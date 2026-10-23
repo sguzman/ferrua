@@ -230,6 +230,137 @@ pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
     Ok(result)
 }
 
+/// A deliberately narrow first-party Lua statement subset.
+///
+/// A complete Lua chunk parser must additionally handle block scopes,
+/// conditions, loops, function definitions, local attributes, labels, goto,
+/// table constructors and the full call syntax.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Statement<'a> {
+    Local {
+        names: Vec<&'a str>,
+        initializers: Vec<Expr<'a>>,
+    },
+    Return(Vec<Expr<'a>>),
+    Assign {
+        targets: Vec<Expr<'a>>,
+        values: Vec<Expr<'a>>,
+    },
+    Call(Expr<'a>),
+}
+
+impl<'a> Parser<'a> {
+    fn name(&mut self) -> Result<&'a str, ParseError> {
+        let token = self.pop().ok_or_else(|| self.error("expected identifier"))?;
+        if token.kind != Kind::Identifier {
+            return Err(ParseError {
+                line: token.line,
+                byte_offset: token.byte_offset,
+                message: "expected identifier",
+            });
+        }
+        Ok(token.spelling)
+    }
+
+    fn expressions(&mut self) -> Result<Vec<Expr<'a>>, ParseError> {
+        let mut values = vec![self.expression(0)?];
+        while self.peek().is_some_and(|token| token.spelling == ",") {
+            self.pop();
+            values.push(self.expression(0)?);
+        }
+        Ok(values)
+    }
+
+    fn statement(&mut self) -> Result<Statement<'a>, ParseError> {
+        if self.peek().is_some_and(|token| token.spelling == "local") {
+            self.pop();
+            let mut names = vec![self.name()?];
+            while self.peek().is_some_and(|token| token.spelling == ",") {
+                self.pop();
+                names.push(self.name()?);
+            }
+            let initializers = if self.peek().is_some_and(|token| token.spelling == "=") {
+                self.pop();
+                self.expressions()?
+            } else {
+                Vec::new()
+            };
+            return Ok(Statement::Local {
+                names,
+                initializers,
+            });
+        }
+        if self.peek().is_some_and(|token| token.spelling == "return") {
+            self.pop();
+            let values = if self.peek().is_none()
+                || self.peek().is_some_and(|token| token.spelling == ";")
+            {
+                Vec::new()
+            } else {
+                self.expressions()?
+            };
+            return Ok(Statement::Return(values));
+        }
+        let first = self.expression(0)?;
+        if self.peek().is_some_and(|token| matches!(token.spelling, "," | "=")) {
+            let mut targets = vec![first];
+            while self.peek().is_some_and(|token| token.spelling == ",") {
+                self.pop();
+                targets.push(self.expression(0)?);
+            }
+            if !self.peek().is_some_and(|token| token.spelling == "=") {
+                return Err(self.error("expected assignment equals"));
+            }
+            for target in &targets {
+                if !matches!(target, Expr::Atom(_) | Expr::Field { .. } | Expr::Index { .. }) {
+                    return Err(self.error("invalid assignment target"));
+                }
+            }
+            self.pop();
+            return Ok(Statement::Assign {
+                targets,
+                values: self.expressions()?,
+            });
+        }
+        if matches!(first, Expr::Call { .. }) {
+            Ok(Statement::Call(first))
+        } else {
+            Err(self.error("only calls can be standalone expression statements"))
+        }
+    }
+}
+
+/// Parse a limited Lua chunk consisting of semicolon-delimited local
+/// declarations, assignments, call statements and an optional final return.
+/// This API does not imply complete Lua statement grammar or scope support.
+pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
+    let tokens = tokenize(source)?;
+    let mut parser = Parser {
+        tokens,
+        index: 0,
+        length: source.len(),
+    };
+    let mut result = Vec::new();
+    while parser.peek().is_some() {
+        if parser.peek().is_some_and(|token| token.spelling == ";") {
+            parser.pop();
+            continue;
+        }
+        let statement = parser.statement()?;
+        let terminal = matches!(statement, Statement::Return(_));
+        result.push(statement);
+        if parser.peek().is_some_and(|token| token.spelling == ";") {
+            parser.pop();
+        } else if parser.peek().is_some() {
+            return Err(parser.error("expected statement separator"));
+        }
+        if terminal && parser.peek().is_some() {
+            return Err(parser.error("return must be final statement"));
+        }
+    }
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,6 +440,54 @@ mod tests {
     fn rejects_malformed_postfix_arguments() {
         for source in ["f(1,)", "a[1", "a.", "obj.123", "f(1,2"] {
             assert!(parse_expression(source).is_err(), "{source}");
+        }
+    }
+
+    #[test]
+    fn local_assignment_call_and_final_return_chunk() {
+        let parsed = parse_chunk("local a,b=2,3; a,b=b,a; print(a,b); return a+b").unwrap();
+        assert_eq!(parsed.len(), 4);
+        match &parsed[0] {
+            Statement::Local { names, initializers } => {
+                assert_eq!(names, &["a", "b"]);
+                assert_eq!(initializers.len(), 2);
+            }
+            _ => panic!("first statement must be local"),
+        }
+        match &parsed[1] {
+            Statement::Assign { targets, values } => {
+                assert_eq!(targets.len(), 2);
+                assert_eq!(values.len(), 2);
+            }
+            _ => panic!("second statement must be assignment"),
+        }
+        assert!(matches!(&parsed[2], Statement::Call(_)));
+        assert!(matches!(&parsed[3], Statement::Return(values) if values.len() == 1));
+    }
+
+    #[test]
+    fn assignment_can_target_table_fields_and_indexes() {
+        let parsed = parse_chunk("t.x, t[2] = 1, 2").unwrap();
+        assert!(matches!(&parsed[0], Statement::Assign { targets, values }
+            if matches!(&targets[0], Expr::Field { .. })
+            && matches!(&targets[1], Expr::Index { .. })
+            && values.len() == 2));
+    }
+
+    #[test]
+    fn rejects_unsupported_or_invalid_chunk_statements() {
+        for source in [
+            "local = 1",
+            "local a,=2",
+            "a+1=2",
+            "a",
+            "1+2",
+            "return 1; print(2)",
+            "local a=1 print(a)",
+            "if true then return 1 end",
+            "local x=1; local y=",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
         }
     }
 
