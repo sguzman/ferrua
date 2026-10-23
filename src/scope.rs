@@ -266,7 +266,9 @@ impl<'src> Resolver<'src> {
                 }
                 self.function_scope(parameters, body, method.is_some());
             }
-            Statement::Break => {}
+            // Labels and jump targets introduce no lexical variable bindings.
+            // The owned bytecode compiler rejects goto until jump lowering exists.
+            Statement::Break | Statement::Label(_) | Statement::Goto(_) => {}
             Statement::Return(values) => {
                 for value in values {
                     self.read_expression(value, number);
