@@ -1162,7 +1162,10 @@ impl Execution<'_> {
     }
 
     fn write_table(&mut self, handle: usize, key: TableKey, value: Value) -> Result<(), FlowError> {
-        let table = self.tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
+        let table = self
+            .tables
+            .get_mut(handle)
+            .ok_or(FlowError::InvalidBytecode)?;
         match key {
             TableKey::Positive(field) => {
                 if field > table.array.len() {
@@ -2374,12 +2377,24 @@ mod tests {
         assert_eq!(evaluate("local t={name=4}; return t['name']"), 4);
         assert_eq!(evaluate("local t={}; t.name=7; return t['name']"), 7);
         assert_eq!(evaluate("local t={}; t['n']=3; return t.n"), 3);
-        assert_eq!(evaluate("local t={name=3,[2]=5,7}; return t.name+t[2]+t[1]"), 15);
-        assert_eq!(evaluate("local t={}; t.name=3; t.name=nil; return t.name or 7"), 7);
-        assert_eq!(evaluate("local key='name'; local t={[key]=9}; return t.name"), 9);
+        assert_eq!(
+            evaluate("local t={name=3,[2]=5,7}; return t.name+t[2]+t[1]"),
+            15
+        );
+        assert_eq!(
+            evaluate("local t={}; t.name=3; t.name=nil; return t.name or 7"),
+            7
+        );
+        assert_eq!(
+            evaluate("local key='name'; local t={[key]=9}; return t.name"),
+            9
+        );
         assert_eq!(evaluate("local t={['a']=4,b=2}; return t.a+t.b"), 6);
         assert_eq!(evaluate("local t={}; t.a,t.b=2,3; return t.a*10+t.b"), 23);
-        assert_eq!(evaluate("local t={}; local key='x'; t[key]=4; return t.x"), 4);
+        assert_eq!(
+            evaluate("local t={}; local key='x'; t[key]=4; return t.x"),
+            4
+        );
         assert_eq!(evaluate("local t={}; t.x=4; return #t"), 0);
     }
 
