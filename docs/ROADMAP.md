@@ -450,10 +450,10 @@
   - [x] Fall back from integer bitwise operators to bounded __band/__bor/__bxor/__shl/__shr Lua callbacks — src/owned_flow.rs: Execution::bitwise_with_metamethod and Binary bitwise VM op handling
   - [x] Cover left/right precedence, mixed operands, recursion, multiple-result adjustment and Lua 5.4 differential fixtures — src/owned_flow.rs: binary_bitwise_metamethods_preserve_integer_rules_and_bounded_callbacks; tests/owned_flow.rs
   - [x] Pass Linux formatter, Clippy, Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI — GitHub Actions 40032378817: Linux quality, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all successful
-- 🔗 **T377** First-class Lua __concat fallback after byte concatenation — `███████░░░ 67%`
+- 🔗 **T377** First-class Lua __concat fallback after byte concatenation — `██████████ 100%`
   - [x] Preserve numeric/string byte concatenation and dispatch function-valued __concat only for incompatible operands — src/owned_flow.rs: Execution::concat_with_metamethod
   - [x] Cover left/right selection, byte strings, closure returns, recursion limits and Lua 5.4 differential fixtures — src/owned_flow.rs: concat_metamethod_preserves_byte_concat_and_bounded_callbacks; tests/owned_flow.rs
-  - [ ] Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and Lua 5.4 differential CI
+  - [x] Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and Lua 5.4 differential CI — GitHub Actions 40033236408: Linux, Rust 1.96, Lua 5.4 differential, action consumer and status reporter all passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -529,5 +529,5 @@
 - ➕ Function-valued arithmetic metamethods with numeric precedence — `██████████ 100%`
 - ➖ Unary negative and bitwise complement metamethods — `██████████ 100%`
 - 🧩 Bitwise binary metamethod callbacks with numeric precedence — `██████████ 100%`
-- 🔗 Lua concat callbacks after native byte concatenation — `███████░░░ 67%`
+- 🔗 Lua concat callbacks after native byte concatenation — `██████████ 100%`
 
