@@ -41,6 +41,9 @@ jobs:
           cargo run --locked -- -e "print(6 * 7)" | grep -x 42
           printf 'print(6 * 7)\n' | cargo run --locked -- -
           cargo run --locked -- examples/count.lua | grep -x 55
+          cargo run --locked -- --check tests/data.lua
+          cargo run --locked -- --check examples/process.lua
+          ! cargo run --locked -- --check -e "local ="
           cargo run --locked -- tests/data.lua | grep -x "TOML and YAML smoke passed"
           cargo run --locked -- examples/process.lua | grep -x "process module smoke passed"
           scratch_dir="$(mktemp -d)"

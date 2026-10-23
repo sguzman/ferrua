@@ -214,3 +214,17 @@ fn github_module_is_only_available_in_trusted_mode() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+#[test]
+fn syntax_check_compiles_without_running_and_reports_invalid_code() {
+    let checked = fer(&["--check", "-e", "error('should never run')"]);
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    assert!(checked.stdout.is_empty());
+    let invalid = fer(&["--check", "-e", "local ="]);
+    assert!(!invalid.status.success());
+    assert!(String::from_utf8_lossy(&invalid.stderr).contains("-e"));
+}

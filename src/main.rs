@@ -21,6 +21,7 @@ Usage:\n\
 Options (before script or -e):\n\
   --lua=5.1..5.5         Select Lua dialect (default: 5.5)\n\
   --sandbox              Safe libraries only; no OS, file or package access\n\
+  --check                Compile source without executing it\n\
   --budget=N             Instruction budget (positive integer)\n\
   -h, --help             Show help\n\
   -v, --version          Show version\n\
@@ -41,6 +42,7 @@ enum Action {
 struct Options {
     lua: LuaVersion,
     sandbox: bool,
+    check_only: bool,
     budget: Option<i64>,
     action: Action,
 }
@@ -48,6 +50,7 @@ struct Options {
 fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
     let mut lua = LuaVersion::Lua55;
     let mut sandbox = false;
+    let mut check_only = false;
     let mut budget = None;
     let mut i = 0;
     while i < args.len() {
@@ -57,6 +60,10 @@ fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
             "-v" | "--version" => Some(Action::Version),
             "--sandbox" => {
                 sandbox = true;
+                None
+            }
+            "--check" => {
+                check_only = true;
                 None
             }
             "-e" => {
@@ -98,6 +105,7 @@ fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
             return Ok(Options {
                 lua,
                 sandbox,
+                check_only,
                 budget,
                 action,
             });
@@ -107,6 +115,7 @@ fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
     Ok(Options {
         lua,
         sandbox,
+        check_only,
         budget,
         action: if interactive_stdin {
             Action::Repl
@@ -239,6 +248,16 @@ fn run_source(vm: &mut Vm, source: &str, name: &str) -> Result<(), String> {
         .map_err(|err| error_message(vm, &err))
 }
 
+fn check_source(vm: &mut Vm, source: &str, name: &str) -> Result<(), String> {
+    let normalized = source
+        .starts_with("#!")
+        .then(|| format!("--{}", &source[2..]));
+    vm.set_bytecode_loading(false);
+    vm.load(normalized.as_deref().unwrap_or(source).as_bytes(), name.as_bytes())
+        .map(|_| ())
+        .map_err(|err| format!("{name}: {err}"))
+}
+
 fn repl(vm: &mut Vm) -> Result<(), String> {
     eprintln!(
         "Ferrua {} (Lua VM) - Ctrl-D to exit",
@@ -294,13 +313,21 @@ fn execute(options: Options) -> Result<(), String> {
         Action::Eval(ref source, ref arguments) => {
             let mut vm = vm_for(&options);
             set_args(&mut vm, "-e", arguments)?;
-            run_source(&mut vm, source, "=-e")
+            if options.check_only {
+                check_source(&mut vm, source, "=-e")
+            } else {
+                run_source(&mut vm, source, "=-e")
+            }
         }
         Action::Script(ref path, ref arguments) => {
             let source = std::fs::read_to_string(path).map_err(|err| format!("{path}: {err}"))?;
             let mut vm = vm_for(&options);
             set_args(&mut vm, path, arguments)?;
-            run_source(&mut vm, &source, path)
+            if options.check_only {
+                check_source(&mut vm, &source, path)
+            } else {
+                run_source(&mut vm, &source, path)
+            }
         }
         Action::Stdin => {
             let mut source = String::new();
@@ -309,9 +336,16 @@ fn execute(options: Options) -> Result<(), String> {
                 .map_err(|err| err.to_string())?;
             let mut vm = vm_for(&options);
             set_args(&mut vm, "-", &[])?;
-            run_source(&mut vm, &source, "=stdin")
+            if options.check_only {
+                check_source(&mut vm, &source, "=stdin")
+            } else {
+                run_source(&mut vm, &source, "=stdin")
+            }
         }
         Action::Repl => {
+            if options.check_only {
+                return Err("--check requires a script, -e, or piped stdin".into());
+            }
             let mut vm = vm_for(&options);
             set_args(&mut vm, "=repl", &[])?;
             repl(&mut vm)
@@ -418,6 +452,15 @@ mod tests {
             "=json-test",
         )
         .unwrap();
+    }
+
+    #[test]
+    fn syntax_check_does_not_execute_code() {
+        let opts = parse(&argv(&["--check", "-e", "error('not executed')"]), false).unwrap();
+        assert!(opts.check_only);
+        let mut vm = vm_for(&opts);
+        check_source(&mut vm, "error('not executed')", "=syntax").unwrap();
+        assert!(check_source(&mut vm, "local =", "=invalid").is_err());
     }
 
     #[test]
