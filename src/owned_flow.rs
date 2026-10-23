@@ -674,9 +674,7 @@ impl<'a> Compiler<'a> {
                             self.push(Op::Constant(Value::String(handle)))?;
                             self.push(Op::GetTable)?;
                         }
-                        let last = self.intern_bytes(
-                            path[path.len() - 1].as_bytes().to_vec(),
-                        )?;
+                        let last = self.intern_bytes(path[path.len() - 1].as_bytes().to_vec())?;
                         self.push(Op::Constant(Value::String(last)))?;
                         let function = if method.is_some() {
                             let mut formals = Vec::with_capacity(parameters.len() + 1);
@@ -2474,15 +2472,21 @@ mod tests {
             7
         );
         assert_eq!(
-            evaluate("local t={inner={v=5}}; function t.inner:add(x) return self.v+x end; return t.inner:add(3)"),
+            evaluate(
+                "local t={inner={v=5}}; function t.inner:add(x) return self.v+x end; return t.inner:add(3)"
+            ),
             8
         );
         assert_eq!(
-            evaluate("local v=5; local t={base=2}; function t:add(x) return v+x+self.base end; return t:add(3)"),
+            evaluate(
+                "local v=5; local t={base=2}; function t:add(x) return v+x+self.base end; return t:add(3)"
+            ),
             10
         );
         assert_eq!(
-            evaluate("local t={v=7}; function t:two() return self.v,2 end; local a,b=t:two(); return a*10+b"),
+            evaluate(
+                "local t={v=7}; function t:two() return self.v,2 end; local a,b=t:two(); return a*10+b"
+            ),
             72
         );
     }
