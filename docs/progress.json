@@ -2515,6 +2515,28 @@
                   "evidence": "GitHub Actions 40033892089: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all succeeded"
                 }
               ]
+            },
+            {
+              "id": "T379",
+              "emoji": "🔄",
+              "name": "Lua __pairs custom iterator triples through first-party closures",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Call table __pairs Lua functions and adjust results to iterator, state and initial control while preserving native raw pairs",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Builtin::Pairs multiple-result execution"
+                },
+                {
+                  "text": "Cover custom generic-for closure iterators, return adjustment, shadowing, raw next, recursion and Lua 5.4 differential fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: pairs_metatable_hook_preserves_generic_for_and_multiple_results; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux formatter, Clippy, Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3040,6 +3062,13 @@
           "name": "Lua equality and ordering metamethod callbacks",
           "task_ids": [
             "T378"
+          ]
+        },
+        {
+          "emoji": "🔄",
+          "name": "Lua pairs table metamethod custom iterator triples",
+          "task_ids": [
+            "T379"
           ]
         }
       ]
