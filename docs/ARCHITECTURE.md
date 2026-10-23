@@ -14,6 +14,8 @@ The trusted `fs` module provides bounded UTF-8 file IO, direct file copy, safe d
 
 The trusted `toml` and `yaml` modules parse and serialize JSON-compatible configuration data through Rust's Serde ecosystem. See [structured-data semantics](DATA.md), including comment/order loss and TOML datetime limitations.
 
+The trusted `github` helper uses the native `http` client for GitHub REST requests. It adds documented API headers and reads `GITHUB_TOKEN` only when a trusted Lua script asks for an API call; see [GitHub REST automation](GITHUB.md). It is absent in sandboxed VMs.
+
 The trusted `http` module uses the pure-Rust blocking `ureq` client with bounded UTF-8 response bodies, configurable request deadlines and TLS. Network access is explicit and confined to trusted mode; see [HTTP API](HTTP.md).
 
 The trusted `process` module calls the Rust `std::process::Command` API directly using JSON-encoded arguments through a native VM callback. It is never installed in the restricted sandbox. Child processes use the caller's permissions, have a default 60-second timeout and capped captured output. Shells run only when deliberately requested as the executable. See [docs/PROCESS.md](PROCESS.md).

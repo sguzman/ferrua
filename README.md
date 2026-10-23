@@ -26,7 +26,7 @@ Trusted mode exposes the standard Lua `io`, `os`, `math`, `string`, `table`, `ut
 
 ### Running other tools
 
-In trusted mode, use `process.run("git", {"status", "--short"})` for structured exit codes and captured output, or `process.check("git", {"status", "--short"})` to raise a Lua error on failure. Arguments are passed directly without invoking a shell. Options include `cwd`, `env`, `stdin`, and `timeout_ms`. The host command inherits the caller's permissions. See [process API](docs/PROCESS.md), [filesystem API](docs/FILESYSTEM.md), [HTTP API](docs/HTTP.md), [structured data](docs/DATA.md) and [examples](examples/).
+In trusted mode, use `process.run("git", {"status", "--short"})` for structured exit codes and captured output, or `process.check("git", {"status", "--short"})` to raise a Lua error on failure. Arguments are passed directly without invoking a shell. Options include `cwd`, `env`, `stdin`, and `timeout_ms`. The host command inherits the caller's permissions. See [process API](docs/PROCESS.md), [filesystem API](docs/FILESYSTEM.md), [HTTP API](docs/HTTP.md), [structured data](docs/DATA.md), [GitHub REST API](docs/GITHUB.md) and [examples](examples/).
 
 ## Development and progress
 

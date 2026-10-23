@@ -175,6 +175,14 @@ fn vm_for(options: &Options) -> Vm {
             .expect("embedded HTTP module must return a table");
         vm.set_global("http", http_module)
             .expect("HTTP module must register");
+        let github_module = vm
+            .eval_chunk(include_str!("../tools/github.lua"), "@ferrua/github.lua")
+            .expect("embedded GitHub module must compile")
+            .into_iter()
+            .next()
+            .expect("embedded GitHub module must return a table");
+        vm.set_global("github", github_module)
+            .expect("GitHub module must register");
         let data_bridge = vm.native_typed(data::serialized as fn(String) -> String);
         vm.set_global("__fer_data_call", data_bridge)
             .expect("structured data bridge must register");
