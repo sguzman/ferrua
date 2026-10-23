@@ -24,15 +24,30 @@ fn local_http_endpoint_is_accessible_from_fer_without_python() {
         .output()
         .expect("launch fer");
     server.join().unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "HTTP local fixture passed");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "HTTP local fixture passed"
+    );
 }
 
 #[test]
 fn sandbox_excludes_http_bridge() {
     let result = Command::new(env!("CARGO_BIN_EXE_fer"))
-        .args(["--sandbox", "-e", "assert(http == nil and __fer_http_call == nil)"])
+        .args([
+            "--sandbox",
+            "-e",
+            "assert(http == nil and __fer_http_call == nil)",
+        ])
         .output()
         .unwrap();
-    assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
 }
