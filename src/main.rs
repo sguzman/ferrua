@@ -127,6 +127,16 @@ fn vm_for(options: &Options) -> Vm {
     } else {
         Vm::new(options.lua)
     };
+    // Built-in first-party data support, including sandboxed pure Lua parsing.
+    let json = vm
+        .eval_chunk(include_str!("../tools/json.lua"), "@ferrua/json.lua")
+        .expect("embedded JSON module must compile")
+        .into_iter()
+        .next()
+        .expect("embedded JSON module must return a table");
+    vm.set_global("json", json)
+        .expect("embedded JSON module must register");
+    // User-supplied budget applies to the user script, not runtime initialization.
     if let Some(budget) = options.budget {
         vm.set_instr_budget(Some(budget));
     }
@@ -326,6 +336,20 @@ mod tests {
         )
         .unwrap();
     }
+    #[test]
+    fn built_in_json_round_trips() {
+        let mut vm = vm_for(&parse(&[], false).unwrap());
+        run_source(
+            &mut vm,
+            r#"local x = json.decode('{"alpha": [1, 2], "ok": true}')
+               assert(x.ok and x.alpha[2] == 2)
+               assert(json.encode(x) == '{"alpha":[1,2],"ok":true}')
+               assert(json.decode('"\\uD83C\\uDF19"') == "🌙")"#,
+            "=json-test",
+        )
+        .unwrap();
+    }
+
     #[test]
     fn runtime_errors_are_propagated() {
         let mut vm = vm_for(&parse(&[], false).unwrap());

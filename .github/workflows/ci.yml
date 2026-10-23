@@ -26,4 +26,8 @@ jobs:
         run: |
           cargo run -- -e "print(6 * 7)" | grep -x 42
           printf 'print(6 * 7)\n' | cargo run -- -
+          cargo run -- examples/count.lua | grep -x 55
           cargo run -- --sandbox -e "assert(io == nil and os == nil)"
+          cargo run -- --sandbox -e "assert(json.decode('{\"key\":42}').key == 42)"
+          ! timeout 10s cargo run -- --budget=1000 -e "while true do end"
+          printf '=6*7\n' | script -q -c "target/debug/fer" /dev/null | grep -Fq 42

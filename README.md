@@ -20,6 +20,8 @@ cargo run -- --sandbox -e 'assert(os == nil and io == nil)'
 
 After building or installing, run `fer` in place of `cargo run --`. Without input, `fer` opens a simple REPL if standard input is a terminal; use `=expression` to display a value. Script parameters are available as `arg[1]`, `arg[2]`, etc., with the script path at `arg[0]`. `--lua=5.4` selects a Lua dialect and `--budget=N` limits executed VM instructions.
 
+Ferrua also installs a first-party Lua `json` global in every session, with `json.decode(text)` and `json.encode(value)`; no third-party Lua package is required. The JSON implementation rejects cycles, invalid input and unsupported types. Its full compatibility matrix is still under development.
+
 Trusted mode exposes the standard Lua `io`, `os`, `math`, `string`, `table`, `utf8`, `coroutine` and `package` libraries. Its shell access carries the caller's OS permissions. `--sandbox` is an explicit restricted-library option, not a promise of audited containment. Native JSON, process APIs and portable release binaries are still upcoming.
 
 ## Development and progress

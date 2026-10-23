@@ -91,3 +91,13 @@ fn sandbox_is_opt_in() {
     );
     assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "safe");
 }
+
+#[test]
+fn json_is_available_for_automation_scripts() {
+    let out = fer(&[
+        "-e",
+        r#"local data=json.decode('{"number":42,"ok":true}'); assert(data.number == 42); print(json.encode(data))"#,
+    ]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), r#"{"number":42,"ok":true}"#);
+}
