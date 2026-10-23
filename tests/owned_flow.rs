@@ -407,6 +407,21 @@ const FIXTURES: &[&str] = &[
     "local t=setmetatable({}, {__concat=function() end}); return (t..'x')==nil and 1 or 0",
     "local t=setmetatable({}, {__concat=function() return 'ok' end}); return (t..3)=='ok' and 1 or 0",
     "local n=0; local t=setmetatable({}, {__concat=function() n=n+1; return 'ok' end}); return (t..3)=='ok' and n or 0",
+    "return (3<5 and 'a'<'b' and 5>=5) and 1 or 0",
+    "local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a<b and 1 or 0",
+    "local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return b>a and 1 or 0",
+    "local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a<=b and 1 or 0",
+    "local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a>=b and 1 or 0",
+    "local mt={__le=function(a,b) return a.x<=b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a<=b and 1 or 0",
+    "local mt={__le=function(a,b) return a.x<=b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return b>=a and 1 or 0",
+    "local mt={__le=function() return nil end, __lt=function() return true end}; local a=setmetatable({},mt); return a<=a and 1 or 0",
+    "local mt={__lt=function() return 0 end}; local a=setmetatable({},mt); return a<a and 1 or 0",
+    "local mt={__eq=function(a,b) return true end}; local a=setmetatable({},mt); local b=setmetatable({},mt); return a==b and 1 or 0",
+    "local mt={__eq=function() return false end}; local a=setmetatable({},mt); local b=setmetatable({},mt); return a~=b and 1 or 0",
+    "local mt={__eq=function() return false end}; local a=setmetatable({},mt); return a==a and 1 or 0",
+    "local a=setmetatable({}, {__eq=function() return true end}); return a=={} and 1 or 0",
+    "local a={}; local b=setmetatable({}, {__eq=function() return true end}); return a==b and 1 or 0",
+    "local a=setmetatable({}, {__eq=function() return true end}); return a==3 and 1 or 0",
 ];
 
 fn render(values: &[Value]) -> String {
