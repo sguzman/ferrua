@@ -2767,6 +2767,28 @@
                   "evidence": "GitHub Actions 40039264425: Linux quality, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all succeeded"
                 }
               ]
+            },
+            {
+              "id": "T386",
+              "emoji": "🔬",
+              "name": "Deterministic generated owned-VM arithmetic and comparison parity corpus",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Generate reproducible bounded integer, bitwise, floor-div/mod and comparison cases without external generators",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs: generated_numeric_fixtures deterministic LCG with 128 numeric Lua chunks"
+                },
+                {
+                  "text": "Route generated chunks through owned execution and production fer/upstream Lua reference comparison harness",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs: check_source and check, production_fer_agrees_with_owned_control_flow_subset; upstream_lua_agrees_when_requested"
+                },
+                {
+                  "text": "Pass full CI, including reference interpreter parity for all generated inputs and strict Rust quality",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3341,6 +3363,13 @@
           "name": "Safe bounded same-block Lua goto execution",
           "task_ids": [
             "T385"
+          ]
+        },
+        {
+          "emoji": "🔬",
+          "name": "Generated deterministic owned-VM numeric differential coverage",
+          "task_ids": [
+            "T386"
           ]
         }
       ]
