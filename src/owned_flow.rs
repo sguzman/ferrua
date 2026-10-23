@@ -22,7 +22,7 @@ const MAX_STRING_POOL_BYTES: usize = 65_536;
 const MAX_STRINGS: usize = 16_384;
 pub const DEFAULT_STEP_BUDGET: usize = 100_000;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Value {
     Integer(i64),
     Boolean(bool),
@@ -1180,7 +1180,7 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
 #[derive(Clone, Copy)]
 enum TableKey {
     Positive(usize),
-    String(usize),
+    Hashed(Value),
 }
 
 #[derive(Clone, Copy)]
@@ -1191,7 +1191,7 @@ enum PendingTarget {
 
 struct TableStorage {
     array: Vec<Option<Value>>,
-    named: HashMap<usize, Value>,
+    hashed: HashMap<Value, Value>,
 }
 
 #[derive(Clone)]
@@ -1216,18 +1216,15 @@ struct Execution<'a> {
 impl Execution<'_> {
     fn table_key(&self, key: Value) -> Result<TableKey, FlowError> {
         match key {
-            Value::Integer(index) => {
-                let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
-                if field == 0 || field > MAX_TABLE_FIELDS {
-                    return Err(FlowError::TypeError);
-                }
-                Ok(TableKey::Positive(field))
+            Value::Integer(index) if (1..=MAX_TABLE_FIELDS as i64).contains(&index) => {
+                Ok(TableKey::Positive(index as usize))
             }
             Value::String(handle) => {
                 self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
-                Ok(TableKey::String(handle))
+                Ok(TableKey::Hashed(key))
             }
-            _ => Err(FlowError::TypeError),
+            Value::Nil => Err(FlowError::TypeError),
+            _ => Ok(TableKey::Hashed(key)),
         }
     }
 
@@ -1240,7 +1237,7 @@ impl Execution<'_> {
                 .copied()
                 .flatten()
                 .unwrap_or(Value::Nil),
-            TableKey::String(field) => table.named.get(&field).copied().unwrap_or(Value::Nil),
+            TableKey::Hashed(field) => table.hashed.get(&field).copied().unwrap_or(Value::Nil),
         })
     }
 
@@ -1261,19 +1258,19 @@ impl Execution<'_> {
                 }
                 table.array[field - 1] = Some(value);
             }
-            TableKey::String(field) => {
+            TableKey::Hashed(field) => {
                 if value == Value::Nil {
-                    if table.named.remove(&field).is_some() {
+                    if table.hashed.remove(&field).is_some() {
                         self.table_cells -= 1;
                     }
                 } else {
-                    if !table.named.contains_key(&field) {
+                    if !table.hashed.contains_key(&field) {
                         if self.table_cells >= MAX_TABLE_CELLS_TOTAL {
                             return Err(FlowError::TooLarge);
                         }
                         self.table_cells += 1;
                     }
-                    table.named.insert(field, value);
+                    table.hashed.insert(field, value);
                 }
             }
         }
@@ -1602,7 +1599,7 @@ impl Execution<'_> {
                     let handle = self.tables.len();
                     self.tables.push(TableStorage {
                         array: values.into_iter().map(Some).collect(),
-                        named: HashMap::new(),
+                        hashed: HashMap::new(),
                     });
                     self.table_cells += arity;
                     stack.push(Value::Table(handle));
@@ -2526,6 +2523,21 @@ mod tests {
     }
 
     #[test]
+    fn arbitrary_hashable_lua_table_keys_share_bounded_storage() {
+        assert_eq!(evaluate("local t={}; t[0]=7; return t[0]"), 7);
+        assert_eq!(evaluate("local t={}; t[-2]=5; return t[-2]"), 5);
+        assert_eq!(evaluate("local t={[true]=7,[false]=3}; return t[true]*10+t[false]"), 73);
+        assert_eq!(evaluate("local t={}; local key={}; t[key]=8; return t[key]"), 8);
+        assert_eq!(
+            evaluate("local f=function() return 1 end; local t={}; t[f]=9; return t[f]"),
+            9
+        );
+        assert_eq!(evaluate("local t={}; t[20000]=4; return t[20000]"), 4);
+        assert_eq!(evaluate("local t={}; t[false]=8; t[false]=nil; return t[false] or 3"), 3);
+        assert_eq!(evaluate("local t={}; t[0]=7; return #t"), 0);
+    }
+
+    #[test]
     fn string_keys_and_named_table_fields_share_one_lookup_path() {
         assert_eq!(evaluate("local t={name=4}; return t.name"), 4);
         assert_eq!(evaluate("local t={name=4}; return t['name']"), 4);
@@ -2612,8 +2624,7 @@ mod tests {
     fn bounded_tables_reject_unsupported_keys_and_fields() {
         assert_eq!(evaluate("local t={name=2}; return t.name"), 2);
         for source in [
-            "local t={1}; t[0]=7; return 1",
-            "local t={1}; return t[true]",
+            "local t={1}; t[nil]=7; return 1",
             "local t=1; return t[1]",
         ] {
             let program = compile_flow_chunk(source).unwrap();

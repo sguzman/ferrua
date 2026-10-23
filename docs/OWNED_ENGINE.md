@@ -228,3 +228,7 @@ The experimental bytecode compiler now supports Lua `object:method(arguments)` c
 ### Dotted and colon function declarations
 
 The bounded owned compiler now handles `function table.field(...)` and `function table:method(...)` declarations rooted in lexically visible local tables, including nested field paths. Colon declarations insert implicit `self` as the first parameter while ordinary dotted declarations leave arguments unchanged. Runtime table lookup and assignments use the existing string-key map and closure capture mechanics, so declarations retain captured lexical state and normal multi-result returns. Unbound global declarations and dynamically computed destination paths remain unsupported.
+
+### Bounded general Lua table key identities
+
+The owned VM now stores integer keys outside the positive-array fast path (zero, negative and large), Boolean keys, table-identity keys, and function-identity keys in an execution-local bounded hash map. String keys share that map and compare by their interned byte value; positive in-range integer keys continue through the sequence array. Assigning nil deletes a hash entry; nil itself remains invalid for assignment keys. Table and function keys compare by identity rather than structural contents. No Lua float-key canonicalization, weak tables, garbage collection or metatables are implemented, and hash entries count toward the shared table storage budget.
