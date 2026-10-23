@@ -146,8 +146,8 @@ fn installed_real_archive_executes_outside_checkout() {
     };
     let root = scratch();
     let archive = fs::read(&tarball).expect("CI built a real release archive");
-    let checksum = fs::read(format!("{tarball}.sha256"))
-        .expect("CI generated the real archive checksum");
+    let checksum =
+        fs::read(format!("{tarball}.sha256")).expect("CI generated the real archive checksum");
     let (base, server) = serve_fixture(archive, checksum);
     let prefix = root.join("installed");
     let install = Command::new("sh")
