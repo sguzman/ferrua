@@ -2214,6 +2214,50 @@
                   "evidence": "tests/owned_flow.rs; GitHub Actions 40017471285: all four jobs successful"
                 }
               ]
+            },
+            {
+              "id": "T367",
+              "emoji": "🔁",
+              "name": "First-class bounded raw and sequential Lua iteration",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Compile lexically shadowable next, pairs and ipairs over bounded table storage",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Builtin::Next, Builtin::Pairs, Builtin::Ipairs, Execution::next_builtin"
+                },
+                {
+                  "text": "Add raw key traversal, sequential-stop, closure, type/error and execution-budget regression fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: first_class_next_pairs_and_ipairs_follow_bounded_lua_raw_iteration; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Rust 1.96, formatter, clippy, production fer and upstream Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T368",
+              "emoji": "🕳️",
+              "name": "Nil-value table holes and allocation-free absent deletes",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Avoid allocating absent positive array fields when assigning nil",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::write_table"
+                },
+                {
+                  "text": "Normalize nil constructor/tail cells and add heap-budget plus Lua parity regression fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: nil_table_fields_do_not_allocate_nonexistent_array_storage; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass all four primary CI jobs with upstream Lua differential verification",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -2655,6 +2699,20 @@
           "name": "First-class assert with truthy multi-result preservation",
           "task_ids": [
             "T366"
+          ]
+        },
+        {
+          "emoji": "🔁",
+          "name": "First-class bounded next, pairs and ipairs table iteration",
+          "task_ids": [
+            "T367"
+          ]
+        },
+        {
+          "emoji": "🕳️",
+          "name": "Nil table holes without absent-entry heap allocation",
+          "task_ids": [
+            "T368"
           ]
         }
       ]
