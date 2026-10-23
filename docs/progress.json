@@ -2520,7 +2520,7 @@
               "id": "T379",
               "emoji": "🔄",
               "name": "Lua __pairs custom iterator triples through first-party closures",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Call table __pairs Lua functions and adjust results to iterator, state and initial control while preserving native raw pairs",
@@ -2534,7 +2534,8 @@
                 },
                 {
                   "text": "Pass Linux formatter, Clippy, Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40034746881: Linux tests/lint/fmt, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter all succeeded"
                 }
               ]
             },
@@ -2542,7 +2543,7 @@
               "id": "T380",
               "emoji": "🛡️",
               "name": "Native-stack-safe bounded recursive metamethod dispatch",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Constrain experimental VM call depth to remain below default Rust thread stack exhaustion",
@@ -2556,7 +2557,8 @@
                 },
                 {
                   "text": "Pass Linux Rust tests without stack abort, formatter, Clippy, Rust 1.96 and differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40034746881: Linux tests/lint/fmt, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter all succeeded"
                 }
               ]
             }
