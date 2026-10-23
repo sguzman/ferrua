@@ -16,6 +16,12 @@ const FIXTURES: &[&str] = &[
     "local s=0; for i=6,2,-2 do s=s+i end; return s",
     "local s=0; for i=1,10,3 do s=s+i end; return s",
     "local s=0; local i=3; for i=i,5 do s=s+i end; return s+i",
+    "return 0 or 99",
+    "return false or 9",
+    "return 3 and 7",
+    "return nil or 12",
+    "if false and (1+true) then return 99 else return 5 end",
+    "if true or (1+true) then return 12 else return 9 end",
 ];
 
 fn check(reference: &str) {

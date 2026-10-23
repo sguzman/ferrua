@@ -46,6 +46,9 @@ pub enum Op {
     Not,
     Binary(Binary),
     JumpIfFalse(usize),
+    JumpIfFalseKeep(usize),
+    JumpIfTrueKeep(usize),
+    Discard,
     Jump(usize),
     ForCheck {
         counter: usize,
@@ -160,6 +163,18 @@ impl<'a> Compiler<'a> {
                 self.expression(right, depth + 1)?;
                 self.push(if *op == "-" { Op::Negate } else { Op::Not })?;
             }
+            Expr::Binary { op, left, right } if matches!(*op, "and" | "or") => {
+                // Lua logical operators keep the chosen operand value.
+                self.expression(left, depth + 1)?;
+                let skip = self.push(if *op == "and" {
+                    Op::JumpIfFalseKeep(usize::MAX)
+                } else {
+                    Op::JumpIfTrueKeep(usize::MAX)
+                })?;
+                self.push(Op::Discard)?;
+                self.expression(right, depth + 1)?;
+                self.patch(skip, self.code.len())?;
+            }
             Expr::Binary { op, left, right } => {
                 let operation = match *op {
                     "+" => Binary::Add,
@@ -204,6 +219,8 @@ impl<'a> Compiler<'a> {
         }
         match self.code.get_mut(address) {
             Some(Op::JumpIfFalse(place))
+            | Some(Op::JumpIfFalseKeep(place))
+            | Some(Op::JumpIfTrueKeep(place))
             | Some(Op::Jump(place))
             | Some(Op::ForCheck { exit: place, .. })
             | Some(Op::ForStep { exit: place, .. }) => *place = target,
@@ -486,6 +503,24 @@ pub fn execute_flow_chunk(program: &FlowProgram, budget: usize) -> Result<i64, F
                     continue;
                 }
             }
+            Op::JumpIfFalseKeep(target) | Op::JumpIfTrueKeep(target) => {
+                let value = *stack.last().ok_or(FlowError::InvalidBytecode)?;
+                let should_jump = match program.instructions[pc] {
+                    Op::JumpIfFalseKeep(_) => !value.truthy(),
+                    Op::JumpIfTrueKeep(_) => value.truthy(),
+                    _ => unreachable!("guarded opcode"),
+                };
+                if should_jump {
+                    if *target > program.instructions.len() {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    pc = *target;
+                    continue;
+                }
+            }
+            Op::Discard => {
+                stack.pop().ok_or(FlowError::InvalidBytecode)?;
+            }
             Op::Jump(target) => {
                 if *target > program.instructions.len() {
                     return Err(FlowError::InvalidBytecode);
@@ -617,6 +652,19 @@ mod tests {
     }
 
     #[test]
+    fn logical_and_or_preserve_values_and_short_circuit() {
+        assert_eq!(evaluate("return 0 or 99"), 0);
+        assert_eq!(evaluate("return false or 9"), 9);
+        assert_eq!(evaluate("return 3 and 7"), 7);
+        assert_eq!(evaluate("return nil or 12"), 12);
+        assert_eq!(evaluate("return false or 0 or 8"), 0);
+        assert_eq!(evaluate("if false and (1+true) then return 99 else return 5 end"), 5);
+        assert_eq!(evaluate("if true or (1+true) then return 12 else return 9 end"), 12);
+        assert_eq!(evaluate("if 0 and not nil then return 6 else return 8 end"), 6);
+        assert_eq!(evaluate("if nil or false then return 1 else return 3 end"), 3);
+    }
+
+    #[test]
     fn numeric_for_supports_both_directions_and_precomputed_bounds() {
         assert_eq!(evaluate("local s=0; for i=1,5 do s=s+i end; return s"), 15);
         assert_eq!(
@@ -686,7 +734,7 @@ mod tests {
             "local x=1; return x//2",
             "return true",
             "local x=1; local y; return x",
-            "local x=1; return x and true",
+            "local x=1; return x//2",
         ] {
             match compile_flow_chunk(source) {
                 Err(_) => {}
