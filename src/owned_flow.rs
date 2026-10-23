@@ -339,9 +339,8 @@ impl<'a> Compiler<'a> {
                 self.push(Op::VarargSingle)?;
             }
             Expr::Atom(text)
-                if text.starts_with('\'')
-                    || text.starts_with('"')
-                    || text.starts_with('[') => {
+                if text.starts_with('\'') || text.starts_with('"') || text.starts_with('[') =>
+            {
                 let index = self.intern_literal(text)?;
                 self.push(Op::Constant(Value::String(index)))?;
             }
@@ -915,7 +914,6 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
     })
 }
 
-
 fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
     let bytes = spelling.as_bytes();
     if bytes.is_empty() {
@@ -993,8 +991,12 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
             b'0'..=b'9' => {
                 let mut value = u32::from(escaped - b'0');
                 for _ in 0..2 {
-                    let Some(next) = bytes.get(i).copied() else { break };
-                    if !next.is_ascii_digit() { break; }
+                    let Some(next) = bytes.get(i).copied() else {
+                        break;
+                    };
+                    if !next.is_ascii_digit() {
+                        break;
+                    }
                     value = value * 10 + u32::from(next - b'0');
                     i += 1;
                 }
@@ -1003,7 +1005,11 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
                 }
                 Some(value as u8)
             }
-            _ => return Err(FlowError::Unsupported("string escape not yet implemented".into())),
+            _ => {
+                return Err(FlowError::Unsupported(
+                    "string escape not yet implemented".into(),
+                ));
+            }
         };
         if let Some(value) = value {
             result.push(value);
@@ -1437,7 +1443,8 @@ impl Execution<'_> {
                             .ok_or(FlowError::InvalidBytecode)?
                             .len(),
                         Value::Table(handle) => {
-                            let entries = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                            let entries =
+                                self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
                             // Dense tables have exact length; a first hole is
                             // one valid border under Lua's sparse-table rules.
                             entries
@@ -2182,7 +2189,10 @@ mod tests {
         assert_eq!(evaluate("return #([=[hello]=])"), 5);
         assert_eq!(evaluate("return ('abc'==\"abc\") and 1 or 0"), 1);
         assert_eq!(evaluate("return ('abc'~='abd') and 1 or 0"), 1);
-        assert_eq!(evaluate("local a='hello'; local b=\"hello\"; return (a==b) and #a or 0"), 5);
+        assert_eq!(
+            evaluate("local a='hello'; local b=\"hello\"; return (a==b) and #a or 0"),
+            5
+        );
     }
 
     #[test]
