@@ -2067,25 +2067,30 @@ mod tests {
     #[test]
     fn repeated_block_local_declarations_keep_distinct_captured_cells() {
         assert_eq!(
-            evaluate("local t={}; for i=1,3 do local x=i; t[i]=function() return x end end; return t[1]()*100+t[2]()*10+t[3]()"),
+            evaluate(
+                "local t={}; for i=1,3 do local x=i; t[i]=function() return x end end; return t[1]()*100+t[2]()*10+t[3]()"
+            ),
             123
         );
         assert_eq!(
-            evaluate("local t={}; local i=0; while i<3 do i=i+1; local x=i; t[i]=function() return x end end; return t[1]()*100+t[2]()*10+t[3]()"),
+            evaluate(
+                "local t={}; local i=0; while i<3 do i=i+1; local x=i; t[i]=function() return x end end; return t[1]()*100+t[2]()*10+t[3]()"
+            ),
             123
         );
         assert_eq!(
-            evaluate("local t={}; local i=0; repeat i=i+1; local x=i; t[i]=function() return x end until i==3; return t[1]()*100+t[2]()*10+t[3]()"),
+            evaluate(
+                "local t={}; local i=0; repeat i=i+1; local x=i; t[i]=function() return x end until i==3; return t[1]()*100+t[2]()*10+t[3]()"
+            ),
             123
         );
         assert_eq!(
-            evaluate("local t={}; for i=1,3 do local function f(n) if n==0 then return i end; return f(n-1) end; t[i]=f end; return t[1](1)*100+t[2](1)*10+t[3](1)"),
+            evaluate(
+                "local t={}; for i=1,3 do local function f(n) if n==0 then return i end; return f(n-1) end; t[i]=f end; return t[1](1)*100+t[2](1)*10+t[3](1)"
+            ),
             123
         );
-        assert_eq!(
-            evaluate("local x=2; do local x=x+1; return x end"),
-            3
-        );
+        assert_eq!(evaluate("local x=2; do local x=x+1; return x end"), 3);
     }
 
     #[test]
