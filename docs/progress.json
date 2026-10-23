@@ -2336,7 +2336,7 @@
               "id": "T371",
               "emoji": "🎭",
               "name": "Function-valued __index and __newindex Lua metamethod callbacks",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Reuse existing bounded closure frames for Lua metamethod callback invocation",
@@ -2350,7 +2350,8 @@
                 },
                 {
                   "text": "Pass Linux rustfmt, clippy, Rust tests, Rust 1.96, composite consumer and Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40028891108: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter all succeeded"
                 }
               ]
             }
