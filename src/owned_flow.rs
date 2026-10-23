@@ -1301,7 +1301,10 @@ impl Execution<'_> {
         } else {
             (false, source.strip_prefix('+').unwrap_or(source))
         };
-        if let Some(hex) = unsigned.strip_prefix("0x").or_else(|| unsigned.strip_prefix("0X")) {
+        if let Some(hex) = unsigned
+            .strip_prefix("0x")
+            .or_else(|| unsigned.strip_prefix("0X"))
+        {
             let number = i64::from_str_radix(hex, 16).map_err(|_| FlowError::TypeError)?;
             if negative {
                 number.checked_neg().ok_or(FlowError::TypeError)
@@ -1706,9 +1709,8 @@ impl Execution<'_> {
                     self.write_table(handle, key, value)?;
                 }
                 Op::Negate => {
-                    let value = self.integer_operand(
-                        stack.pop().ok_or(FlowError::InvalidBytecode)?,
-                    )?;
+                    let value =
+                        self.integer_operand(stack.pop().ok_or(FlowError::InvalidBytecode)?)?;
                     stack.push(Value::Integer(value.wrapping_neg()));
                 }
                 Op::Not => {
@@ -1740,9 +1742,8 @@ impl Execution<'_> {
                     stack.push(Value::Integer(length as i64));
                 }
                 Op::BitNot => {
-                    let value = self.integer_operand(
-                        stack.pop().ok_or(FlowError::InvalidBytecode)?,
-                    )?;
+                    let value =
+                        self.integer_operand(stack.pop().ok_or(FlowError::InvalidBytecode)?)?;
                     stack.push(Value::Integer(!value));
                 }
                 Op::Binary(op) => {
