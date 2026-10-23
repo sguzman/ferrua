@@ -66,6 +66,24 @@ jobs:
         run: |
           cargo build --locked --release
           (cd target/release && sha256sum fer > fer.sha256)
+      - name: Validate Linux release binary on isolated Arch userspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Official Arch Linux base image, date-pinned for reproducible CI.
+          # Container smoke is not native EndeavourOS or Hyprland acceptance.
+          docker run --rm --network none --read-only \
+            --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --mount "type=bind,src=$PWD,dst=/work,readonly" \
+            --workdir /work \
+            archlinux:base-20261011.0.609700 /bin/sh -ec '
+              ./target/release/fer -e "print(6 * 7)" | grep -x 42
+              ./target/release/fer examples/count.lua | grep -x 55
+              ./target/release/fer --check examples/process.lua
+              ./target/release/fer --sandbox -e "assert(io == nil and os == nil and process == nil)"
+              ./target/release/fer -e "assert(json.decode(\"{\\\"key\\\":42}\").key == 42)"
+            '
       - name: Validate Lua-driven release packaging
         run: target/release/fer tools/package_release.lua
       - name: Install and run actual Linux archive outside checkout
