@@ -3650,22 +3650,70 @@ mod tests {
     #[test]
     fn arithmetic_metamethods_reuse_owned_lua_closure_frames() {
         for (source, expected) in [
-            ("local t=setmetatable({}, {__add=function(a,b) return b+3 end}); return t+5", 8),
-            ("local t=setmetatable({}, {__sub=function(a,b) return a.x-b end}); t.x=12; return t-3", 9),
-            ("local t=setmetatable({}, {__mul=function(a,b) return a.factor*b end}); t.factor=4; return t*5", 20),
-            ("local t=setmetatable({}, {__div=function(a,b) return 33 end}); return t/5", 33),
-            ("local t=setmetatable({}, {__idiv=function(a,b) return 44 end}); return t//5", 44),
-            ("local t=setmetatable({}, {__mod=function(a,b) return 55 end}); return t%5", 55),
-            ("local t=setmetatable({}, {__pow=function(a,b) return 66 end}); return t^5", 66),
-            ("local t=setmetatable({}, {__add=function(a,b) return a+7 end}); return 3+t", 10),
-            ("local t=setmetatable({}, {__add=function(a,b) return b end}); return 12+t", 12),
-            ("local a=setmetatable({}, {__add=function() return 11 end}); local b=setmetatable({}, {__add=function() return 22 end}); return a+b", 11),
-            ("local b=setmetatable({}, {__add=function() return 22 end}); return {}+b", 22),
-            ("local t=setmetatable({}, {__add=function() return 4,5 end}); return t+1", 4),
-            ("local t=setmetatable({}, {__add=function() end}); return (t+1)==nil and 1 or 0", 1),
-            ("local n=1; local t=setmetatable({}, {__add=function(self,x) n=n+1; return n+x end}); return t+3+n", 7),
-            ("local t=setmetatable({}, {__add=function(a,b) return b*10 end}); return (t+5)*2", 100),
-            ("local t=setmetatable({}, {__add=function() return 7 end}); return type(t+2)=='number' and 1 or 0", 1),
+            (
+                "local t=setmetatable({}, {__add=function(a,b) return b+3 end}); return t+5",
+                8,
+            ),
+            (
+                "local t=setmetatable({}, {__sub=function(a,b) return a.x-b end}); t.x=12; return t-3",
+                9,
+            ),
+            (
+                "local t=setmetatable({}, {__mul=function(a,b) return a.factor*b end}); t.factor=4; return t*5",
+                20,
+            ),
+            (
+                "local t=setmetatable({}, {__div=function(a,b) return 33 end}); return t/5",
+                33,
+            ),
+            (
+                "local t=setmetatable({}, {__idiv=function(a,b) return 44 end}); return t//5",
+                44,
+            ),
+            (
+                "local t=setmetatable({}, {__mod=function(a,b) return 55 end}); return t%5",
+                55,
+            ),
+            (
+                "local t=setmetatable({}, {__pow=function(a,b) return 66 end}); return t^5",
+                66,
+            ),
+            (
+                "local t=setmetatable({}, {__add=function(a,b) return a+7 end}); return 3+t",
+                10,
+            ),
+            (
+                "local t=setmetatable({}, {__add=function(a,b) return b end}); return rawequal(12+t,t) and 1 or 0",
+                1,
+            ),
+            (
+                "local a=setmetatable({}, {__add=function() return 11 end}); local b=setmetatable({}, {__add=function() return 22 end}); return a+b",
+                11,
+            ),
+            (
+                "local b=setmetatable({}, {__add=function() return 22 end}); return {}+b",
+                22,
+            ),
+            (
+                "local t=setmetatable({}, {__add=function() return 4,5 end}); return t+1",
+                4,
+            ),
+            (
+                "local t=setmetatable({}, {__add=function() end}); return (t+1)==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local n=1; local t=setmetatable({}, {__add=function(self,x) n=n+1; return n+x end}); return t+3+n",
+                7,
+            ),
+            (
+                "local t=setmetatable({}, {__add=function(a,b) return b*10 end}); return (t+5)*2",
+                100,
+            ),
+            (
+                "local t=setmetatable({}, {__add=function() return 7 end}); return type(t+2)=='number' and 1 or 0",
+                1,
+            ),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
@@ -3681,7 +3729,7 @@ mod tests {
             );
         }
         let program = compile_flow_chunk(
-            "local t={}; setmetatable(t, {__add=function(a,b) return a+b end}); return t+1"
+            "local t={}; setmetatable(t, {__add=function(a,b) return a+b end}); return t+1",
         )
         .unwrap();
         assert_eq!(
