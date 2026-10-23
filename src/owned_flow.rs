@@ -2439,15 +2439,21 @@ mod tests {
             7
         );
         assert_eq!(
-            evaluate("local t={name='abc',size=function(self) return #self.name end}; return t:size()"),
+            evaluate(
+                "local t={name='abc',size=function(self) return #self.name end}; return t:size()"
+            ),
             3
         );
         assert_eq!(
-            evaluate("local t={v=5,f=function(self,x) return self.v+x end}; local n=0; local function get() n=n+1; return t end; return get():f(2)+n"),
+            evaluate(
+                "local t={v=5,f=function(self,x) return self.v+x end}; local n=0; local function get() n=n+1; return t end; return get():f(2)+n"
+            ),
             8
         );
         assert_eq!(
-            evaluate("local function pair() return 3,4 end; local t={sum=function(self,a,b) return self.v+a+b end,v=2}; return t:sum(pair())"),
+            evaluate(
+                "local function pair() return 3,4 end; local t={sum=function(self,a,b) return self.v+a+b end,v=2}; return t:sum(pair())"
+            ),
             9
         );
         let multi = compile_flow_chunk(
