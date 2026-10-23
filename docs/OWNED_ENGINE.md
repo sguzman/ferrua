@@ -400,3 +400,9 @@ Unary negation (`-value`) and bitwise complement (`~value`) now retain their acc
 The CI-accepted regression and Lua 5.4 differential fixtures cover duplicate arguments, ordinary numeric operators, extra/no callback results, lexical captures and recursion limits. Builtin/callable-table metamethods, additional binary bitwise dispatch, primitive metatables and full language parity remain outside this increment. Production `fer` remains unchanged.
 
 [CI #40031937707](https://github.com/sguzman/ferrua/actions/runs/40031937707) passed all four primary jobs and the machine-readable status reporter for unary metamethod semantics.
+
+### Bounded binary bitwise metamethods (pending CI)
+
+The owned VM now tries its existing integer-only bitwise operation first for `&`, `|`, binary `~`, `<<`, and `>>`. If conversion fails with a type error, table operands are considered left first for `__band`, `__bor`, `__bxor`, `__shl` or `__shr` respectively. First-party Lua function callbacks execute through the shared bounded closure executor with both original operands, and only the first callback result contributes to the surrounding expression.
+
+This increment has regression and Lua 5.4 differential fixtures but remains **pending full CI acceptance**. It does not add bitwise metamethods for callable-table/builtin values, generalized primitive metatables, comprehensive coercion of all numeric-string representations or remaining comparison metamethods. Production `fer` remains unchanged.
