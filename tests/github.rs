@@ -86,7 +86,7 @@ fn github_rest_json_write_with_explicit_headers_and_no_redirects() {
         );
         assert!(request.contains("x-ferrua-test: yes"), "{request}");
         // No reliance on HTTP payload arriving in a single socket read.
-        stream.write_all(b"HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"number\":1}").unwrap();
+        stream.write_all(b"HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: 12\r\nConnection: close\r\n\r\n{\"number\":1}").unwrap();
     });
     let code = format!(
         "local data,err=github.request_json('POST','/repos/fictional/demo/issues',{{base_url='http://{address}',json_body={{title='Sample'}},headers={{['X-Ferrua-Test']='yes'}}}}); assert(data,err); assert(data.number==1); print('GitHub POST passed')"
