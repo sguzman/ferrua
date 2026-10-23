@@ -765,13 +765,14 @@ impl<'a> Parser<'a> {
             let statement = self.statement(depth)?;
             let terminal = matches!(statement, Statement::Return(_) | Statement::Break);
             let label = matches!(statement, Statement::Label(_));
-            if let Statement::Label(name) = &statement {
-                if result
+            let duplicate = match &statement {
+                Statement::Label(name) => result
                     .iter()
-                    .any(|other| matches!(other, Statement::Label(previous) if previous == name))
-                {
-                    return Err(self.error("duplicate label in lexical block"));
-                }
+                    .any(|other| matches!(other, Statement::Label(previous) if previous == name)),
+                _ => false,
+            };
+            if duplicate {
+                return Err(self.error("duplicate label in lexical block"));
             }
             result.push(statement);
             let ending_line = self
