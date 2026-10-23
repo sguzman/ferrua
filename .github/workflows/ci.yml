@@ -121,6 +121,10 @@ jobs:
         run: cargo build --locked
       - name: Compare deterministic Lua fixture output
         run: target/debug/fer tools/diff_lua.lua | grep -x "Ferrua vs Lua 5.4 differential smoke passed"
+      - name: Compare experimental integer register IR against upstream Lua
+        env:
+          FERRUA_COMPARE_OWNED_WITH_LUA: "1"
+        run: cargo test --locked --test owned_vm -- --nocapture
 
   msrv:
     timeout-minutes: 20
