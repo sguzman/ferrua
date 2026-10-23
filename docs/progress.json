@@ -2566,7 +2566,7 @@
               "id": "T381",
               "emoji": "📝",
               "name": "Bounded Lua table __tostring callback and return validation",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Invoke first-party Lua __tostring closures with the original table and require a string result",
@@ -2580,7 +2580,8 @@
                 },
                 {
                   "text": "Pass Linux formatting/Clippy/Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40036891366: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all succeeded"
                 }
               ]
             }
