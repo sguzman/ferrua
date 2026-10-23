@@ -4,7 +4,7 @@
 
 **Overall:** `██████████ 96%` across 111 atomic tasks. This describes recorded work, not full Lua compatibility.
 
-## 🌙 M0 — Working fer interpreter MVP — `█████████░ 92%`
+## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
 **Acceptance gate:** A usable fer CLI executes basic Lua scripts and passes Linux CI; stable v1.0.0 requires release acceptance.
 
@@ -21,7 +21,7 @@
   - [x] Rust fer crate and GitHub workflow checked in — Cargo.toml; .github/workflows/ci.yml
   - [x] Rust compile, lint and formatting verified in CI — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
 
-### ⚙️ P1 — Lua interpreter and command interface — `█████████░ 89%`
+### ⚙️ P1 — Lua interpreter and command interface — `█████████░ 93%`
 
 - 🧠 **T101** Compile and execute Lua bytecode in pure Rust — `██████████ 100%`
   - [x] Pinned pure-Rust Lua VM integrated — Cargo.toml; src/main.rs; docs/ARCHITECTURE.md
@@ -52,10 +52,10 @@
   - [x] Accept --check for script paths, expressions and piped Lua source — src/main.rs: check_source, parse and execute
   - [x] Never run validated Lua during syntax-only check — tests/cli.rs and src/main.rs unit test; GitHub Actions 39947311765
   - [x] Report syntax errors with nonzero exit status — GitHub Actions 39947311765: --check invalid Lua rejects, 42 tests green
-- 🐧 **T109** Isolated Arch Linux userspace validation for release-mode fer — `███████░░░ 67%`
+- 🐧 **T109** Isolated Arch Linux userspace validation for release-mode fer — `██████████ 100%`
   - [x] Run actual release-built fer in the official Arch Linux userspace image, independent of the Ubuntu build host — .github/workflows/ci.yml: Validate Linux release binary on isolated Arch userspace
   - [x] Pin the Arch base image and exercise CLI, Lua dialect, syntax-check and restricted-mode smoke with read-only filesystem and disabled network — .github/workflows/ci.yml: archlinux:base-20261011.0.609700; docker --network none --read-only
-  - [ ] Pass full CI, including isolated Arch smoke, after integration
+  - [x] Pass full CI, including isolated Arch smoke, after integration — GitHub Actions 40039930789: linux job includes isolated Arch release-binary smoke; Rust 1.96, Lua 5.4 differential and composite consumer also succeeded
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -65,7 +65,7 @@
 - 📋 Documented, auditable progress — `██████████ 100%`
 - 📦 Distribution readiness — `███░░░░░░░ 33%`
 - 📝 Side-effect-free source validation — `██████████ 100%`
-- 🐧 Arch Linux release-binary portability smoke (not native EndeavourOS) — `███████░░░ 67%`
+- 🐧 Arch Linux release-binary portability smoke (not native EndeavourOS) — `██████████ 100%`
 
 ## 🧰 M1 — Daily automation and Python replacement — `█████████░ 93%`
 
