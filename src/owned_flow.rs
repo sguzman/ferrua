@@ -1915,6 +1915,48 @@ impl Execution<'_> {
         Ok(fresh)
     }
 
+    /// Single closure invocation path for bytecode calls and metamethods.
+    /// The owned VM shares call-depth and instruction budgets across both.
+    fn call_owned_function(
+        &mut self,
+        handle: usize,
+        args: &[Value],
+    ) -> Result<Vec<Value>, FlowError> {
+        let closure = self
+            .closures
+            .get(handle)
+            .cloned()
+            .ok_or(FlowError::InvalidBytecode)?;
+        let function = self
+            .program
+            .functions
+            .get(closure.function)
+            .ok_or(FlowError::InvalidBytecode)?
+            .clone();
+        if self.depth >= MAX_CALL_DEPTH {
+            return Err(FlowError::CallDepthExceeded);
+        }
+        let mut initial = Vec::new();
+        for (position, slot) in function.parameters.iter().enumerate() {
+            initial.push((*slot, args.get(position).copied().unwrap_or(Value::Nil)));
+        }
+        self.depth += 1;
+        let varargs = if function.vararg && args.len() > function.parameters.len() {
+            &args[function.parameters.len()..]
+        } else {
+            &[]
+        };
+        let result = self.run(
+            &function.instructions,
+            function.slots,
+            &initial,
+            &closure.captures,
+            varargs,
+        );
+        self.depth -= 1;
+        result
+    }
+
     fn run(
         &mut self,
         instructions: &[Op],
@@ -2173,39 +2215,7 @@ impl Execution<'_> {
                     let Value::Function(handle) = callable else {
                         return Err(FlowError::TypeError);
                     };
-                    let closure = self
-                        .closures
-                        .get(handle)
-                        .cloned()
-                        .ok_or(FlowError::InvalidBytecode)?;
-                    let function = self
-                        .program
-                        .functions
-                        .get(closure.function)
-                        .ok_or(FlowError::InvalidBytecode)?
-                        .clone();
-                    if self.depth >= MAX_CALL_DEPTH {
-                        return Err(FlowError::CallDepthExceeded);
-                    }
-                    let mut initial = Vec::new();
-                    for (position, slot) in function.parameters.iter().enumerate() {
-                        initial.push((*slot, args.get(position).copied().unwrap_or(Value::Nil)));
-                    }
-                    self.depth += 1;
-                    let varargs = if function.vararg && args.len() > function.parameters.len() {
-                        &args[function.parameters.len()..]
-                    } else {
-                        &[]
-                    };
-                    let result = self.run(
-                        &function.instructions,
-                        function.slots,
-                        &initial,
-                        &closure.captures,
-                        varargs,
-                    );
-                    self.depth -= 1;
-                    let returned = result?;
+                    let returned = self.call_owned_function(handle, &args)?;
                     if matches!(
                         instructions[pc],
                         Op::CallMany(_) | Op::CallSpread { many: true, .. }
