@@ -68,7 +68,10 @@ pub enum Op {
     CallMany(usize),
     VarargSingle,
     VarargMany,
-    AdjustTail { prefix: usize, targets: usize },
+    AdjustTail {
+        prefix: usize,
+        targets: usize,
+    },
     GetTable,
     SetTable,
     Negate,
@@ -1369,9 +1372,18 @@ mod tests {
             eval_many("local function pair() return 2,3 end; return (pair())"),
             vec![Value::Integer(2)]
         );
-        assert_eq!(evaluate("local function pair() return 2,3 end; local a,b=pair(); return a+b"), 5);
-        assert_eq!(evaluate("local function pair() return 2,3 end; local a,b=9,pair(); return a+b"), 11);
-        assert_eq!(evaluate("local function pair() return 2,3 end; local a,b=pair(),9; return a+b"), 11);
+        assert_eq!(
+            evaluate("local function pair() return 2,3 end; local a,b=pair(); return a+b"),
+            5
+        );
+        assert_eq!(
+            evaluate("local function pair() return 2,3 end; local a,b=9,pair(); return a+b"),
+            11
+        );
+        assert_eq!(
+            evaluate("local function pair() return 2,3 end; local a,b=pair(),9; return a+b"),
+            11
+        );
         assert_eq!(
             eval_many("local function f(...) return ... end; return f(4,5,6)"),
             vec![Value::Integer(4), Value::Integer(5), Value::Integer(6)]
@@ -1380,8 +1392,14 @@ mod tests {
             eval_many("local function f(a,...) return a,... end; return f(2,3,4)"),
             vec![Value::Integer(2), Value::Integer(3), Value::Integer(4)]
         );
-        assert_eq!(evaluate("local function f(...) local a,b=...; return a+b end; return f(3,4)"), 7);
-        assert_eq!(evaluate("local function f(...) local a,b=1,...; return a+b end; return f(3,4)"), 4);
+        assert_eq!(
+            evaluate("local function f(...) local a,b=...; return a+b end; return f(3,4)"),
+            7
+        );
+        assert_eq!(
+            evaluate("local function f(...) local a,b=1,...; return a+b end; return f(3,4)"),
+            4
+        );
         assert!(compile_flow_chunk("return ...").is_err());
     }
 
