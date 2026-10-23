@@ -1495,11 +1495,18 @@ impl Execution<'_> {
     /// Bounded raw table traversal. Lua leaves hash traversal order unspecified;
     /// iteration uses the current table storage order, never a sorted-key promise.
     /// Missing/deleted previous keys are rejected rather than silently restarting.
-    fn next_builtin(&self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+    fn next_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
         let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
             return Err(FlowError::TypeError);
         };
         let table = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+        // The table scan is bounded by the same shared execution budget as
+        // bytecode, preventing repeated next() calls from bypassing VM limits.
+        let scan_cost = table.array.len().saturating_add(table.hashed.len());
+        if self.steps.saturating_add(scan_cost) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += scan_cost;
         let mut entries = Vec::new();
         for (index, value) in table.array.iter().enumerate() {
             if let Some(value) = *value {
@@ -3396,6 +3403,14 @@ mod tests {
             5
         );
         assert_eq!(evaluate("return type(pairs)=='function' and 1 or 0"), 1);
+        let program = compile_flow_chunk(
+            "local t={}; for i=1,50 do t[i]=i end; local k,v=next(t); return v",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_value(&program, 40),
+            Err(FlowError::StepBudgetExceeded)
+        );
         for source in [
             "return next()",
             "return next(3)",
