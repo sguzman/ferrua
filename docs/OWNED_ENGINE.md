@@ -1,41 +1,35 @@
 # 🔩 Ferrua-owned language engine
 
-The working fer command currently runs on the pinned third-party pure-Rust luna-core compiler/VM. The experimental owned Rust library modules **do not execute Lua**.
+The production `fer` executable still uses the pinned, independently maintained pure-Rust `luna-core` compiler and VM. Ferrua's separate experimental Rust-owned components are library APIs, and **do not replace the production backend**.
 
-- ferrua::lex::tokenize records Lua keyword, name, number, literal and symbol tokens with original spelling, byte offset and line.
-- ferrua::expr::parse_expression uses a Pratt parser for standalone literal/name expressions, unary and binary operators, parentheses, Lua 5.4 precedence and right associativity.
-- Neither is a complete Lua grammar parser, a compiler, or a register VM. Expression parsing supports only semicolon-delimited local declarations, assignments, call statements, and an optional final return through `parse_chunk`. It does not yet support complete Lua statement grammar, block scopes, method-call syntax, table constructors or anonymous functions. The supported expression subset now includes calls, chained field selection and bracket indexing.
+## Current independent components
 
-## Evidence and limits
+- **Lexer:** [`src/lex.rs`](../src/lex.rs) tokenizes a documented Lua 5.4 subset, preserving spelling, line number and source byte offsets; [the first-party source corpus](../tests/owned_syntax.rs) covers 27 real Lua scripts.
+- **Parser:** [`src/expr.rs`](../src/expr.rs) builds Pratt expression trees with operator precedence, chained calls, fields and indexing. Its limited chunk grammar includes local declarations, assignments, calls, returns, nested `do/end`, `if/elseif/else`, `while`, `repeat/until`, numeric `for`, and generic `for/in`.
+- **Scope analysis:** [`src/scope.rs`](../src/scope.rs) records local bindings and name references, including block/branch/loop scopes, shadowing, parallel declaration visibility, and `repeat` conditions evaluated in the body scope.
+- **Register prototype:** [`src/owned_vm.rs`](../src/owned_vm.rs) compiles and runs integer expression bytecode with bounded registers. Supported operators include unary minus, integer addition/subtraction/multiplication, Lua floor division and modulo, and integer bitwise/shift operations. Division by zero yields an explicit error. Integer overflow wraps as on the supported 64-bit Lua reference.
+- **Static integer chunks:** `compile_integer_chunk` compiles straight-line integer locals, parallel assignments to existing locals, nested `do/end` scopes, and a final scalar return into the same owned register IR. An initializer sees the outer/previous binding, while parallel assignment evaluates all RHS expressions before rebinding names.
 
-The lexical integration suite scans 27 first-party Lua scripts (automation, examples, and reference conformance fixtures), checks source-token slicing, source offset monotonicity, and line number ordering. Rust unit tests verify numeric boundaries, comments, escapes, parser precedence, diagnostic offsets, and invalid input.
+## Explicit boundaries
 
-The production runtime is also compared separately against the upstream Lua 5.4.6 reference interpreter, but those tests **do not demonstrate that the experimental lexer/parser can execute Lua**.
+The parser is **not** complete Lua syntax. The independent bytecode engine supports neither Lua functions nor dynamic loops, branches, global variables, calls, Lua tables, strings, floats, metatables, coroutines, closures/upvalues, garbage collection, or a standard library. The static chunk compiler refuses unsupported forms instead of silently falling back to the production engine. Native script entrypoints remain powered by `luna-core`.
 
-## Graduation
+The tests compare the narrow owned integer subset to the production `fer` CLI and, in a separate Linux CI job, directly to upstream **Lua 5.4.6**. These comparisons do not certify full Lua conformance.
 
-1. Finish all lexical corner cases and first-class parser diagnostics.
-2. Implement full statement grammar and scope analysis with golden ASTs.
-3. Implement bytecode compilation, VM, closures, coroutines, tables, GC and standard library semantics.
-4. Expand reference differential tests for the new engine.
-5. Only replace the production backend after language and regression acceptance; do not prematurely label MVP or v1.
+## Acceptance evidence
 
-**CI acceptance:** [run #39953838372](https://github.com/sguzman/ferrua/actions/runs/39953838372) passed four jobs including 27-script lexer acceptance and the expanded expression parser tests. The source scanner understands Lua's `\\z` whitespace-skipping string escape, but semantic string-escape validation is still future work. Parent T301 remains incomplete until the full language statement parser and lexical scopes exist.
+- [Lexer/parser corpus — CI #39953838372](https://github.com/sguzman/ferrua/actions/runs/39953838372)
+- [Scoped conditional/loop parser — CI #39957918722](https://github.com/sguzman/ferrua/actions/runs/39957918722)
+- [Owned integer IR against upstream Lua — CI #39959317291](https://github.com/sguzman/ferrua/actions/runs/39959317291)
+- [Extended floor/modulo/bitwise parity — CI #39960437635](https://github.com/sguzman/ferrua/actions/runs/39960437635)
+- [Static integer local chunks against upstream Lua — CI #39961500042](https://github.com/sguzman/ferrua/actions/runs/39961500042)
 
-**Additional parser acceptance:** [run #39954592909](https://github.com/sguzman/ferrua/actions/runs/39954592909) verifies the experimental `parse_chunk` subset and malformed statement tests. The parent full-parser/scoping task remains incomplete.
+Each cited CI run passed all four existing jobs. The ledger in [`progress.json`](progress.json) credits only these narrower implemented tasks; **full parser/scoping (T301), full VM/compiler (T302), and native runtime graduation (T304) remain open**.
 
-### First-party name binding subset
+## Graduation sequence
 
-`ferrua::scope::analyze(source)` assigns binding slots to locals in the supported semicolon-delimited chunk grammar. It reports identifier references as local or global and as reads/writes, including shadowing semantics where the initializer of a newly declared local sees the preceding binding, not the new binding. It now resolves nested do/end blocks and independent conditional/while/for/repeat scopes. Full function scopes, upvalues, closures, goto/labels, and Lua's complete grammar remain unimplemented. [CI #39955169495](https://github.com/sguzman/ferrua/actions/runs/39955169495) validated the analyzer with all four jobs green.
-
-### Scoped control flow and loops (experimental)
-
-The owned AST now covers bounded `do/end`, `if/elseif/else`, `while/do`, `repeat/until`, numeric `for`, and generic `for/in` for its documented expression/statement subset. Newlines may separate those supported statements. Scope analysis recognizes separate branch and loop frames, including numeric/generic iterator bounds evaluated before their locals exist, and `repeat` conditions evaluated **inside** the body frame. The new syntax tests do not imply that the owned VM can execute any of these constructs; production still uses `luna-core`.
-
-**Acceptance:** [nested/conditional #39956479889](https://github.com/sguzman/ferrua/actions/runs/39956479889), [repeat/newline #39956981511](https://github.com/sguzman/ferrua/actions/runs/39956981511), [numeric for #39957386939](https://github.com/sguzman/ferrua/actions/runs/39957386939), and [generic for #39957918722](https://github.com/sguzman/ferrua/actions/runs/39957918722) each passed all four CI jobs. All are limited source-analysis features, not full grammar/VM acceptance.
-
-### Register-bytecode proof of concept
-
-The separate Rust module `ferrua::owned_vm` compiles **standalone integer arithmetic expressions only** into a bounded, first-party register instruction stream (`Load`, `Neg`, `Add`, `Sub`, `Mul`) and executes it with initialized-register checks and wrapping i64 arithmetic. Variables, function calls, Lua tables, floating-point numbers, control-flow bytecode, closures, coroutines, garbage collection and standard libraries are **not implemented by this module**. It does not modify the shipped `fer` interpreter.
-
-**Evidence:** [CI #39959317291](https://github.com/sguzman/ferrua/actions/runs/39959317291) passed the official Lua 5.4.6 comparison for this narrow integer subset, as well as all four quality jobs. The full `T302` compiler and VM task remains open at 0% until the required compiler/register dispatcher and closure/coroutine acceptance gates are achieved; this proof of concept does not satisfy those gates.
+1. Expand syntax and diagnostics to complete Lua grammar, including function definitions and expression forms.
+2. Implement complete lexical bindings, upvalues, closures, and function call mechanics.
+3. Extend runtime value types, Lua tables/metamethods, control-flow bytecode, garbage collection, coroutines and standard libraries.
+4. Grow upstream Lua differential testing beyond deterministic smoke fixtures, including error semantics and real automation workloads.
+5. Integrate the independent engine with `fer` only after passing the full acceptance gates. Do not claim a stable owned runtime prematurely.

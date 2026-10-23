@@ -37,7 +37,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [all four jobs green, including independent integer register IR compared with upstream Lua 5.4.6](https://github.com/sguzman/ferrua/actions/runs/39959317291). Native EndeavourOS acceptance, published stable release, and a complete Ferrua-owned Lua VM remain pending.
+**Latest verified CI:** [all four jobs green, including owned integer chunk execution against upstream Lua 5.4.6](https://github.com/sguzman/ferrua/actions/runs/39961500042). Native EndeavourOS acceptance, a published stable release and complete Ferrua-owned Lua execution remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
@@ -65,14 +65,8 @@ For engine parity work, CI also runs a Lua-authored differential test harness ag
 
 ### Rust-owned language components
 
-Experimental independent Rust lexer and expression parser components are available through the `ferrua` library. They are not connected to the production `fer` VM. See [owned-engine architecture](docs/OWNED_ENGINE.md) for scope and corpus validation, with the working CLI still using the external VM.
+Ferrua's independent language engine is developed separately from the working `fer` CLI, which continues to use the pinned `luna-core` VM. Current Rust-owned library components include a lexical scanner, expression and limited statement parser, nested-scope resolver, and a **bounded integer register-bytecode interpreter**.
 
-The experimental Rust-owned expression AST has gained calls, field selectors, and bracket indexing. These are source-analysis components only; production `fer` continues using the pinned existing VM. [Owned-engine acceptance and limitations](docs/OWNED_ENGINE.md).
+The owned bytecode engine executes Lua-compatible integer arithmetic, modulo/floor division, bitwise shifts, and a limited straight-line chunk form with locals, parallel assignments, nested `do/end` scopes and a final return. It is verified against upstream Lua 5.4.6, but does **not** yet execute general Lua scripts, functions, loops, tables, or closures.
 
-The owned language library now also exposes a deliberately restricted `parse_chunk` AST for semicolon-delimited local declarations, assignment, calls, and returns. Full Lua statement grammar, lexical scope analysis, and independent VM execution are **not yet implemented**.
-
-The experimental owned-engine library now also provides single-scope local-variable shadowing and reference analysis. It is **not** a complete lexical scope implementation, and it does not affect normal Lua execution.
-
-Experimental source analysis now includes nested lexical blocks, conditional branches, `while`/`repeat`, and numeric/generic `for` syntax with correctly scoped loop variables. See [owned-engine limitations](docs/OWNED_ENGINE.md). None of these features replaces the working third-party Lua VM.
-
-The separate `ferrua::owned_vm` module now executes a **limited integer-expression register-bytecode subset** and is tested against upstream Lua 5.4.6. This is an experimental compiler/VM proof of concept, not a replacement for the production `fer` interpreter. See [owned-engine architecture](docs/OWNED_ENGINE.md).
+Read [🔩 independent engine design and acceptance evidence](docs/OWNED_ENGINE.md). The complete independent Lua compiler and VM remain future acceptance gates.

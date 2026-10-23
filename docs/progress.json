@@ -972,6 +972,52 @@
                   "evidence": "tests/owned_vm.rs and CI 39959317291: Compare experimental integer register IR against upstream Lua — success"
                 }
               ]
+            },
+            {
+              "id": "T313",
+              "emoji": "🔢",
+              "name": "Lua integer floor, modulo, bitwise and shift instructions",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Implement Lua 5.4 floor-div/modulo sign and division-by-zero rules in owned integer IR",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: floor_div, lua_mod, Error::DivisionByZero, wrapping overflow regression tests"
+                },
+                {
+                  "text": "Implement unsigned logical bitwise operations and signed-direction shift counts",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: BitAnd/BitOr/BitXor/BitNot/Shl/Shr instructions and shift boundary fixtures"
+                },
+                {
+                  "text": "Verify against production fer and independent upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_vm.rs; GitHub Actions 39960437635: four CI jobs green"
+                }
+              ]
+            },
+            {
+              "id": "T314",
+              "emoji": "🧱",
+              "name": "Static integer chunk compilation with local assignments",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile a bounded straight-line Lua chunk subset to the existing owned integer IR",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: compile_integer_chunk and scoped compile_statements"
+                },
+                {
+                  "text": "Preserve parallel RHS evaluation, block shadowing, and rejection of unsupported statements",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs unit tests for nested do/end, local shadowing, parallel reassignment, invalid call/control-flow forms"
+                },
+                {
+                  "text": "Verify static chunk results against fer and upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_vm.rs; GitHub Actions 39961500042 all four jobs passed"
+                }
+              ]
             }
           ]
         }
@@ -1035,6 +1081,20 @@
           "name": "Experimental integer register VM proof of concept",
           "task_ids": [
             "T312"
+          ]
+        },
+        {
+          "emoji": "🔣",
+          "name": "Lua integer arithmetic and bitwise coverage",
+          "task_ids": [
+            "T313"
+          ]
+        },
+        {
+          "emoji": "🧱",
+          "name": "Static integer chunk bytecode",
+          "task_ids": [
+            "T314"
           ]
         }
       ]

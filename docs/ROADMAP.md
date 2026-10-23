@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 87%` across 37 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 88%` across 39 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `████████░░ 75%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `████████░░ 79%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `████████░░ 75%`
+### 🔣 P3 — Ferrua-owned language engine — `████████░░ 79%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -190,6 +190,14 @@
   - [x] Implement bounded first-party register bytecode compiler and dispatcher for integer arithmetic only — src/owned_vm.rs: compile_integer_expression, execute_integer_program, explicit unsupported forms
   - [x] Reject malformed registers and validate wrapping integer arithmetic — src/owned_vm.rs: invalid-register and overflow unit tests; CI 39958915661
   - [x] Compare owned integer bytecode with official upstream Lua 5.4.6 — tests/owned_vm.rs and CI 39959317291: Compare experimental integer register IR against upstream Lua — success
+- 🔢 **T313** Lua integer floor, modulo, bitwise and shift instructions — `██████████ 100%`
+  - [x] Implement Lua 5.4 floor-div/modulo sign and division-by-zero rules in owned integer IR — src/owned_vm.rs: floor_div, lua_mod, Error::DivisionByZero, wrapping overflow regression tests
+  - [x] Implement unsigned logical bitwise operations and signed-direction shift counts — src/owned_vm.rs: BitAnd/BitOr/BitXor/BitNot/Shl/Shr instructions and shift boundary fixtures
+  - [x] Verify against production fer and independent upstream Lua 5.4.6 — tests/owned_vm.rs; GitHub Actions 39960437635: four CI jobs green
+- 🧱 **T314** Static integer chunk compilation with local assignments — `██████████ 100%`
+  - [x] Compile a bounded straight-line Lua chunk subset to the existing owned integer IR — src/owned_vm.rs: compile_integer_chunk and scoped compile_statements
+  - [x] Preserve parallel RHS evaluation, block shadowing, and rejection of unsupported statements — src/owned_vm.rs unit tests for nested do/end, local shadowing, parallel reassignment, invalid call/control-flow forms
+  - [x] Verify static chunk results against fer and upstream Lua 5.4.6 — tests/owned_vm.rs; GitHub Actions 39961500042 all four jobs passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -201,4 +209,6 @@
 - 🌿 Experimental local binding analysis — `██████████ 100%`
 - 🌳 Nested lexical control-flow and loop parsing — `██████████ 100%`
 - 🔢 Experimental integer register VM proof of concept — `██████████ 100%`
+- 🔣 Lua integer arithmetic and bitwise coverage — `██████████ 100%`
+- 🧱 Static integer chunk bytecode — `██████████ 100%`
 
