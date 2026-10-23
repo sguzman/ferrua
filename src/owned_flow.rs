@@ -2,7 +2,7 @@
 //! This bounded stack VM evaluates integer, Boolean and nil Lua values with
 //! lexical locals and control flow. It is not a complete Lua runtime or the register backend.
 
-use crate::expr::{Expr, Statement, parse_chunk};
+use crate::expr::{Expr, Statement, TableField, parse_chunk};
 use crate::owned_vm::{floor_div, lua_mod, shift};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -10,6 +10,9 @@ use std::fmt;
 const MAX_CODE: usize = 16_384;
 const MAX_SLOTS: usize = 16_384;
 const MAX_STACK: usize = 16_384;
+const MAX_TABLES: usize = 16_384;
+const MAX_TABLE_FIELDS: usize = 16_384;
+const MAX_TABLE_CELLS_TOTAL: usize = 65_536;
 pub const DEFAULT_STEP_BUDGET: usize = 100_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,6 +20,8 @@ pub enum Value {
     Integer(i64),
     Boolean(bool),
     Nil,
+    /// Opaque index into the per-execution bounded heap.
+    Table(usize),
 }
 
 impl Value {
@@ -50,6 +55,9 @@ pub enum Op {
     Constant(Value),
     ReadLocal(usize),
     AssignLocals(Vec<usize>),
+    NewTable(usize),
+    GetTable,
+    SetTable,
     Negate,
     Not,
     BitNot,
@@ -195,6 +203,22 @@ impl<'a> Compiler<'a> {
                 self.expression(right, depth + 1)?;
                 self.patch(skip, self.code.len())?;
             }
+            Expr::Index { object, key } => {
+                self.expression(object, depth + 1)?;
+                self.expression(key, depth + 1)?;
+                self.push(Op::GetTable)?;
+            }
+            Expr::Table(fields) => {
+                for field in fields {
+                    let TableField::Value(value) = field else {
+                        return Err(FlowError::Unsupported(
+                            "only positional integer-key table fields".into(),
+                        ));
+                    };
+                    self.expression(value, depth + 1)?;
+                }
+                self.push(Op::NewTable(fields.len()))?;
+            }
             Expr::Binary { op, left, right } => {
                 let operation = match *op {
                     "+" => Binary::Add,
@@ -298,6 +322,15 @@ impl<'a> Compiler<'a> {
                     self.push(Op::AssignLocals(targets))?;
                 }
                 Statement::Assign { targets, values } => {
+                    if let ([Expr::Index { object, key }], [value]) =
+                        (targets.as_slice(), values.as_slice())
+                    {
+                        self.expression(object, 0)?;
+                        self.expression(key, 0)?;
+                        self.expression(value, 0)?;
+                        self.push(Op::SetTable)?;
+                        continue;
+                    }
                     // Resolve targets and evaluate RHS before mutating slots.
                     let slots = targets
                         .iter()
@@ -532,6 +565,8 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
     }
     let mut stack = Vec::new();
     let mut slots: Vec<Option<Value>> = vec![None; program.slots];
+    let mut tables: Vec<Vec<Option<Value>>> = Vec::new();
+    let mut table_cells = 0usize;
     let mut pc = 0;
     let mut steps = 0;
     while pc < program.instructions.len() {
@@ -558,6 +593,61 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
                 for (index, value) in indices.iter().zip(values) {
                     *slots.get_mut(*index).ok_or(FlowError::InvalidBytecode)? = Some(value);
                 }
+            }
+            Op::NewTable(count) => {
+                if *count > MAX_TABLE_FIELDS
+                    || tables.len() >= MAX_TABLES
+                    || table_cells.saturating_add(*count) > MAX_TABLE_CELLS_TOTAL
+                    || stack.len() < *count
+                {
+                    return Err(FlowError::TooLarge);
+                }
+                let values = stack.split_off(stack.len() - *count);
+                let handle = tables.len();
+                tables.push(values.into_iter().map(Some).collect());
+                table_cells += *count;
+                stack.push(Value::Table(handle));
+            }
+            Op::GetTable => {
+                let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                let (Value::Table(handle), Value::Integer(index)) = (table, key) else {
+                    return Err(FlowError::TypeError);
+                };
+                let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
+                if field == 0 || field > MAX_TABLE_FIELDS {
+                    return Err(FlowError::TypeError);
+                }
+                let values = tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                stack.push(
+                    values
+                        .get(field - 1)
+                        .copied()
+                        .flatten()
+                        .unwrap_or(Value::Nil),
+                );
+            }
+            Op::SetTable => {
+                let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                let (Value::Table(handle), Value::Integer(index)) = (table, key) else {
+                    return Err(FlowError::TypeError);
+                };
+                let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
+                if field == 0 || field > MAX_TABLE_FIELDS {
+                    return Err(FlowError::TypeError);
+                }
+                let values = tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
+                if field > values.len() {
+                    let growth = field - values.len();
+                    if table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+                        return Err(FlowError::TooLarge);
+                    }
+                    table_cells += growth;
+                    values.resize(field, None);
+                }
+                values[field - 1] = Some(value);
             }
             Op::Negate => {
                 let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)? else {
@@ -862,6 +952,33 @@ mod tests {
             1
         );
     }
+    #[test]
+    fn bounded_array_tables_preserve_reference_identity_and_missing_nil() {
+        assert_eq!(evaluate("local t={4,5}; return t[2]"), 5);
+        assert_eq!(evaluate("local t={4}; t[1]=7; return t[1]"), 7);
+        assert_eq!(evaluate("local t={2}; local alias=t; alias[1]=8; return t[1]"), 8);
+        assert_eq!(evaluate("local t={1}; return t[9] or 3"), 3);
+        assert_eq!(evaluate("local t={{2}}; return t[1][1]"), 2);
+        assert_eq!(evaluate("local a={1}; local b=a; return (a==b) and 1 or 0"), 1);
+        assert_eq!(evaluate("local a={1}; local b={1}; return (a==b) and 1 or 0"), 0);
+    }
+
+    #[test]
+    fn bounded_tables_reject_unsupported_keys_and_fields() {
+        assert!(compile_flow_chunk("local t={name=2}; return 1").is_err());
+        for source in [
+            "local t={1}; t[0]=7; return 1",
+            "local t={1}; return t[true]",
+            "local t=1; return t[1]",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_chunk(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError)
+            );
+        }
+    }
+
     #[test]
     fn returns_fixed_count_lua_values_and_preserves_single_value_apis() {
         for (source, values) in [

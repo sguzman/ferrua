@@ -59,6 +59,13 @@ const FIXTURES: &[&str] = &[
     "return true,0",
     "if true then return 1,2 else return 3,4 end",
     "local x,y=2,3; return y,x",
+    "local t={4,5}; return t[2]",
+    "local t={4}; t[1]=7; return t[1]",
+    "local t={2}; local alias=t; alias[1]=8; return t[1]",
+    "local t={1}; return t[9] or 3",
+    "local t={{2}}; return t[1][1]",
+    "local a={1}; local b=a; return (a==b) and 1 or 0",
+    "local a={1}; local b={1}; return (a==b) and 1 or 0",
 ];
 
 fn render(values: &[Value]) -> String {
@@ -68,6 +75,7 @@ fn render(values: &[Value]) -> String {
             Value::Integer(number) => number.to_string(),
             Value::Boolean(boolean) => boolean.to_string(),
             Value::Nil => "nil".to_owned(),
+            Value::Table(_) => "table".to_owned(),
         })
         .collect::<Vec<_>>()
         .join("\t")

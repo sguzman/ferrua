@@ -103,3 +103,7 @@ The full parser, executable call frames and closure runtime are **not** yet comp
 ### Table constructor syntax foundation
 
 The Rust-owned parser now builds explicit field ASTs for empty and nested table constructors, list elements, `name=value` entries, and `[expr]=value` computed keys, including mixed comma/semicolon separators and trailing separators. Lexical analysis reads only computed keys and value expressions, not literal field names. Upstream Lua 5.4 syntax fixtures cover supported and malformed cases. Neither owned execution prototype yet allocates table values or implements metatables.
+
+### Bounded indexed-table execution
+
+The experimental stack-based `owned_flow` VM can now create array-style positional tables using a per-execution bounded heap, read positive integer keys and assign one computed integer-key target at a time. Aliases share the same internal table handle, and missing positive indices yield `nil`. Table identity uses a handle comparison. The allocated heap is limited in total cells and count to avoid unbounded allocation. The supported numeric results are compared against production `fer` and upstream Lua 5.4.6. General Lua keys, named fields, nil deletion, hash semantics, metatables, iteration, simultaneous indexed LHS assignment, and complete table value compatibility remain unsupported. Opaque table handles returned from the experimental API cannot be dereferenced outside a particular VM execution.
