@@ -3701,6 +3701,43 @@ mod tests {
     }
 
     #[test]
+    fn concat_metamethod_preserves_byte_concat_and_bounded_callbacks() {
+        for (source, expected) in [
+            ("return ('ab'..'cd')=='abcd' and 1 or 0", 1),
+            ("return ('a'..12)=='a12' and 1 or 0", 1),
+            ("local t=setmetatable({name='X'},{__concat=function(a,b) return a.name..b end}); return (t..'Y')=='XY' and 1 or 0", 1),
+            ("local t=setmetatable({name='X'},{__concat=function(a,b) return a..b.name end}); return ('Y'..t)=='YX' and 1 or 0", 1),
+            ("local a=setmetatable({}, {__concat=function() return 11 end}); local b=setmetatable({}, {__concat=function() return 22 end}); return a..b", 11),
+            ("local b=setmetatable({}, {__concat=function() return 22 end}); return {}..b", 22),
+            ("local t=setmetatable({}, {__concat=function() return 9,10 end}); return t..'x'", 9),
+            ("local t=setmetatable({}, {__concat=function() end}); return (t..'x')==nil and 1 or 0", 1),
+            ("local t=setmetatable({}, {__concat=function() return 'ok' end}); return (t..3)=='ok' and 1 or 0", 1),
+            ("local n=0; local t=setmetatable({}, {__concat=function() n=n+1; return 'ok' end}); return (t..3)=='ok' and n or 0", 1),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        for source in [
+            "return {}..'x'",
+            "local t=setmetatable({}, {__concat=3}); return t..'x'",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError),
+                "{source}"
+            );
+        }
+        let program = compile_flow_chunk(
+            "local t={}; setmetatable(t,{__concat=function(a,b) return a..b end}); return t..'x'"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+    }
+
+    #[test]
     fn binary_bitwise_metamethods_preserve_integer_rules_and_bounded_callbacks() {
         for (source, expected) in [
             (
