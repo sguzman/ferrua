@@ -380,7 +380,11 @@ impl<'a> Parser<'a> {
             } else if self.peek().is_some() {
                 return Err(self.error("expected statement separator"));
             }
-            if terminal && self.peek().is_some_and(|token| !(stop_at_end && token.spelling == "end")) {
+            if terminal
+                && self
+                    .peek()
+                    .is_some_and(|token| !(stop_at_end && token.spelling == "end"))
+            {
                 return Err(self.error("return must be final statement in block"));
             }
         }
@@ -393,7 +397,11 @@ impl<'a> Parser<'a> {
 /// lexical blocks. Other Lua control flow is not yet supported.
 pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
     let tokens = tokenize(source)?;
-    let mut parser = Parser { tokens, index: 0, length: source.len() };
+    let mut parser = Parser {
+        tokens,
+        index: 0,
+        length: source.len(),
+    };
     parser.block(false, 0)
 }
 
@@ -535,8 +543,9 @@ mod tests {
     #[test]
     fn parses_nested_do_blocks_and_post_block_statements() {
         let parsed = parse_chunk(
-            "local x=1; do local x=2; do local y=x; print(y) end; print(x) end; return x"
-        ).unwrap();
+            "local x=1; do local x=2; do local y=x; print(y) end; print(x) end; return x",
+        )
+        .unwrap();
         assert_eq!(parsed.len(), 3);
         match &parsed[1] {
             Statement::Block(outer) => {
@@ -560,7 +569,12 @@ mod tests {
             assert!(parse_chunk(source).is_err(), "{source}");
         }
         let deeply_nested = format!("{}{}", "do ".repeat(65), "end ".repeat(65));
-        assert!(parse_chunk(&deeply_nested).unwrap_err().message.contains("nesting"));
+        assert!(
+            parse_chunk(&deeply_nested)
+                .unwrap_err()
+                .message
+                .contains("nesting")
+        );
     }
 
     #[test]

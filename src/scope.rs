@@ -52,7 +52,11 @@ struct Resolver<'src> {
 
 impl<'src> Resolver<'src> {
     fn record(&mut self, name: &'src str, access: Access, statement: usize) {
-        let resolution = self.scopes.iter().rev().find_map(|frame| frame.get(name).copied())
+        let resolution = self
+            .scopes
+            .iter()
+            .rev()
+            .find_map(|frame| frame.get(name).copied())
             .map_or(Resolution::Global, Resolution::Local);
         self.result.references.push(Reference {
             name,
@@ -103,7 +107,10 @@ impl<'src> Resolver<'src> {
 
     fn bind(&mut self, name: &'src str, statement: usize) {
         let slot = self.result.bindings.len();
-        self.scopes.last_mut().expect("at least root scope").insert(name, slot);
+        self.scopes
+            .last_mut()
+            .expect("at least root scope")
+            .insert(name, slot);
         self.result.bindings.push(Binding {
             name,
             slot,
@@ -228,31 +235,44 @@ mod tests {
     #[test]
     fn nested_blocks_shadow_and_restore_local_bindings() {
         let result = analyze(
-            "local x=1; do local x=x+1; do local y=x; print(y,x) end; print(x) end; return x"
-        ).unwrap();
+            "local x=1; do local x=x+1; do local y=x; print(y,x) end; print(x) end; return x",
+        )
+        .unwrap();
         assert_eq!(result.bindings.len(), 3);
         assert_eq!(result.bindings[0].scope_depth, 0);
         assert_eq!(result.bindings[1].scope_depth, 1);
         assert_eq!(result.bindings[2].scope_depth, 2);
-        assert!(result.references.iter().any(|r|
-            r.name == "x" && r.scope_depth == 1 && r.resolution == Resolution::Local(0)
-        ));
-        assert!(result.references.iter().any(|r|
-            r.name == "x" && r.scope_depth == 2 && r.resolution == Resolution::Local(1)
-        ));
-        assert!(result.references.iter().any(|r|
-            r.name == "x" && r.scope_depth == 0 && r.resolution == Resolution::Local(0)
-        ));
-        assert!(result.references.iter().any(|r|
-            r.name == "y" && r.scope_depth == 2 && r.resolution == Resolution::Local(2)
-        ));
+        assert!(
+            result.references.iter().any(|r| r.name == "x"
+                && r.scope_depth == 1
+                && r.resolution == Resolution::Local(0))
+        );
+        assert!(
+            result.references.iter().any(|r| r.name == "x"
+                && r.scope_depth == 2
+                && r.resolution == Resolution::Local(1))
+        );
+        assert!(
+            result.references.iter().any(|r| r.name == "x"
+                && r.scope_depth == 0
+                && r.resolution == Resolution::Local(0))
+        );
+        assert!(
+            result.references.iter().any(|r| r.name == "y"
+                && r.scope_depth == 2
+                && r.resolution == Resolution::Local(2))
+        );
     }
 
     #[test]
     fn escaped_block_locals_are_not_visible_after_end() {
         let result = analyze("do local hidden=1 end; print(hidden)").unwrap();
         assert_eq!(result.bindings.len(), 1);
-        let hidden = result.references.iter().find(|r| r.name == "hidden").unwrap();
+        let hidden = result
+            .references
+            .iter()
+            .find(|r| r.name == "hidden")
+            .unwrap();
         assert_eq!(hidden.scope_depth, 0);
         assert_eq!(hidden.resolution, Resolution::Global);
     }
@@ -260,7 +280,9 @@ mod tests {
     #[test]
     fn assignments_in_inner_blocks_resolve_nearest_visible_local() {
         let result = analyze("local x=1; do x=2; local x=3; x=4 end; x=5").unwrap();
-        let writes: Vec<_> = result.references.iter()
+        let writes: Vec<_> = result
+            .references
+            .iter()
             .filter(|r| r.name == "x" && r.access == Access::Write)
             .collect();
         assert_eq!(writes.len(), 3);
