@@ -4,7 +4,7 @@
 
 **Overall:** `██████████ 96%` across 114 atomic tasks. This describes recorded work, not full Lua compatibility.
 
-## 🌙 M0 — Working fer interpreter MVP — `█████████░ 92%`
+## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
 **Acceptance gate:** A usable fer CLI executes basic Lua scripts and passes Linux CI; stable v1.0.0 requires release acceptance.
 
@@ -21,7 +21,7 @@
   - [x] Rust fer crate and GitHub workflow checked in — Cargo.toml; .github/workflows/ci.yml
   - [x] Rust compile, lint and formatting verified in CI — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
 
-### ⚙️ P1 — Lua interpreter and command interface — `█████████░ 90%`
+### ⚙️ P1 — Lua interpreter and command interface — `█████████░ 93%`
 
 - 🧠 **T101** Compile and execute Lua bytecode in pure Rust — `██████████ 100%`
   - [x] Pinned pure-Rust Lua VM integrated — Cargo.toml; src/main.rs; docs/ARCHITECTURE.md
@@ -56,10 +56,10 @@
   - [x] Run actual release-built fer in the official Arch Linux userspace image, independent of the Ubuntu build host — .github/workflows/ci.yml: Validate Linux release binary on isolated Arch userspace
   - [x] Pin the Arch base image and exercise CLI, Lua dialect, syntax-check and restricted-mode smoke with read-only filesystem and disabled network — .github/workflows/ci.yml: archlinux:base-20261011.0.609700; docker --network none --read-only
   - [x] Pass full CI, including isolated Arch smoke, after integration — GitHub Actions 40039930789: linux job includes isolated Arch release-binary smoke; Rust 1.96, Lua 5.4 differential and composite consumer also succeeded
-- 📦 **T110** Checksum-verified release archive portability on Arch Linux — `███████░░░ 67%`
+- 📦 **T110** Checksum-verified release archive portability on Arch Linux — `██████████ 100%`
   - [x] Validate packaged tarball SHA-256 and execute extracted fer in an isolated pinned Arch Linux container — .github/workflows/ci.yml: Verify packaged Linux archive inside isolated Arch userspace
   - [x] Run equivalent archive validation before a tagged GitHub Release publishes assets — .github/workflows/release.yml: Verify tagged release archive in pinned Arch Linux userspace
-  - [ ] Pass Linux CI with extracted release archive smoke, installer, compiler and differential acceptance
+  - [x] Pass Linux CI with extracted release archive smoke, installer, compiler and differential acceptance — GitHub Actions 40041099463: linux job checksum-verified and executed extracted archive in pinned Arch container; full five-job CI passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -70,7 +70,7 @@
 - 📦 Distribution readiness — `███░░░░░░░ 33%`
 - 📝 Side-effect-free source validation — `██████████ 100%`
 - 🐧 Arch Linux release-binary portability smoke (not native EndeavourOS) — `██████████ 100%`
-- 📦 Arch-portable checksum-verified release archives — `███████░░░ 67%`
+- 📦 Arch-portable checksum-verified release archives — `██████████ 100%`
 
 ## 🧰 M1 — Daily automation and Python replacement — `█████████░ 94%`
 
