@@ -65,6 +65,10 @@ pub enum Op {
     NewTable(usize),
     NewFunction(usize),
     Call(usize),
+    CallMany(usize),
+    VarargSingle,
+    VarargMany,
+    AdjustTail { prefix: usize, targets: usize },
     GetTable,
     SetTable,
     Negate,
@@ -89,6 +93,7 @@ pub enum Op {
     },
     Return,
     ReturnMany(usize),
+    ReturnTail(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -104,6 +109,7 @@ struct FunctionProgram {
     slots: usize,
     parameters: Vec<usize>,
     captures: Vec<(usize, usize)>,
+    vararg: bool,
 }
 
 impl FlowProgram {
@@ -155,6 +161,7 @@ struct Compiler<'a> {
     read_only: HashSet<usize>,
     loop_breaks: Vec<Vec<usize>>,
     functions: Rc<RefCell<Vec<FunctionProgram>>>,
+    vararg: bool,
 }
 
 impl<'a> Compiler<'a> {
@@ -181,9 +188,6 @@ impl<'a> Compiler<'a> {
         vararg: bool,
         body: &[Statement<'a>],
     ) -> Result<usize, FlowError> {
-        if vararg {
-            return Err(FlowError::Unsupported("vararg functions".into()));
-        }
         let id = self.functions.borrow().len();
         if id >= MAX_CLOSURES {
             return Err(FlowError::TooLarge);
@@ -193,6 +197,7 @@ impl<'a> Compiler<'a> {
             slots: 0,
             parameters: Vec::new(),
             captures: Vec::new(),
+            vararg: false,
         });
         let mut child = Self {
             code: Vec::new(),
@@ -202,6 +207,7 @@ impl<'a> Compiler<'a> {
             read_only: HashSet::new(),
             loop_breaks: Vec::new(),
             functions: Rc::clone(&self.functions),
+            vararg,
         };
         // Eagerly and deterministically capture visible locals; shadowing
         // resolves from outer to inner scope.
@@ -235,7 +241,7 @@ impl<'a> Compiler<'a> {
         if !child
             .code
             .iter()
-            .any(|op| matches!(op, Op::Return | Op::ReturnMany(_)))
+            .any(|op| matches!(op, Op::Return | Op::ReturnMany(_) | Op::ReturnTail(_)))
         {
             child.push(Op::ReturnMany(0))?;
         }
@@ -244,6 +250,7 @@ impl<'a> Compiler<'a> {
             slots: child.slots,
             parameters: formal_slots,
             captures,
+            vararg,
         };
         Ok(id)
     }
@@ -254,6 +261,9 @@ impl<'a> Compiler<'a> {
         }
         match expr {
             Expr::Grouped(inner) => self.expression(inner, depth + 1)?,
+            Expr::Vararg if self.vararg => {
+                self.push(Op::VarargSingle)?;
+            }
             Expr::Atom(text) => {
                 let constant = match *text {
                     "true" => Some(Value::Boolean(true)),
@@ -362,12 +372,41 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    // Lua evaluates every explicit RHS expression, then truncates surplus
-    // values or supplies nil for missing targets. Calls and multireturns
-    // remain unsupported in this intentionally bounded prototype.
+    fn multiple_expression(&mut self, expr: &Expr<'a>) -> Result<bool, FlowError> {
+        match expr {
+            Expr::Call { callee, arguments } => {
+                self.expression(callee, 0)?;
+                for argument in arguments {
+                    self.expression(argument, 0)?;
+                }
+                self.push(Op::CallMany(arguments.len()))?;
+                Ok(true)
+            }
+            Expr::Vararg if self.vararg => {
+                self.push(Op::VarargMany)?;
+                Ok(true)
+            }
+            _ => {
+                self.expression(expr, 0)?;
+                Ok(false)
+            }
+        }
+    }
+
+    // Only a final unparenthesized call or vararg expands. Earlier
+    // expressions evaluate once, and result lists pad or truncate with nil.
     fn values(&mut self, expressions: &[Expr<'a>], targets: usize) -> Result<(), FlowError> {
-        for expression in expressions {
-            self.expression(expression, 0)?;
+        if let Some((last, before)) = expressions.split_last() {
+            for expression in before {
+                self.expression(expression, 0)?;
+            }
+            if self.multiple_expression(last)? {
+                self.push(Op::AdjustTail {
+                    prefix: before.len(),
+                    targets,
+                })?;
+                return Ok(());
+            }
         }
         for _ in targets..expressions.len() {
             self.push(Op::Discard)?;
@@ -499,8 +538,14 @@ impl<'a> Compiler<'a> {
                     self.push(Op::AssignLocals(slots))?;
                 }
                 Statement::Return(values) => {
-                    for value in values {
-                        self.expression(value, 0)?;
+                    if let Some((last, before)) = values.split_last() {
+                        for value in before {
+                            self.expression(value, 0)?;
+                        }
+                        if self.multiple_expression(last)? {
+                            self.push(Op::ReturnTail(before.len()))?;
+                            continue;
+                        }
                     }
                     if values.len() == 1 {
                         self.push(Op::Return)?;
@@ -662,12 +707,13 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
         read_only: HashSet::new(),
         loop_breaks: Vec::new(),
         functions: Rc::clone(&functions),
+        vararg: false,
     };
     compiler.statements(&statements)?;
     if !compiler
         .code
         .iter()
-        .any(|op| matches!(op, Op::Return | Op::ReturnMany(_)))
+        .any(|op| matches!(op, Op::Return | Op::ReturnMany(_) | Op::ReturnTail(_)))
     {
         return Err(FlowError::NoReturn);
     }
@@ -731,6 +777,7 @@ impl Execution<'_> {
         slot_count: usize,
         initial: &[(usize, Value)],
         captures: &[(usize, usize)],
+        varargs: &[Value],
     ) -> Result<Vec<Value>, FlowError> {
         if instructions.len() > MAX_CODE
             || slot_count > MAX_SLOTS
@@ -754,6 +801,7 @@ impl Execution<'_> {
             *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
         }
         let mut stack = Vec::new();
+        let mut last_multiple = None;
         let mut pc = 0;
         while pc < instructions.len() {
             if self.steps >= self.budget {
@@ -781,7 +829,7 @@ impl Execution<'_> {
                     });
                     stack.push(Value::Function(handle));
                 }
-                Op::Call(argc) => {
+                Op::Call(argc) | Op::CallMany(argc) => {
                     if stack.len() < argc.saturating_add(1) {
                         return Err(FlowError::InvalidBytecode);
                     }
@@ -809,15 +857,50 @@ impl Execution<'_> {
                         initial.push((*slot, args.get(position).copied().unwrap_or(Value::Nil)));
                     }
                     self.depth += 1;
+                    let varargs = if function.vararg && args.len() > function.parameters.len() {
+                        &args[function.parameters.len()..]
+                    } else {
+                        &[]
+                    };
                     let result = self.run(
                         &function.instructions,
                         function.slots,
                         &initial,
                         &closure.captures,
+                        varargs,
                     );
                     self.depth -= 1;
                     let returned = result?;
-                    stack.push(returned.into_iter().next().unwrap_or(Value::Nil));
+                    if matches!(instructions[pc], Op::CallMany(_)) {
+                        last_multiple = Some(returned.len());
+                        stack.extend(returned);
+                    } else {
+                        stack.push(returned.into_iter().next().unwrap_or(Value::Nil));
+                    }
+                }
+                Op::VarargSingle => {
+                    stack.push(varargs.first().copied().unwrap_or(Value::Nil));
+                }
+                Op::VarargMany => {
+                    last_multiple = Some(varargs.len());
+                    stack.extend_from_slice(varargs);
+                }
+                Op::AdjustTail { prefix, targets } => {
+                    let multiple = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
+                    if stack.len() < prefix.saturating_add(multiple) {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let tail = stack.split_off(stack.len() - multiple);
+                    if *prefix > *targets {
+                        for _ in *targets..*prefix {
+                            stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                        }
+                    }
+                    let needed = targets.saturating_sub(*prefix);
+                    stack.extend(tail.iter().copied().take(needed));
+                    for _ in multiple..needed {
+                        stack.push(Value::Nil);
+                    }
                 }
                 Op::ReadLocal(slot) => {
                     let cell = *slots.get(*slot).ok_or(FlowError::InvalidBytecode)?;
@@ -1027,6 +1110,14 @@ impl Execution<'_> {
                     }
                     return Ok(stack.split_off(stack.len() - *count));
                 }
+                Op::ReturnTail(prefix) => {
+                    let multiple = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
+                    let count = prefix.saturating_add(multiple);
+                    if stack.len() < count {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    return Ok(stack.split_off(stack.len() - count));
+                }
             }
             if stack.len() > MAX_STACK {
                 return Err(FlowError::TooLarge);
@@ -1050,7 +1141,7 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
         closures: Vec::new(),
         cells: Vec::new(),
     };
-    execution.run(&program.instructions, program.slots, &[], &[])
+    execution.run(&program.instructions, program.slots, &[], &[], &[])
 }
 
 /// Preserve the single-value API for existing consumers. Zero or multiple
@@ -1258,6 +1349,40 @@ mod tests {
             execute_flow_value(&program, DEFAULT_STEP_BUDGET),
             Ok(Value::Nil)
         );
+    }
+
+    #[test]
+    fn last_expression_multireturn_and_variadic_adjustment() {
+        let eval_many = |source| {
+            let program = compile_flow_chunk(source).unwrap();
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET).unwrap()
+        };
+        assert_eq!(
+            eval_many("local function pair() return 2,3 end; return pair()"),
+            vec![Value::Integer(2), Value::Integer(3)]
+        );
+        assert_eq!(
+            eval_many("local function pair() return 2,3 end; return 1,pair()"),
+            vec![Value::Integer(1), Value::Integer(2), Value::Integer(3)]
+        );
+        assert_eq!(
+            eval_many("local function pair() return 2,3 end; return (pair())"),
+            vec![Value::Integer(2)]
+        );
+        assert_eq!(evaluate("local function pair() return 2,3 end; local a,b=pair(); return a+b"), 5);
+        assert_eq!(evaluate("local function pair() return 2,3 end; local a,b=9,pair(); return a+b"), 11);
+        assert_eq!(evaluate("local function pair() return 2,3 end; local a,b=pair(),9; return a+b"), 11);
+        assert_eq!(
+            eval_many("local function f(...) return ... end; return f(4,5,6)"),
+            vec![Value::Integer(4), Value::Integer(5), Value::Integer(6)]
+        );
+        assert_eq!(
+            eval_many("local function f(a,...) return a,... end; return f(2,3,4)"),
+            vec![Value::Integer(2), Value::Integer(3), Value::Integer(4)]
+        );
+        assert_eq!(evaluate("local function f(...) local a,b=...; return a+b end; return f(3,4)"), 7);
+        assert_eq!(evaluate("local function f(...) local a,b=1,...; return a+b end; return f(3,4)"), 4);
+        assert!(compile_flow_chunk("return ...").is_err());
     }
 
     #[test]

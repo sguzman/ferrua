@@ -78,6 +78,16 @@ const FIXTURES: &[&str] = &[
     "local function make() local n=0; local function next() n=n+1; return n end; return next end; local a=make(); local b=make(); return a()+b()+a()",
     "local x=1; local function outer() return function() return x end end; local inner=outer(); x=7; return inner()",
     "local function f(n) if n==0 then return 0 end; return f(n-1) end; local original=f; f=function(x) return 8 end; return original(3)",
+    "local function pair() return 2,3 end; return pair()",
+    "local function pair() return 2,3 end; return 1,pair()",
+    "local function pair() return 2,3 end; return (pair())",
+    "local function pair() return 2,3 end; local a,b=pair(); return a+b",
+    "local function pair() return 2,3 end; local a,b=9,pair(); return a+b",
+    "local function pair() return 2,3 end; local a,b=pair(),9; return a+b",
+    "local function f(...) return ... end; return f(4,5,6)",
+    "local function f(a,...) return a,... end; return f(2,3,4)",
+    "local function f(...) local a,b=...; return a+b end; return f(3,4)",
+    "local function f(...) local a,b=1,...; return a+b end; return f(3,4)",
 ];
 
 fn render(values: &[Value]) -> String {
