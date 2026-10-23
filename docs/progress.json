@@ -2584,6 +2584,28 @@
                   "evidence": "GitHub Actions 40036891366: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all succeeded"
                 }
               ]
+            },
+            {
+              "id": "T382",
+              "emoji": "🔎",
+              "name": "Lua ipairs respects bounded __index fallbacks for missing sequence elements",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Use regular table indexing for ipairs iteration, retaining rawget/next and ipairs' independence from __pairs",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::ipairs_iterator uses lookup_with_metatable"
+                },
+                {
+                  "text": "Cover table/closure index fallbacks, nil holes, stop conditions, raw bypass, recursion and Lua 5.4 differential fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: ipairs_respects_index_fallbacks_without_changing_raw_iteration; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux formatting, Clippy, Rust unit tests, Rust 1.96, consumer and upstream Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3130,6 +3152,13 @@
           "name": "Lua __tostring closures with validated string returns",
           "task_ids": [
             "T381"
+          ]
+        },
+        {
+          "emoji": "🔎",
+          "name": "Metamethod-aware sequential ipairs with raw-access separation",
+          "task_ids": [
+            "T382"
           ]
         }
       ]
