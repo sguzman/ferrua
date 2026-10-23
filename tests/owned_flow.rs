@@ -1,5 +1,5 @@
 //! Differential acceptance for experimental integer+boolean control-flow VM.
-use ferrua::owned_flow::{compile_flow_chunk, execute_flow_chunk, DEFAULT_STEP_BUDGET};
+use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, compile_flow_chunk, execute_flow_chunk};
 use std::process::Command;
 
 const FIXTURES: &[&str] = &[
@@ -19,9 +19,19 @@ fn check(reference: &str) {
         let compiled = compile_flow_chunk(source).unwrap();
         let owned = execute_flow_chunk(&compiled, DEFAULT_STEP_BUDGET).unwrap();
         let code = format!("print((function() {source} end)())");
-        let output = Command::new(reference).args(["-e", &code]).output().unwrap();
-        assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
-        let expected: i64 = String::from_utf8_lossy(&output.stdout).trim().parse().unwrap();
+        let output = Command::new(reference)
+            .args(["-e", &code])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let expected: i64 = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse()
+            .unwrap();
         assert_eq!(owned, expected, "{reference} differs on {source}");
     }
 }
@@ -33,16 +43,29 @@ fn production_fer_agrees_with_owned_control_flow_subset() {
         let owned = execute_flow_chunk(&compiled, DEFAULT_STEP_BUDGET).unwrap();
         let code = format!("print((function() {source} end)())");
         let output = Command::new(env!("CARGO_BIN_EXE_fer"))
-            .args(["--lua=5.4", "-e", &code]).output().unwrap();
-        assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
-        let expected: i64 = String::from_utf8_lossy(&output.stdout).trim().parse().unwrap();
+            .args(["--lua=5.4", "-e", &code])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let expected: i64 = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse()
+            .unwrap();
         assert_eq!(owned, expected, "production fer differs on {source}");
     }
 }
 
 #[test]
 fn upstream_lua_agrees_when_requested() {
-    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() == Some("1") {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
         check("lua5.4");
     }
 }
