@@ -47,6 +47,7 @@ pub enum Builtin {
     RawEqual,
     RawGet,
     RawSet,
+    RawLen,
 }
 
 impl Value {
@@ -450,6 +451,9 @@ impl<'a> Compiler<'a> {
                         }
                         Err(_) if *text == "rawset" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::RawSet)))?;
+                        }
+                        Err(_) if *text == "rawlen" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::RawLen)))?;
                         }
                         Err(error) => return Err(error),
                     }
@@ -1589,6 +1593,30 @@ impl Execution<'_> {
         }
     }
 
+    fn raw_len(&self, value: Value) -> Result<Value, FlowError> {
+        let length = match value {
+            Value::String(handle) => self
+                .strings
+                .get(handle)
+                .ok_or(FlowError::InvalidBytecode)?
+                .len(),
+            Value::Table(handle) => {
+                let array = &self
+                    .tables
+                    .get(handle)
+                    .ok_or(FlowError::InvalidBytecode)?
+                    .array;
+                // A first missing positive index is a valid Lua raw border.
+                array
+                    .iter()
+                    .take_while(|cell| !matches!(cell, None | Some(Value::Nil)))
+                    .count()
+            }
+            _ => return Err(FlowError::TypeError),
+        };
+        Ok(Value::Integer(length as i64))
+    }
+
     fn string_bytes(&self, value: Value) -> Result<Vec<u8>, FlowError> {
         match value {
             Value::String(handle) => self
@@ -1806,6 +1834,7 @@ impl Execution<'_> {
                                 self.write_table(handle, key, value)?;
                                 Value::Table(handle)
                             }
+                            Builtin::RawLen => self.raw_len(value)?,
                             Builtin::ToString => match value {
                                 Value::String(_) => value,
                                 Value::Integer(number) => {
@@ -2084,28 +2113,8 @@ impl Execution<'_> {
                     stack.push(Value::Boolean(!value.truthy()));
                 }
                 Op::Length => {
-                    let length = match stack.pop().ok_or(FlowError::InvalidBytecode)? {
-                        Value::String(handle) => self
-                            .strings
-                            .get(handle)
-                            .ok_or(FlowError::InvalidBytecode)?
-                            .len(),
-                        Value::Table(handle) => {
-                            let entries = &self
-                                .tables
-                                .get(handle)
-                                .ok_or(FlowError::InvalidBytecode)?
-                                .array;
-                            // Dense tables have exact length; a first hole is
-                            // one valid border under Lua's sparse-table rules.
-                            entries
-                                .iter()
-                                .take_while(|cell| !matches!(cell, None | Some(Value::Nil)))
-                                .count()
-                        }
-                        _ => return Err(FlowError::TypeError),
-                    };
-                    stack.push(Value::Integer(length as i64));
+                    let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    stack.push(self.raw_len(value)?);
                 }
                 Op::BitNot => {
                     let value =
@@ -3077,6 +3086,31 @@ mod tests {
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
+    }
+
+    #[test]
+    fn rawlen_reports_bounded_string_bytes_and_table_borders() {
+        assert_eq!(evaluate("return rawlen('abc')"), 3);
+        assert_eq!(evaluate("return rawlen('é')"), 2);
+        assert_eq!(evaluate("return rawlen({1,2,3})"), 3);
+        assert_eq!(evaluate("local t={a=4}; return rawlen(t)"), 0);
+        assert_eq!(
+            evaluate("local t={1,2}; t[3]=4; return rawlen(t)"),
+            3
+        );
+        assert_eq!(evaluate("local f=rawlen; return f('xyz')"), 3);
+        assert_eq!(
+            evaluate("local rawlen=function() return 6 end; return rawlen({})"),
+            6
+        );
+        assert_eq!(evaluate("return (type(rawlen)=='function') and 1 or 0"), 1);
+        for source in ["return rawlen()", "return rawlen(2)"] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError)
+            );
+        }
     }
 
     #[test]

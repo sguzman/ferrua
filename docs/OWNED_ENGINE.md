@@ -317,3 +317,7 @@ The owned runtime now exposes `tonumber` as a pure, lexically shadowable callabl
 ### First-class raw table functions
 
 The independent stack VM now exposes first-class, lexically shadowable `rawequal`, `rawget`, and `rawset` functions. Raw equality preserves numeric integer/float equivalence, string byte-content equality, and table/function identity. Raw reads and writes use the same bounded table storage and canonicalized numeric keys as regular table access, and `rawset` returns the input table. Nil values remove entries, with invalid assignment keys rejected. Full metamethod bypass semantics cannot be tested until metatables exist; these are narrowly verified builtins, not a complete Lua base library. The production `fer` interpreter remains unchanged.
+
+### Bounded first-class rawlen
+
+The owned stack VM now exposes a first-class, lexically shadowable `rawlen` builtin. It returns byte lengths for strings and a valid sequence border for the current bounded Lua table representation, sharing the existing table-length logic rather than introducing inconsistent implementations. It rejects unsupported operand types and preserves the existing execution budgets. Metamethods are not yet implemented, so raw-versus-metamethod length differences remain untested. Production `fer` remains unchanged.
