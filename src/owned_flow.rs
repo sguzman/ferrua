@@ -50,6 +50,10 @@ pub enum Builtin {
     RawLen,
     Select,
     Assert,
+    Next,
+    Pairs,
+    IPairs,
+    IPairsIterator,
 }
 
 impl Value {
@@ -462,6 +466,15 @@ impl<'a> Compiler<'a> {
                         }
                         Err(_) if *text == "assert" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::Assert)))?;
+                        }
+                        Err(_) if *text == "next" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::Next)))?;
+                        }
+                        Err(_) if *text == "pairs" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::Pairs)))?;
+                        }
+                        Err(_) if *text == "ipairs" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::IPairs)))?;
                         }
                         Err(error) => return Err(error),
                     }
@@ -1479,6 +1492,62 @@ impl Execution<'_> {
         Ok(())
     }
 
+    /// Bounded raw table traversal. Lua leaves hash traversal order unspecified;
+    /// iteration uses the current table storage order, never a sorted-key promise.
+    /// Missing/deleted previous keys are rejected rather than silently restarting.
+    fn next_builtin(&self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
+            return Err(FlowError::TypeError);
+        };
+        let table = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+        let mut entries = Vec::new();
+        for (index, value) in table.array.iter().enumerate() {
+            if let Some(value) = value.filter(|value| **value != Value::Nil) {
+                entries.push((Value::Integer((index + 1) as i64), *value));
+            }
+        }
+        for (&key, &value) in &table.hashed {
+            if value != Value::Nil {
+                entries.push((key, value));
+            }
+        }
+        let offset = match args.get(1).copied().unwrap_or(Value::Nil) {
+            Value::Nil => 0,
+            key => {
+                let normalized = match self.table_key(key)? {
+                    TableKey::Positive(index) => Value::Integer(index as i64),
+                    TableKey::Hashed(value) => value,
+                };
+                entries
+                    .iter()
+                    .position(|(existing, _)| *existing == normalized)
+                    .ok_or(FlowError::TypeError)?
+                    + 1
+            }
+        };
+        Ok(match entries.get(offset) {
+            Some(&(key, value)) => vec![key, value],
+            None => vec![Value::Nil],
+        })
+    }
+
+    /// The ipairs iterator uses raw positive-integer lookups and terminates at
+    /// the first nil; metatable and resource-closing semantics are not modeled.
+    fn ipairs_iterator(&self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
+            return Err(FlowError::TypeError);
+        };
+        let index = self.exact_integer_operand(*args.get(1).ok_or(FlowError::TypeError)?)?;
+        let index = index.checked_add(1).ok_or(FlowError::TypeError)?;
+        let key = self.table_key(Value::Integer(index))?;
+        let value = self.read_table(handle, key)?;
+        Ok(if value == Value::Nil {
+            vec![Value::Nil]
+        } else {
+            vec![Value::Integer(index), value]
+        })
+    }
+
     fn tonumber_builtin(&self, args: &[Value]) -> Result<Value, FlowError> {
         let value = args.first().copied().unwrap_or(Value::Nil);
         if let Some(base_value) = args.get(1).copied().filter(|arg| *arg != Value::Nil) {
@@ -1820,13 +1889,36 @@ impl Execution<'_> {
                         if args.is_empty() {
                             return Err(FlowError::TypeError);
                         }
-                        if matches!(builtin, Builtin::Select | Builtin::Assert) {
-                            let returned = if builtin == Builtin::Select {
-                                self.select_builtin(&args)?
-                            } else if args.first().is_some_and(|value| value.truthy()) {
-                                args
-                            } else {
-                                return Err(FlowError::TypeError);
+                        if matches!(
+                            builtin,
+                            Builtin::Select | Builtin::Assert | Builtin::Next
+                                | Builtin::Pairs | Builtin::IPairs | Builtin::IPairsIterator
+                        ) {
+                            let returned = match builtin {
+                                Builtin::Select => self.select_builtin(&args)?,
+                                Builtin::Assert if args[0].truthy() => args,
+                                Builtin::Assert => return Err(FlowError::TypeError),
+                                Builtin::Next => self.next_builtin(&args)?,
+                                Builtin::Pairs | Builtin::IPairs => {
+                                    if !matches!(args[0], Value::Table(_)) {
+                                        return Err(FlowError::TypeError);
+                                    }
+                                    vec![
+                                        Value::Builtin(if builtin == Builtin::Pairs {
+                                            Builtin::Next
+                                        } else {
+                                            Builtin::IPairsIterator
+                                        }),
+                                        args[0],
+                                        if builtin == Builtin::Pairs {
+                                            Value::Nil
+                                        } else {
+                                            Value::Integer(0)
+                                        },
+                                    ]
+                                }
+                                Builtin::IPairsIterator => self.ipairs_iterator(&args)?,
+                                _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
                                 instructions[pc],
@@ -1892,8 +1984,13 @@ impl Execution<'_> {
                                 Value::Table(handle)
                             }
                             Builtin::RawLen => self.raw_len(value)?,
-                            Builtin::Select | Builtin::Assert => {
-                                unreachable!("select/assert handled as multiple results")
+                            Builtin::Select
+                            | Builtin::Assert
+                            | Builtin::Next
+                            | Builtin::Pairs
+                            | Builtin::IPairs
+                            | Builtin::IPairsIterator => {
+                                unreachable!("iteration/selection builtins handled as multiple results")
                             }
                             Builtin::ToString => match value {
                                 Value::String(_) => value,
