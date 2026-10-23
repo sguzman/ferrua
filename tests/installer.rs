@@ -49,12 +49,24 @@ fn serve_fixture(archive: Vec<u8>, checksum: Vec<u8>) -> (String, thread::JoinHa
 fn create_fixture(root: &Path, bad_checksum: bool) -> (Vec<u8>, Vec<u8>) {
     let source = root.join("contents");
     fs::create_dir_all(&source).unwrap();
-    fs::write(source.join("fer"), "#!/bin/sh\nprintf 'fer fixture works\\n'\n").unwrap();
+    fs::write(
+        source.join("fer"),
+        "#!/bin/sh\nprintf 'fer fixture works\\n'\n",
+    )
+    .unwrap();
     fs::write(source.join("README.md"), "Test fixture\n").unwrap();
     fs::write(source.join("LICENSE"), "Test fixture license\n").unwrap();
     let archive = "fer-v0.1.0-linux-x86_64.tar.gz";
     let status = Command::new("tar")
-        .args(["-czf", archive, "-C", "contents", "fer", "README.md", "LICENSE"])
+        .args([
+            "-czf",
+            archive,
+            "-C",
+            "contents",
+            "fer",
+            "README.md",
+            "LICENSE",
+        ])
         .current_dir(root)
         .status()
         .unwrap();
@@ -89,10 +101,17 @@ fn exercise(bad_checksum: bool) {
         assert!(!destination.exists(), "tampered archive was installed");
         assert!(String::from_utf8_lossy(&run.stderr).contains("SHA-256 mismatch"));
     } else {
-        assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
         let output = Command::new(destination).output().unwrap();
         assert!(output.status.success());
-        assert_eq!(String::from_utf8_lossy(&output.stdout), "fer fixture works\n");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            "fer fixture works\n"
+        );
     }
     fs::remove_dir_all(root).unwrap();
 }
