@@ -3407,8 +3407,7 @@ mod tests {
             .map(|number| number.to_string())
             .collect::<Vec<_>>()
             .join(",");
-        let program = compile_flow_chunk(&format!("local t={{{entries}}}; return next(t)"))
-            .unwrap();
+        let program = compile_flow_chunk(&format!("local t={{{entries}}}; return next(t)")).unwrap();
         assert_eq!(
             execute_flow_values(&program, 80),
             Err(FlowError::StepBudgetExceeded)
