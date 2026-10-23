@@ -76,11 +76,24 @@ fn owned_goto_label_grammar_accepts_valid_lua_syntax() {
         let syntax = parse_chunk(source).unwrap_or_else(|error| {
             panic!("owned parser rejected valid label/goto syntax {source:?}: {error}")
         });
-        assert!(syntax.iter().any(|stmt| matches!(stmt, Statement::Label(_) | Statement::Goto(_)))
-            || source.contains("::inner::"));
+        assert!(
+            syntax
+                .iter()
+                .any(|stmt| matches!(stmt, Statement::Label(_) | Statement::Goto(_)))
+                || source.contains("::inner::")
+        );
     }
-    for source in ["::", "::3::", "goto 3", "::named:", "::dup:: ::dup:: return 1"] {
-        assert!(parse_chunk(source).is_err(), "malformed label/goto syntax {source:?}");
+    for source in [
+        "::",
+        "::3::",
+        "goto 3",
+        "::named:",
+        "::dup:: ::dup:: return 1",
+    ] {
+        assert!(
+            parse_chunk(source).is_err(),
+            "malformed label/goto syntax {source:?}"
+        );
     }
 }
 
@@ -97,7 +110,10 @@ fn goto_syntax_and_scope_boundaries_match_lua_54_when_requested() {
         ("::first:: goto done; ::done:: return 4", true),
         ("goto done ::done:: return 3", true),
         ("do ::inner:: local x=2 end; ::outer:: return 5", true),
-        ("local n=1; ::mark:: n=n+1; if n<3 then goto mark end; return n", true),
+        (
+            "local n=1; ::mark:: n=n+1; if n<3 then goto mark end; return n",
+            true,
+        ),
         ("goto missing", false),
         ("goto ready; local x=1; ::ready:: return 1", false),
         ("::dup:: ::dup:: return 1", false),
