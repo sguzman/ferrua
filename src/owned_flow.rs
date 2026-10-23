@@ -3576,6 +3576,62 @@ mod tests {
     }
 
     #[test]
+    fn length_metamethod_uses_owned_closures_and_preserves_rawlen() {
+        assert_eq!(
+            evaluate(
+                "local t=setmetatable({1,2,3},{__len=function(a,b) return (a==b) and 90 or 0 end}); return #t"
+            ),
+            90
+        );
+        assert_eq!(
+            evaluate(
+                "local t=setmetatable({1,2,3},{__len=function() return 90 end}); return rawlen(t)"
+            ),
+            3
+        );
+        assert_eq!(
+            evaluate(
+                "local t=setmetatable({}, {__len=function() return 4,5 end}); return #t"
+            ),
+            4
+        );
+        assert_eq!(
+            evaluate(
+                "local t=setmetatable({}, {__len=function() end}); return (#t)==nil and 1 or 0"
+            ),
+            1
+        );
+        assert_eq!(
+            evaluate(
+                "local n=2; local t=setmetatable({}, {__len=function() n=n+1; return n end}); return #t+n"
+            ),
+            6
+        );
+        assert_eq!(
+            evaluate("local t=setmetatable({1,2,3},{}); return #t"),
+            3
+        );
+        assert_eq!(
+            evaluate("return #('é')"),
+            2
+        );
+        let program = compile_flow_chunk(
+            "local t=setmetatable({}, {__len=7}); return #t"
+        ).unwrap();
+        assert_eq!(
+            execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
+        let program = compile_flow_chunk(
+            "local t={}; setmetatable(t,{__len=function(self) return #self end}); return #t"
+        ).unwrap();
+        assert_eq!(
+            execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+    }
+
+    #[test]
     fn callable_index_and_newindex_share_lexical_closure_frames() {
         assert_eq!(
             evaluate(
