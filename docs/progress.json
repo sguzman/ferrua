@@ -2537,6 +2537,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T380",
+              "emoji": "🛡️",
+              "name": "Native-stack-safe bounded recursive metamethod dispatch",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Constrain experimental VM call depth to remain below default Rust thread stack exhaustion",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: MAX_CALL_DEPTH=16 enforced by Execution::call_owned_function"
+                },
+                {
+                  "text": "Regression-test recursive __index, __add, __pairs and __len dispatch return CallDepthExceeded",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: recursively_dispatched_metamethods_stop_before_native_stack_exhaustion"
+                },
+                {
+                  "text": "Pass Linux Rust tests without stack abort, formatter, Clippy, Rust 1.96 and differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3069,6 +3091,13 @@
           "name": "Lua pairs table metamethod custom iterator triples",
           "task_ids": [
             "T379"
+          ]
+        },
+        {
+          "emoji": "🛡️",
+          "name": "Native-stack-safe recursive metamethod limits",
+          "task_ids": [
+            "T380"
           ]
         }
       ]
