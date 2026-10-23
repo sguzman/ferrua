@@ -21,7 +21,11 @@ fn scratch() -> PathBuf {
     path
 }
 
-fn serve_fixture(archive: Vec<u8>, checksum: Vec<u8>, version: &str) -> (String, thread::JoinHandle<()>) {
+fn serve_fixture(
+    archive: Vec<u8>,
+    checksum: Vec<u8>,
+    version: &str,
+) -> (String, thread::JoinHandle<()>) {
     let expected_archive = format!("fer-{version}-linux-x86_64.tar.gz ");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -262,6 +266,8 @@ fn rejects_untrusted_http_origin_before_network_access() {
         .output()
         .unwrap();
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr)
-        .contains("download server must be official GitHub releases or loopback fixture"));
+    assert!(
+        String::from_utf8_lossy(&out.stderr)
+            .contains("download server must be official GitHub releases or loopback fixture")
+    );
 }
