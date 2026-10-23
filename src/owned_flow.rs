@@ -1593,6 +1593,14 @@ impl Execution<'_> {
         self.metatable_field(handle, b"__metatable")
     }
 
+    /// Convert canonicalized table keys back into their Lua runtime values.
+    fn table_key_value(key: TableKey) -> Value {
+        match key {
+            TableKey::Positive(index) => Value::Integer(index as i64),
+            TableKey::Hashed(value) => value,
+        }
+    }
+
     /// Table-valued __index fallbacks form a bounded chain.
     fn lookup_with_metatable(
         &mut self,
@@ -1610,6 +1618,11 @@ impl Execution<'_> {
             }
             match self.metatable_field(handle, b"__index")? {
                 Some(Value::Table(fallback)) => handle = fallback,
+                Some(Value::Function(callback)) => {
+                    let args = [Value::Table(handle), Self::table_key_value(key)];
+                    let returned = self.call_owned_function(callback, &args)?;
+                    return Ok(returned.first().copied().unwrap_or(Value::Nil));
+                }
                 None => return Ok(Value::Nil),
                 Some(_) => return Err(FlowError::TypeError),
             }
@@ -1634,6 +1647,11 @@ impl Execution<'_> {
             }
             match self.metatable_field(handle, b"__newindex")? {
                 Some(Value::Table(fallback)) => handle = fallback,
+                Some(Value::Function(callback)) => {
+                    let args = [Value::Table(handle), Self::table_key_value(key), value];
+                    self.call_owned_function(callback, &args)?;
+                    return Ok(());
+                }
                 None => return self.write_table(handle, key, value),
                 Some(_) => return Err(FlowError::TypeError),
             }
