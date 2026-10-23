@@ -1501,6 +1501,29 @@
                   "evidence": "tests/owned_flow.rs; GitHub Actions 39996750649: 4 jobs passed"
                 }
               ]
+            },
+            {
+              "id": "T336",
+              "emoji": "🧠",
+              "name": "Reuse captured closure cells without duplicate frame allocation",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Map captured lexical slots directly to existing shared-cell references",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::run slot mapping"
+                },
+                {
+                  "text": "Reject duplicate and invalid capture indices while respecting the total cell budget",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::run inherited slot validation and MAX_CELLS_TOTAL"
+                },
+                {
+                  "text": "Verify 30,000 repeated captured calls and full Rust/upstream Lua CI",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: repeated_captured_calls_do_not_allocate_duplicate_upvalue_cells; GitHub Actions 39997490573: four jobs successful"
+                }
+              ]
             }
           ]
         }
@@ -1725,6 +1748,13 @@
           "name": "Implicit zero-result return on conditional function fallthrough",
           "task_ids": [
             "T335"
+          ]
+        },
+        {
+          "emoji": "🧠",
+          "name": "Reuse captured closure cells without duplicate frame allocation",
+          "task_ids": [
+            "T336"
           ]
         }
       ]

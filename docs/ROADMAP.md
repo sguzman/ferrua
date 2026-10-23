@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 92%` across 60 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 92%` across 61 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 91%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 92%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `█████████░ 91%`
+### 🔣 P3 — Ferrua-owned language engine — `█████████░ 92%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -282,6 +282,10 @@
   - [x] Emit an implicit empty return at the end of every compiled function — src/owned_flow.rs: Compiler::compile_function
   - [x] Verify both taken and untaken conditional return branches — src/owned_flow.rs: conditional_function_fallthrough_returns_zero_values
   - [x] Pass Lua 5.4.6, Rust and downstream action compatibility tests — tests/owned_flow.rs; GitHub Actions 39996750649: 4 jobs passed
+- 🧠 **T336** Reuse captured closure cells without duplicate frame allocation — `██████████ 100%`
+  - [x] Map captured lexical slots directly to existing shared-cell references — src/owned_flow.rs: Execution::run slot mapping
+  - [x] Reject duplicate and invalid capture indices while respecting the total cell budget — src/owned_flow.rs: Execution::run inherited slot validation and MAX_CELLS_TOTAL
+  - [x] Verify 30,000 repeated captured calls and full Rust/upstream Lua CI — src/owned_flow.rs: repeated_captured_calls_do_not_allocate_duplicate_upvalue_cells; GitHub Actions 39997490573: four jobs successful
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -316,4 +320,5 @@
 - 🔄 Variadic function parameters and final-result expansion — `██████████ 100%`
 - 🧩 Lua last-argument and positional table-tail result expansion — `██████████ 100%`
 - ⤵️ Implicit zero-result return on conditional function fallthrough — `██████████ 100%`
+- 🧠 Reuse captured closure cells without duplicate frame allocation — `██████████ 100%`
 

@@ -153,3 +153,5 @@ Earlier sections document the incremental prototypes as they existed at the time
 ### Captured-slot allocation efficiency
 
 Execution frames now map captured lexical slots directly to their already-allocated shared cells; they allocate new heap cells only for their own parameters and local variables. The allocation is guarded against duplicated/out-of-range capture descriptors. A bounded 30,000-call regression verifies that repeated invocations with shared captured variables do not waste a duplicate heap cell for each capture. This optimization does not implement garbage collection, reclamation of returned-frame local cells, or unbounded allocation.
+
+- [CI #39997490573](https://github.com/sguzman/ferrua/actions/runs/39997490573): captured slots now reuse their parent cells without allocating unused duplicates; 30,000-call regression and all four CI jobs passed.
