@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 93%` across 64 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 93%` across 65 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 92%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 93%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `█████████░ 92%`
+### 🔣 P3 — Ferrua-owned language engine — `█████████░ 93%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -298,6 +298,10 @@
   - [x] Separate numeric loop-control slots from visible lexical variables and renew captured iteration cells — src/owned_flow.rs: Op::ForCheck; Execution::iteration_cell
   - [x] Ensure generic-for loop closures capture distinct values across iterations — src/owned_flow.rs: Op::GenericForCheck; loop_closures_capture_distinct_iteration_cells
   - [x] Verify ascending/descending and function-iterator captures against Lua 5.4.6 and production fer — tests/owned_flow.rs; GitHub Actions 39999404758: all four jobs passed
+- ♻️ **T340** Capture-aware reuse of numeric and generic loop cells — `██████████ 100%`
+  - [x] Track captured cell identifiers at closure construction to avoid renewing uncaptured loop cells — src/owned_flow.rs: Execution::captured_cells, Op::NewFunction, iteration_cell
+  - [x] Retain per-iteration captured values without exhausting the heap for noncapturing loops — src/owned_flow.rs: loop_closures_capture_distinct_iteration_cells; noncapturing_numeric_loops_do_not_exhaust_cell_heap
+  - [x] Pass Linux, Rust 1.96, action-consumer and Lua 5.4.6 differential CI — GitHub Actions 40000123176: all four jobs successful
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -336,4 +340,5 @@
 - 🔀 Parallel indexed and local LHS execution — `██████████ 100%`
 - 🔁 Function-based generic for loop execution — `██████████ 100%`
 - 🧵 Fresh captured loop-variable cells — `██████████ 100%`
+- ♻️ Capture-aware loop-cell allocation — `██████████ 100%`
 

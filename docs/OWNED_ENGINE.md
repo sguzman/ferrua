@@ -179,3 +179,7 @@ These milestones cover tested bounded Lua subsets. A full independent Lua 5.4 ru
 ### Capture-aware loop cell allocation
 
 Fresh per-iteration cells are allocated only when a live loop-variable cell has been captured by at least one closure. The bounded VM records captured cell identifiers when constructing closures, retaining distinct values for captured iterations while reusing the same cell across ordinary noncapturing loop iterations. A 70,000-iteration numeric loop regression verifies that uncaptured variables do not waste the execution-local cell budget. The optimization does not implement garbage collection or collection of unreachable closures.
+
+### Verified capture-aware loop allocation
+
+- [CI #40000123176](https://github.com/sguzman/ferrua/actions/runs/40000123176): capture-aware per-iteration cell renewal and a 70,000-iteration uncaptured-loop heap regression passed all four jobs. As before, this is a bounded independent prototype, not the production interpreter or a garbage-collected Lua runtime.

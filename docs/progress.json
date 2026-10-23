@@ -1593,6 +1593,29 @@
                   "evidence": "tests/owned_flow.rs; GitHub Actions 39999404758: all four jobs passed"
                 }
               ]
+            },
+            {
+              "id": "T340",
+              "emoji": "♻️",
+              "name": "Capture-aware reuse of numeric and generic loop cells",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Track captured cell identifiers at closure construction to avoid renewing uncaptured loop cells",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::captured_cells, Op::NewFunction, iteration_cell"
+                },
+                {
+                  "text": "Retain per-iteration captured values without exhausting the heap for noncapturing loops",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: loop_closures_capture_distinct_iteration_cells; noncapturing_numeric_loops_do_not_exhaust_cell_heap"
+                },
+                {
+                  "text": "Pass Linux, Rust 1.96, action-consumer and Lua 5.4.6 differential CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40000123176: all four jobs successful"
+                }
+              ]
             }
           ]
         }
@@ -1845,6 +1868,13 @@
           "name": "Fresh captured loop-variable cells",
           "task_ids": [
             "T339"
+          ]
+        },
+        {
+          "emoji": "♻️",
+          "name": "Capture-aware loop-cell allocation",
+          "task_ids": [
+            "T340"
           ]
         }
       ]
