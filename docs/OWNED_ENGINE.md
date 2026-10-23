@@ -393,8 +393,10 @@ The experimental owned stack VM now attempts the existing Lua numeric coercion p
 
 [CI #40031328390](https://github.com/sguzman/ferrua/actions/runs/40031328390) passed Linux quality gates, Rust 1.96, action-consumer tests, Lua 5.4 differential fixtures and aggregate status reporting. It does not yet add arithmetic metamethod callbacks backed by tables/builtins, unary metamethods, bitwise metamethods, `__concat`, ordering/equality metamethods, primitive metatables, or full Lua conformance. The production `fer` executable continues to use the pinned external VM.
 
-### Bounded Lua unary metamethods (pending CI)
+### Verified bounded Lua unary metamethods
 
 Unary negation (`-value`) and bitwise complement (`~value`) now retain their accepted integer/float behavior and use first-party table metamethods only when the original operand cannot be converted directly. The respective `__unm` and `__bnot` callbacks are invoked via the existing bounded Lua closure executor. Following Lua 5.4's unary metamethod convention, the operand is passed twice. Only the first return contributes to the expression, and recursive callbacks share the VM's call-depth and step limits.
 
-The pending regression and Lua 5.4 differential fixtures cover duplicate arguments, ordinary numeric operators, extra/no callback results, lexical captures and recursion limits. Builtin/callable-table metamethods, additional binary bitwise dispatch, primitive metatables and full language parity remain outside this increment. Production `fer` remains unchanged.
+The CI-accepted regression and Lua 5.4 differential fixtures cover duplicate arguments, ordinary numeric operators, extra/no callback results, lexical captures and recursion limits. Builtin/callable-table metamethods, additional binary bitwise dispatch, primitive metatables and full language parity remain outside this increment. Production `fer` remains unchanged.
+
+[CI #40031937707](https://github.com/sguzman/ferrua/actions/runs/40031937707) passed all four primary jobs and the machine-readable status reporter for unary metamethod semantics.
