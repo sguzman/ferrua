@@ -668,9 +668,15 @@ impl<'a> Compiler<'a> {
                                 self.expression(key, 0)?;
                                 self.push(Op::PrepareIndexed)?;
                             }
+                            Expr::Field { object, name } => {
+                                self.expression(object, 0)?;
+                                let handle = self.intern_bytes(name.as_bytes().to_vec())?;
+                                self.push(Op::Constant(Value::String(handle)))?;
+                                self.push(Op::PrepareIndexed)?;
+                            }
                             _ => {
                                 return Err(FlowError::Unsupported(
-                                    "only local and integer-index assignment targets".into(),
+                                    "only local and table-field assignment targets".into(),
                                 ));
                             }
                         }
