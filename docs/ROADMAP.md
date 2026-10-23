@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 89%` across 43 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 89%` across 44 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `████████░░ 83%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `████████░░ 84%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `████████░░ 83%`
+### 🔣 P3 — Ferrua-owned language engine — `████████░░ 84%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -214,6 +214,10 @@
   - [x] Evaluate control expressions once and execute ascending and descending numeric for loops — src/owned_flow.rs: ForCheck and ForStep, numeric for direction/step tests
   - [x] Preserve outer binding scope and reject mutation or invalid loop steps; bound overflow and runtime work — src/owned_flow.rs: numeric-for read-only slots, step-zero and boundary tests, step budget
   - [x] Verify supported numeric for-loop fixtures against production fer and upstream Lua — tests/owned_flow.rs; CI 39966547309: all four jobs successful
+- 🔀 **T319** Lua lazy logical operand semantics on the bounded flow VM — `██████████ 100%`
+  - [x] Short-circuit and/or without evaluating skipped operands; preserve selected operand values — src/owned_flow.rs: JumpIfFalseKeep, JumpIfTrueKeep, Discard and logical expression codegen
+  - [x] Honor Lua truthiness (including truthy zero), Boolean/not and nil in conditions — src/owned_flow.rs: logical_and_or_preserve_values_and_short_circuit unit test
+  - [x] Compare supported lazy logical cases against fer and official Lua 5.4.6 in CI — tests/owned_flow.rs; GitHub Actions 39967285721 all four jobs succeeded
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -231,4 +235,5 @@
 - 🔠 Short-string lexical escape parity — `██████████ 100%`
 - 🔀 Experimental bounded control-flow bytecode — `██████████ 100%`
 - 🔁 Numeric iteration on owned control-flow VM — `██████████ 100%`
+- 🔀 Lua short-circuit logical expressions — `██████████ 100%`
 

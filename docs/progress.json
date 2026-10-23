@@ -1110,6 +1110,29 @@
                   "evidence": "tests/owned_flow.rs; CI 39966547309: all four jobs successful"
                 }
               ]
+            },
+            {
+              "id": "T319",
+              "emoji": "🔀",
+              "name": "Lua lazy logical operand semantics on the bounded flow VM",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Short-circuit and/or without evaluating skipped operands; preserve selected operand values",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: JumpIfFalseKeep, JumpIfTrueKeep, Discard and logical expression codegen"
+                },
+                {
+                  "text": "Honor Lua truthiness (including truthy zero), Boolean/not and nil in conditions",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: logical_and_or_preserve_values_and_short_circuit unit test"
+                },
+                {
+                  "text": "Compare supported lazy logical cases against fer and official Lua 5.4.6 in CI",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39967285721 all four jobs succeeded"
+                }
+              ]
             }
           ]
         }
@@ -1215,6 +1238,13 @@
           "name": "Numeric iteration on owned control-flow VM",
           "task_ids": [
             "T318"
+          ]
+        },
+        {
+          "emoji": "🔀",
+          "name": "Lua short-circuit logical expressions",
+          "task_ids": [
+            "T319"
           ]
         }
       ]
