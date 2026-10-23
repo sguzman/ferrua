@@ -2400,6 +2400,28 @@
                   "evidence": "GitHub Actions 40030079883: four primary jobs and status reporter successful, including Lua 5.4.6 differential fixture"
                 }
               ]
+            },
+            {
+              "id": "T374",
+              "emoji": "➕",
+              "name": "Function-valued Lua arithmetic metamethods after numeric coercion",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Fall back from Lua numeric coercion to bounded first-party __add/__sub/__mul/__div/__idiv/__mod/__pow callbacks",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::arithmetic_with_metamethod and Execution::binary_metamethod"
+                },
+                {
+                  "text": "Test operand order, left/right precedence, recursion, result adjustment and Lua 5.4 differential fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: arithmetic_metamethods_reuse_owned_lua_closure_frames; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux formatting, lint, tests, Rust 1.96, action consumer and Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -2890,6 +2912,13 @@
           "name": "Callable Lua tables with bounded __call chains",
           "task_ids": [
             "T373"
+          ]
+        },
+        {
+          "emoji": "➕",
+          "name": "Function-valued arithmetic metamethods with numeric precedence",
+          "task_ids": [
+            "T374"
           ]
         }
       ]
