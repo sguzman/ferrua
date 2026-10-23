@@ -301,6 +301,16 @@ const FIXTURES: &[&str] = &[
     "local function maybe(x) if x then return 4 end end; return maybe(true)",
     "local function empty() return end; return empty() or 8",
     "local function maybe(x) if x then return 4,5 end end; return maybe(false)",
+    "local t={[1]=12}; local k,v=next(t); return k*100+v",
+    "return next({})==nil and 1 or 0",
+    "local t={7}; return next(t,1)==nil and 1 or 0",
+    "local t={[0]=4,[-2]=5,[true]=6,[1]=7,[2]=8,x=9}; local s=0; local n=0; for k,v in pairs(t) do s=s+v; n=n+1 end; return s*10+n",
+    "local t={4,5,6}; local s=0; for i,v in ipairs(t) do s=s+i*10+v end; return s",
+    "local t={[1]=2,[3]=8}; local n=0; for i,v in ipairs(t) do n=n+i+v end; return n",
+    "local f=ipairs; local s=0; for i,v in f({2,3}) do s=s+v end; return s",
+    "local f=pairs; local s=0; for k,v in f({name=4}) do s=s+v end; return s",
+    "local iter,t,k=ipairs({4,5}); local i,v=iter(t,k); return i*10+v",
+    "local ipairs=function() return function(_,n) if n==nil then return 2,3 end end,nil,nil end; local s=0; for i,v in ipairs({}) do s=s+i+v end; return s",
 ];
 
 fn render(values: &[Value]) -> String {
