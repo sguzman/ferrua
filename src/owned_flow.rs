@@ -3686,14 +3686,8 @@ mod tests {
                 "local n=2; local t=setmetatable({}, {__unm=function() n=n+1; return n end}); return -t+n",
                 6,
             ),
-            (
-                "return -'5'",
-                -5,
-            ),
-            (
-                "return ~5",
-                -6,
-            ),
+            ("return -'5'", -5),
+            ("return ~5", -6),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
@@ -3706,7 +3700,7 @@ mod tests {
             );
         }
         let program = compile_flow_chunk(
-            "local t={}; setmetatable(t,{__unm=function(x) return -x end}); return -t"
+            "local t={}; setmetatable(t,{__unm=function(x) return -x end}); return -t",
         )
         .unwrap();
         assert_eq!(
