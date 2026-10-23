@@ -2377,6 +2377,28 @@
                   "evidence": "GitHub Actions 40029449968: Linux, Rust 1.96, Lua 5.4 differential, action consumer and reporter succeeded"
                 }
               ]
+            },
+            {
+              "id": "T373",
+              "emoji": "📞",
+              "name": "Callable Lua tables and bounded __call metamethod chains",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Forward table call values and arguments through bounded __call chains, preserving normal Lua call result adjustment",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::Call, Op::CallMany, Op::CallSpread and Execution::metatable_field"
+                },
+                {
+                  "text": "Add first-class table, nested callback, builtin, multireturn, cycle and Lua 5.4 differential fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: callable_tables_forward_lua_args_and_obey_bounded_call_depth; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and upstream Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -2860,6 +2882,13 @@
           "name": "Callable Lua __len and rawlen separation",
           "task_ids": [
             "T372"
+          ]
+        },
+        {
+          "emoji": "📞",
+          "name": "Callable Lua tables with bounded __call chains",
+          "task_ids": [
+            "T373"
           ]
         }
       ]
