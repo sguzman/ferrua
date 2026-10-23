@@ -37,7 +37,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [all four jobs green, including bounded fixed-arity Lua return lists and earlier control-flow parity compared with Lua 5.4.6](https://github.com/sguzman/ferrua/actions/runs/39987809090). Native EndeavourOS acceptance, a published stable release, and a complete Ferrua-owned Lua VM remain pending.
+**Latest verified CI:** [all four jobs green, including bounded fixed-arity Lua return lists and earlier control-flow parity compared with Lua 5.4.6](https://github.com/sguzman/ferrua/actions/runs/39988105509). Native EndeavourOS acceptance, a published stable release, and a complete Ferrua-owned Lua VM remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
@@ -67,6 +67,6 @@ For engine parity work, CI also runs a Lua-authored differential test harness ag
 
 Ferrua's independent language engine is developed separately from the working `fer` CLI, which continues to use the pinned `luna-core` VM. Current Rust-owned library components include a lexical scanner, expression and limited statement parser, nested-scope resolver, and a **bounded integer register-bytecode interpreter**.
 
-The first owned register-bytecode engine executes Lua-compatible integer arithmetic, modulo/floor division, bitwise shifts, and straight-line chunks. A separate **bounded control-flow bytecode prototype** executes a narrow integer/Boolean Lua subset with `if`, `while`, `repeat/until`, numeric `for`, scoped locals and parallel assignments. Both are compared with Lua 5.4.6; neither provides complete Lua values, functions, tables, generic iterator calls, closures, coroutines or the full runtime.
+The first owned register-bytecode engine executes Lua-compatible integer arithmetic, modulo/floor division, bitwise shifts, and straight-line chunks. A separate **bounded control-flow bytecode prototype** executes an integer/Boolean/nil Lua subset with `if`, `while`, `repeat/until`, numeric `for`, loop `break`, scoped locals, assignment padding and fixed-arity return lists. Both are compared with Lua 5.4.6; neither provides complete Lua values, functions, tables, generic iterator calls, closures, coroutines or the full runtime.
 
 Read [🔩 independent engine design and acceptance evidence](docs/OWNED_ENGINE.md). The complete independent Lua compiler and VM remain future acceptance gates.

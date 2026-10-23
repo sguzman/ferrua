@@ -42,7 +42,7 @@ The source scanner validates short Lua string escapes: simple escapes, decimal b
 
 ## Bounded control-flow bytecode experiment
 
-The separate first-party [`owned_flow.rs`](../src/owned_flow.rs) module now compiles limited integer/Boolean Lua chunks into **stack-based control-flow bytecode** with runtime branches, `while`, `repeat/until`, numeric `for` loops, scoped locals, parallel assignment semantics, and a required integer return value. The prototype has an explicit instruction-step budget and no host-side I/O. Numeric `for` control expressions are evaluated once before the read-only loop variable becomes visible; both step directions are supported, with zero-step rejection and loop-boundary overflow handling.
+The separate first-party [`owned_flow.rs`](../src/owned_flow.rs) module now compiles a restricted integer/Boolean/nil Lua subset into **stack-based control-flow bytecode** with runtime branches, `while`, `repeat/until`, numeric `for` loops, scoped locals, parallel assignment semantics, and fixed-arity return lists. The prototype has an explicit instruction-step budget and no host-side I/O. Numeric `for` control expressions are evaluated once before the read-only loop variable becomes visible; both step directions are supported, with zero-step rejection and loop-boundary overflow handling.
 
 This is a **second experimental execution IR**, separate from the [register-based integer expression prototype](../src/owned_vm.rs). Unifying them into a complete Ferrua-owned Lua compiler/VM is still pending. Functions, generic iterator execution, closures, tables, strings, metatables, full Lua value semantics, coroutines, standard libraries, and production integration remain outside the accepted scope.
 

@@ -1,4 +1,4 @@
-//! Differential acceptance for experimental integer+boolean control-flow VM.
+//! Differential acceptance for experimental bounded Lua control-flow and return values.
 use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, Value, compile_flow_chunk, execute_flow_values};
 use std::process::Command;
 

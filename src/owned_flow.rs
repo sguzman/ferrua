@@ -1,6 +1,6 @@
 //! Experimental Ferrua-owned control-flow bytecode, separate from production fer.
-//! This small stack VM evaluates integer-valued chunks with local variables and
-//! Boolean conditions. It is not a complete Lua runtime or the register backend.
+//! This bounded stack VM evaluates integer, Boolean and nil Lua values with
+//! lexical locals and control flow. It is not a complete Lua runtime or the register backend.
 
 use crate::expr::{Expr, Statement, parse_chunk};
 use crate::owned_vm::{floor_div, lua_mod, shift};
