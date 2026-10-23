@@ -2525,13 +2525,17 @@ impl Execution<'_> {
                     self.assign_with_metatable(handle, key, value)?;
                 }
                 Op::Negate => {
-                    let value =
-                        self.arithmetic_operand(stack.pop().ok_or(FlowError::InvalidBytecode)?)?;
-                    stack.push(match value {
-                        Value::Integer(value) => Value::Integer(value.wrapping_neg()),
-                        Value::Float(bits) => Value::Float((-f64::from_bits(bits)).to_bits()),
-                        _ => return Err(FlowError::TypeError),
-                    });
+                    let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let result = match self.arithmetic_operand(value) {
+                        Ok(Value::Integer(number)) => Value::Integer(number.wrapping_neg()),
+                        Ok(Value::Float(bits)) => Value::Float((-f64::from_bits(bits)).to_bits()),
+                        Err(FlowError::TypeError) => {
+                            self.binary_metamethod(b"__unm", value, value)?
+                        }
+                        Ok(_) => return Err(FlowError::InvalidBytecode),
+                        Err(error) => return Err(error),
+                    };
+                    stack.push(result);
                 }
                 Op::Not => {
                     let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
@@ -2542,9 +2546,15 @@ impl Execution<'_> {
                     stack.push(self.length_with_metatable(value)?);
                 }
                 Op::BitNot => {
-                    let value =
-                        self.exact_integer_operand(stack.pop().ok_or(FlowError::InvalidBytecode)?)?;
-                    stack.push(Value::Integer(!value));
+                    let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let result = match self.exact_integer_operand(value) {
+                        Ok(number) => Value::Integer(!number),
+                        Err(FlowError::TypeError) => {
+                            self.binary_metamethod(b"__bnot", value, value)?
+                        }
+                        Err(error) => return Err(error),
+                    };
+                    stack.push(result);
                 }
                 Op::Binary(op) => {
                     let rhs = stack.pop().ok_or(FlowError::InvalidBytecode)?;
