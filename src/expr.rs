@@ -254,6 +254,11 @@ pub enum Statement<'a> {
         condition: Expr<'a>,
         body: Vec<Statement<'a>>,
     },
+    /// Lua repeat's condition can see locals declared in the loop body.
+    Repeat {
+        body: Vec<Statement<'a>>,
+        condition: Expr<'a>,
+    },
     If {
         branches: Vec<(Expr<'a>, Vec<Statement<'a>>)>,
         else_branch: Option<Vec<Statement<'a>>>,
@@ -293,6 +298,16 @@ impl<'a> Parser<'a> {
             }
             self.pop();
             return Ok(Statement::Block(body));
+        }
+        if self.peek().is_some_and(|token| token.spelling == "repeat") {
+            self.pop();
+            let body = self.block(&["until"], depth + 1)?;
+            if self.peek().map(|token| token.spelling) != Some("until") {
+                return Err(self.error("expected until to close repeat block"));
+            }
+            self.pop();
+            let condition = self.expression(0)?;
+            return Ok(Statement::Repeat { body, condition });
         }
         if self.peek().is_some_and(|token| token.spelling == "while") {
             self.pop();
@@ -361,7 +376,9 @@ impl<'a> Parser<'a> {
         if self.peek().is_some_and(|token| token.spelling == "return") {
             self.pop();
             let values = if self.peek().is_none()
-                || self.peek().is_some_and(|token| token.spelling == ";")
+                || self.peek().is_some_and(|token| matches!(
+                    token.spelling, ";" | "end" | "else" | "elseif" | "until"
+                ))
             {
                 Vec::new()
             } else {
@@ -431,6 +448,17 @@ impl<'a> Parser<'a> {
             let statement = self.statement(depth)?;
             let terminal = matches!(statement, Statement::Return(_));
             result.push(statement);
+            let ending_line = self.tokens.get(self.index.saturating_sub(1)).map_or(0, |token| {
+                let mut line = token.line;
+                let mut cr = false;
+                for byte in token.spelling.bytes() {
+                    if byte == b'\r' || (byte == b'\n' && !cr) {
+                        line += 1;
+                    }
+                    cr = byte == b'\r';
+                }
+                line
+            });
             if self.peek().is_some_and(|token| token.spelling == ";") {
                 self.pop();
             } else if self
@@ -438,6 +466,8 @@ impl<'a> Parser<'a> {
                 .is_some_and(|token| terminators.contains(&token.spelling))
             {
                 // A block's closing token is a natural terminator.
+            } else if self.peek().is_some_and(|token| token.line > ending_line) {
+                // A newline may separate statements in this grammar subset.
             } else if self.peek().is_some() {
                 return Err(self.error("expected statement separator"));
             }
@@ -455,8 +485,8 @@ impl<'a> Parser<'a> {
 
 /// Parse a deliberately limited Lua chunk: semicolon-separated locals,
 /// assignments, call statements and final returns, plus nested do/end
-/// lexical blocks, conditional branches, and while loops. Other Lua
-/// control-flow constructs are not yet supported.
+/// lexical blocks, conditional branches, while and repeat loops. Newline
+/// boundaries can separate supported statements. Other control-flow is pending.
 pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
     let tokens = tokenize(source)?;
     let mut parser = Parser {
@@ -661,6 +691,34 @@ mod tests {
             "if true then else elseif false then end",
             "if true then return 1; print(2) end",
             "elseif true then print(1)",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
+    }
+
+    #[test]
+    fn parses_repeat_with_body_local_in_until_condition() {
+        let source = "local x=0\nrepeat\nlocal next=x+1\nx=next\nuntil next>3\nreturn x";
+        let parsed = parse_chunk(source).unwrap();
+        assert_eq!(parsed.len(), 3);
+        assert!(matches!(&parsed[1], Statement::Repeat { body, .. } if body.len() == 2));
+        assert!(matches!(&parsed[2], Statement::Return(_)));
+    }
+
+    #[test]
+    fn supports_bare_return_at_end_of_nested_branch() {
+        assert!(parse_chunk("if flag then return else return end").is_ok());
+        assert!(parse_chunk("do return end").is_ok());
+    }
+
+    #[test]
+    fn checks_repeat_terminators_and_newline_separators() {
+        for source in [
+            "repeat local x=1 end",
+            "repeat local x=1 until",
+            "local a=1 print(a)",
+            "return 1\nprint(2)",
+            "repeat local x=1; return 2; print(x) until true",
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
         }

@@ -165,6 +165,15 @@ impl<'src> Resolver<'src> {
                 self.read_expression(condition, number);
                 self.scoped_statements(body);
             }
+            Statement::Repeat { body, condition } => {
+                self.scopes.push(HashMap::new());
+                for child in body {
+                    self.statement(child);
+                }
+                // Lua repeat evaluates until inside its body scope.
+                self.read_expression(condition, number);
+                self.scopes.pop();
+            }
             Statement::If {
                 branches,
                 else_branch,
@@ -354,6 +363,19 @@ mod tests {
         assert_eq!(uses.len(), 3);
         assert_eq!(uses[0].resolution, Resolution::Local(0));
         assert_eq!(uses[1].resolution, Resolution::Global);
+        assert_eq!(uses[2].resolution, Resolution::Global);
+    }
+
+    #[test]
+    fn repeat_condition_sees_body_local_but_later_code_does_not() {
+        let summary = analyze(
+            "repeat local inner=1\nprint(inner)\nuntil inner>2\nprint(inner)"
+        ).unwrap();
+        let uses: Vec<_> = summary.references.iter()
+            .filter(|r| r.name == "inner").collect();
+        assert_eq!(uses.len(), 3);
+        assert_eq!(uses[0].resolution, Resolution::Local(0));
+        assert_eq!(uses[1].resolution, Resolution::Local(0));
         assert_eq!(uses[2].resolution, Resolution::Global);
     }
 
