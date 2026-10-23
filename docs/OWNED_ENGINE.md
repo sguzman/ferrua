@@ -386,3 +386,9 @@ Normal `Op::Call`, `Op::CallMany` and `Op::CallSpread` can now resolve a table's
 The CI-accepted unit and Lua 5.4 differential fixtures cover aliasing a callable table as a first-class value, extra argument forwarding, multiple returns, builtin call targets, nested callable-table chains, and invalid or cyclic metamethods. The change does not add userdata, full arithmetic/comparison metamethods, garbage collection or host-side function callbacks. Production `fer` is unchanged.
 
 [CI #40030079883](https://github.com/sguzman/ferrua/actions/runs/40030079883) passed all four primary jobs plus aggregate status reporting, including upstream Lua 5.4.6 differential fixtures.
+
+### Bounded arithmetic metamethods (pending CI)
+
+The experimental owned stack VM now attempts the existing Lua numeric coercion path first for binary addition, subtraction, multiplication, true division, floor division, remainder and exponentiation. Only an operand type error causes `__add`, `__sub`, `__mul`, `__div`, `__idiv`, `__mod` or `__pow` fallback lookup. The left table is consulted before the right. Supported metamethods are first-party Lua functions, invoked with both original (uncoerced) operands through the already bounded closure executor. Only the first return contributes to a binary expression. Arithmetic errors such as division by zero are not swallowed by fallback dispatch.
+
+This work is **pending full CI acceptance**. It does not yet add arithmetic metamethod callbacks backed by tables/builtins, unary metamethods, bitwise metamethods, `__concat`, ordering/equality metamethods, primitive metatables, or full Lua conformance. The production `fer` executable continues to use the pinned external VM.
