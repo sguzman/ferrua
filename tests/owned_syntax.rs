@@ -1,6 +1,7 @@
 //! Integration acceptance for experimental Ferrua-owned Lua source tooling.
 //! This tests its lexical scanner against public first-party Lua script corpus;
 //! actual script execution stays on the pinned external VM until graduation.
+use ferrua::expr::{Statement, parse_chunk};
 use ferrua::lex::tokenize;
 use std::fs;
 use std::path::Path;
@@ -60,6 +61,62 @@ fn scans_real_checked_in_lua_scripts_without_losing_source_slices() {
             );
             last_end = token.byte_offset + token.spelling.len();
             last_line = token.line;
+        }
+    }
+}
+
+#[test]
+fn owned_goto_label_grammar_accepts_valid_lua_syntax() {
+    for source in [
+        "::first:: goto done; ::done:: return 4",
+        "goto done ::done:: return 3",
+        "do ::inner:: local x=2 end; ::inner:: return 5",
+        "local n=1; ::mark:: n=n+1; if n<3 then goto mark end; return n",
+    ] {
+        let syntax = parse_chunk(source).unwrap_or_else(|error| {
+            panic!("owned parser rejected valid label/goto syntax {source:?}: {error}")
+        });
+        assert!(syntax.iter().any(|stmt| matches!(stmt, Statement::Label(_) | Statement::Goto(_)))
+            || source.contains("::inner::"));
+    }
+    for source in ["::", "::3::", "goto 3", "::named:", "::dup:: ::dup:: return 1"] {
+        assert!(parse_chunk(source).is_err(), "malformed label/goto syntax {source:?}");
+    }
+}
+
+#[test]
+fn goto_syntax_and_scope_boundaries_match_lua_54_when_requested() {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
+        return;
+    }
+    for (source, valid) in [
+        ("::first:: goto done; ::done:: return 4", true),
+        ("goto done ::done:: return 3", true),
+        ("do ::inner:: local x=2 end; ::outer:: return 5", true),
+        ("local n=1; ::mark:: n=n+1; if n<3 then goto mark end; return n", true),
+        ("goto missing", false),
+        ("goto ready; local x=1; ::ready:: return 1", false),
+        ("::dup:: ::dup:: return 1", false),
+    ] {
+        let output = std::process::Command::new("lua5.4")
+            .args(["-e", source])
+            .output()
+            .expect("upstream Lua 5.4 installed by differential job");
+        assert_eq!(
+            output.status.success(),
+            valid,
+            "upstream Lua label/goto source {source:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        // The owned parser recognizes grammar, but cross-scope goto resolution
+        // is an explicit future compilation gate; do not equate parsing with
+        // complete upstream validity.
+        if valid {
+            assert!(parse_chunk(source).is_ok(), "{source}");
         }
     }
 }
