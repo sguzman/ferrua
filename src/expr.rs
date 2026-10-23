@@ -19,6 +19,11 @@ pub enum Expr<'a> {
         callee: Box<Expr<'a>>,
         arguments: Vec<Expr<'a>>,
     },
+    MethodCall {
+        object: Box<Expr<'a>>,
+        method: &'a str,
+        arguments: Vec<Expr<'a>>,
+    },
     Field {
         object: Box<Expr<'a>>,
         name: &'a str,
@@ -154,6 +159,33 @@ impl<'a> Parser<'a> {
                     self.pop();
                     left = Expr::Call {
                         callee: Box::new(left),
+                        arguments,
+                    };
+                }
+                Some(":") => {
+                    self.pop();
+                    let method = self.name()?;
+                    if self.peek().map(|token| token.spelling) != Some("(") {
+                        return Err(self.error("expected parenthesized method arguments"));
+                    }
+                    self.pop();
+                    let mut arguments = Vec::new();
+                    if self.peek().map(|token| token.spelling) != Some(")") {
+                        loop {
+                            arguments.push(self.expression(0)?);
+                            if self.peek().map(|token| token.spelling) != Some(",") {
+                                break;
+                            }
+                            self.pop();
+                        }
+                    }
+                    if self.peek().map(|token| token.spelling) != Some(")") {
+                        return Err(self.error("expected closing parenthesis in method call"));
+                    }
+                    self.pop();
+                    left = Expr::MethodCall {
+                        object: Box::new(left),
+                        method,
                         arguments,
                     };
                 }
@@ -487,7 +519,7 @@ impl<'a> Parser<'a> {
                 values: self.expressions()?,
             });
         }
-        if matches!(first, Expr::Call { .. }) {
+        if matches!(first, Expr::Call { .. } | Expr::MethodCall { .. }) {
             Ok(Statement::Call(first))
         } else {
             Err(self.error("only calls can be standalone expression statements"))
@@ -585,6 +617,10 @@ mod tests {
             Expr::Call { callee, arguments } => {
                 let text = arguments.iter().map(show).collect::<Vec<_>>().join(" ");
                 format!("(call {} [{}])", show(callee), text)
+            }
+            Expr::MethodCall { object, method, arguments } => {
+                let text = arguments.iter().map(show).collect::<Vec<_>>().join(" ");
+                format!("(method {} {method} [{}])", show(object), text)
             }
             Expr::Field { object, name } => format!("(field {} {name})", show(object)),
             Expr::Index { object, key } => format!("(index {} {})", show(object), show(key)),
@@ -849,6 +885,24 @@ mod tests {
             "for k in pairs(t) do print(k)",
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
+        }
+    }
+
+    #[test]
+    fn parses_chained_method_calls_with_explicit_parenthesized_arguments() {
+        let expression = parse_expression("obj.child:run(1,2).value").unwrap();
+        assert_eq!(
+            show(&expression),
+            "(field (method (field obj child) run [1 2]) value)"
+        );
+        let statements = parse_chunk("obj:run(1,2); return 0").unwrap();
+        assert!(matches!(&statements[0], Statement::Call(Expr::MethodCall { .. })));
+    }
+
+    #[test]
+    fn rejects_incomplete_or_non_identifier_method_calls() {
+        for source in ["obj:run", "obj:run(", "obj:run(1,)", "obj:3(1)", "obj:(1)"] {
+            assert!(parse_expression(source).is_err(), "{source}");
         }
     }
 

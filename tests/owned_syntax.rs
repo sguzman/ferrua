@@ -131,3 +131,34 @@ fn lua_short_string_escape_syntax_matches_upstream_when_requested() {
         );
     }
 }
+
+#[test]
+fn owned_method_call_syntax_matches_lua_54_when_requested() {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() != Some("1") {
+        return;
+    }
+    for (source, valid) in [
+        ("obj:run(1)", true),
+        ("obj:run(1).value", true),
+        ("obj.child:run(1,2)", true),
+        ("obj:run", false),
+        ("obj:run(", false),
+        ("obj:run(1,)", false),
+        ("obj:3(1)", false),
+        ("obj:(1)", false),
+    ] {
+        let owned = ferrua::expr::parse_expression(source).is_ok();
+        assert_eq!(owned, valid, "{source}");
+        let compile_only = format!("local f,err=load('return {source}'); if not f then error(err) end");
+        let reference = std::process::Command::new("lua5.4")
+            .args(["-e", &compile_only])
+            .output()
+            .unwrap();
+        assert_eq!(
+            owned,
+            reference.status.success(),
+            "method call syntax differs for {source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+    }
+}
