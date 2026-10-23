@@ -96,6 +96,10 @@ const FIXTURES: &[&str] = &[
     "local function pair() return 4,5 end; local t={2,(pair())}; return t[3] or 7",
     "local function pair() return 4,5 end; local t={pair()}; return t[2]",
     "local function f(...) return ... end; local t={1,f(2,3)}; return t[3]",
+    "local function maybe(x) if x then return 4 end end; return maybe(false) or 9",
+    "local function maybe(x) if x then return 4 end end; return maybe(true)",
+    "local function empty() return end; return empty() or 8",
+    "local function maybe(x) if x then return 4,5 end end; return maybe(false)",
 ];
 
 fn render(values: &[Value]) -> String {

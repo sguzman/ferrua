@@ -246,13 +246,9 @@ impl<'a> Compiler<'a> {
             formal_slots.push(slot);
         }
         child.statements(body)?;
-        if !child
-            .code
-            .iter()
-            .any(|op| matches!(op, Op::Return | Op::ReturnMany(_) | Op::ReturnTail(_)))
-        {
-            child.push(Op::ReturnMany(0))?;
-        }
+        // A return inside one branch does not guarantee every path returns.
+        // An unconditional fallthrough must yield an empty Lua result list.
+        child.push(Op::ReturnMany(0))?;
         self.functions.borrow_mut()[id] = FunctionProgram {
             instructions: child.code,
             slots: child.slots,
@@ -1412,6 +1408,29 @@ mod tests {
         assert_eq!(
             execute_flow_value(&program, DEFAULT_STEP_BUDGET),
             Ok(Value::Nil)
+        );
+    }
+
+    #[test]
+    fn conditional_function_fallthrough_returns_zero_values() {
+        assert_eq!(
+            evaluate("local function maybe(x) if x then return 4 end end; return maybe(false) or 9"),
+            9
+        );
+        assert_eq!(
+            evaluate("local function maybe(x) if x then return 4 end end; return maybe(true)"),
+            4
+        );
+        assert_eq!(
+            evaluate("local function empty() return end; return empty() or 8"),
+            8
+        );
+        let result = compile_flow_chunk(
+            "local function maybe(x) if x then return 4,5 end end; return maybe(false)",
+        ).unwrap();
+        assert_eq!(
+            execute_flow_values(&result, DEFAULT_STEP_BUDGET),
+            Ok(Vec::new())
         );
     }
 
