@@ -1363,6 +1363,144 @@
                   "evidence": "tests/owned_flow.rs; GitHub Actions 39991929210 all four jobs successful"
                 }
               ]
+            },
+            {
+              "id": "T330",
+              "emoji": "📞",
+              "name": "Bounded local function calls and isolated execution frames",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile local and anonymous function declarations to owned function bytecode with first-class handles",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Compiler::compile_function; Op::NewFunction; Op::Call"
+                },
+                {
+                  "text": "Enforce a shared instruction budget and finite recursion depth across nested calls",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::run; local_function_call_frames_and_self_recursion; bounded_calls_reject_excessive_recursion"
+                },
+                {
+                  "text": "Verify production fer and upstream Lua 5.4.6 call-frame behavior in full CI",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39993807376: 4 jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T331",
+              "emoji": "🪢",
+              "name": "Shared mutable lexical upvalues and transitive returned closures",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Capture visible lexically scoped bindings in stable order with live shared cells",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: BTreeMap capture mapping; Closure; Execution::cells"
+                },
+                {
+                  "text": "Verify returned factory closures, sibling mutation, nested captures and recursive rebinding",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: captured_locals_share_mutable_cells_across_calls"
+                },
+                {
+                  "text": "Pass differential Lua 5.4.6 and production fer CI in four jobs",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39994624379: 4 jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T332",
+              "emoji": "🧷",
+              "name": "Parenthesized single-result expression boundaries",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Preserve an explicit AST node for parenthesized expressions",
+                  "passed": true,
+                  "evidence": "src/expr.rs: Expr::Grouped and parenthesized_call_retains_single_result_boundary"
+                },
+                {
+                  "text": "Preserve grouping across register VM, flow VM and lexical analyzer",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs; src/owned_flow.rs; src/scope.rs"
+                },
+                {
+                  "text": "Verify syntax and regression suite on Rust 1.96 and Lua 5.4.6 CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39995260412: 4 jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T333",
+              "emoji": "🔄",
+              "name": "Variadic function parameters and final-result expansion",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Implement bounded vararg reads and dynamic result arity for return and assignment tails",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: VarargSingle, VarargMany, CallMany, AdjustTail, ReturnTail"
+                },
+                {
+                  "text": "Distinguish unparenthesized multi-result tails from parenthesized calls",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: last_expression_multireturn_and_variadic_adjustment"
+                },
+                {
+                  "text": "Verify result-list behavior against production fer and Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39995832249: 4 jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T334",
+              "emoji": "🧩",
+              "name": "Lua last-argument and positional table-tail result expansion",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Expand final call arguments with dynamic count while preserving earlier arguments as single-valued",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Compiler::call; Op::CallSpread"
+                },
+                {
+                  "text": "Expand final array-constructor results with bounded allocation",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::NewTableTail; last_call_argument_and_table_field_expand_results"
+                },
+                {
+                  "text": "Verify differential parity against production fer and upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39996328937: 4 jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T335",
+              "emoji": "⤵️",
+              "name": "Implicit zero-result return on conditional function fallthrough",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Emit an implicit empty return at the end of every compiled function",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Compiler::compile_function"
+                },
+                {
+                  "text": "Verify both taken and untaken conditional return branches",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: conditional_function_fallthrough_returns_zero_values"
+                },
+                {
+                  "text": "Pass Lua 5.4.6, Rust and downstream action compatibility tests",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39996750649: 4 jobs passed"
+                }
+              ]
             }
           ]
         }
@@ -1545,6 +1683,48 @@
           "name": "Bounded indexed table execution",
           "task_ids": [
             "T329"
+          ]
+        },
+        {
+          "emoji": "📞",
+          "name": "Bounded local function calls and isolated execution frames",
+          "task_ids": [
+            "T330"
+          ]
+        },
+        {
+          "emoji": "🪢",
+          "name": "Shared mutable lexical upvalues and transitive returned closures",
+          "task_ids": [
+            "T331"
+          ]
+        },
+        {
+          "emoji": "🧷",
+          "name": "Parenthesized single-result expression boundaries",
+          "task_ids": [
+            "T332"
+          ]
+        },
+        {
+          "emoji": "🔄",
+          "name": "Variadic function parameters and final-result expansion",
+          "task_ids": [
+            "T333"
+          ]
+        },
+        {
+          "emoji": "🧩",
+          "name": "Lua last-argument and positional table-tail result expansion",
+          "task_ids": [
+            "T334"
+          ]
+        },
+        {
+          "emoji": "⤵️",
+          "name": "Implicit zero-result return on conditional function fallthrough",
+          "task_ids": [
+            "T335"
           ]
         }
       ]

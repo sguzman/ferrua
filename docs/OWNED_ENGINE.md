@@ -12,7 +12,7 @@ The production `fer` executable still uses the pinned, independently maintained 
 
 ## Explicit boundaries
 
-The parser is **not** complete Lua syntax. The independent bytecode engine supports neither Lua functions nor dynamic loops, branches, global variables, calls, Lua tables, strings, floats, metatables, coroutines, closures/upvalues, garbage collection, or a standard library. The static chunk compiler refuses unsupported forms instead of silently falling back to the production engine. Native script entrypoints remain powered by `luna-core`.
+The parser is **not** complete Lua syntax. The original register-based integer bytecode engine supports neither Lua functions nor dynamic loops, branches, global variables, calls, Lua tables, strings, floats, metatables, coroutines, closures/upvalues, garbage collection, or a standard library. The separate stack-based flow engine has since added some of these capabilities. The static chunk compiler refuses unsupported forms instead of silently falling back to the production engine. Native script entrypoints remain powered by `luna-core`.
 
 The tests compare the narrow owned integer subset to the production `fer` CLI and, in a separate Linux CI job, directly to upstream **Lua 5.4.6**. These comparisons do not certify full Lua conformance.
 
@@ -44,7 +44,7 @@ The source scanner validates short Lua string escapes: simple escapes, decimal b
 
 The separate first-party [`owned_flow.rs`](../src/owned_flow.rs) module now compiles a restricted integer/Boolean/nil Lua subset into **stack-based control-flow bytecode** with runtime branches, `while`, `repeat/until`, numeric `for` loops, scoped locals, parallel assignment semantics, and fixed-arity return lists. The prototype has an explicit instruction-step budget and no host-side I/O. Numeric `for` control expressions are evaluated once before the read-only loop variable becomes visible; both step directions are supported, with zero-step rejection and loop-boundary overflow handling.
 
-This is a **second experimental execution IR**, separate from the [register-based integer expression prototype](../src/owned_vm.rs). Unifying them into a complete Ferrua-owned Lua compiler/VM is still pending. Functions, generic iterator execution, closures, tables, strings, metatables, full Lua value semantics, coroutines, standard libraries, and production integration remain outside the accepted scope.
+This is a **second experimental execution IR**, separate from the [register-based integer expression prototype](../src/owned_vm.rs). Unifying them into a complete Ferrua-owned Lua compiler/VM is still pending. Later milestones added a bounded function/closure and positional-table subset; generic iterator execution, general table/string/value semantics, metatables, coroutines, standard libraries and production integration remain outside the accepted scope.
 
 - [CI #39965337560](https://github.com/sguzman/ferrua/actions/runs/39965337560): bounded conditionals and loops passed Linux tests, Rust 1.96, composite consumer and Lua 5.4.6 differential checks.
 - [CI #39966547309](https://github.com/sguzman/ferrua/actions/runs/39966547309): numeric `for` scopes and overflow tests passed all four jobs, including upstream Lua fixture comparisons.
@@ -138,3 +138,14 @@ The independent compiler now propagates a final unparenthesized call or `...` re
 ### Implicit function fallthrough
 
 Every first-party compiled function ends with an implicit zero-result return, even if other branches contain explicit returns. A conditional branch therefore no longer causes `NoReturn` when its return is not taken; a call in a single-result expression context adjusts its empty result to nil. The differential fixtures cover successful and unsuccessful conditional return paths against Lua 5.4.6 and production `fer`.
+
+### Verified closure, variadic function and result-adjustment acceptance
+
+- [CI #39993807376](https://github.com/sguzman/ferrua/actions/runs/39993807376): bounded owned function values, calls, recursion and shared instruction budget — four jobs passed.
+- [CI #39994624379](https://github.com/sguzman/ferrua/actions/runs/39994624379): mutable lexical captures, nested and independent closures — four jobs passed.
+- [CI #39995260412](https://github.com/sguzman/ferrua/actions/runs/39995260412): parenthesized AST single-result semantics — four jobs passed.
+- [CI #39995832249](https://github.com/sguzman/ferrua/actions/runs/39995832249): variadic arguments and return/assignment tail-result adjustment — four jobs passed.
+- [CI #39996328937](https://github.com/sguzman/ferrua/actions/runs/39996328937): final call-argument and array-constructor tail expansion — four jobs passed.
+- [CI #39996750649](https://github.com/sguzman/ferrua/actions/runs/39996750649): implicit zero-result function fallthrough — four jobs passed.
+
+Earlier sections document the incremental prototypes as they existed at the time of each milestone. The current supported subset is summarized here and in the README. Neither the standalone register VM nor the flow VM has graduated into production `fer`.

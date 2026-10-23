@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 91%` across 54 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 92%` across 60 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 90%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 91%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `█████████░ 90%`
+### 🔣 P3 — Ferrua-owned language engine — `█████████░ 91%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -258,6 +258,30 @@
   - [x] Allocate positional tables in a bounded execution-local heap; read/write positive integer indices — src/owned_flow.rs: Op::NewTable, Op::GetTable, Op::SetTable, MAX_TABLE_CELLS_TOTAL
   - [x] Preserve alias identity and nil on missing positive indices; reject unsupported key shapes — src/owned_flow.rs: bounded_array_tables_preserve_reference_identity_and_missing_nil, bounded_tables_reject_unsupported_keys_and_fields
   - [x] Match supported numeric table fixtures against production fer and upstream Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 39991929210 all four jobs successful
+- 📞 **T330** Bounded local function calls and isolated execution frames — `██████████ 100%`
+  - [x] Compile local and anonymous function declarations to owned function bytecode with first-class handles — src/owned_flow.rs: Compiler::compile_function; Op::NewFunction; Op::Call
+  - [x] Enforce a shared instruction budget and finite recursion depth across nested calls — src/owned_flow.rs: Execution::run; local_function_call_frames_and_self_recursion; bounded_calls_reject_excessive_recursion
+  - [x] Verify production fer and upstream Lua 5.4.6 call-frame behavior in full CI — tests/owned_flow.rs; GitHub Actions 39993807376: 4 jobs passed
+- 🪢 **T331** Shared mutable lexical upvalues and transitive returned closures — `██████████ 100%`
+  - [x] Capture visible lexically scoped bindings in stable order with live shared cells — src/owned_flow.rs: BTreeMap capture mapping; Closure; Execution::cells
+  - [x] Verify returned factory closures, sibling mutation, nested captures and recursive rebinding — src/owned_flow.rs: captured_locals_share_mutable_cells_across_calls
+  - [x] Pass differential Lua 5.4.6 and production fer CI in four jobs — tests/owned_flow.rs; GitHub Actions 39994624379: 4 jobs passed
+- 🧷 **T332** Parenthesized single-result expression boundaries — `██████████ 100%`
+  - [x] Preserve an explicit AST node for parenthesized expressions — src/expr.rs: Expr::Grouped and parenthesized_call_retains_single_result_boundary
+  - [x] Preserve grouping across register VM, flow VM and lexical analyzer — src/owned_vm.rs; src/owned_flow.rs; src/scope.rs
+  - [x] Verify syntax and regression suite on Rust 1.96 and Lua 5.4.6 CI — GitHub Actions 39995260412: 4 jobs passed
+- 🔄 **T333** Variadic function parameters and final-result expansion — `██████████ 100%`
+  - [x] Implement bounded vararg reads and dynamic result arity for return and assignment tails — src/owned_flow.rs: VarargSingle, VarargMany, CallMany, AdjustTail, ReturnTail
+  - [x] Distinguish unparenthesized multi-result tails from parenthesized calls — src/owned_flow.rs: last_expression_multireturn_and_variadic_adjustment
+  - [x] Verify result-list behavior against production fer and Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 39995832249: 4 jobs passed
+- 🧩 **T334** Lua last-argument and positional table-tail result expansion — `██████████ 100%`
+  - [x] Expand final call arguments with dynamic count while preserving earlier arguments as single-valued — src/owned_flow.rs: Compiler::call; Op::CallSpread
+  - [x] Expand final array-constructor results with bounded allocation — src/owned_flow.rs: Op::NewTableTail; last_call_argument_and_table_field_expand_results
+  - [x] Verify differential parity against production fer and upstream Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 39996328937: 4 jobs passed
+- ⤵️ **T335** Implicit zero-result return on conditional function fallthrough — `██████████ 100%`
+  - [x] Emit an implicit empty return at the end of every compiled function — src/owned_flow.rs: Compiler::compile_function
+  - [x] Verify both taken and untaken conditional return branches — src/owned_flow.rs: conditional_function_fallthrough_returns_zero_values
+  - [x] Pass Lua 5.4.6, Rust and downstream action compatibility tests — tests/owned_flow.rs; GitHub Actions 39996750649: 4 jobs passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -286,4 +310,10 @@
 - 🪢 Nested closure capture descriptors — `██████████ 100%`
 - 🧺 Table constructor syntax and field resolution — `██████████ 100%`
 - 🗃️ Bounded indexed table execution — `██████████ 100%`
+- 📞 Bounded local function calls and isolated execution frames — `██████████ 100%`
+- 🪢 Shared mutable lexical upvalues and transitive returned closures — `██████████ 100%`
+- 🧷 Parenthesized single-result expression boundaries — `██████████ 100%`
+- 🔄 Variadic function parameters and final-result expansion — `██████████ 100%`
+- 🧩 Lua last-argument and positional table-tail result expansion — `██████████ 100%`
+- ⤵️ Implicit zero-result return on conditional function fallthrough — `██████████ 100%`
 
