@@ -15,6 +15,18 @@ pub enum Expr<'a> {
         left: Box<Expr<'a>>,
         right: Box<Expr<'a>>,
     },
+    Call {
+        callee: Box<Expr<'a>>,
+        arguments: Vec<Expr<'a>>,
+    },
+    Field {
+        object: Box<Expr<'a>>,
+        name: &'a str,
+    },
+    Index {
+        object: Box<Expr<'a>>,
+        key: Box<Expr<'a>>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -121,8 +133,65 @@ impl<'a> Parser<'a> {
             }),
         }
     }
+    fn postfix(&mut self, mut left: Expr<'a>) -> Result<Expr<'a>, ParseError> {
+        loop {
+            match self.peek().map(|token| token.spelling) {
+                Some("(") => {
+                    self.pop();
+                    let mut arguments = Vec::new();
+                    if self.peek().map(|token| token.spelling) != Some(")") {
+                        loop {
+                            arguments.push(self.expression(0)?);
+                            if self.peek().map(|token| token.spelling) != Some(",") {
+                                break;
+                            }
+                            self.pop();
+                        }
+                    }
+                    if self.peek().map(|token| token.spelling) != Some(")") {
+                        return Err(self.error("expected closing parenthesis in call"));
+                    }
+                    self.pop();
+                    left = Expr::Call {
+                        callee: Box::new(left),
+                        arguments,
+                    };
+                }
+                Some(".") => {
+                    self.pop();
+                    let token = self.pop().ok_or_else(|| self.error("expected field name"))?;
+                    if token.kind != Kind::Identifier {
+                        return Err(ParseError {
+                            line: token.line,
+                            byte_offset: token.byte_offset,
+                            message: "expected identifier after dot",
+                        });
+                    }
+                    left = Expr::Field {
+                        object: Box::new(left),
+                        name: token.spelling,
+                    };
+                }
+                Some("[") => {
+                    self.pop();
+                    let key = self.expression(0)?;
+                    if self.peek().map(|token| token.spelling) != Some("]") {
+                        return Err(self.error("expected closing bracket in index"));
+                    }
+                    self.pop();
+                    left = Expr::Index {
+                        object: Box::new(left),
+                        key: Box::new(key),
+                    };
+                }
+                _ => break,
+            }
+        }
+        Ok(left)
+    }
     fn expression(&mut self, min_bp: u8) -> Result<Expr<'a>, ParseError> {
         let mut left = self.prefix()?;
+        left = self.postfix(left)?;
         while let Some(op) = self.peek().map(|t| t.spelling) {
             let Some((l_bp, r_bp)) = binding_power(op) else {
                 break;
@@ -143,7 +212,7 @@ impl<'a> Parser<'a> {
 }
 
 /// Parse only a standalone Lua expression into a Ferrua-owned syntax tree.
-/// Statement grammar, calls, table constructors, indexing, and lambda bodies
+/// Statement grammar, method calls, table constructors, and lambda bodies
 /// are not implemented. The working fer interpreter is unaffected.
 pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
     let tokens = tokenize(source)?;
@@ -170,6 +239,12 @@ mod tests {
             Expr::Binary { op, left, right } => {
                 format!("({op} {} {})", show(left), show(right))
             }
+            Expr::Call { callee, arguments } => {
+                let text = arguments.iter().map(show).collect::<Vec<_>>().join(" ");
+                format!("(call {} [{}])", show(callee), text)
+            }
+            Expr::Field { object, name } => format!("(field {} {name})", show(object)),
+            Expr::Index { object, key } => format!("(index {} {})", show(object), show(key)),
         }
     }
 
@@ -202,7 +277,32 @@ mod tests {
 
     #[test]
     fn rejects_statement_syntax_and_unfinished_expressions() {
-        for source in ["local x=2", "x+", "(1+2", "1 2", "foo()"] {
+        for source in ["local x=2", "x+", "(1+2", "1 2", "foo(1,"] {
+            assert!(parse_expression(source).is_err(), "{source}");
+        }
+    }
+
+    #[test]
+    fn chained_calls_fields_and_indexing() {
+        let parsed = parse_expression("obj.child[2](3, 4).value").unwrap();
+        assert_eq!(
+            show(&parsed),
+            "(field (call (index (field obj child) 2) [3 4]) value)"
+        );
+    }
+
+    #[test]
+    fn empty_call_and_operator_precedence() {
+        assert_eq!(show(&parse_expression("f()^2").unwrap()), "(^ (call f []) 2)");
+        assert_eq!(
+            show(&parse_expression("-obj.x^2").unwrap()),
+            "(- (^ (field obj x) 2))"
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_postfix_arguments() {
+        for source in ["f(1,)", "a[1", "a.", "obj.123", "f(1,2"] {
             assert!(parse_expression(source).is_err(), "{source}");
         }
     }
