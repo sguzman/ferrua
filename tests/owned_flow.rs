@@ -373,7 +373,7 @@ const FIXTURES: &[&str] = &[
     "local t=setmetatable({}, {__mod=function(a,b) return 55 end}); return t%5",
     "local t=setmetatable({}, {__pow=function(a,b) return 66 end}); return t^5",
     "local t=setmetatable({}, {__add=function(a,b) return a+7 end}); return 3+t",
-    "local t=setmetatable({}, {__add=function(a,b) return b end}); return 12+t",
+    "local t=setmetatable({}, {__add=function(a,b) return b end}); return rawequal(12+t,t) and 1 or 0",
     "local a=setmetatable({}, {__add=function() return 11 end}); local b=setmetatable({}, {__add=function() return 22 end}); return a+b",
     "local b=setmetatable({}, {__add=function() return 22 end}); return {}+b",
     "local t=setmetatable({}, {__add=function() return 4,5 end}); return t+1",
