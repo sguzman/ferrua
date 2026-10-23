@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 96%` across 115 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 96%` across 116 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -505,6 +505,10 @@
   - [x] Generate reproducible bounded integer, bitwise, floor-div/mod and comparison cases without external generators — tests/owned_flow.rs: generated_numeric_fixtures deterministic LCG with 128 numeric Lua chunks
   - [x] Route generated chunks through owned execution and production fer/upstream Lua reference comparison harness — tests/owned_flow.rs: check_source and check, production_fer_agrees_with_owned_control_flow_subset; upstream_lua_agrees_when_requested
   - [x] Pass full CI, including reference interpreter parity for all generated inputs and strict Rust quality — GitHub Actions 40041470699: Linux formatter/lint/tests, Rust 1.96, Lua 5.4 differential fixtures and composite consumer passed
+- 🚫 **T387** Differential syntax and runtime rejection corpus — `███████░░░ 67%`
+  - [x] Add deterministic invalid-source fixtures partitioned into parser rejection and owned-VM runtime failures — tests/owned_flow.rs: SYNTAX_ERROR_FIXTURES, RUNTIME_ERROR_FIXTURES, check_rejected_source
+  - [x] Exercise the same failure fixtures against production fer and opt-in upstream Lua 5.4; compare stages and failure exit statuses without falsely matching diagnostics — tests/owned_flow.rs: check and check_rejected_source integration harness
+  - [ ] Pass full Linux quality/test suite and upstream Lua 5.4 rejection parity in CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -590,4 +594,5 @@
 - 🏷️ Lua label/goto parsing (execution remains gated) — `██████████ 100%`
 - ↪️ Safe bounded same-block Lua goto execution — `██████████ 100%`
 - 🔬 Generated deterministic owned-VM numeric differential coverage — `██████████ 100%`
+- 🚫 Intentional syntax and runtime failure parity — `███████░░░ 67%`
 
