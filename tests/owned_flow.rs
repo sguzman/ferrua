@@ -422,6 +422,15 @@ const FIXTURES: &[&str] = &[
     "local a=setmetatable({}, {__eq=function() return true end}); return a=={} and 1 or 0",
     "local a={}; local b=setmetatable({}, {__eq=function() return true end}); return a==b and 1 or 0",
     "local a=setmetatable({}, {__eq=function() return true end}); return a==3 and 1 or 0",
+    "local t=setmetatable({a=3}, {__pairs=function(self) return next,self,nil end}); local total=0; for k,v in pairs(t) do total=total+v end; return total",
+    "local t=setmetatable({}, {__pairs=function() return function(_,k) if k==nil then return 5,6 end end,nil,nil end}); local total=0; for k,v in pairs(t) do total=total+k+v end; return total",
+    "local t=setmetatable({}, {__pairs=function() return next,{x=7},nil,99 end}); return select('#',pairs(t))",
+    "local t=setmetatable({}, {__pairs=function() return nil end}); return select('#',pairs(t))",
+    "local t=setmetatable({}, {__pairs=function() end}); return pairs(t)==nil and 1 or 0",
+    "local n=0; local t=setmetatable({}, {__pairs=function(self) n=n+1; return next,{x=4},nil end}); local s=0; for k,v in pairs(t) do s=s+v end; return s+n",
+    "local t=setmetatable({4,5}, {__pairs=function() return function() end,nil,nil end}); local s=0; for i,v in ipairs(t) do s=s+v end; return s",
+    "local t=setmetatable({a=3}, {__pairs=function() return next,{x=7},nil end}); local s=0; for k,v in pairs(t) do s=s+v end; return s",
+    "local t=setmetatable({a=3}, {__pairs=function() return next,{x=7},nil end}); return next(t)~=nil and 1 or 0",
 ];
 
 fn render(values: &[Value]) -> String {
