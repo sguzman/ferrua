@@ -824,22 +824,36 @@ impl Execution<'_> {
         captures: &[(usize, usize)],
         varargs: &[Value],
     ) -> Result<Vec<Value>, FlowError> {
-        if instructions.len() > MAX_CODE
-            || slot_count > MAX_SLOTS
-            || self.cells.len().saturating_add(slot_count) > MAX_CELLS_TOTAL
-        {
+        if instructions.len() > MAX_CODE || slot_count > MAX_SLOTS {
             return Err(FlowError::TooLarge);
         }
         let start = self.cells.len();
-        self.cells.resize(start + slot_count, None);
-        let mut slots: Vec<usize> = (start..start + slot_count).collect();
+        // Captured slots already have a shared cell. Allocate fresh cells
+        // only for parameters and locals owned by this invocation.
+        let mut inherited = vec![None; slot_count];
         for &(local_slot, cell) in captures {
             if cell >= start {
                 return Err(FlowError::InvalidBytecode);
             }
-            *slots
+            let target = inherited
                 .get_mut(local_slot)
-                .ok_or(FlowError::InvalidBytecode)? = cell;
+                .ok_or(FlowError::InvalidBytecode)?;
+            if target.replace(cell).is_some() {
+                return Err(FlowError::InvalidBytecode);
+            }
+        }
+        let mut slots = Vec::with_capacity(slot_count);
+        for cell in inherited {
+            if let Some(cell) = cell {
+                slots.push(cell);
+            } else {
+                if self.cells.len() >= MAX_CELLS_TOTAL {
+                    return Err(FlowError::TooLarge);
+                }
+                let cell = self.cells.len();
+                self.cells.push(None);
+                slots.push(cell);
+            }
         }
         for &(slot, value) in initial {
             let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
@@ -1530,6 +1544,15 @@ mod tests {
             4
         );
         assert!(compile_flow_chunk("return ...").is_err());
+    }
+
+    #[test]
+    fn repeated_captured_calls_do_not_allocate_duplicate_upvalue_cells() {
+        let program = compile_flow_chunk(
+            "local n=0; local function bump(x) n=n+x end; for i=1,30000 do bump(1) end; return n",
+        )
+        .unwrap();
+        assert_eq!(execute_flow_chunk(&program, 1_000_000), Ok(30_000));
     }
 
     #[test]
