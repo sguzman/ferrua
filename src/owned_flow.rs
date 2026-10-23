@@ -1684,7 +1684,8 @@ impl Execution<'_> {
                     let args = stack.split_off(stack.len() - arity);
                     let callable = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     if let Value::Builtin(Builtin::Type) = callable {
-                        let name: &[u8] = match args.first().copied().unwrap_or(Value::Nil) {
+                        let value = *args.first().ok_or(FlowError::TypeError)?;
+                        let name: &[u8] = match value {
                             Value::Integer(_) | Value::Float(_) => b"number",
                             Value::Boolean(_) => b"boolean",
                             Value::Nil => b"nil",
@@ -2930,7 +2931,11 @@ mod tests {
             evaluate("local type=function(x) return 'shadow' end; return (type(4)=='shadow') and 1 or 0"),
             1
         );
-        assert_eq!(evaluate("return (type()=='nil') and 1 or 0"), 1);
+        let invalid = compile_flow_chunk("return type()").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
     }
 
     #[test]

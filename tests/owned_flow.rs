@@ -142,7 +142,6 @@ const FIXTURES: &[&str] = &[
     "return (type(type)=='function') and 1 or 0",
     "local kind=type; return (kind(4)=='number') and 1 or 0",
     "local type=function(x) return 'shadow' end; return (type(4)=='shadow') and 1 or 0",
-    "return (type()=='nil') and 1 or 0",
     "return 3.0&1",
     "return 4.0|1",
     "return 7.0~3",

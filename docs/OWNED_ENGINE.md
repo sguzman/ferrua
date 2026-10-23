@@ -303,3 +303,5 @@ These statuses cover only the recorded bounded behavior. Full Lua metamethods, n
 ### First-class pure Lua type builtin
 
 The experimental owned runtime now represents the standard Lua `type` function as a first-class built-in callable. A reference to `type` compiles as a value only when no lexical binding of the same name exists, so local shadowing preserves Lua lexical behavior. The callable returns interned category strings for nil, Boolean, number (integer and float), string, table and function values. Its execution uses the existing instruction/stack and byte-pool limits. This deliberately narrow core-builtin path does not provide a general global environment, string formatting, Lua metatables, or side-effecting host functions; production `fer` remains unchanged.
+
+The `type` builtin requires at least one argument, matching Lua's missing-value error behavior; an explicit nil argument still returns the string `"nil"`. Extra arguments are ignored as in Lua's base library.
