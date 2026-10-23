@@ -49,8 +49,9 @@ impl Scanner<'_> {
     }
     fn bump(&mut self) {
         let byte = self.peek(0).expect("within source");
-        if byte == b'\r'
-            || (byte == b'\n' && (self.at == 0 || self.src.as_bytes()[self.at - 1] != b'\r'))
+        let previous = self.at.checked_sub(1).and_then(|at| self.src.as_bytes().get(at)).copied();
+        if (byte == b'\r' && previous != Some(b'\n'))
+            || (byte == b'\n' && previous != Some(b'\r'))
         {
             self.line += 1;
         }
@@ -111,22 +112,81 @@ impl Scanner<'_> {
             if byte == b'\r' || byte == b'\n' {
                 return Err(self.error("unfinished short string"));
             }
-            if byte == b'\\' {
+            if byte != b'\\' {
                 self.bump();
-                if self.peek(0).is_none() {
-                    return Err(self.error("unfinished escape"));
-                }
-                if self.peek(0) == Some(b'z') {
-                    // Lua's \z skips all following ASCII whitespace,
-                    // including newlines inside otherwise short strings.
-                    self.bump();
-                    while self.peek(0).is_some_and(|c| c.is_ascii_whitespace()) {
-                        self.bump();
-                    }
-                    continue;
-                }
+                continue;
             }
             self.bump();
+            let escape = self.peek(0).ok_or_else(|| self.error("unfinished escape"))?;
+            match escape {
+                b'a' | b'b' | b'f' | b'n' | b'r' | b't' | b'v' |
+                b'\\' | b'\'' | b'"' => {
+                    self.bump();
+                }
+                b'\r' | b'\n' => {
+                    // Escaped line breaks are allowed in a short Lua string.
+                    self.bump();
+                    if self.peek(0) == Some(if escape == b'\r' { b'\n' } else { b'\r' }) {
+                        self.bump();
+                    }
+                }
+                b'z' => {
+                    // Lua's z escape consumes subsequent whitespace including lines.
+                    self.bump();
+                    while self.peek(0).is_some_and(|next| next.is_ascii_whitespace()) {
+                        self.bump();
+                    }
+                }
+                b'x' => {
+                    self.bump();
+                    for _ in 0..2 {
+                        if !self.peek(0).is_some_and(|next| next.is_ascii_hexdigit()) {
+                            return Err(self.error("hex escape requires exactly two digits"));
+                        }
+                        self.bump();
+                    }
+                }
+                b'u' => {
+                    self.bump();
+                    if self.peek(0) != Some(b'{') {
+                        return Err(self.error("Unicode escape requires opening brace"));
+                    }
+                    self.bump();
+                    let mut value = 0u32;
+                    let mut count = 0;
+                    while let Some(next) = self.peek(0) {
+                        if !next.is_ascii_hexdigit() {
+                            break;
+                        }
+                        let digit = (next as char).to_digit(16).expect("hex digit");
+                        value = value.checked_mul(16)
+                            .and_then(|v| v.checked_add(digit))
+                            .ok_or_else(|| self.error("Unicode escape value too large"))?;
+                        if value > 0x7fff_ffff {
+                            return Err(self.error("Unicode escape value too large"));
+                        }
+                        count += 1;
+                        self.bump();
+                    }
+                    if count == 0 || self.peek(0) != Some(b'}') {
+                        return Err(self.error("unfinished Unicode escape"));
+                    }
+                    self.bump();
+                }
+                b'0'..=b'9' => {
+                    let mut value = 0u32;
+                    for _ in 0..3 {
+                        let Some(next) = self.peek(0) else { break; };
+                        if !next.is_ascii_digit() { break; }
+                        value = value * 10 + u32::from(next - b'0');
+                        self.bump();
+                    }
+                    if value > 255 {
+                        return Err(self.error("decimal escape exceeds one byte"));
+                    }
+                }
+                _ => return Err(self.error("invalid string escape")),
+            }
         }
         Err(self.error("unfinished short string"))
     }
@@ -340,6 +400,45 @@ mod tests {
         assert_eq!(tokens[3].kind, Kind::ShortString);
         assert_eq!(tokens[4].spelling, "local");
         assert_eq!(tokens[4].line, 3);
+    }
+
+    #[test]
+    fn supports_lua_short_string_escapes_and_normalizes_newline_count() {
+        for source in [
+            r#""\x41""#,
+            r#""\u{1F600}""#,
+            r#""\u{7FFFFFFF}""#,
+            r#""\255""#,
+            r#""\a\b\f\n\r\t\v\\\"\'""#,
+            r#""\0012""#,
+            "\"continued\\\nnext\"",
+            "\"continued\\\r\nnext\"",
+            "\"continued\\\n\rnext\"",
+        ] {
+            assert!(tokenize(source).is_ok(), "{source:?}");
+        }
+        let source = "\"a\\\n\rb\"\nlocal x=1";
+        let tokens = tokenize(source).unwrap();
+        assert_eq!(tokens[1].spelling, "local");
+        assert_eq!(tokens[1].line, 3);
+    }
+
+    #[test]
+    fn rejects_invalid_short_string_escapes_with_bounded_errors() {
+        for source in [
+            r#""\q""#,
+            r#""\x""#,
+            r#""\xG0""#,
+            r#""\x1""#,
+            r#""\u""#,
+            r#""\u{}""#,
+            r#""\u{GG}""#,
+            r#""\u{80000000}""#,
+            r#""\999""#,
+            r#""\256""#,
+        ] {
+            assert!(tokenize(source).is_err(), "{source:?}");
+        }
     }
 
     #[test]
