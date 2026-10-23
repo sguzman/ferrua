@@ -1557,7 +1557,7 @@ impl Execution<'_> {
 
     /// Lua 5.4 ipairs uses ordinary positive-integer table indexing, including
     /// table __index fallbacks, and terminates at the first nil.
-    fn ipairs_iterator(&self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+    fn ipairs_iterator(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
         let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
             return Err(FlowError::TypeError);
         };
