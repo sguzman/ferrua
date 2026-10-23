@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 95%` across 106 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 96%` across 106 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -143,11 +143,11 @@
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 95%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 96%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 95%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 96%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -458,14 +458,14 @@
   - [x] Preserve native number/string comparisons and add table __eq, __lt, __le callbacks with Lua truthiness and reverse-order fallbacks — src/owned_flow.rs: Execution::equality_with_metamethod and Execution::ordering_with_metamethod
   - [x] Exercise identity, left/right selection, <= via __lt, reversed >/>=, invalid types, recursion and Lua 5.4 differential fixtures — src/owned_flow.rs: comparison_metamethods_preserve_identity_truthiness_and_ordering; tests/owned_flow.rs
   - [x] Pass Linux formatter, Clippy, Rust tests, Rust 1.96, composite consumer and Lua 5.4 differential CI — GitHub Actions 40033892089: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all succeeded
-- 🔄 **T379** Lua __pairs custom iterator triples through first-party closures — `███████░░░ 67%`
+- 🔄 **T379** Lua __pairs custom iterator triples through first-party closures — `██████████ 100%`
   - [x] Call table __pairs Lua functions and adjust results to iterator, state and initial control while preserving native raw pairs — src/owned_flow.rs: Builtin::Pairs multiple-result execution
   - [x] Cover custom generic-for closure iterators, return adjustment, shadowing, raw next, recursion and Lua 5.4 differential fixtures — src/owned_flow.rs: pairs_metatable_hook_preserves_generic_for_and_multiple_results; tests/owned_flow.rs
-  - [ ] Pass Linux formatter, Clippy, Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI
-- 🛡️ **T380** Native-stack-safe bounded recursive metamethod dispatch — `███████░░░ 67%`
+  - [x] Pass Linux formatter, Clippy, Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI — GitHub Actions 40034746881: Linux tests/lint/fmt, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter all succeeded
+- 🛡️ **T380** Native-stack-safe bounded recursive metamethod dispatch — `██████████ 100%`
   - [x] Constrain experimental VM call depth to remain below default Rust thread stack exhaustion — src/owned_flow.rs: MAX_CALL_DEPTH=16 enforced by Execution::call_owned_function
   - [x] Regression-test recursive __index, __add, __pairs and __len dispatch return CallDepthExceeded — src/owned_flow.rs: recursively_dispatched_metamethods_stop_before_native_stack_exhaustion
-  - [ ] Pass Linux Rust tests without stack abort, formatter, Clippy, Rust 1.96 and differential CI
+  - [x] Pass Linux Rust tests without stack abort, formatter, Clippy, Rust 1.96 and differential CI — GitHub Actions 40034746881: Linux tests/lint/fmt, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter all succeeded
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -543,6 +543,6 @@
 - 🧩 Bitwise binary metamethod callbacks with numeric precedence — `██████████ 100%`
 - 🔗 Lua concat callbacks after native byte concatenation — `██████████ 100%`
 - ⚖️ Lua equality and ordering metamethod callbacks — `██████████ 100%`
-- 🔄 Lua pairs table metamethod custom iterator triples — `███████░░░ 67%`
-- 🛡️ Native-stack-safe recursive metamethod limits — `███████░░░ 67%`
+- 🔄 Lua pairs table metamethod custom iterator triples — `██████████ 100%`
+- 🛡️ Native-stack-safe recursive metamethod limits — `██████████ 100%`
 
