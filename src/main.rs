@@ -253,9 +253,12 @@ fn check_source(vm: &mut Vm, source: &str, name: &str) -> Result<(), String> {
         .starts_with("#!")
         .then(|| format!("--{}", &source[2..]));
     vm.set_bytecode_loading(false);
-    vm.load(normalized.as_deref().unwrap_or(source).as_bytes(), name.as_bytes())
-        .map(|_| ())
-        .map_err(|err| format!("{name}: {err}"))
+    vm.load(
+        normalized.as_deref().unwrap_or(source).as_bytes(),
+        name.as_bytes(),
+    )
+    .map(|_| ())
+    .map_err(|err| format!("{name}: {err}"))
 }
 
 fn repl(vm: &mut Vm) -> Result<(), String> {
