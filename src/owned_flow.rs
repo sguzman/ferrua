@@ -2639,11 +2639,15 @@ mod tests {
     #[test]
     fn mixed_table_constructor_expands_last_method_result_list() {
         assert_eq!(
-            evaluate("local maker={pair=function(self) return 3,4 end}; local t={[5]=9,1,maker:pair()}; return t[1]*100+t[2]*10+t[3]"),
+            evaluate(
+                "local maker={pair=function(self) return 3,4 end}; local t={[5]=9,1,maker:pair()}; return t[1]*100+t[2]*10+t[3]"
+            ),
             134
         );
         assert_eq!(
-            evaluate("local maker={pair=function(self) return 3,4 end}; local t={[5]=9,1,(maker:pair())}; return t[3] or 7"),
+            evaluate(
+                "local maker={pair=function(self) return 3,4 end}; local t={[5]=9,1,(maker:pair())}; return t[3] or 7"
+            ),
             7
         );
     }
