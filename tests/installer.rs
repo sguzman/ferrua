@@ -8,6 +8,7 @@ use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
+use std::time::{Duration, Instant};
 
 fn scratch() -> PathBuf {
     let name = format!(
@@ -22,10 +23,23 @@ fn scratch() -> PathBuf {
 
 fn serve_fixture(archive: Vec<u8>, checksum: Vec<u8>) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
     let server = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(15);
         for _ in 0..2 {
-            let (mut stream, _) = listener.accept().unwrap();
+            let (mut stream, _) = loop {
+                match listener.accept() {
+                    Ok(accepted) => break accepted,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(Instant::now() < deadline, "installer fixture request timed out");
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => panic!("fixture accept error: {err}"),
+                }
+            };
+            stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+            stream.set_write_timeout(Some(Duration::from_secs(5))).unwrap();
             let mut request = [0u8; 4096];
             let count = stream.read(&mut request).unwrap();
             let line = String::from_utf8_lossy(&request[..count]);
