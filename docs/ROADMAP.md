@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████░░░░ 63%` across 18 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████░░░░ 64%` across 22 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 93%`
 
@@ -57,11 +57,11 @@
 - 📋 Documented, auditable progress — `██████████ 100%`
 - 📦 Distribution readiness — `███░░░░░░░ 33%`
 
-## 🧰 M1 — Daily automation and Python replacement — `█████░░░░░ 50%`
+## 🧰 M1 — Daily automation and Python replacement — `██████░░░░ 58%`
 
-**Acceptance gate:** Representative filesystem, JSON, process and release automation scripts run under fer without Python.
+**Acceptance gate:** Representative filesystem, JSON, process, HTTP, structured-data and versioned downstream CI scripts run without Python. Stable distribution and adoption acceptance required.
 
-### 🗂️ P2 — Everyday host and data capabilities — `█████░░░░░ 50%`
+### 🗂️ P2 — Everyday host and data capabilities — `█████████░ 93%`
 
 - 📂 **T201** Read, write and iterate local files — `██████████ 100%`
   - [x] Lua io and os library available in trusted mode — src/main.rs
@@ -70,19 +70,41 @@
   - [x] Document supported JSON interface and cases — README.md, docs/ARCHITECTURE.md, tools/json.lua
   - [x] JSON decoding and encoding implemented — tools/json.lua, embedded src/main.rs
   - [x] Round-trip integration cases accepted — GitHub Actions 39894224746: JSON encoding/decoding and empty-collection Rust/CLI tests passed
-- 🔧 **T203** Reliable subprocess and Git automation — `░░░░░░░░░░ 0%`
-  - [ ] Document process execution and exit status contract
-  - [ ] Safe argv-based child process module
-  - [ ] GitHub Actions CI exercise
-- 📦 **T204** Modules, release binaries and GitHub setup action — `░░░░░░░░░░ 0%`
+- 🔧 **T203** Reliable subprocess and Git automation — `██████████ 100%`
+  - [x] Document process execution and exit status contract — docs/PROCESS.md documents exit, timeout and no-shell behavior
+  - [x] Safe argv-based child process module — src/process.rs, tools/process.lua; GitHub Actions 39896443549
+  - [x] GitHub Actions CI exercise — GitHub Actions 39896443549: subprocess smoke passes in Linux and composite consumer jobs
+- 📦 **T204** Modules, release binaries and GitHub setup action — `███████░░░ 67%`
   - [ ] Linux release artifact published
-  - [ ] Reusable setup-fer GitHub action published
-  - [ ] End-to-end consumer example passes
+  - [x] Reusable setup-fer GitHub action published — action.yml and docs/ACTIONS.md; GitHub Actions 39896443549 action consumer passes
+  - [x] End-to-end consumer example passes — GitHub Actions 39896443549: separate consumer job installs fer and executes Lua and process automation
+- 📂 **T205** Rust-backed filesystem operations and directory traversal — `██████████ 100%`
+  - [x] Define bounded text IO, copy and deterministic traversal contract — docs/FILESYSTEM.md, examples/fs.lua
+  - [x] Expose trusted filesystem API with sandbox separation — src/fs.rs, tools/fs.lua, src/main.rs
+  - [x] Native and composite action consumer filesystem smoke pass — GitHub Actions 39896443549: temporary-dir read/write/copy/walk and sandbox tests
+
+### 🌐 P4 — Portable data and CI graduation — `░░░░░░░░░░ 0%`
+
+- 🌐 **T206** First-party HTTP API and GitHub REST client — `░░░░░░░░░░ 0%`
+  - [ ] Provide documented HTTP GET, POST and response contracts with timeouts
+  - [ ] Expose trusted Rust HTTP client with no Python dependency
+  - [ ] Offline/local-server fixture tests pass CI
+- 🗃️ **T207** TOML and YAML parsing and serialization — `░░░░░░░░░░ 0%`
+  - [ ] Document round-trip formats, supported types and limits
+  - [ ] Implement native TOML and YAML modules
+  - [ ] Schema and round-trip fixtures pass CI
+- 📦 **T208** Stable binary distribution and cross-repository adoption — `░░░░░░░░░░ 0%`
+  - [ ] Publish semver-tagged Linux artifacts with reproducible SHA-256 checksums
+  - [ ] Offer installer that consumes versioned release binaries
+  - [ ] Validate pinned downstream GitHub workflow with representative scripts
 
 **Feature inventory** (computed from associated atomic task progress):
 
 - 📂 Filesystem and data workflows — `██████████ 100%`
-- 🔧 Processes and CI reuse — `░░░░░░░░░░ 0%`
+- 🔧 Processes and CI reuse — `████████░░ 84%`
+- 🗂️ Directory traversal and file automation — `██████████ 100%`
+- 🌐 HTTP and structured external data — `░░░░░░░░░░ 0%`
+- 📦 Versioned CI reuse — `███░░░░░░░ 34%`
 
 ## 🔩 M2 — Independent Ferrua VM and compatibility — `░░░░░░░░░░ 0%`
 

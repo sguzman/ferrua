@@ -274,7 +274,7 @@
       "id": "M1",
       "emoji": "🧰",
       "name": "Daily automation and Python replacement",
-      "gate": "Representative filesystem, JSON, process and release automation scripts run under fer without Python.",
+      "gate": "Representative filesystem, JSON, process, HTTP, structured-data and versioned downstream CI scripts run without Python. Stable distribution and adoption acceptance required.",
       "phases": [
         {
           "id": "P2",
@@ -329,18 +329,21 @@
               "checks": [
                 {
                   "text": "Document process execution and exit status contract",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "docs/PROCESS.md documents exit, timeout and no-shell behavior"
                 },
                 {
                   "text": "Safe argv-based child process module",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "src/process.rs, tools/process.lua; GitHub Actions 39896443549"
                 },
                 {
                   "text": "GitHub Actions CI exercise",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39896443549: subprocess smoke passes in Linux and composite consumer jobs"
                 }
               ],
-              "progress": 0
+              "progress": 100
             },
             {
               "id": "T204",
@@ -353,10 +356,102 @@
                 },
                 {
                   "text": "Reusable setup-fer GitHub action published",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "action.yml and docs/ACTIONS.md; GitHub Actions 39896443549 action consumer passes"
                 },
                 {
                   "text": "End-to-end consumer example passes",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39896443549: separate consumer job installs fer and executes Lua and process automation"
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T205",
+              "emoji": "📂",
+              "name": "Rust-backed filesystem operations and directory traversal",
+              "checks": [
+                {
+                  "text": "Define bounded text IO, copy and deterministic traversal contract",
+                  "passed": true,
+                  "evidence": "docs/FILESYSTEM.md, examples/fs.lua"
+                },
+                {
+                  "text": "Expose trusted filesystem API with sandbox separation",
+                  "passed": true,
+                  "evidence": "src/fs.rs, tools/fs.lua, src/main.rs"
+                },
+                {
+                  "text": "Native and composite action consumer filesystem smoke pass",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39896443549: temporary-dir read/write/copy/walk and sandbox tests"
+                }
+              ],
+              "progress": 100
+            }
+          ]
+        },
+        {
+          "id": "P4",
+          "emoji": "🌐",
+          "name": "Portable data and CI graduation",
+          "tasks": [
+            {
+              "id": "T206",
+              "emoji": "🌐",
+              "name": "First-party HTTP API and GitHub REST client",
+              "checks": [
+                {
+                  "text": "Provide documented HTTP GET, POST and response contracts with timeouts",
+                  "passed": false
+                },
+                {
+                  "text": "Expose trusted Rust HTTP client with no Python dependency",
+                  "passed": false
+                },
+                {
+                  "text": "Offline/local-server fixture tests pass CI",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T207",
+              "emoji": "🗃️",
+              "name": "TOML and YAML parsing and serialization",
+              "checks": [
+                {
+                  "text": "Document round-trip formats, supported types and limits",
+                  "passed": false
+                },
+                {
+                  "text": "Implement native TOML and YAML modules",
+                  "passed": false
+                },
+                {
+                  "text": "Schema and round-trip fixtures pass CI",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T208",
+              "emoji": "📦",
+              "name": "Stable binary distribution and cross-repository adoption",
+              "checks": [
+                {
+                  "text": "Publish semver-tagged Linux artifacts with reproducible SHA-256 checksums",
+                  "passed": false
+                },
+                {
+                  "text": "Offer installer that consumes versioned release binaries",
+                  "passed": false
+                },
+                {
+                  "text": "Validate pinned downstream GitHub workflow with representative scripts",
                   "passed": false
                 }
               ],
@@ -380,6 +475,29 @@
           "task_ids": [
             "T203",
             "T204"
+          ]
+        },
+        {
+          "emoji": "🗂️",
+          "name": "Directory traversal and file automation",
+          "task_ids": [
+            "T205"
+          ]
+        },
+        {
+          "emoji": "🌐",
+          "name": "HTTP and structured external data",
+          "task_ids": [
+            "T206",
+            "T207"
+          ]
+        },
+        {
+          "emoji": "📦",
+          "name": "Versioned CI reuse",
+          "task_ids": [
+            "T204",
+            "T208"
           ]
         }
       ]
