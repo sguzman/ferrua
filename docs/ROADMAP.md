@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 95%` across 103 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 95%` across 104 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -454,6 +454,10 @@
   - [x] Preserve numeric/string byte concatenation and dispatch function-valued __concat only for incompatible operands — src/owned_flow.rs: Execution::concat_with_metamethod
   - [x] Cover left/right selection, byte strings, closure returns, recursion limits and Lua 5.4 differential fixtures — src/owned_flow.rs: concat_metamethod_preserves_byte_concat_and_bounded_callbacks; tests/owned_flow.rs
   - [x] Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and Lua 5.4 differential CI — GitHub Actions 40033236408: Linux, Rust 1.96, Lua 5.4 differential, action consumer and status reporter all passed
+- ⚖️ **T378** Lua table equality and ordering metamethods with reversed fallbacks — `███████░░░ 67%`
+  - [x] Preserve native number/string comparisons and add table __eq, __lt, __le callbacks with Lua truthiness and reverse-order fallbacks — src/owned_flow.rs: Execution::equality_with_metamethod and Execution::ordering_with_metamethod
+  - [x] Exercise identity, left/right selection, <= via __lt, reversed >/>=, invalid types, recursion and Lua 5.4 differential fixtures — src/owned_flow.rs: comparison_metamethods_preserve_identity_truthiness_and_ordering; tests/owned_flow.rs
+  - [ ] Pass Linux formatter, Clippy, Rust tests, Rust 1.96, composite consumer and Lua 5.4 differential CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -530,4 +534,5 @@
 - ➖ Unary negative and bitwise complement metamethods — `██████████ 100%`
 - 🧩 Bitwise binary metamethod callbacks with numeric precedence — `██████████ 100%`
 - 🔗 Lua concat callbacks after native byte concatenation — `██████████ 100%`
+- ⚖️ Lua equality and ordering metamethod callbacks — `███████░░░ 67%`
 
