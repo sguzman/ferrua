@@ -122,3 +122,7 @@ The first-party stack bytecode VM now supports local named functions, anonymous 
 ### Mutable closure upvalue cells
 
 Closures from the bounded owned VM now capture lexically visible locals through a bounded shared-cell heap, preserving mutations after creation, sibling closures, transitive nested captures and separate factory invocations. A recursive local function observes reassignment of its own outer binding. For predictable analysis and containment, captured bindings are collected eagerly in stable name order, not optimized by liveness; the execution allocates at most 65,536 slots across its lifetime. This does not implement garbage collection, Lua globals, varargs, methods or complete multireturn semantics. Production `fer` remains untouched.
+
+### Parenthesized expression result boundaries
+
+Ferrua's independent syntax tree now retains parentheses as explicit `Expr::Grouped` nodes instead of erasing them during parsing. Both current execution prototypes preserve the enclosed expression's ordinary single-value arithmetic semantics, and the scope resolver traverses grouped expressions. This is necessary for future Lua multi-result adjustment because `return f()` and `return (f())` must differ. Grouped assignment targets are rejected by the restricted parser. This AST change is not itself a claim of complete multiple-return support.

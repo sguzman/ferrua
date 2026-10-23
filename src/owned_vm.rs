@@ -65,6 +65,7 @@ fn emit<'a>(
         return Err(Error::TooLarge);
     }
     let instruction = match expression {
+        Expr::Grouped(inner) => return emit(program, inner, depth + 1, locals),
         Expr::Atom(text) => {
             let integer =
                 if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {

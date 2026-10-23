@@ -103,6 +103,7 @@ impl<'src> Resolver<'src> {
 
     fn read_expression(&mut self, expr: &Expr<'src>, statement: usize) {
         match expr {
+            Expr::Grouped(inner) => self.read_expression(inner, statement),
             Expr::Atom(value) => {
                 if identifier(value) {
                     self.record(value, Access::Read, statement);

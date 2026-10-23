@@ -253,6 +253,7 @@ impl<'a> Compiler<'a> {
             return Err(FlowError::TooLarge);
         }
         match expr {
+            Expr::Grouped(inner) => self.expression(inner, depth + 1)?,
             Expr::Atom(text) => {
                 let constant = match *text {
                     "true" => Some(Value::Boolean(true)),

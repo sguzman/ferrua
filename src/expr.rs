@@ -6,6 +6,8 @@ use std::fmt;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr<'a> {
     Atom(&'a str),
+    /// Parentheses deliberately force a single-result expression context.
+    Grouped(Box<Expr<'a>>),
     Unary {
         op: &'a str,
         right: Box<Expr<'a>>,
@@ -149,7 +151,7 @@ impl<'a> Parser<'a> {
                     return Err(self.error("expected closing parenthesis"));
                 }
                 self.pop();
-                Ok(inner)
+                Ok(Expr::Grouped(Box::new(inner)))
             }
             _ if matches!(
                 token.kind,
@@ -809,6 +811,7 @@ mod tests {
     fn show(expr: &Expr<'_>) -> String {
         match expr {
             Expr::Atom(s) => (*s).to_owned(),
+            Expr::Grouped(inner) => show(inner),
             Expr::Unary { op, right } => format!("({op} {})", show(right)),
             Expr::Binary { op, left, right } => {
                 format!("({op} {} {})", show(left), show(right))
@@ -931,6 +934,20 @@ mod tests {
         }
         assert!(parse_chunk("local function f(...) return ... end").is_ok());
         assert!(parse_chunk("return ...").is_ok());
+    }
+
+    #[test]
+    fn parenthesized_call_retains_single_result_boundary() {
+        assert!(matches!(parse_expression("f()").unwrap(), Expr::Call { .. }));
+        assert!(matches!(
+            parse_expression("(f())").unwrap(),
+            Expr::Grouped(inner) if matches!(*inner, Expr::Call { .. })
+        ));
+        assert!(matches!(
+            parse_expression("((f()))").unwrap(),
+            Expr::Grouped(inner) if matches!(*inner, Expr::Grouped(_))
+        ));
+        assert!(parse_chunk("(x)=1").is_err());
     }
 
     #[test]
