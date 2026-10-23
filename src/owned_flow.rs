@@ -1465,8 +1465,7 @@ impl Execution<'_> {
                 let number = f64::from_bits(bits);
                 if number.is_finite()
                     && number.fract() == 0.0
-                    && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
-                        .contains(&number)
+                    && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&number)
                 {
                     Ok(number as i64)
                 } else {
@@ -1938,9 +1937,8 @@ impl Execution<'_> {
                     stack.push(Value::Integer(length as i64));
                 }
                 Op::BitNot => {
-                    let value = self.exact_integer_operand(
-                        stack.pop().ok_or(FlowError::InvalidBytecode)?,
-                    )?;
+                    let value =
+                        self.exact_integer_operand(stack.pop().ok_or(FlowError::InvalidBytecode)?)?;
                     stack.push(Value::Integer(!value));
                 }
                 Op::Binary(op) => {
