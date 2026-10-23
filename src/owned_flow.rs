@@ -490,7 +490,7 @@ impl<'a> Compiler<'a> {
                         TableField::Value(value) => {
                             positional += 1;
                             if position + 1 == fields.len()
-                                && (matches!(value, Expr::Call { .. })
+                                && (matches!(value, Expr::Call { .. } | Expr::MethodCall { .. })
                                     || (self.vararg && matches!(value, Expr::Vararg)))
                             {
                                 self.multiple_expression(value, depth + 1)?;
@@ -2633,6 +2633,18 @@ mod tests {
         assert_eq!(
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
+        );
+    }
+
+    #[test]
+    fn mixed_table_constructor_expands_last_method_result_list() {
+        assert_eq!(
+            evaluate("local maker={pair=function(self) return 3,4 end}; local t={[5]=9,1,maker:pair()}; return t[1]*100+t[2]*10+t[3]"),
+            134
+        );
+        assert_eq!(
+            evaluate("local maker={pair=function(self) return 3,4 end}; local t={[5]=9,1,(maker:pair())}; return t[3] or 7"),
+            7
         );
     }
 

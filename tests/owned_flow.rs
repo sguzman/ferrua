@@ -140,6 +140,8 @@ const FIXTURES: &[&str] = &[
     "local t={1,2}; local function size(x) return #x end; return size(t)",
     "local t={1,2}; t[2]=nil; return #t",
     "local t={[3]=7,[1]=4}; return t[1]*10+t[3]",
+    "local maker={pair=function(self) return 3,4 end}; local t={[5]=9,1,maker:pair()}; return t[1]*100+t[2]*10+t[3]",
+    "local maker={pair=function(self) return 3,4 end}; local t={[5]=9,1,(maker:pair())}; return t[3] or 7",
     "local t={2,[4]=9,3}; return t[1]*10+t[2]",
     "local t={[3]=7,2,[2]=8}; return t[1]*100+t[2]*10+t[3]",
     "local k=3; local t={[k]=9,1}; return t[1]*10+t[3]",

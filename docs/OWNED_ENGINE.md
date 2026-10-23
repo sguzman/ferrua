@@ -244,3 +244,7 @@ The independent VM now distinguishes local variable **declarations** from assign
 - [CI #40007436327](https://github.com/sguzman/ferrua/actions/runs/40007436327): generalized Lua table hash keys and fresh captured cells for repeated block-local declarations passed all four jobs.
 
 These are accepted bounded-subset steps. Full Lua globals, metatables, arbitrary float semantics, collectable heaps, standard libraries and native engine graduation remain pending.
+
+### Method tail-result expansion inside mixed tables
+
+The mixed named/computed/positional table constructor compiler now treats an unparenthesized final colon method call like any other Lua multireturn call. It expands the returned values into successive positional fields, while `(receiver:method())` remains one value. Regression fixtures verify these cases against the production interpreter and upstream Lua 5.4.6.
