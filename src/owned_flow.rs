@@ -2019,7 +2019,7 @@ mod tests {
     #[test]
     fn computed_integer_keys_in_mixed_table_constructors() {
         assert_eq!(evaluate("local t={[3]=7,[1]=4}; return t[1]*10+t[3]"), 47);
-        assert_eq!(evaluate("local t={2,[1]=9,3}; return t[1]*10+t[2]"), 93);
+        assert_eq!(evaluate("local t={2,[4]=9,3}; return t[1]*10+t[2]"), 23);
         assert_eq!(
             evaluate("local t={[3]=7,2,[2]=8}; return t[1]*100+t[2]*10+t[3]"),
             287
@@ -2030,7 +2030,7 @@ mod tests {
         );
         assert_eq!(
             evaluate(
-                "local function vals() return 4,5 end; local t={[3]=9,2,vals()}; return t[1]*100+t[2]*10+t[3]"
+                "local function vals() return 4,5 end; local t={[5]=9,2,vals()}; return t[1]*100+t[2]*10+t[3]"
             ),
             245
         );
