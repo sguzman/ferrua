@@ -87,10 +87,10 @@ fn create_fixture(root: &Path, bad_checksum: bool) -> (Vec<u8>, Vec<u8>) {
 fn exercise(bad_checksum: bool) {
     let root = scratch();
     let (archive, checksum) = create_fixture(&root, bad_checksum);
-    let (base, server) = serve_fixture(archive, checksum);
-    let install = root.join("prefix");
     let expected = String::from_utf8_lossy(&checksum);
     let expected = expected.chars().take(64).collect::<String>();
+    let (base, server) = serve_fixture(archive, checksum);
+    let install = root.join("prefix");
     let run = Command::new("sh")
         .args([
             "scripts/install.sh",
