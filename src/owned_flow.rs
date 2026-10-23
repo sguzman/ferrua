@@ -122,6 +122,7 @@ struct Compiler<'a> {
     slots: usize,
     depth: usize,
     read_only: HashSet<usize>,
+    loop_breaks: Vec<Vec<usize>>,
 }
 
 impl<'a> Compiler<'a> {
@@ -341,9 +342,16 @@ impl<'a> Compiler<'a> {
                     let begin = self.code.len();
                     self.expression(condition, 0)?;
                     let exit = self.push(Op::JumpIfFalse(usize::MAX))?;
-                    self.scope(body)?;
+                    self.loop_breaks.push(Vec::new());
+                    let compiled = self.scope(body);
+                    let breaks = self.loop_breaks.pop().expect("while loop break scope");
+                    compiled?;
                     self.push(Op::Jump(begin))?;
-                    self.patch(exit, self.code.len())?;
+                    let end = self.code.len();
+                    self.patch(exit, end)?;
+                    for address in breaks {
+                        self.patch(address, end)?;
+                    }
                 }
                 Statement::NumericFor {
                     variable,
@@ -376,6 +384,7 @@ impl<'a> Compiler<'a> {
                         .insert(*variable, counter);
                     self.read_only.insert(counter);
                     self.depth += 1;
+                    self.loop_breaks.push(Vec::new());
                     let compiled = (|| {
                         let begin = self.code.len();
                         let check = self.push(Op::ForCheck {
@@ -395,10 +404,15 @@ impl<'a> Compiler<'a> {
                         self.patch(check, exit)?;
                         self.patch(next, exit)
                     })();
+                    let breaks = self.loop_breaks.pop().expect("numeric for break scope");
                     self.depth -= 1;
                     self.read_only.remove(&counter);
                     self.frames.pop();
                     compiled?;
+                    let end = self.code.len();
+                    for address in breaks {
+                        self.patch(address, end)?;
+                    }
                 }
                 Statement::Repeat { body, condition } => {
                     if self.depth >= 64 {
@@ -407,15 +421,31 @@ impl<'a> Compiler<'a> {
                     let begin = self.code.len();
                     self.frames.push(HashMap::new());
                     self.depth += 1;
+                    self.loop_breaks.push(Vec::new());
                     let result = (|| {
                         self.statements(body)?;
                         // Lua until conditions see locals from the repeat body.
                         self.expression(condition, 0)
                     })();
+                    let breaks = self.loop_breaks.pop().expect("repeat break scope");
                     self.depth -= 1;
                     self.frames.pop();
                     result?;
                     self.push(Op::JumpIfFalse(begin))?;
+                    let end = self.code.len();
+                    for address in breaks {
+                        self.patch(address, end)?;
+                    }
+                }
+                Statement::Break => {
+                    if self.loop_breaks.is_empty() {
+                        return Err(FlowError::Unsupported("break outside loop".into()));
+                    }
+                    let address = self.push(Op::Jump(usize::MAX))?;
+                    self.loop_breaks
+                        .last_mut()
+                        .expect("loop break scope")
+                        .push(address);
                 }
                 _ => {
                     return Err(FlowError::Unsupported(
@@ -438,6 +468,7 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
         slots: 0,
         depth: 0,
         read_only: HashSet::new(),
+        loop_breaks: Vec::new(),
     };
     compiler.statements(&statements)?;
     if !compiler.code.iter().any(|op| matches!(op, Op::Return)) {
@@ -793,6 +824,27 @@ mod tests {
             1
         );
     }
+    #[test]
+    fn break_targets_innermost_loop_and_skips_repeat_condition() {
+        assert_eq!(
+            evaluate("local x=0; while true do x=x+1; if x==3 then break end end; return x"),
+            3
+        );
+        assert_eq!(
+            evaluate("local x=0; repeat x=x+1; if x==2 then break end until x==100; return x"),
+            2
+        );
+        assert_eq!(
+            evaluate("local s=0; for i=1,10 do if i==4 then break end; s=s+i end; return s"),
+            6
+        );
+        assert_eq!(
+            evaluate("local x=0; while x<3 do local j=0; while true do j=j+1; break end; x=x+j end; return x"),
+            3
+        );
+        assert_eq!(evaluate("while true do break end; return 6"), 6);
+    }
+
     #[test]
     fn budget_prevents_infinite_loops() {
         let compiled = compile_flow_chunk("while true do end; return 3").unwrap();

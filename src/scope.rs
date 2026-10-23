@@ -161,6 +161,7 @@ impl<'src> Resolver<'src> {
                 }
             }
             Statement::Call(call) => self.read_expression(call, number),
+            Statement::Break => {},
             Statement::Return(values) => {
                 for value in values {
                     self.read_expression(value, number);

@@ -33,6 +33,10 @@ const FIXTURES: &[&str] = &[
     "local x=-7; if x//3==-3 and x%3==2 then return 1 else return 0 end",
     "return false and (1//0) or 4",
     "if true then return 5 else return 1//0 end",
+    "local x=0; while true do x=x+1; if x==3 then break end end; return x",
+    "local x=0; repeat x=x+1; if x==2 then break end until x==100; return x",
+    "local s=0; for i=1,10 do if i==4 then break end; s=s+i end; return s",
+    "local x=0; while x<3 do local j=0; while true do j=j+1; break end; x=x+j end; return x",
 ];
 
 fn check(reference: &str) {

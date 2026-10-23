@@ -66,6 +66,7 @@ struct Parser<'a> {
     tokens: Vec<Token<'a>>,
     index: usize,
     length: usize,
+    loop_depth: usize,
 }
 
 fn binding_power(op: &str) -> Option<(u8, u8)> {
@@ -254,6 +255,7 @@ pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
         tokens,
         index: 0,
         length: source.len(),
+        loop_depth: 0,
     };
     let result = parser.expression(0)?;
     if parser.peek().is_some() {
@@ -279,6 +281,7 @@ pub enum Statement<'a> {
         values: Vec<Expr<'a>>,
     },
     Call(Expr<'a>),
+    Break,
     /// A lexical scope closed with `end`. Nested Lua blocks are supported
     /// by this experimental subset, not arbitrary control-flow statements.
     Block(Vec<Statement<'a>>),
@@ -364,7 +367,9 @@ impl<'a> Parser<'a> {
                     return Err(self.error("expected do in numeric for"));
                 }
                 self.pop();
+                self.loop_depth += 1;
                 let body = self.block(&["end"], depth + 1)?;
+                self.loop_depth -= 1;
                 if self.peek().map(|token| token.spelling) != Some("end") {
                     return Err(self.error("expected end to close numeric for"));
                 }
@@ -391,7 +396,9 @@ impl<'a> Parser<'a> {
                 return Err(self.error("expected do in generic for"));
             }
             self.pop();
+            self.loop_depth += 1;
             let body = self.block(&["end"], depth + 1)?;
+            self.loop_depth -= 1;
             if self.peek().map(|token| token.spelling) != Some("end") {
                 return Err(self.error("expected end to close generic for"));
             }
@@ -404,7 +411,9 @@ impl<'a> Parser<'a> {
         }
         if self.peek().is_some_and(|token| token.spelling == "repeat") {
             self.pop();
+            self.loop_depth += 1;
             let body = self.block(&["until"], depth + 1)?;
+            self.loop_depth -= 1;
             if self.peek().map(|token| token.spelling) != Some("until") {
                 return Err(self.error("expected until to close repeat block"));
             }
@@ -419,7 +428,9 @@ impl<'a> Parser<'a> {
                 return Err(self.error("expected do after while condition"));
             }
             self.pop();
+            self.loop_depth += 1;
             let body = self.block(&["end"], depth + 1)?;
+            self.loop_depth -= 1;
             if self.peek().map(|token| token.spelling) != Some("end") {
                 return Err(self.error("expected end to close while block"));
             }
@@ -457,6 +468,13 @@ impl<'a> Parser<'a> {
                 branches,
                 else_branch,
             });
+        }
+        if self.peek().is_some_and(|token| token.spelling == "break") {
+            if self.loop_depth == 0 {
+                return Err(self.error("break outside loop"));
+            }
+            self.pop();
+            return Ok(Statement::Break);
         }
         if self.peek().is_some_and(|token| token.spelling == "local") {
             self.pop();
@@ -548,7 +566,7 @@ impl<'a> Parser<'a> {
                 continue;
             }
             let statement = self.statement(depth)?;
-            let terminal = matches!(statement, Statement::Return(_));
+            let terminal = matches!(statement, Statement::Return(_) | Statement::Break);
             result.push(statement);
             let ending_line = self
                 .tokens
@@ -581,7 +599,7 @@ impl<'a> Parser<'a> {
                     .peek()
                     .is_some_and(|token| !terminators.contains(&token.spelling))
             {
-                return Err(self.error("return must be final statement in block"));
+                return Err(self.error("return or break must be final statement in block"));
             }
         }
         Ok(result)
@@ -599,6 +617,7 @@ pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
         tokens,
         index: 0,
         length: source.len(),
+        loop_depth: 0,
     };
     parser.block(&[], 0)
 }
@@ -781,6 +800,28 @@ mod tests {
                 .message
                 .contains("nesting")
         );
+    }
+
+    #[test]
+    fn break_is_scoped_to_loops_and_must_terminate_its_block() {
+        for source in [
+            "while true do break end; return 1",
+            "repeat if true then break end until false; return 2",
+            "for i=1,10 do if i==3 then break end end; return 3",
+            "for k in pairs(t) do break end; return 4",
+            "while true do while true do break end; break end; return 5",
+        ] {
+            assert!(parse_chunk(source).is_ok(), "{source}");
+        }
+        for source in [
+            "break",
+            "do break end",
+            "if true then break end",
+            "while true do break; print(1) end",
+            "repeat break; local x=2 until true",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
     }
 
     #[test]
