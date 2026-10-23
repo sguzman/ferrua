@@ -32,14 +32,21 @@ fn serve_fixture(archive: Vec<u8>, checksum: Vec<u8>) -> (String, thread::JoinHa
                 match listener.accept() {
                     Ok(accepted) => break accepted,
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                        assert!(Instant::now() < deadline, "installer fixture request timed out");
+                        assert!(
+                            Instant::now() < deadline,
+                            "installer fixture request timed out"
+                        );
                         thread::sleep(Duration::from_millis(10));
                     }
                     Err(err) => panic!("fixture accept error: {err}"),
                 }
             };
-            stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-            stream.set_write_timeout(Some(Duration::from_secs(5))).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
             let mut request = [0u8; 4096];
             let count = stream.read(&mut request).unwrap();
             let line = String::from_utf8_lossy(&request[..count]);
