@@ -456,12 +456,12 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
         (Add, Integer(a), Integer(b)) => Ok(Integer(a.wrapping_add(b))),
         (Sub, Integer(a), Integer(b)) => Ok(Integer(a.wrapping_sub(b))),
         (Mul, Integer(a), Integer(b)) => Ok(Integer(a.wrapping_mul(b))),
-        (FloorDiv, Integer(a), Integer(b)) => {
-            Ok(Integer(floor_div(a, b).map_err(|_| FlowError::DivisionByZero)?))
-        }
-        (Mod, Integer(a), Integer(b)) => {
-            Ok(Integer(lua_mod(a, b).map_err(|_| FlowError::DivisionByZero)?))
-        }
+        (FloorDiv, Integer(a), Integer(b)) => Ok(Integer(
+            floor_div(a, b).map_err(|_| FlowError::DivisionByZero)?,
+        )),
+        (Mod, Integer(a), Integer(b)) => Ok(Integer(
+            lua_mod(a, b).map_err(|_| FlowError::DivisionByZero)?,
+        )),
         (BitAnd, Integer(a), Integer(b)) => Ok(Integer(a & b)),
         (BitOr, Integer(a), Integer(b)) => Ok(Integer(a | b)),
         (BitXor, Integer(a), Integer(b)) => Ok(Integer(a ^ b)),
