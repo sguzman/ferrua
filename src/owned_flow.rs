@@ -372,7 +372,11 @@ impl<'a> Compiler<'a> {
                 self.expression(key, depth + 1)?;
                 self.push(Op::GetTable)?;
             }
-            Expr::Table(fields) if fields.iter().any(|field| matches!(field, TableField::Indexed { .. })) => {
+            Expr::Table(fields)
+                if fields
+                    .iter()
+                    .any(|field| matches!(field, TableField::Indexed { .. })) =>
+            {
                 // Construct mixed positional/integer-key tables in source order.
                 // Keep the table on the stack while individual writes consume a copy.
                 self.push(Op::NewTable(0))?;
@@ -1198,7 +1202,10 @@ impl Execution<'_> {
                     else {
                         return Err(FlowError::TypeError);
                     };
-                    let cells = self.tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
+                    let cells = self
+                        .tables
+                        .get_mut(handle)
+                        .ok_or(FlowError::InvalidBytecode)?;
                     if end > cells.len() {
                         let growth = end - cells.len();
                         if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
@@ -2013,18 +2020,30 @@ mod tests {
     fn computed_integer_keys_in_mixed_table_constructors() {
         assert_eq!(evaluate("local t={[3]=7,[1]=4}; return t[1]*10+t[3]"), 47);
         assert_eq!(evaluate("local t={2,[1]=9,3}; return t[1]*10+t[2]"), 93);
-        assert_eq!(evaluate("local t={[3]=7,2,[2]=8}; return t[1]*100+t[2]*10+t[3]"), 287);
-        assert_eq!(evaluate("local k=3; local t={[k]=9,1}; return t[1]*10+t[3]"), 19);
         assert_eq!(
-            evaluate("local function vals() return 4,5 end; local t={[3]=9,2,vals()}; return t[1]*100+t[2]*10+t[3]"),
+            evaluate("local t={[3]=7,2,[2]=8}; return t[1]*100+t[2]*10+t[3]"),
+            287
+        );
+        assert_eq!(
+            evaluate("local k=3; local t={[k]=9,1}; return t[1]*10+t[3]"),
+            19
+        );
+        assert_eq!(
+            evaluate(
+                "local function vals() return 4,5 end; local t={[3]=9,2,vals()}; return t[1]*100+t[2]*10+t[3]"
+            ),
             245
         );
         assert_eq!(
-            evaluate("local function vals() return end; local t={[3]=9,2,vals()}; return t[1]*10+t[3]"),
+            evaluate(
+                "local function vals() return end; local t={[3]=9,2,vals()}; return t[1]*10+t[3]"
+            ),
             29
         );
         assert_eq!(
-            evaluate("local k=0; local function nextkey() k=k+1; return k end; local t={[nextkey()]=5,[nextkey()]=7}; return t[1]*10+t[2]"),
+            evaluate(
+                "local k=0; local function nextkey() k=k+1; return k end; local t={[nextkey()]=5,[nextkey()]=7}; return t[1]*10+t[2]"
+            ),
             57
         );
         assert!(compile_flow_chunk("local t={name=7}; return 1").is_err());
