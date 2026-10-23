@@ -20,6 +20,8 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - name: Unit and integration tests
         run: cargo test --all-targets
+      - name: Lua roadmap integrity
+        run: cargo run -- tools/roadmap.lua --check
       - name: Interpreter smoke
         run: |
           cargo run -- -e "print(6 * 7)" | grep -x 42
