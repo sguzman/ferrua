@@ -446,10 +446,10 @@
   - [x] Preserve numeric unary operators and fall back to first-party __unm and __bnot closures — src/owned_flow.rs: Op::Negate and Op::BitNot via Execution::binary_metamethod
   - [x] Verify Lua duplicate-operand callback convention, recursion limits, return adjustment and differential fixtures — src/owned_flow.rs: unary_metamethods_pass_duplicate_operand_and_keep_numeric_fallback; tests/owned_flow.rs
   - [x] Pass Rust formatter, Clippy, Rust 1.96, full tests, action consumer and Lua 5.4 differential CI — GitHub Actions 40031937707: Linux tests/lint/formatter, Rust 1.96, upstream Lua 5.4, composite consumer and status reporter passed
-- 🧩 **T376** Binary bitwise metamethod callbacks with integer operand precedence — `███████░░░ 67%`
+- 🧩 **T376** Binary bitwise metamethod callbacks with integer operand precedence — `██████████ 100%`
   - [x] Fall back from integer bitwise operators to bounded __band/__bor/__bxor/__shl/__shr Lua callbacks — src/owned_flow.rs: Execution::bitwise_with_metamethod and Binary bitwise VM op handling
   - [x] Cover left/right precedence, mixed operands, recursion, multiple-result adjustment and Lua 5.4 differential fixtures — src/owned_flow.rs: binary_bitwise_metamethods_preserve_integer_rules_and_bounded_callbacks; tests/owned_flow.rs
-  - [ ] Pass Linux formatter, Clippy, Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI
+  - [x] Pass Linux formatter, Clippy, Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI — GitHub Actions 40032378817: Linux quality, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all successful
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -524,5 +524,5 @@
 - 📞 Callable Lua tables with bounded __call chains — `██████████ 100%`
 - ➕ Function-valued arithmetic metamethods with numeric precedence — `██████████ 100%`
 - ➖ Unary negative and bitwise complement metamethods — `██████████ 100%`
-- 🧩 Bitwise binary metamethod callbacks with numeric precedence — `███████░░░ 67%`
+- 🧩 Bitwise binary metamethod callbacks with numeric precedence — `██████████ 100%`
 
