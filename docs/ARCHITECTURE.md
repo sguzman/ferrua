@@ -27,3 +27,7 @@ The first priority is working shell scripting, reliable scripts, diagnostics and
 Lua versions supported by the selected engine are 5.1–5.5. Default is 5.5. The project intentionally does not claim that every detail of every dialect has been independently tested by Ferrua.
 
 Ferrua's interpreter CLI provides `--check` syntax-only compilation using the engine's compiler without executing the chunk. CI dogfoods `tools/check_compat.lua` against Lua 5.1–5.5. Passing these targeted smoke tests does not constitute complete conformance to each official language specification.
+
+### Differential Lua reference testing
+
+A separate Linux CI job installs the distribution-provided Lua 5.4 reference interpreter and uses Ferrua's own `process` module to compare deterministic output from seven small, non-IO semantic fixtures. The comparator, `tools/diff_lua.lua`, is written in Lua and invokes `target/debug/fer` with `--lua=5.4`. CI reports the Lua reference version in its logs. This is a deliberately narrow smoke suite and **not** full Lua conformance or a claim of Ferrua-owned VM implementation. Future M2 work should grow the fixture corpus and pin a separate reproducible upstream source build.

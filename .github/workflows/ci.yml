@@ -100,6 +100,22 @@ jobs:
           fer examples/fs.lua "$scratch_dir" | grep -x "filesystem module smoke passed"
           fer --sandbox -e "assert(process == nil and __fer_process_run == nil)"
 
+  reference-conformance:
+    name: Lua 5.4 differential smoke
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Lua 5.4 reference interpreter
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.4
+          lua5.4 -v
+      - name: Build pinned Ferrua interpreter
+        run: cargo build --locked
+      - name: Compare deterministic Lua fixture output
+        run: target/debug/fer tools/diff_lua.lua | grep -x "Ferrua vs Lua 5.4 differential smoke passed"
+
   msrv:
     name: Rust 1.96 compatibility
     runs-on: ubuntu-24.04
