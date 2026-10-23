@@ -5377,6 +5377,21 @@ mod tests {
     }
 
     #[test]
+    fn parsed_goto_and_labels_never_silently_compile_as_noops() {
+        for source in [
+            "::start:: goto done; ::done:: return 4",
+            "goto done ::done:: return 4",
+            "do ::inside:: end; return 4",
+        ] {
+            let result = compile_flow_chunk(source);
+            assert!(
+                matches!(result, Err(FlowError::Unsupported(_))),
+                "goto and label execution must be explicit: {source}"
+            );
+        }
+    }
+
+    #[test]
     fn rejects_unsupported_and_unbound_forms() {
         for source in [
             "x=1; return x",
