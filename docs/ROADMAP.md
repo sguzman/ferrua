@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 96%` across 106 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 95%` across 107 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -466,6 +466,10 @@
   - [x] Constrain experimental VM call depth to remain below default Rust thread stack exhaustion — src/owned_flow.rs: MAX_CALL_DEPTH=16 enforced by Execution::call_owned_function
   - [x] Regression-test recursive __index, __add, __pairs and __len dispatch return CallDepthExceeded — src/owned_flow.rs: recursively_dispatched_metamethods_stop_before_native_stack_exhaustion
   - [x] Pass Linux Rust tests without stack abort, formatter, Clippy, Rust 1.96 and differential CI — GitHub Actions 40034746881: Linux tests/lint/fmt, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter all succeeded
+- 📝 **T381** Bounded Lua table __tostring callback and return validation — `███████░░░ 67%`
+  - [x] Invoke first-party Lua __tostring closures with the original table and require a string result — src/owned_flow.rs: Builtin::ToString table dispatch
+  - [x] Test lexical captures, string-only returns, default stringification, depth limits and Lua 5.4 differential fixtures — src/owned_flow.rs: tostring_metatable_hook_requires_string_and_bounds_recursive_calls; tests/owned_flow.rs
+  - [ ] Pass Linux formatting/Clippy/Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -545,4 +549,5 @@
 - ⚖️ Lua equality and ordering metamethod callbacks — `██████████ 100%`
 - 🔄 Lua pairs table metamethod custom iterator triples — `██████████ 100%`
 - 🛡️ Native-stack-safe recursive metamethod limits — `██████████ 100%`
+- 📝 Lua __tostring closures with validated string returns — `███████░░░ 67%`
 
