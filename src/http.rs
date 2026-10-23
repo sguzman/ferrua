@@ -63,6 +63,9 @@ fn perform(req: Request) -> Result<Value, String> {
     let agent = Agent::config_builder()
         .timeout_global(Some(Duration::from_millis(timeout_ms)))
         .http_status_as_error(false)
+        // Do not follow redirects implicitly: especially important when
+        // scripts provide Authorization headers for GitHub API requests.
+        .max_redirects(0)
         .build()
         .new_agent();
     let response = match req.method.as_str() {

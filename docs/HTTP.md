@@ -29,3 +29,5 @@ For authenticated GitHub automation, read a token from environment variables at 
 The CI integration test starts a temporary server on `127.0.0.1`, invokes the built `fer` interpreter, asserts HTTP headers/body/status, and shuts down. It needs no public network, credentials or Python. The API is intentionally unavailable under `fer --sandbox`.
 
 HTTP shortcut methods copy supplied options rather than mutating the caller's table. The local CI fixtures cover successful GET, non-2xx GET, POST with headers and request body, and sandbox exclusion.
+
+**Redirect policy:** Ferrua does not follow redirects automatically. A 3xx response is returned with `ok=false`, and the `Location` response header can be inspected explicitly. This deliberate policy prevents confidential headers from being forwarded to an unintended origin.

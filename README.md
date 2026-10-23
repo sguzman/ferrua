@@ -37,7 +37,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Last verified pre-lock CI:** [33 passing Rust tests, TOML/YAML/JSON automation and HTTP loopback fixtures, action consumer, and release preview](https://github.com/sguzman/ferrua/actions/runs/39897905622). Rust builds now enforce a committed `Cargo.lock`, with an MSRV build gate and checksummed preview artifact. Native EndeavourOS validation and the v1.0.0 inauguration remain pending.
+**Latest verified CI before this security change:** [locked builds, 3 green jobs and GitHub REST fixtures](https://github.com/sguzman/ferrua/actions/runs/39898880895). Rust builds now enforce a committed `Cargo.lock`, with an MSRV build gate and checksummed preview artifact. Native EndeavourOS validation and the v1.0.0 inauguration remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
