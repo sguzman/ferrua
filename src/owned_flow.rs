@@ -1215,6 +1215,45 @@ fn number_to_f64(value: Value) -> Result<f64, FlowError> {
     }
 }
 
+
+fn compare_integer_float(
+    integer: i64,
+    floating: f64,
+) -> Option<std::cmp::Ordering> {
+    use std::cmp::Ordering;
+    if floating.is_nan() {
+        return None;
+    }
+    if floating >= 9_223_372_036_854_775_808.0 {
+        return Some(Ordering::Less);
+    }
+    if floating < -9_223_372_036_854_775_808.0 {
+        return Some(Ordering::Greater);
+    }
+    let whole = floating.trunc() as i64;
+    match integer.cmp(&whole) {
+        Ordering::Equal if floating.fract() > 0.0 => Some(Ordering::Less),
+        Ordering::Equal if floating.fract() < 0.0 => Some(Ordering::Greater),
+        other => Some(other),
+    }
+}
+
+fn numeric_order(left: Value, right: Value) -> Option<std::cmp::Ordering> {
+    match (left, right) {
+        (Value::Integer(a), Value::Integer(b)) => Some(a.cmp(&b)),
+        (Value::Float(a), Value::Float(b)) => {
+            f64::from_bits(a).partial_cmp(&f64::from_bits(b))
+        }
+        (Value::Integer(a), Value::Float(b)) => {
+            compare_integer_float(a, f64::from_bits(b))
+        }
+        (Value::Float(a), Value::Integer(b)) => {
+            compare_integer_float(b, f64::from_bits(a)).map(std::cmp::Ordering::reverse)
+        }
+        _ => None,
+    }
+}
+
 fn numeric_equal(a: Value, b: Value) -> Result<bool, FlowError> {
     match (a, b) {
         (Value::Integer(left), Value::Integer(right)) => Ok(left == right),
@@ -1952,12 +1991,19 @@ impl Execution<'_> {
                             if matches!(lhs, Value::Integer(_) | Value::Float(_))
                                 && matches!(rhs, Value::Integer(_) | Value::Float(_)) =>
                         {
-                            let (left, right) = (number_to_f64(lhs)?, number_to_f64(rhs)?);
+                            use std::cmp::Ordering;
+                            let ordering = numeric_order(lhs, rhs);
                             Value::Boolean(match *op {
-                                Binary::Less => left < right,
-                                Binary::LessEqual => left <= right,
-                                Binary::Greater => left > right,
-                                Binary::GreaterEqual => left >= right,
+                                Binary::Less => ordering == Some(Ordering::Less),
+                                Binary::LessEqual => matches!(
+                                    ordering,
+                                    Some(Ordering::Less | Ordering::Equal)
+                                ),
+                                Binary::Greater => ordering == Some(Ordering::Greater),
+                                Binary::GreaterEqual => matches!(
+                                    ordering,
+                                    Some(Ordering::Greater | Ordering::Equal)
+                                ),
                                 _ => unreachable!("guarded ordered numeric operator"),
                             })
                         }
@@ -2738,6 +2784,16 @@ mod tests {
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
+    }
+
+    #[test]
+    fn mixed_large_integer_float_ordering_preserves_integer_precision() {
+        assert_eq!(evaluate("return (9007199254740993>9007199254740992.0) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (-9007199254740993<-9007199254740992.0) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (9223372036854775807<9223372036854775808.0) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (-9223372036854775808<=-9223372036854775808.0) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (9007199254740993==9007199254740992.0) and 1 or 0"), 0);
+        assert_eq!(evaluate("return (0/0<0) and 1 or 0"), 0);
     }
 
     #[test]

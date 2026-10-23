@@ -277,3 +277,7 @@ The bounded table-key resolver now accepts floating keys and canonicalizes exact
 ### Bounded hexadecimal floating numerals
 
 Lua hexadecimal floating-point forms such as `0x1.8p1`, `0X.8P+2`, `0x1p-1`, and `0x10.0` now compile into IEEE-754 binary values. The Ferrua-owned parser accumulates hexadecimal whole/fractional digits and applies the optional power-of-two exponent without relying on Rust's decimal-only float parser. Exponent magnitudes are capped at 4096 to keep this prototype bounded. Integer-form hex literals continue using the existing integer path. Accepted cases have Lua 5.4.6 differential fixtures.
+
+### Exact mixed integer/float numeric ordering
+
+Cross-type Lua comparisons now avoid converting a 64-bit integer to an imprecise double before ordering. The bounded runtime compares integral portions exactly, then considers floating fractional sign, with explicit handling of NaN and out-of-range double magnitudes. Differential tests cover integers beyond the 53-bit IEEE-754 exact-integer window and signed 64-bit boundaries. Equality still uses the separately guarded exact integral-float comparison.
