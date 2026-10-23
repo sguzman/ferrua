@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 95%` across 94 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 95%` across 95 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -143,11 +143,11 @@
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 96%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 95%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 96%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 95%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -418,6 +418,10 @@
   - [x] Avoid allocating absent positive array fields when assigning nil — src/owned_flow.rs: Execution::write_table
   - [x] Normalize nil constructor/tail cells and add heap-budget plus Lua parity regression fixtures — src/owned_flow.rs: nil_table_fields_do_not_allocate_nonexistent_array_storage; tests/owned_flow.rs
   - [x] Pass all four primary CI jobs with upstream Lua differential verification — GitHub Actions 40024909050: Linux, Rust 1.96, Lua 5.4 differential and composite consumer jobs successful
+- 🪞 **T369** First-class Lua table metatable visibility and protection — `███████░░░ 67%`
+  - [x] Represent bounded table metatables and compile shadowable getmetatable/setmetatable builtins — src/owned_flow.rs: TableStorage::metatable, Builtin::GetMetatable, Builtin::SetMetatable
+  - [x] Implement protected __metatable reads/replacements with identity and regression coverage — src/owned_flow.rs: protected_metatable, first_class_table_metatables_support_raw_storage_and_protection; tests/owned_flow.rs
+  - [ ] Pass formatter, clippy, Rust 1.96, production fer and Lua 5.4 differential CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -485,4 +489,5 @@
 - ✅ First-class assert with truthy multi-result preservation — `██████████ 100%`
 - 🔁 First-class bounded next, pairs and ipairs table iteration — `██████████ 100%`
 - 🕳️ Nil table holes without absent-entry heap allocation — `██████████ 100%`
+- 🪞 First-class Lua metatable storage and protection — `███████░░░ 67%`
 
