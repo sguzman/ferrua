@@ -42,6 +42,7 @@ pub enum Value {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Builtin {
     Type,
+    ToString,
 }
 
 impl Value {
@@ -430,6 +431,9 @@ impl<'a> Compiler<'a> {
                         }
                         Err(_) if *text == "type" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::Type)))?;
+                        }
+                        Err(_) if *text == "tostring" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::ToString)))?;
                         }
                         Err(error) => return Err(error),
                     }
@@ -1685,17 +1689,45 @@ impl Execution<'_> {
                     }
                     let args = stack.split_off(stack.len() - arity);
                     let callable = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                    if let Value::Builtin(Builtin::Type) = callable {
+                    if let Value::Builtin(builtin) = callable {
                         let value = *args.first().ok_or(FlowError::TypeError)?;
-                        let name: &[u8] = match value {
-                            Value::Integer(_) | Value::Float(_) => b"number",
-                            Value::Boolean(_) => b"boolean",
-                            Value::Nil => b"nil",
-                            Value::String(_) => b"string",
-                            Value::Table(_) => b"table",
-                            Value::Function(_) | Value::Builtin(_) => b"function",
+                        let result = match builtin {
+                            Builtin::Type => {
+                                let name: &[u8] = match value {
+                                    Value::Integer(_) | Value::Float(_) => b"number",
+                                    Value::Boolean(_) => b"boolean",
+                                    Value::Nil => b"nil",
+                                    Value::String(_) => b"string",
+                                    Value::Table(_) => b"table",
+                                    Value::Function(_) | Value::Builtin(_) => b"function",
+                                };
+                                self.intern_string(name.to_vec())?
+                            }
+                            Builtin::ToString => match value {
+                                Value::String(_) => value,
+                                Value::Integer(number) => {
+                                    self.intern_string(number.to_string().into_bytes())?
+                                }
+                                Value::Float(bits) => {
+                                    self.intern_string(
+                                        format!("{:?}", f64::from_bits(bits)).into_bytes(),
+                                    )?
+                                }
+                                Value::Boolean(boolean) => {
+                                    self.intern_string(boolean.to_string().into_bytes())?
+                                }
+                                Value::Nil => self.intern_string(b"nil".to_vec())?,
+                                Value::Table(handle) => self.intern_string(
+                                    format!("table: 0x{handle:x}").into_bytes(),
+                                )?,
+                                Value::Function(handle) => self.intern_string(
+                                    format!("function: 0x{handle:x}").into_bytes(),
+                                )?,
+                                Value::Builtin(_) => {
+                                    self.intern_string(b"function: builtin".to_vec())?
+                                }
+                            },
                         };
-                        let result = self.intern_string(name.to_vec())?;
                         if matches!(
                             instructions[pc],
                             Op::CallMany(_) | Op::CallSpread { many: true, .. }
@@ -2912,6 +2944,28 @@ mod tests {
         );
         assert_eq!(evaluate("return ('7'..'0')+2"), 72);
         let invalid = compile_flow_chunk("return 'hello'+1").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
+    }
+
+    #[test]
+    fn first_class_tostring_builtin_formats_bounded_lua_values() {
+        assert_eq!(evaluate("return (tostring(3)=='3') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (tostring(2.5)=='2.5') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (tostring(3.0)=='3.0') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (tostring(true)=='true') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (tostring(nil)=='nil') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (tostring('abc')=='abc') and 1 or 0"), 1);
+        assert_eq!(evaluate("return #tostring(12345)"), 5);
+        assert_eq!(evaluate("return (type(tostring({}))=='string') and 1 or 0"), 1);
+        assert_eq!(evaluate("local f=tostring; return (f(4)=='4') and 1 or 0"), 1);
+        assert_eq!(
+            evaluate("local tostring=function() return 'shadow' end; return (tostring(3)=='shadow') and 1 or 0"),
+            1
+        );
+        let invalid = compile_flow_chunk("return tostring()").unwrap();
         assert_eq!(
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
