@@ -18,6 +18,8 @@ const MAX_TABLE_CELLS_TOTAL: usize = 65_536;
 const MAX_CLOSURES: usize = 16_384;
 const MAX_CALL_DEPTH: usize = 64;
 const MAX_CELLS_TOTAL: usize = 65_536;
+const MAX_STRING_POOL_BYTES: usize = 65_536;
+const MAX_STRINGS: usize = 16_384;
 pub const DEFAULT_STEP_BUDGET: usize = 100_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,6 +27,8 @@ pub enum Value {
     Integer(i64),
     Boolean(bool),
     Nil,
+    /// Index into the immutable compiler-generated Lua byte-string pool.
+    String(usize),
     /// Opaque index into the per-execution bounded heap.
     Table(usize),
     /// Opaque, execution-local function identity.
@@ -121,6 +125,7 @@ pub struct FlowProgram {
     instructions: Vec<Op>,
     slots: usize,
     functions: Vec<FunctionProgram>,
+    strings: Vec<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -181,6 +186,7 @@ struct Compiler<'a> {
     read_only: HashSet<usize>,
     loop_breaks: Vec<Vec<usize>>,
     functions: Rc<RefCell<Vec<FunctionProgram>>>,
+    strings: Rc<RefCell<Vec<Vec<u8>>>>,
     vararg: bool,
 }
 
@@ -227,6 +233,7 @@ impl<'a> Compiler<'a> {
             read_only: HashSet::new(),
             loop_breaks: Vec::new(),
             functions: Rc::clone(&self.functions),
+            strings: Rc::clone(&self.strings),
             vararg,
         };
         // Eagerly and deterministically capture visible locals; shadowing
@@ -304,6 +311,24 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    fn intern_literal(&mut self, spelling: &str) -> Result<usize, FlowError> {
+        let bytes = decode_lua_string(spelling)?;
+        let mut strings = self.strings.borrow_mut();
+        if let Some(index) = strings.iter().position(|item| item == &bytes) {
+            return Ok(index);
+        }
+        if strings.len() >= MAX_STRINGS
+            || bytes.len() > MAX_STRING_POOL_BYTES
+            || strings.iter().map(Vec::len).sum::<usize>()
+                > MAX_STRING_POOL_BYTES.saturating_sub(bytes.len())
+        {
+            return Err(FlowError::TooLarge);
+        }
+        let index = strings.len();
+        strings.push(bytes);
+        Ok(index)
+    }
+
     fn expression(&mut self, expr: &Expr<'a>, depth: usize) -> Result<(), FlowError> {
         if depth > 128 {
             return Err(FlowError::TooLarge);
@@ -312,6 +337,10 @@ impl<'a> Compiler<'a> {
             Expr::Grouped(inner) => self.expression(inner, depth + 1)?,
             Expr::Vararg if self.vararg => {
                 self.push(Op::VarargSingle)?;
+            }
+            Expr::Atom(text) if text.starts_with(['\'', '"', '[']) => {
+                let index = self.intern_literal(text)?;
+                self.push(Op::Constant(Value::String(index)))?;
             }
             Expr::Atom(text) => {
                 let constant = match *text {
@@ -853,6 +882,7 @@ impl<'a> Compiler<'a> {
 pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
     let statements = parse_chunk(source).map_err(|err| FlowError::Unsupported(err.to_string()))?;
     let functions = Rc::new(RefCell::new(Vec::new()));
+    let strings = Rc::new(RefCell::new(Vec::new()));
     let mut compiler = Compiler {
         code: Vec::new(),
         frames: vec![HashMap::new()],
@@ -861,6 +891,7 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
         read_only: HashSet::new(),
         loop_breaks: Vec::new(),
         functions: Rc::clone(&functions),
+        strings: Rc::clone(&strings),
         vararg: false,
     };
     compiler.statements(&statements)?;
@@ -872,11 +903,110 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
         return Err(FlowError::NoReturn);
     }
     let compiled_functions = functions.borrow().clone();
+    let compiled_strings = strings.borrow().clone();
     Ok(FlowProgram {
         instructions: compiler.code,
         slots: compiler.slots,
         functions: compiled_functions,
+        strings: compiled_strings,
     })
+}
+
+
+fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
+    let bytes = spelling.as_bytes();
+    if bytes.is_empty() {
+        return Err(FlowError::InvalidBytecode);
+    }
+    if bytes[0] == b'[' {
+        // Lua long-bracket delimiters have matching equals-sign depth.
+        let equals = bytes.iter().skip(1).take_while(|b| **b == b'=').count();
+        let start = equals + 2;
+        let end = equals + 2;
+        if bytes.get(start - 1) != Some(&b'[')
+            || bytes.len() < start + end
+            || bytes[bytes.len() - end] != b']'
+            || bytes[bytes.len() - end + 1..bytes.len() - 1]
+                .iter()
+                .any(|b| *b != b'=')
+            || *bytes.last().ok_or(FlowError::InvalidBytecode)? != b']'
+        {
+            return Err(FlowError::Unsupported("invalid long string".into()));
+        }
+        let mut body = &bytes[start..bytes.len() - end];
+        if body.starts_with(b"\r\n") || body.starts_with(b"\n\r") {
+            body = &body[2..];
+        } else if body.starts_with(b"\r") || body.starts_with(b"\n") {
+            body = &body[1..];
+        }
+        return Ok(body.to_vec());
+    }
+    let quote = bytes[0];
+    if !matches!(quote, b'\'' | b'"') || bytes.last() != Some(&quote) {
+        return Err(FlowError::Unsupported("invalid short string".into()));
+    }
+    let mut result = Vec::new();
+    let mut i = 1;
+    while i + 1 < bytes.len() {
+        let byte = bytes[i];
+        i += 1;
+        if byte != b'\\' {
+            result.push(byte);
+            continue;
+        }
+        let escaped = *bytes.get(i).ok_or(FlowError::InvalidBytecode)?;
+        i += 1;
+        let value = match escaped {
+            b'a' => Some(7),
+            b'b' => Some(8),
+            b'f' => Some(12),
+            b'n' => Some(10),
+            b'r' => Some(13),
+            b't' => Some(9),
+            b'v' => Some(11),
+            b'\\' | b'\'' | b'"' => Some(escaped),
+            b'\n' | b'\r' => {
+                if bytes.get(i) == Some(&if escaped == b'\n' { b'\r' } else { b'\n' }) {
+                    i += 1;
+                }
+                Some(b'\n')
+            }
+            b'z' => {
+                while bytes.get(i).is_some_and(|byte| byte.is_ascii_whitespace()) {
+                    i += 1;
+                }
+                None
+            }
+            b'x' => {
+                let digit = |byte: u8| (byte as char).to_digit(16);
+                let a = bytes.get(i).copied().and_then(digit);
+                let b = bytes.get(i + 1).copied().and_then(digit);
+                let (Some(a), Some(b)) = (a, b) else {
+                    return Err(FlowError::Unsupported("invalid hex escape".into()));
+                };
+                i += 2;
+                Some((a * 16 + b) as u8)
+            }
+            b'0'..=b'9' => {
+                let mut value = u32::from(escaped - b'0');
+                for _ in 0..2 {
+                    let Some(next) = bytes.get(i).copied() else { break };
+                    if !next.is_ascii_digit() { break; }
+                    value = value * 10 + u32::from(next - b'0');
+                    i += 1;
+                }
+                if value > 255 {
+                    return Err(FlowError::Unsupported("decimal escape exceeds byte".into()));
+                }
+                Some(value as u8)
+            }
+            _ => return Err(FlowError::Unsupported("string escape not yet implemented".into())),
+        };
+        if let Some(value) = value {
+            result.push(value);
+        }
+    }
+    Ok(result)
 }
 
 fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowError> {
@@ -1296,17 +1426,24 @@ impl Execution<'_> {
                     stack.push(Value::Boolean(!value.truthy()));
                 }
                 Op::Length => {
-                    let Value::Table(handle) = stack.pop().ok_or(FlowError::InvalidBytecode)?
-                    else {
-                        return Err(FlowError::TypeError);
+                    let length = match stack.pop().ok_or(FlowError::InvalidBytecode)? {
+                        Value::String(handle) => self
+                            .program
+                            .strings
+                            .get(handle)
+                            .ok_or(FlowError::InvalidBytecode)?
+                            .len(),
+                        Value::Table(handle) => {
+                            let entries = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                            // Dense tables have exact length; a first hole is
+                            // one valid border under Lua's sparse-table rules.
+                            entries
+                                .iter()
+                                .take_while(|cell| !matches!(cell, None | Some(Value::Nil)))
+                                .count()
+                        }
+                        _ => return Err(FlowError::TypeError),
                     };
-                    let entries = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
-                    // A first missing positive entry is a valid Lua border.
-                    // Dense tables have a uniquely determined length.
-                    let length = entries
-                        .iter()
-                        .take_while(|cell| !matches!(cell, None | Some(Value::Nil)))
-                        .count();
                     stack.push(Value::Integer(length as i64));
                 }
                 Op::BitNot => {
@@ -2030,6 +2167,19 @@ mod tests {
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
+    }
+
+    #[test]
+    fn lua_byte_strings_are_interned_by_content_and_measure_bytes() {
+        assert_eq!(evaluate("return #\"abc\""), 3);
+        assert_eq!(evaluate("return #\"é\""), 2);
+        assert_eq!(evaluate("return #''"), 0);
+        assert_eq!(evaluate("return (#'a\\nb')"), 3);
+        assert_eq!(evaluate("return #\"a\\x00b\""), 3);
+        assert_eq!(evaluate("return #([=[hello]=])"), 5);
+        assert_eq!(evaluate("return ('abc'==\"abc\") and 1 or 0"), 1);
+        assert_eq!(evaluate("return ('abc'~='abd') and 1 or 0"), 1);
+        assert_eq!(evaluate("local a='hello'; local b=\"hello\"; return (a==b) and #a or 0"), 5);
     }
 
     #[test]
