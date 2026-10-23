@@ -34,3 +34,5 @@ Timeouts terminate the directly launched child, **not its entire process tree**.
 ### Verification
 
 `cargo run -- examples/process.lua` exercises argument passing, exit status, errors, stdin, child environment, and timeouts. CI also verifies that `process` and its native bridge are unavailable in sandbox mode.
+
+The Rust subprocess reader continues consuming stdout and stderr after either 2 MiB capture ceiling, rather than shutting the pipe and risking child deadlock. Text beyond the ceiling is discarded while `stdout_truncated`/`stderr_truncated` is set; a regression launches a real process emitting more than the bound. Timeouts still apply independently.

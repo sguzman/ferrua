@@ -6,7 +6,7 @@
 
 **Project color:** `#15B6A9` · `oklch(70% 0.12 186)` ([OKLCH decision](docs/COLOR.md)).
 
-> **Early working-source preview, not a validated MVP.** The Rust CLI and smoke tests exist, but build, compatibility and release claims remain gated by CI. Ferrua currently embeds the independent [luna-core](https://crates.io/crates/luna-core) Rust Lua compiler and VM. It does not yet own its own compiler/VM.
+> **CI-validated development preview, not a stable release.** The Rust `fer` CLI, Lua automation libraries, and release packaging are exercised by Linux CI. Ferrua still embeds the independent [luna-core](https://crates.io/crates/luna-core) pure-Rust Lua compiler and VM; the fully owned VM is a future milestone.
 
 ## Try it
 
@@ -37,7 +37,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI before this security change:** [locked builds, 3 green jobs and GitHub REST fixtures](https://github.com/sguzman/ferrua/actions/runs/39898880895). Rust builds now enforce a committed `Cargo.lock`, with an MSRV build gate and checksummed preview artifact. Native EndeavourOS validation and the v1.0.0 inauguration remain pending.
+**Latest verified CI:** [40 passing Rust tests, 3 green GitHub Actions jobs, Lua release packaging and SHA-256 verification](https://github.com/sguzman/ferrua/actions/runs/39946114053). Native EndeavourOS acceptance and the tagged stable v1.0.0 release remain outstanding.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
@@ -52,3 +52,5 @@ Ferrua includes a [reusable composite setup action](docs/ACTIONS.md). It install
 MIT. The independently maintained `luna-core` runtime is MIT/Apache-2.0 licensed; attribution and its implementation boundary are documented in [architecture](docs/ARCHITECTURE.md).
 
 For a future tagged release, the Python-free packaging entrypoint is `target/release/fer tools/package_release.lua v0.1.0` after a locked release build. It creates a versioned Linux tarball with `fer`, README and LICENSE, plus a verified SHA-256 checksum. The separate release workflow publishes assets only when a matching version tag is explicitly pushed; merely committing to `main` does not inaugurate a stable release.
+
+The [most recent tested preview archive](https://github.com/sguzman/ferrua/actions/runs/39946114053) is named `fer-v0.1.0-linux-x86_64.tar.gz` and includes its `.sha256` checksum. CI verifies the archive after construction. This is an Actions artifact, **not** a published GitHub Release.

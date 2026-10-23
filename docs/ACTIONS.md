@@ -28,3 +28,5 @@ The composite installer runs `cargo install --locked`, using the checked-in `Car
 ## Tagged releases
 
 The [tag-triggered release workflow](../.github/workflows/release.yml) checks that the Git tag matches the package version and executes the Lua-based [release packager](../tools/package_release.lua). It builds and checks a Linux x86-64 archive with SHA-256, then creates a GitHub Release. Tags beginning with `v0.` are explicitly prereleases. This workflow is **not triggered by ordinary commits** and has no current claim of a published stable release. A `v1.0.0` tag remains gated on actual acceptance and crate versioning.
+
+**CI acceptance:** [GitHub Actions #39946114053](https://github.com/sguzman/ferrua/actions/runs/39946114053) passed the source-build action consumer, Rust 1.96 compatibility, locked Rust tests and Lua-built/checksummed Linux archive. These are tested previews, not stable signed releases.

@@ -351,7 +351,7 @@
               "name": "Modules, release binaries and GitHub setup action",
               "checks": [
                 {
-                  "text": "Linux release artifact published",
+                  "text": "Tagged GitHub Release published with verified versioned artifact",
                   "passed": false
                 },
                 {
@@ -389,6 +389,29 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T211",
+              "emoji": "🧵",
+              "name": "Drain bounded subprocess output without stalls",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Read streams after capture ceiling instead of blocking child",
+                  "passed": true,
+                  "evidence": "src/process.rs: limited_read drains all output and caps capture at 2 MiB"
+                },
+                {
+                  "text": "Exercise verbose child without artificial timeout",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39946114053: verbose_child_is_drained_without_spurious_timeout accepted"
+                },
+                {
+                  "text": "Preserve explicit truncation and timeout result flags",
+                  "passed": true,
+                  "evidence": "src/process.rs; GitHub Actions 39946114053: all Rust tests passed"
+                }
+              ]
             }
           ]
         },
@@ -462,6 +485,75 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T209",
+              "emoji": "🌙",
+              "name": "Dogfood Lua for release archive packaging",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Write version-and-checksum-aware packaging script in Lua",
+                  "passed": true,
+                  "evidence": "tools/package_release.lua, docs/ACTIONS.md"
+                },
+                {
+                  "text": "Verify executable, README, LICENSE and SHA-256 archive locally in CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39946114053: fer-v0.1.0-linux-x86_64.tar.gz generated and checksum verified"
+                },
+                {
+                  "text": "Provide explicit tag-triggered publication path without premature v1 inauguration",
+                  "passed": true,
+                  "evidence": ".github/workflows/release.yml: matching tag gate, v0 prerelease logic"
+                }
+              ]
+            },
+            {
+              "id": "T210",
+              "emoji": "🐙",
+              "name": "Authenticated GitHub REST mutation and redirect protection",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Expose REST read/write, JSON request/response, and token handling",
+                  "passed": true,
+                  "evidence": "tools/github.lua and docs/GITHUB.md"
+                },
+                {
+                  "text": "Disable automatic HTTP redirects and exercise token-bearing 302 without forwarding",
+                  "passed": true,
+                  "evidence": "src/http.rs and tests/github.rs; GitHub Actions 39946114053"
+                },
+                {
+                  "text": "Verify GitHub POST fixture, sandbox exclusion, and MSRV CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39946114053: 40 Rust tests, three jobs green"
+                }
+              ]
+            },
+            {
+              "id": "T212",
+              "emoji": "🔒",
+              "name": "Pinned dependencies and cached Rust quality gates",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Commit CI-generated Cargo.lock and enforce --locked everywhere",
+                  "passed": true,
+                  "evidence": "Cargo.lock, .github/workflows/ci.yml, action.yml"
+                },
+                {
+                  "text": "Verify pinned minimum Rust 1.96 and composite consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39946114053: msrv and action-consumer green"
+                },
+                {
+                  "text": "Populate restoreable dependency/build cache with successful CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39946114053: cache saved linux; MSRV cache restored"
+                }
+              ]
             }
           ]
         }
@@ -503,6 +595,29 @@
           "name": "Versioned CI reuse",
           "task_ids": [
             "T204",
+            "T208"
+          ]
+        },
+        {
+          "emoji": "🧵",
+          "name": "Reliable bounded subprocess capture",
+          "task_ids": [
+            "T211"
+          ]
+        },
+        {
+          "emoji": "🐙",
+          "name": "Native GitHub REST automation",
+          "task_ids": [
+            "T210"
+          ]
+        },
+        {
+          "emoji": "🌙",
+          "name": "Release packaging and dependency reproducibility",
+          "task_ids": [
+            "T209",
+            "T212",
             "T208"
           ]
         }

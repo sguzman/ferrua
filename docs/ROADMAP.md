@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `███████░░░ 73%` across 22 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `████████░░ 77%` across 26 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 93%`
 
@@ -57,11 +57,11 @@
 - 📋 Documented, auditable progress — `██████████ 100%`
 - 📦 Distribution readiness — `███░░░░░░░ 33%`
 
-## 🧰 M1 — Daily automation and Python replacement — `████████░░ 83%`
+## 🧰 M1 — Daily automation and Python replacement — `█████████░ 89%`
 
 **Acceptance gate:** Representative filesystem, JSON, process, HTTP, structured-data and versioned downstream CI scripts run without Python. Stable distribution and adoption acceptance required.
 
-### 🗂️ P2 — Everyday host and data capabilities — `█████████░ 93%`
+### 🗂️ P2 — Everyday host and data capabilities — `██████████ 95%`
 
 - 📂 **T201** Read, write and iterate local files — `██████████ 100%`
   - [x] Lua io and os library available in trusted mode — src/main.rs
@@ -75,15 +75,19 @@
   - [x] Safe argv-based child process module — src/process.rs, tools/process.lua; GitHub Actions 39896443549
   - [x] GitHub Actions CI exercise — GitHub Actions 39896443549: subprocess smoke passes in Linux and composite consumer jobs
 - 📦 **T204** Modules, release binaries and GitHub setup action — `███████░░░ 67%`
-  - [ ] Linux release artifact published
+  - [ ] Tagged GitHub Release published with verified versioned artifact
   - [x] Reusable setup-fer GitHub action published — action.yml and docs/ACTIONS.md; GitHub Actions 39896443549 action consumer passes
   - [x] End-to-end consumer example passes — GitHub Actions 39896443549: separate consumer job installs fer and executes Lua and process automation
 - 📂 **T205** Rust-backed filesystem operations and directory traversal — `██████████ 100%`
   - [x] Define bounded text IO, copy and deterministic traversal contract — docs/FILESYSTEM.md, examples/fs.lua
   - [x] Expose trusted filesystem API with sandbox separation — src/fs.rs, tools/fs.lua, src/main.rs
   - [x] Native and composite action consumer filesystem smoke pass — GitHub Actions 39896443549: temporary-dir read/write/copy/walk and sandbox tests
+- 🧵 **T211** Drain bounded subprocess output without stalls — `██████████ 100%`
+  - [x] Read streams after capture ceiling instead of blocking child — src/process.rs: limited_read drains all output and caps capture at 2 MiB
+  - [x] Exercise verbose child without artificial timeout — GitHub Actions 39946114053: verbose_child_is_drained_without_spurious_timeout accepted
+  - [x] Preserve explicit truncation and timeout result flags — src/process.rs; GitHub Actions 39946114053: all Rust tests passed
 
-### 🌐 P4 — Portable data and CI graduation — `███████░░░ 67%`
+### 🌐 P4 — Portable data and CI graduation — `████████░░ 83%`
 
 - 🌐 **T206** First-party HTTP API and GitHub REST client — `██████████ 100%`
   - [x] Provide documented HTTP GET, POST and response contracts with timeouts — docs/HTTP.md and tools/http.lua specify methods, output, limits and errors
@@ -97,6 +101,18 @@
   - [ ] Publish semver-tagged Linux artifacts with reproducible SHA-256 checksums
   - [ ] Offer installer that consumes versioned release binaries
   - [ ] Validate pinned downstream GitHub workflow with representative scripts
+- 🌙 **T209** Dogfood Lua for release archive packaging — `██████████ 100%`
+  - [x] Write version-and-checksum-aware packaging script in Lua — tools/package_release.lua, docs/ACTIONS.md
+  - [x] Verify executable, README, LICENSE and SHA-256 archive locally in CI — GitHub Actions 39946114053: fer-v0.1.0-linux-x86_64.tar.gz generated and checksum verified
+  - [x] Provide explicit tag-triggered publication path without premature v1 inauguration — .github/workflows/release.yml: matching tag gate, v0 prerelease logic
+- 🐙 **T210** Authenticated GitHub REST mutation and redirect protection — `██████████ 100%`
+  - [x] Expose REST read/write, JSON request/response, and token handling — tools/github.lua and docs/GITHUB.md
+  - [x] Disable automatic HTTP redirects and exercise token-bearing 302 without forwarding — src/http.rs and tests/github.rs; GitHub Actions 39946114053
+  - [x] Verify GitHub POST fixture, sandbox exclusion, and MSRV CI — GitHub Actions 39946114053: 40 Rust tests, three jobs green
+- 🔒 **T212** Pinned dependencies and cached Rust quality gates — `██████████ 100%`
+  - [x] Commit CI-generated Cargo.lock and enforce --locked everywhere — Cargo.lock, .github/workflows/ci.yml, action.yml
+  - [x] Verify pinned minimum Rust 1.96 and composite consumer — GitHub Actions 39946114053: msrv and action-consumer green
+  - [x] Populate restoreable dependency/build cache with successful CI — GitHub Actions 39946114053: cache saved linux; MSRV cache restored
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -105,6 +121,9 @@
 - 🗂️ Directory traversal and file automation — `██████████ 100%`
 - 🌐 HTTP and structured external data — `██████████ 100%`
 - 📦 Versioned CI reuse — `███░░░░░░░ 34%`
+- 🧵 Reliable bounded subprocess capture — `██████████ 100%`
+- 🐙 Native GitHub REST automation — `██████████ 100%`
+- 🌙 Release packaging and dependency reproducibility — `███████░░░ 67%`
 
 ## 🔩 M2 — Independent Ferrua VM and compatibility — `░░░░░░░░░░ 0%`
 
