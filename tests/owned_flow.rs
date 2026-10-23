@@ -328,6 +328,16 @@ const FIXTURES: &[&str] = &[
     "local m={__metatable='locked'}; local t=setmetatable({},m); rawset(m,'__metatable',nil); setmetatable(t,nil); return getmetatable(t)==nil and 1 or 0",
     "local get=getmetatable; local set=setmetatable; local t={}; local m={}; set(t,m); return rawequal(get(t),m) and 1 or 0",
     "return type(getmetatable)=='function' and type(setmetatable)=='function' and 1 or 0",
+    "local t=setmetatable({}, {__index={x=7}}); return t.x",
+    "local t=setmetatable({}, {__index={x=7}}); return rawget(t,'x')==nil and 1 or 0",
+    "local t={x=2}; setmetatable(t,{__index={x=7}}); return t.x",
+    "local t=setmetatable({}, {__index=setmetatable({}, {__index={x=7}})}); return t.x",
+    "local dest={}; local t=setmetatable({}, {__newindex=dest}); t.x=9; return dest.x",
+    "local dest={}; local t={x=2}; setmetatable(t,{__newindex=dest}); t.x=7; return t.x*10+(dest.x or 0)",
+    "local dest={}; local t=setmetatable({}, {__newindex=dest}); t['x']=9; return (rawget(t,'x')==nil and dest.x==9) and 1 or 0",
+    "local fallback={}; local t=setmetatable({}, {__newindex=fallback}); local i=1; t[i],i=8,2; return fallback[1]*10+i",
+    "local dest={}; local t=setmetatable({}, {__newindex=dest}); rawset(t,'x',8); return rawget(t,'x')==8 and dest.x==nil and 1 or 0",
+    "local t=setmetatable({}, {__index={add=function(self,x) return x+3 end}}); return t:add(4)",
 ];
 
 fn render(values: &[Value]) -> String {
