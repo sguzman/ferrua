@@ -151,3 +151,39 @@ jobs:
           key: ferrua-msrv-1.96-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
       - name: Build pinned dependencies on MSRV
         run: cargo build --locked
+
+  acceptance-status:
+    name: Publish CI acceptance status
+    needs: [linux, action-consumer, reference-conformance, msrv]
+    if: ${{ always() && github.event_name == 'push' }}
+    timeout-minutes: 5
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - name: Record aggregate four-job result for main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
+          GH_RUN_ID: ${{ github.run_id }}
+          LINUX_RESULT: ${{ needs.linux.result }}
+          CONSUMER_RESULT: ${{ needs['action-consumer'].result }}
+          REFERENCE_RESULT: ${{ needs['reference-conformance'].result }}
+          MSRV_RESULT: ${{ needs.msrv.result }}
+        run: |
+          set -euo pipefail
+          state=failure
+          message="Ferrua CI: one or more primary jobs did not pass"
+          if [[ "$LINUX_RESULT" == success && "$CONSUMER_RESULT" == success && "$REFERENCE_RESULT" == success && "$MSRV_RESULT" == success ]]; then
+            state=success
+            message="All four Ferrua acceptance jobs passed"
+          fi
+          gh api --method POST "repos/$GH_REPO/statuses/$GH_SHA" \
+            -f state="$state" \
+            -f context="ferrua/ci" \
+            -f description="$message" \
+            -f target_url="https://github.com/$GH_REPO/actions/runs/$GH_RUN_ID" >/dev/null
+          [[ "$state" == success ]]
