@@ -66,6 +66,8 @@ pub enum Op {
     PrepareIndexed,
     AssignPrepared(usize),
     NewTable(usize),
+    Duplicate,
+    SetTableTail(usize),
     NewFunction(usize),
     Call(usize),
     CallMany(usize),
@@ -369,6 +371,40 @@ impl<'a> Compiler<'a> {
                 self.expression(object, depth + 1)?;
                 self.expression(key, depth + 1)?;
                 self.push(Op::GetTable)?;
+            }
+            Expr::Table(fields) if fields.iter().any(|field| matches!(field, TableField::Indexed { .. })) => {
+                // Construct mixed positional/integer-key tables in source order.
+                // Keep the table on the stack while individual writes consume a copy.
+                self.push(Op::NewTable(0))?;
+                let mut positional = 0usize;
+                for (position, field) in fields.iter().enumerate() {
+                    match field {
+                        TableField::Named { .. } => {
+                            return Err(FlowError::Unsupported(
+                                "named table fields require string-key support".into(),
+                            ));
+                        }
+                        TableField::Indexed { key, value } => {
+                            self.push(Op::Duplicate)?;
+                            self.expression(key, depth + 1)?;
+                            self.expression(value, depth + 1)?;
+                            self.push(Op::SetTable)?;
+                        }
+                        TableField::Value(value) => {
+                            positional += 1;
+                            if position + 1 == fields.len()
+                                && self.multiple_expression(value, depth + 1)?
+                            {
+                                self.push(Op::SetTableTail(positional))?;
+                            } else {
+                                self.push(Op::Duplicate)?;
+                                self.push(Op::Constant(Value::Integer(positional as i64)))?;
+                                self.expression(value, depth + 1)?;
+                                self.push(Op::SetTable)?;
+                            }
+                        }
+                    }
+                }
             }
             Expr::Table(fields) => {
                 if let Some((last, before)) = fields.split_last() {
@@ -1139,6 +1175,38 @@ impl Execution<'_> {
                                 cells[field - 1] = Some(value);
                             }
                         }
+                    }
+                }
+                Op::Duplicate => {
+                    let value = *stack.last().ok_or(FlowError::InvalidBytecode)?;
+                    stack.push(value);
+                }
+                Op::SetTableTail(start) => {
+                    let multiple = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
+                    if stack.len() < multiple.saturating_add(1) {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let first = start.checked_sub(1).ok_or(FlowError::InvalidBytecode)?;
+                    let end = first.checked_add(multiple).ok_or(FlowError::TooLarge)?;
+                    if end > MAX_TABLE_FIELDS {
+                        return Err(FlowError::TooLarge);
+                    }
+                    let results = stack.split_off(stack.len() - multiple);
+                    let Value::Table(handle) = *stack.last().ok_or(FlowError::InvalidBytecode)?
+                    else {
+                        return Err(FlowError::TypeError);
+                    };
+                    let cells = self.tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
+                    if end > cells.len() {
+                        let growth = end - cells.len();
+                        if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+                            return Err(FlowError::TooLarge);
+                        }
+                        self.table_cells += growth;
+                        cells.resize(end, None);
+                    }
+                    for (offset, value) in results.into_iter().enumerate() {
+                        cells[first + offset] = Some(value);
                     }
                 }
                 Op::NewTable(count) | Op::NewTableTail(count) => {
@@ -1935,6 +2003,32 @@ mod tests {
         let invalid = compile_flow_chunk("local t={1}; t[0],t[1]=8,9; return t[1]").unwrap();
         assert_eq!(
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
+    }
+
+    #[test]
+    fn computed_integer_keys_in_mixed_table_constructors() {
+        assert_eq!(evaluate("local t={[3]=7,[1]=4}; return t[1]*10+t[3]"), 47);
+        assert_eq!(evaluate("local t={2,[1]=9,3}; return t[1]*10+t[2]"), 93);
+        assert_eq!(evaluate("local t={[3]=7,2,[2]=8}; return t[1]*100+t[2]*10+t[3]"), 287);
+        assert_eq!(evaluate("local k=3; local t={[k]=9,1}; return t[1]*10+t[3]"), 19);
+        assert_eq!(
+            evaluate("local function vals() return 4,5 end; local t={[3]=9,2,vals()}; return t[1]*1000+t[2]*100+t[3]*10+t[4]"),
+            2495
+        );
+        assert_eq!(
+            evaluate("local function vals() return end; local t={[3]=9,2,vals()}; return t[1]*10+t[3]"),
+            29
+        );
+        assert_eq!(
+            evaluate("local k=0; local function nextkey() k=k+1; return k end; local t={[nextkey()]=5,[nextkey()]=7}; return t[1]*10+t[2]"),
+            57
+        );
+        assert!(compile_flow_chunk("local t={name=7}; return 1").is_err());
+        let unsupported = compile_flow_chunk("local t={[0]=7,1}; return t[1]").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&unsupported, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
     }
