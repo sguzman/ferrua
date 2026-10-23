@@ -94,13 +94,14 @@ jobs:
           test "${#archives[@]}" -eq 1
           docker run --rm --network none --read-only \
             --security-opt no-new-privileges \
-            --tmpfs /tmp:rw,nosuid,size=64m \
+            --tmpfs /tmp:rw,exec,nosuid,size=64m \
             --mount "type=bind,src=$PWD,dst=/work,readonly" \
             --workdir /work --env "FERRUA_ARCHIVE=${archives[0]}" \
             archlinux:base-20261011.0.609700 /bin/sh -ec '
               sha256sum --check "$FERRUA_ARCHIVE.sha256"
               mkdir -p /tmp/ferrua-archive-smoke
               tar -xzf "$FERRUA_ARCHIVE" -C /tmp/ferrua-archive-smoke fer
+              test -x /tmp/ferrua-archive-smoke/fer
               /tmp/ferrua-archive-smoke/fer -e "print(6 * 7)" | grep -x 42
               /tmp/ferrua-archive-smoke/fer --check examples/process.lua
               /tmp/ferrua-archive-smoke/fer --sandbox -e "assert(io == nil and os == nil)"
