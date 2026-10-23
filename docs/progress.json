@@ -801,7 +801,8 @@
               "checks": [
                 {
                   "text": "Document engine switch criteria",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "docs/ENGINE_GRADUATION.md: explicit grammar, runtime, differential, cutover and distribution acceptance gates"
                 },
                 {
                   "text": "Switch main fer runtime after parity tests",
@@ -812,7 +813,7 @@
                   "passed": false
                 }
               ],
-              "progress": 0
+              "progress": 33
             },
             {
               "id": "T305",
