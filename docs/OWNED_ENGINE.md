@@ -269,3 +269,7 @@ Integer-formatted Lua byte strings now participate in integer arithmetic, intege
 ### Bounded decimal floating-point values and arithmetic
 
 The independently owned control-flow VM can now hold IEEE-754 double values (stored as raw bits in the compact value enum), compile decimal floating literals, and evaluate Lua's `/` and `^` operators. Mixed integer/float arithmetic, floor division, modulo, unary negation, decimal-formatted string conversion, string concatenation, and numeric comparisons are supported in the tested subset. Integer-only `+`, `-`, `*`, `//`, and `%` retain their existing wrapping-integer behavior. Decimal float table keys, hexadecimal float literals, precise comparison of very large integers against non-integral floats, floating numeric `for`, NaN key semantics and the rest of Lua 5.4 number coercions remain separate acceptance gates; production `fer` is unchanged.
+
+### Lua floating-point table-key normalization
+
+The bounded table-key resolver now accepts floating keys and canonicalizes exactly integral, in-range floats to existing integer-key storage, including positive and negative zero. Nonintegral floating keys preserve their byte-level floating identity in the hashed map, while NaN is rejected as an invalid table index. Existing table and function identity keys remain unchanged. Tests verify cross-type integer/float lookups and deletions against upstream Lua 5.4.6 and production `fer`. Float arithmetic support still excludes full Lua numeric-for and hex-float parsing.

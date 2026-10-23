@@ -1289,6 +1289,25 @@ impl Execution<'_> {
                 self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
                 Ok(TableKey::Hashed(key))
             }
+            Value::Float(bits) => {
+                let number = f64::from_bits(bits);
+                if number.is_nan() {
+                    return Err(FlowError::TypeError);
+                }
+                // Lua normalizes an integral floating table key to the
+                // corresponding integer key, including both signed zeros.
+                if number.fract() == 0.0
+                    && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
+                        .contains(&number)
+                {
+                    let integer = number as i64;
+                    if (1..=MAX_TABLE_FIELDS as i64).contains(&integer) {
+                        return Ok(TableKey::Positive(integer as usize));
+                    }
+                    return Ok(TableKey::Hashed(Value::Integer(integer)));
+                }
+                Ok(TableKey::Hashed(Value::Float(bits)))
+            }
             Value::Nil => Err(FlowError::TypeError),
             _ => Ok(TableKey::Hashed(key)),
         }
@@ -2814,6 +2833,19 @@ mod tests {
             execute_flow_values(&multi, DEFAULT_STEP_BUDGET),
             Ok(vec![Value::Integer(7), Value::Integer(2)])
         );
+    }
+
+    #[test]
+    fn floating_table_keys_normalize_integral_values_and_reject_nan() {
+        assert_eq!(evaluate("local t={}; t[1.0]=7; return t[1]"), 7);
+        assert_eq!(evaluate("local t={[1]=7}; return t[1.0]"), 7);
+        assert_eq!(evaluate("local t={}; t[-0.0]=3; return t[0]"), 3);
+        assert_eq!(evaluate("local t={}; t[1.5]=9; return t[1.5]"), 9);
+        assert_eq!(evaluate("local t={}; t[1.5]=9; return t[1] or 4"), 4);
+        assert_eq!(evaluate("local t={}; t[2^3]=5; return t[8]"), 5);
+        assert_eq!(evaluate("local t={}; t[0.0]=3; t[0]=nil; return t[-0.0] or 6"), 6);
+        let invalid = compile_flow_chunk("local t={}; t[0/0]=1; return 0").unwrap();
+        assert_eq!(execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET), Err(FlowError::TypeError));
     }
 
     #[test]
