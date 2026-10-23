@@ -319,6 +319,15 @@ const FIXTURES: &[&str] = &[
     "local t={nil,5,nil}; return next(t)==2 and 1 or 0",
     "local function holes() return nil,4,nil end; local t={holes()}; return t[2]",
     "local t={[1]=5}; rawset(t,1,nil); return next(t)==nil and 1 or 0",
+    "local t={}; return getmetatable(t)==nil and 1 or 0",
+    "local m={}; local t={}; setmetatable(t,m); return rawequal(getmetatable(t),m) and 1 or 0",
+    "local m={}; local t={}; local same=setmetatable(t,m); return rawequal(t,same) and 1 or 0",
+    "local m={__metatable='shield'}; local t=setmetatable({},m); return getmetatable(t)=='shield' and 1 or 0",
+    "local m={__metatable=false}; local t=setmetatable({},m); return getmetatable(t)==false and 1 or 0",
+    "local t=setmetatable({},{}); setmetatable(t,nil); return getmetatable(t)==nil and 1 or 0",
+    "local m={__metatable='locked'}; local t=setmetatable({},m); rawset(m,'__metatable',nil); setmetatable(t,nil); return getmetatable(t)==nil and 1 or 0",
+    "local get=getmetatable; local set=setmetatable; local t={}; local m={}; set(t,m); return rawequal(get(t),m) and 1 or 0",
+    "return type(getmetatable)=='function' and type(setmetatable)=='function' and 1 or 0",
 ];
 
 fn render(values: &[Value]) -> String {
