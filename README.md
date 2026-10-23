@@ -68,3 +68,5 @@ For engine parity work, CI also runs a Lua-authored differential test harness ag
 Experimental independent Rust lexer and expression parser components are available through the `ferrua` library. They are not connected to the production `fer` VM. See [owned-engine architecture](docs/OWNED_ENGINE.md) for scope and corpus validation, with the working CLI still using the external VM.
 
 The experimental Rust-owned expression AST has gained calls, field selectors, and bracket indexing. These are source-analysis components only; production `fer` continues using the pinned existing VM. [Owned-engine acceptance and limitations](docs/OWNED_ENGINE.md).
+
+The owned language library now also exposes a deliberately restricted `parse_chunk` AST for semicolon-delimited local declarations, assignment, calls, and returns. Full Lua statement grammar, lexical scope analysis, and independent VM execution are **not yet implemented**.

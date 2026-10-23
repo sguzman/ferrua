@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 85%` across 31 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 85%` across 32 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `█████░░░░░ 50%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████░░░░ 57%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `█████░░░░░ 50%`
+### 🔣 P3 — Ferrua-owned language engine — `██████░░░░ 57%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -166,6 +166,10 @@
   - [x] Parse arithmetic, bitwise, logical and right-associative operators — src/expr.rs precedence/associativity unit tests
   - [x] Parse chained function calls, field selections and bracket indexes — src/expr.rs: Call, Field and Index AST variants, invalid-syntax regressions
   - [x] Accept standalone expression parser without swapping VM backend — GitHub Actions 39953838372: four jobs green; src/main.rs still uses luna-core
+- 🧾 **T307** Semicolon-delimited Lua statement AST subset — `██████████ 100%`
+  - [x] Parse local declarations, calls, assignments, and final returns — src/expr.rs: public Statement and parse_chunk APIs
+  - [x] Reject unsupported grammar, invalid assignment targets and missing separators — src/expr.rs: chunk parser invalid syntax and assignment fixtures
+  - [x] Validate parser subset without changing the production VM — GitHub Actions 39954592909: all four jobs green with unit/integration tests
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -173,4 +177,5 @@
 - 🧪 Verified Lua compatibility — `█████░░░░░ 50%`
 - 🔡 Ferrua-owned lexer scaffold — `██████████ 100%`
 - 🧮 Experimental expression AST — `██████████ 100%`
+- 🧾 Early statement syntax trees — `██████████ 100%`
 

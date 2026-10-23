@@ -834,6 +834,29 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T307",
+              "emoji": "🧾",
+              "name": "Semicolon-delimited Lua statement AST subset",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Parse local declarations, calls, assignments, and final returns",
+                  "passed": true,
+                  "evidence": "src/expr.rs: public Statement and parse_chunk APIs"
+                },
+                {
+                  "text": "Reject unsupported grammar, invalid assignment targets and missing separators",
+                  "passed": true,
+                  "evidence": "src/expr.rs: chunk parser invalid syntax and assignment fixtures"
+                },
+                {
+                  "text": "Validate parser subset without changing the production VM",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39954592909: all four jobs green with unit/integration tests"
+                }
+              ]
             }
           ]
         }
@@ -867,6 +890,13 @@
           "name": "Experimental expression AST",
           "task_ids": [
             "T306"
+          ]
+        },
+        {
+          "emoji": "🧾",
+          "name": "Early statement syntax trees",
+          "task_ids": [
+            "T307"
           ]
         }
       ]
