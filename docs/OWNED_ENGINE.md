@@ -130,3 +130,7 @@ Ferrua's independent syntax tree now retains parentheses as explicit `Expr::Grou
 ### Bounded variadic functions and final-call result adjustment
 
 The owned stack VM now expands the results of an unparenthesized final call or `...` in return and assignment lists, preserving the single-result boundary of parentheses. Variadic functions receive surplus arguments, and frame-local dynamic result counts feed `CallMany`, `AdjustTail`, and `ReturnTail` instructions. Ordinary expression calls retain the first result or nil, preserving previous behavior. Nested last-argument expansion, table-constructor tail expansion, Lua globals, general method calls and complete Lua 5.4 language semantics remain unsupported. This is an experimental runtime and does not change production `fer`.
+
+### Tail expansion in function arguments and array constructors
+
+The independent compiler now propagates a final unparenthesized call or `...` result list into an enclosing call's final argument position and into the last positional element of a bounded table constructor. `CallSpread` and `NewTableTail` consume the frame-local dynamic result count before constructing the final arity, while parenthesized calls remain single-valued. Upstream Lua 5.4 and production `fer` differential fixtures cover accepted numeric outcomes. Named/hash table fields, method calls, general Lua keys and full VM/runtime compatibility remain unsupported.

@@ -88,6 +88,14 @@ const FIXTURES: &[&str] = &[
     "local function f(a,...) return a,... end; return f(2,3,4)",
     "local function f(...) local a,b=...; return a+b end; return f(3,4)",
     "local function f(...) local a,b=1,...; return a+b end; return f(3,4)",
+    "local function pair() return 3,4 end; local function add(a,b) return a+b end; return add(pair())",
+    "local function pair() return 3,4 end; local function sum(a,b,c) return a+b+c end; return sum(2,pair())",
+    "local function pair() return 3,4 end; local function f(a,b,c) return a*100+b*10+c end; return f(pair(),8,9)",
+    "local function f(...) return ... end; local function sum(a,b) return a+b end; return sum(f(4,5))",
+    "local function pair() return 4,5 end; local t={2,pair()}; return t[2]+t[3]",
+    "local function pair() return 4,5 end; local t={2,(pair())}; return t[3] or 7",
+    "local function pair() return 4,5 end; local t={pair()}; return t[2]",
+    "local function f(...) return ... end; local t={1,f(2,3)}; return t[3]",
 ];
 
 fn render(values: &[Value]) -> String {

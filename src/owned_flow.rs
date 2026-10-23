@@ -66,6 +66,8 @@ pub enum Op {
     NewFunction(usize),
     Call(usize),
     CallMany(usize),
+    CallSpread { prefix: usize, many: bool },
+    NewTableTail(usize),
     VarargSingle,
     VarargMany,
     AdjustTail {
@@ -258,6 +260,39 @@ impl<'a> Compiler<'a> {
         Ok(id)
     }
 
+    /// A call's last argument is the only argument that may contribute
+    /// multiple results. Nested calls use the same bounded adjustment path.
+    fn call(
+        &mut self,
+        callee: &Expr<'a>,
+        arguments: &[Expr<'a>],
+        depth: usize,
+        many: bool,
+    ) -> Result<(), FlowError> {
+        if depth > 128 {
+            return Err(FlowError::TooLarge);
+        }
+        self.expression(callee, depth + 1)?;
+        if let Some((last, before)) = arguments.split_last() {
+            for argument in before {
+                self.expression(argument, depth + 1)?;
+            }
+            if self.multiple_expression(last, depth + 1)? {
+                self.push(Op::CallSpread {
+                    prefix: before.len(),
+                    many,
+                })?;
+                return Ok(());
+            }
+        }
+        self.push(if many {
+            Op::CallMany(arguments.len())
+        } else {
+            Op::Call(arguments.len())
+        })?;
+        Ok(())
+    }
+
     fn expression(&mut self, expr: &Expr<'a>, depth: usize) -> Result<(), FlowError> {
         if depth > 128 {
             return Err(FlowError::TooLarge);
@@ -320,11 +355,7 @@ impl<'a> Compiler<'a> {
                 self.push(Op::NewFunction(function))?;
             }
             Expr::Call { callee, arguments } => {
-                self.expression(callee, depth + 1)?;
-                for argument in arguments {
-                    self.expression(argument, depth + 1)?;
-                }
-                self.push(Op::Call(arguments.len()))?;
+                self.call(callee, arguments, depth, false)?;
             }
             Expr::Index { object, key } => {
                 self.expression(object, depth + 1)?;
@@ -332,15 +363,28 @@ impl<'a> Compiler<'a> {
                 self.push(Op::GetTable)?;
             }
             Expr::Table(fields) => {
-                for field in fields {
-                    let TableField::Value(value) = field else {
+                if let Some((last, before)) = fields.split_last() {
+                    for field in before {
+                        let TableField::Value(value) = field else {
+                            return Err(FlowError::Unsupported(
+                                "only positional integer-key table fields".into(),
+                            ));
+                        };
+                        self.expression(value, depth + 1)?;
+                    }
+                    let TableField::Value(value) = last else {
                         return Err(FlowError::Unsupported(
                             "only positional integer-key table fields".into(),
                         ));
                     };
-                    self.expression(value, depth + 1)?;
+                    if self.multiple_expression(value, depth + 1)? {
+                        self.push(Op::NewTableTail(before.len()))?;
+                    } else {
+                        self.push(Op::NewTable(fields.len()))?;
+                    }
+                } else {
+                    self.push(Op::NewTable(0))?;
                 }
-                self.push(Op::NewTable(fields.len()))?;
             }
             Expr::Binary { op, left, right } => {
                 let operation = match *op {
@@ -375,14 +419,17 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn multiple_expression(&mut self, expr: &Expr<'a>) -> Result<bool, FlowError> {
+    fn multiple_expression(
+        &mut self,
+        expr: &Expr<'a>,
+        depth: usize,
+    ) -> Result<bool, FlowError> {
+        if depth > 128 {
+            return Err(FlowError::TooLarge);
+        }
         match expr {
             Expr::Call { callee, arguments } => {
-                self.expression(callee, 0)?;
-                for argument in arguments {
-                    self.expression(argument, 0)?;
-                }
-                self.push(Op::CallMany(arguments.len()))?;
+                self.call(callee, arguments, depth + 1, true)?;
                 Ok(true)
             }
             Expr::Vararg if self.vararg => {
@@ -390,7 +437,7 @@ impl<'a> Compiler<'a> {
                 Ok(true)
             }
             _ => {
-                self.expression(expr, 0)?;
+                self.expression(expr, depth + 1)?;
                 Ok(false)
             }
         }
@@ -403,7 +450,7 @@ impl<'a> Compiler<'a> {
             for expression in before {
                 self.expression(expression, 0)?;
             }
-            if self.multiple_expression(last)? {
+            if self.multiple_expression(last, 0)? {
                 self.push(Op::AdjustTail {
                     prefix: before.len(),
                     targets,
@@ -545,7 +592,7 @@ impl<'a> Compiler<'a> {
                         for value in before {
                             self.expression(value, 0)?;
                         }
-                        if self.multiple_expression(last)? {
+                        if self.multiple_expression(last, 0)? {
                             self.push(Op::ReturnTail(before.len()))?;
                             continue;
                         }
@@ -832,11 +879,19 @@ impl Execution<'_> {
                     });
                     stack.push(Value::Function(handle));
                 }
-                Op::Call(argc) | Op::CallMany(argc) => {
-                    if stack.len() < argc.saturating_add(1) {
+                Op::Call(argc)
+                | Op::CallMany(argc)
+                | Op::CallSpread { prefix: argc, .. } => {
+                    let arity = if matches!(instructions[pc], Op::CallSpread { .. }) {
+                        let expanded = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
+                        argc.checked_add(expanded).ok_or(FlowError::TooLarge)?
+                    } else {
+                        *argc
+                    };
+                    if stack.len() < arity.saturating_add(1) {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    let args = stack.split_off(stack.len() - argc);
+                    let args = stack.split_off(stack.len() - arity);
                     let Value::Function(handle) = stack.pop().ok_or(FlowError::InvalidBytecode)?
                     else {
                         return Err(FlowError::TypeError);
@@ -874,7 +929,10 @@ impl Execution<'_> {
                     );
                     self.depth -= 1;
                     let returned = result?;
-                    if matches!(instructions[pc], Op::CallMany(_)) {
+                    if matches!(
+                        instructions[pc],
+                        Op::CallMany(_) | Op::CallSpread { many: true, .. }
+                    ) {
                         last_multiple = Some(returned.len());
                         stack.extend(returned);
                     } else {
@@ -925,18 +983,24 @@ impl Execution<'_> {
                         *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
                     }
                 }
-                Op::NewTable(count) => {
-                    if *count > MAX_TABLE_FIELDS
+                Op::NewTable(count) | Op::NewTableTail(count) => {
+                    let arity = if matches!(instructions[pc], Op::NewTableTail(_)) {
+                        let expanded = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
+                        count.checked_add(expanded).ok_or(FlowError::TooLarge)?
+                    } else {
+                        *count
+                    };
+                    if arity > MAX_TABLE_FIELDS
                         || self.tables.len() >= MAX_TABLES
-                        || self.table_cells.saturating_add(*count) > MAX_TABLE_CELLS_TOTAL
-                        || stack.len() < *count
+                        || self.table_cells.saturating_add(arity) > MAX_TABLE_CELLS_TOTAL
+                        || stack.len() < arity
                     {
                         return Err(FlowError::TooLarge);
                     }
-                    let values = stack.split_off(stack.len() - *count);
+                    let values = stack.split_off(stack.len() - arity);
                     let handle = self.tables.len();
                     self.tables.push(values.into_iter().map(Some).collect());
-                    self.table_cells += *count;
+                    self.table_cells += arity;
                     stack.push(Value::Table(handle));
                 }
                 Op::GetTable => {
@@ -1351,6 +1415,42 @@ mod tests {
         assert_eq!(
             execute_flow_value(&program, DEFAULT_STEP_BUDGET),
             Ok(Value::Nil)
+        );
+    }
+
+    #[test]
+    fn last_call_argument_and_table_field_expand_results() {
+        assert_eq!(
+            evaluate("local function pair() return 3,4 end; local function add(a,b) return a+b end; return add(pair())"),
+            7
+        );
+        assert_eq!(
+            evaluate("local function pair() return 3,4 end; local function sum(a,b,c) return a+b+c end; return sum(2,pair())"),
+            9
+        );
+        assert_eq!(
+            evaluate("local function pair() return 3,4 end; local function f(a,b,c) return a*100+b*10+c end; return f(pair(),8,9)"),
+            389
+        );
+        assert_eq!(
+            evaluate("local function f(...) return ... end; local function sum(a,b) return a+b end; return sum(f(4,5))"),
+            9
+        );
+        assert_eq!(
+            evaluate("local function pair() return 4,5 end; local t={2,pair()}; return t[2]+t[3]"),
+            9
+        );
+        assert_eq!(
+            evaluate("local function pair() return 4,5 end; local t={2,(pair())}; return t[3] or 7"),
+            7
+        );
+        assert_eq!(
+            evaluate("local function pair() return 4,5 end; local t={pair()}; return t[2]"),
+            5
+        );
+        assert_eq!(
+            evaluate("local function f(...) return ... end; local t={1,f(2,3)}; return t[3]"),
+            3
         );
     }
 
