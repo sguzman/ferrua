@@ -1836,21 +1836,15 @@ impl Execution<'_> {
 
     /// Lua concatenates byte strings and numbers directly; otherwise an
     /// operand's first available __concat closure handles the original values.
-    fn concat_with_metamethod(
-        &mut self,
-        left: Value,
-        right: Value,
-    ) -> Result<Value, FlowError> {
-        let direct = self
-            .string_bytes(left)
-            .and_then(|mut bytes| {
-                let suffix = self.string_bytes(right)?;
-                if bytes.len().saturating_add(suffix.len()) > MAX_STRING_POOL_BYTES {
-                    return Err(FlowError::TooLarge);
-                }
-                bytes.extend_from_slice(&suffix);
-                Ok(bytes)
-            });
+    fn concat_with_metamethod(&mut self, left: Value, right: Value) -> Result<Value, FlowError> {
+        let direct = self.string_bytes(left).and_then(|mut bytes| {
+            let suffix = self.string_bytes(right)?;
+            if bytes.len().saturating_add(suffix.len()) > MAX_STRING_POOL_BYTES {
+                return Err(FlowError::TooLarge);
+            }
+            bytes.extend_from_slice(&suffix);
+            Ok(bytes)
+        });
         match direct {
             Ok(bytes) => self.intern_string(bytes),
             Err(FlowError::TypeError) => self.binary_metamethod(b"__concat", left, right),
@@ -3705,14 +3699,38 @@ mod tests {
         for (source, expected) in [
             ("return ('ab'..'cd')=='abcd' and 1 or 0", 1),
             ("return ('a'..12)=='a12' and 1 or 0", 1),
-            ("local t=setmetatable({name='X'},{__concat=function(a,b) return a.name..b end}); return (t..'Y')=='XY' and 1 or 0", 1),
-            ("local t=setmetatable({name='X'},{__concat=function(a,b) return a..b.name end}); return ('Y'..t)=='YX' and 1 or 0", 1),
-            ("local a=setmetatable({}, {__concat=function() return 11 end}); local b=setmetatable({}, {__concat=function() return 22 end}); return a..b", 11),
-            ("local b=setmetatable({}, {__concat=function() return 22 end}); return {}..b", 22),
-            ("local t=setmetatable({}, {__concat=function() return 9,10 end}); return t..'x'", 9),
-            ("local t=setmetatable({}, {__concat=function() end}); return (t..'x')==nil and 1 or 0", 1),
-            ("local t=setmetatable({}, {__concat=function() return 'ok' end}); return (t..3)=='ok' and 1 or 0", 1),
-            ("local n=0; local t=setmetatable({}, {__concat=function() n=n+1; return 'ok' end}); return (t..3)=='ok' and n or 0", 1),
+            (
+                "local t=setmetatable({name='X'},{__concat=function(a,b) return a.name..b end}); return (t..'Y')=='XY' and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({name='X'},{__concat=function(a,b) return a..b.name end}); return ('Y'..t)=='YX' and 1 or 0",
+                1,
+            ),
+            (
+                "local a=setmetatable({}, {__concat=function() return 11 end}); local b=setmetatable({}, {__concat=function() return 22 end}); return a..b",
+                11,
+            ),
+            (
+                "local b=setmetatable({}, {__concat=function() return 22 end}); return {}..b",
+                22,
+            ),
+            (
+                "local t=setmetatable({}, {__concat=function() return 9,10 end}); return t..'x'",
+                9,
+            ),
+            (
+                "local t=setmetatable({}, {__concat=function() end}); return (t..'x')==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({}, {__concat=function() return 'ok' end}); return (t..3)=='ok' and 1 or 0",
+                1,
+            ),
+            (
+                "local n=0; local t=setmetatable({}, {__concat=function() n=n+1; return 'ok' end}); return (t..3)=='ok' and n or 0",
+                1,
+            ),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
@@ -3728,7 +3746,7 @@ mod tests {
             );
         }
         let program = compile_flow_chunk(
-            "local t={}; setmetatable(t,{__concat=function(a,b) return a..b end}); return t..'x'"
+            "local t={}; setmetatable(t,{__concat=function(a,b) return a..b end}); return t..'x'",
         )
         .unwrap();
         assert_eq!(
