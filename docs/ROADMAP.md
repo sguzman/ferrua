@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 95%` across 108 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 96%` across 108 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -470,10 +470,10 @@
   - [x] Invoke first-party Lua __tostring closures with the original table and require a string result — src/owned_flow.rs: Builtin::ToString table dispatch
   - [x] Test lexical captures, string-only returns, default stringification, depth limits and Lua 5.4 differential fixtures — src/owned_flow.rs: tostring_metatable_hook_requires_string_and_bounds_recursive_calls; tests/owned_flow.rs
   - [x] Pass Linux formatting/Clippy/Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI — GitHub Actions 40036891366: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all succeeded
-- 🔎 **T382** Lua ipairs respects bounded __index fallbacks for missing sequence elements — `███████░░░ 67%`
+- 🔎 **T382** Lua ipairs respects bounded __index fallbacks for missing sequence elements — `██████████ 100%`
   - [x] Use regular table indexing for ipairs iteration, retaining rawget/next and ipairs' independence from __pairs — src/owned_flow.rs: Execution::ipairs_iterator uses lookup_with_metatable
   - [x] Cover table/closure index fallbacks, nil holes, stop conditions, raw bypass, recursion and Lua 5.4 differential fixtures — src/owned_flow.rs: ipairs_respects_index_fallbacks_without_changing_raw_iteration; tests/owned_flow.rs
-  - [ ] Pass Linux formatting, Clippy, Rust unit tests, Rust 1.96, consumer and upstream Lua 5.4 differential CI
+  - [x] Pass Linux formatting, Clippy, Rust unit tests, Rust 1.96, consumer and upstream Lua 5.4 differential CI — GitHub Actions 40037327110: Linux quality, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -554,5 +554,5 @@
 - 🔄 Lua pairs table metamethod custom iterator triples — `██████████ 100%`
 - 🛡️ Native-stack-safe recursive metamethod limits — `██████████ 100%`
 - 📝 Lua __tostring closures with validated string returns — `██████████ 100%`
-- 🔎 Metamethod-aware sequential ipairs with raw-access separation — `███████░░░ 67%`
+- 🔎 Metamethod-aware sequential ipairs with raw-access separation — `██████████ 100%`
 
