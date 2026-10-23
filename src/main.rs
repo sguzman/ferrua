@@ -349,7 +349,7 @@ mod tests {
                assert(json.encode(json.decode('[]')) == '[]')
                assert(json.encode(json.object()) == '{}')
                assert(json.encode(json.array()) == '[]')
-               assert(json.decode('null') == json.null)"#
+               assert(json.decode('null') == json.null)"#,
             "=json-test",
         )
         .unwrap();
