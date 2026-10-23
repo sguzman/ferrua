@@ -59,7 +59,7 @@ jobs:
           cargo run --locked -- examples/fs.lua "$scratch_dir" | grep -x "filesystem module smoke passed"
           cargo run --locked -- --sandbox -e "assert(process == nil and __fer_process_run == nil and fs == nil and __fer_fs_call == nil)"
           cargo run --locked -- --sandbox -e "assert(io == nil and os == nil)"
-              ./target/release/fer --lua=5.4 -e "assert(2^3 == 8)"
+          cargo run --locked -- --sandbox -e 'assert(json.decode([[{"key":42}]]).key == 42)'
           ! timeout 10s cargo run --locked -- --budget=1000 -e "while true do end"
           printf 'answer=6*7\n=answer\n' | script -q -c "target/debug/fer" /dev/null | grep -Fq 42
       - name: Build release preview
