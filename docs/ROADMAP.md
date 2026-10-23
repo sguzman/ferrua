@@ -501,10 +501,10 @@
   - [x] Compile forward and backward same-block goto/label statements to real validated bytecode jumps — src/owned_flow.rs: FlowCompiler::statements lowers Statement::Goto to Op::Jump and patches same-block label targets
   - [x] Reject missing labels, cross-block targets and jumps that cross active local lifetimes; bound backward loops — src/owned_flow.rs: same_block_goto_executes_but_cross_scope_jumps_are_rejected; tests/owned_flow.rs
   - [x] Pass full Linux CI and upstream Lua 5.4 differential semantics — GitHub Actions 40039264425: Linux quality, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all succeeded
-- 🔬 **T386** Deterministic generated owned-VM arithmetic and comparison parity corpus — `███████░░░ 67%`
+- 🔬 **T386** Deterministic generated owned-VM arithmetic and comparison parity corpus — `██████████ 100%`
   - [x] Generate reproducible bounded integer, bitwise, floor-div/mod and comparison cases without external generators — tests/owned_flow.rs: generated_numeric_fixtures deterministic LCG with 128 numeric Lua chunks
   - [x] Route generated chunks through owned execution and production fer/upstream Lua reference comparison harness — tests/owned_flow.rs: check_source and check, production_fer_agrees_with_owned_control_flow_subset; upstream_lua_agrees_when_requested
-  - [ ] Pass full CI, including reference interpreter parity for all generated inputs and strict Rust quality
+  - [x] Pass full CI, including reference interpreter parity for all generated inputs and strict Rust quality — GitHub Actions 40041470699: Linux formatter/lint/tests, Rust 1.96, Lua 5.4 differential fixtures and composite consumer passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -589,5 +589,5 @@
 - 🔒 Machine-enforced owned-engine and stable-release graduation guards — `██████████ 100%`
 - 🏷️ Lua label/goto parsing (execution remains gated) — `██████████ 100%`
 - ↪️ Safe bounded same-block Lua goto execution — `██████████ 100%`
-- 🔬 Generated deterministic owned-VM numeric differential coverage — `███████░░░ 67%`
+- 🔬 Generated deterministic owned-VM numeric differential coverage — `██████████ 100%`
 
