@@ -2428,7 +2428,7 @@
               "id": "T375",
               "emoji": "➖",
               "name": "Bounded unary __unm and __bnot metamethod callbacks",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Preserve numeric unary operators and fall back to first-party __unm and __bnot closures",
@@ -2442,7 +2442,8 @@
                 },
                 {
                   "text": "Pass Rust formatter, Clippy, Rust 1.96, full tests, action consumer and Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40031937707: Linux tests/lint/formatter, Rust 1.96, upstream Lua 5.4, composite consumer and status reporter passed"
                 }
               ]
             }
