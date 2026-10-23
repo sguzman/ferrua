@@ -498,6 +498,66 @@ fn generated_numeric_fixtures() -> Vec<String> {
     fixtures
 }
 
+/// Intentional failures are compared by stage and exit outcome, not by
+/// unstable VM-specific diagnostic text or source paths.
+const RUNTIME_ERROR_FIXTURES: &[&str] = &[
+    "return {}+1",
+    "return {}<{}",
+    "return {}..'x'",
+    "return #nil",
+    "return ~nil",
+    "return nil(1)",
+    "return 1//0",
+    "return 5%0",
+    "local t={}; t[nil]=4; return t.x",
+    "return next({},'missing')",
+    "return rawget(5,1)",
+    "return setmetatable(1,{})",
+    "return assert(false)",
+    "local t={}; return t()",
+    "local t=setmetatable({}, {__add=3}); return t+1",
+    "local t=setmetatable({}, {__len=3}); return #t",
+];
+
+const SYNTAX_ERROR_FIXTURES: &[&str] = &[
+    "local =",
+    "if true then",
+    "return (",
+    "do local x=1",
+    "return 1+",
+    "return @",
+    "for i=1, do end",
+    "return {[1]=}",
+    "local x='unterminated",
+];
+
+fn check_rejected_source(reference: &str, prefix: &[&str], source: &str, syntax: bool) {
+    if syntax {
+        assert!(
+            compile_flow_chunk(source).is_err(),
+            "owned compiler accepted invalid Lua syntax: {source}"
+        );
+    } else {
+        let program = compile_flow_chunk(source)
+            .unwrap_or_else(|error| panic!("owned compiler rejected runtime-error fixture {source}: {error}"));
+        assert!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET).is_err(),
+            "owned VM accepted invalid runtime operation: {source}"
+        );
+    }
+    let code = format!("return (function() {source} end)()");
+    let output = Command::new(reference)
+        .args(prefix)
+        .args(["-e", &code])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "{reference} unexpectedly accepted rejected Lua source {source}: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
 fn check_source(reference: &str, prefix: &[&str], source: &str) {
     let compiled = compile_flow_chunk(source).unwrap();
     let owned = render(&execute_flow_values(&compiled, DEFAULT_STEP_BUDGET).unwrap());
@@ -522,6 +582,12 @@ fn check(reference: &str, prefix: &[&str]) {
     }
     for source in generated_numeric_fixtures() {
         check_source(reference, prefix, &source);
+    }
+    for source in RUNTIME_ERROR_FIXTURES {
+        check_rejected_source(reference, prefix, source, false);
+    }
+    for source in SYNTAX_ERROR_FIXTURES {
+        check_rejected_source(reference, prefix, source, true);
     }
 }
 
