@@ -35,6 +35,13 @@ pub enum Value {
     Table(usize),
     /// Opaque, execution-local function identity.
     Function(usize),
+    /// First-party, pure Lua core builtins have first-class function values.
+    Builtin(Builtin),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Builtin {
+    Type,
 }
 
 impl Value {
@@ -417,8 +424,13 @@ impl<'a> Compiler<'a> {
                 if let Some(value) = constant {
                     self.push(Op::Constant(value))?;
                 } else {
-                    let slot = self.slot(text)?;
-                    self.push(Op::ReadLocal(slot))?;
+                    match self.slot(text) {
+                        Ok(slot) => self.push(Op::ReadLocal(slot))?,
+                        Err(_) if *text == "type" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::Type)))?;
+                        }
+                        Err(error) => return Err(error),
+                    }
                 }
             }
             Expr::Unary { op, right } if matches!(*op, "-" | "not" | "~" | "#") => {
@@ -1670,8 +1682,31 @@ impl Execution<'_> {
                         return Err(FlowError::InvalidBytecode);
                     }
                     let args = stack.split_off(stack.len() - arity);
-                    let Value::Function(handle) = stack.pop().ok_or(FlowError::InvalidBytecode)?
-                    else {
+                    let callable = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    if let Value::Builtin(Builtin::Type) = callable {
+                        let name: &[u8] = match args.first().copied().unwrap_or(Value::Nil) {
+                            Value::Integer(_) | Value::Float(_) => b"number",
+                            Value::Boolean(_) => b"boolean",
+                            Value::Nil => b"nil",
+                            Value::String(_) => b"string",
+                            Value::Table(_) => b"table",
+                            Value::Function(_) | Value::Builtin(_) => b"function",
+                        };
+                        let result = self.intern_string(name.to_vec())?;
+                        if matches!(
+                            instructions[pc],
+                            Op::CallMany(_) | Op::CallSpread { many: true, .. }
+                        ) {
+                            last_multiple = Some(1);
+                        }
+                        stack.push(result);
+                        if stack.len() > MAX_STACK {
+                            return Err(FlowError::TooLarge);
+                        }
+                        pc = next;
+                        continue;
+                    }
+                    let Value::Function(handle) = callable else {
                         return Err(FlowError::TypeError);
                     };
                     let closure = self
@@ -2878,6 +2913,24 @@ mod tests {
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
+    }
+
+    #[test]
+    fn first_class_type_builtin_reports_lua_value_categories() {
+        assert_eq!(evaluate("return (type(4)=='number') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (type(2.5)=='number') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (type(true)=='boolean') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (type(nil)=='nil') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (type('hi')=='string') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (type({})=='table') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (type(function() end)=='function') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (type(type)=='function') and 1 or 0"), 1);
+        assert_eq!(evaluate("local kind=type; return (kind(4)=='number') and 1 or 0"), 1);
+        assert_eq!(
+            evaluate("local type=function(x) return 'shadow' end; return (type(4)=='shadow') and 1 or 0"),
+            1
+        );
+        assert_eq!(evaluate("return (type()=='nil') and 1 or 0"), 1);
     }
 
     #[test]

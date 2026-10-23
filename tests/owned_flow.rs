@@ -132,6 +132,17 @@ const FIXTURES: &[&str] = &[
     r#"return ("\u{E9}" == "é") and 1 or 0"#,
     "return #\"abc\"",
     "return #('ab'..'cd')",
+    "return (type(4)=='number') and 1 or 0",
+    "return (type(2.5)=='number') and 1 or 0",
+    "return (type(true)=='boolean') and 1 or 0",
+    "return (type(nil)=='nil') and 1 or 0",
+    "return (type('hi')=='string') and 1 or 0",
+    "return (type({})=='table') and 1 or 0",
+    "return (type(function() end)=='function') and 1 or 0",
+    "return (type(type)=='function') and 1 or 0",
+    "local kind=type; return (kind(4)=='number') and 1 or 0",
+    "local type=function(x) return 'shadow' end; return (type(4)=='shadow') and 1 or 0",
+    "return (type()=='nil') and 1 or 0",
     "return 3.0&1",
     "return 4.0|1",
     "return 7.0~3",
@@ -240,7 +251,7 @@ fn render(values: &[Value]) -> String {
             Value::Nil => "nil".to_owned(),
             Value::String(_) => "string".to_owned(),
             Value::Table(_) => "table".to_owned(),
-            Value::Function(_) => "function".to_owned(),
+            Value::Function(_) | Value::Builtin(_) => "function".to_owned(),
         })
         .collect::<Vec<_>>()
         .join("\t")

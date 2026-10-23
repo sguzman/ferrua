@@ -299,3 +299,7 @@ The owned VM now accepts mathematically integral, representable IEEE-754 double 
 - [CI #40012977915](https://github.com/sguzman/ferrua/actions/runs/40012977915): fractional Lua numeric for loops and exact integral-float bitwise operands accepted across four jobs.
 
 These statuses cover only the recorded bounded behavior. Full Lua metamethods, numeric edge cases, complete float/string coercion, general garbage collection, standard libraries and native production-engine graduation remain unfinished.
+
+### First-class pure Lua type builtin
+
+The experimental owned runtime now represents the standard Lua `type` function as a first-class built-in callable. A reference to `type` compiles as a value only when no lexical binding of the same name exists, so local shadowing preserves Lua lexical behavior. The callable returns interned category strings for nil, Boolean, number (integer and float), string, table and function values. Its execution uses the existing instruction/stack and byte-pool limits. This deliberately narrow core-builtin path does not provide a general global environment, string formatting, Lua metatables, or side-effecting host functions; production `fer` remains unchanged.
