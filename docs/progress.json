@@ -2405,7 +2405,7 @@
               "id": "T374",
               "emoji": "➕",
               "name": "Function-valued Lua arithmetic metamethods after numeric coercion",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Fall back from Lua numeric coercion to bounded first-party __add/__sub/__mul/__div/__idiv/__mod/__pow callbacks",
@@ -2419,7 +2419,8 @@
                 },
                 {
                   "text": "Pass Linux formatting, lint, tests, Rust 1.96, action consumer and Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40031328390: Linux, Rust 1.96, Lua 5.4 differential, action consumer and status reporter passed"
                 }
               ]
             }
