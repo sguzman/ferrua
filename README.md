@@ -37,7 +37,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [four green jobs including Rust 1.96, Lua 5.4.6 differential tests and verified Linux binary installation](https://github.com/sguzman/ferrua/actions/runs/39957918722). Native EndeavourOS acceptance, a published release, and Ferrua-owned execution remain pending.
+**Latest verified CI:** [all four jobs green, including independent integer register IR compared with upstream Lua 5.4.6](https://github.com/sguzman/ferrua/actions/runs/39959317291). Native EndeavourOS acceptance, published stable release, and a complete Ferrua-owned Lua VM remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
@@ -74,3 +74,5 @@ The owned language library now also exposes a deliberately restricted `parse_chu
 The experimental owned-engine library now also provides single-scope local-variable shadowing and reference analysis. It is **not** a complete lexical scope implementation, and it does not affect normal Lua execution.
 
 Experimental source analysis now includes nested lexical blocks, conditional branches, `while`/`repeat`, and numeric/generic `for` syntax with correctly scoped loop variables. See [owned-engine limitations](docs/OWNED_ENGINE.md). None of these features replaces the working third-party Lua VM.
+
+The separate `ferrua::owned_vm` module now executes a **limited integer-expression register-bytecode subset** and is tested against upstream Lua 5.4.6. This is an experimental compiler/VM proof of concept, not a replacement for the production `fer` interpreter. See [owned-engine architecture](docs/OWNED_ENGINE.md).

@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 87%` across 36 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 87%` across 37 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `███████░░░ 73%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `████████░░ 75%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `███████░░░ 73%`
+### 🔣 P3 — Ferrua-owned language engine — `████████░░ 75%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -186,6 +186,10 @@
   - [x] Implement numeric for (optional step), iteration locals and outside bounds — src/expr.rs, src/scope.rs; CI 39957386939
   - [x] Implement generic for-in name lists, iterator expressions and scoped locals — src/expr.rs, src/scope.rs; CI 39957918722
   - [x] Verify malformed headers and all four CI acceptance jobs — CI 39957918722: four jobs passed
+- 🔢 **T312** Experimental integer register IR and execution subset — `██████████ 100%`
+  - [x] Implement bounded first-party register bytecode compiler and dispatcher for integer arithmetic only — src/owned_vm.rs: compile_integer_expression, execute_integer_program, explicit unsupported forms
+  - [x] Reject malformed registers and validate wrapping integer arithmetic — src/owned_vm.rs: invalid-register and overflow unit tests; CI 39958915661
+  - [x] Compare owned integer bytecode with official upstream Lua 5.4.6 — tests/owned_vm.rs and CI 39959317291: Compare experimental integer register IR against upstream Lua — success
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -196,4 +200,5 @@
 - 🧾 Early statement syntax trees — `██████████ 100%`
 - 🌿 Experimental local binding analysis — `██████████ 100%`
 - 🌳 Nested lexical control-flow and loop parsing — `██████████ 100%`
+- 🔢 Experimental integer register VM proof of concept — `██████████ 100%`
 

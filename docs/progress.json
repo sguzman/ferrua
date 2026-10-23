@@ -949,6 +949,29 @@
                   "evidence": "CI 39957918722: four jobs passed"
                 }
               ]
+            },
+            {
+              "id": "T312",
+              "emoji": "🔢",
+              "name": "Experimental integer register IR and execution subset",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Implement bounded first-party register bytecode compiler and dispatcher for integer arithmetic only",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: compile_integer_expression, execute_integer_program, explicit unsupported forms"
+                },
+                {
+                  "text": "Reject malformed registers and validate wrapping integer arithmetic",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: invalid-register and overflow unit tests; CI 39958915661"
+                },
+                {
+                  "text": "Compare owned integer bytecode with official upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_vm.rs and CI 39959317291: Compare experimental integer register IR against upstream Lua — success"
+                }
+              ]
             }
           ]
         }
@@ -1005,6 +1028,13 @@
             "T309",
             "T310",
             "T311"
+          ]
+        },
+        {
+          "emoji": "🔢",
+          "name": "Experimental integer register VM proof of concept",
+          "task_ids": [
+            "T312"
           ]
         }
       ]
