@@ -829,7 +829,10 @@ mod tests {
     }
     #[test]
     fn lua_assignment_arity_and_nil_padding() {
-        assert_eq!(evaluate("local x; if x==nil then return 6 else return 0 end"), 6);
+        assert_eq!(
+            evaluate("local x; if x==nil then return 6 else return 0 end"),
+            6
+        );
         assert_eq!(evaluate("local x=1,2; return x"), 1);
         assert_eq!(
             evaluate("local x,y=3; if y==nil then return x else return 0 end"),
@@ -841,10 +844,7 @@ mod tests {
         );
         assert_eq!(evaluate("local x,y=3,4; x=7,8; return x"), 7);
         assert_eq!(evaluate("local x,y=1,2; x,y=3,4,5; return x+y"), 7);
-        for source in [
-            "local x=1,1//0; return x",
-            "local x=2; x=3,1//0; return x",
-        ] {
+        for source in ["local x=1,1//0; return x", "local x=2; x=3,1//0; return x"] {
             let program = compile_flow_chunk(source).unwrap();
             assert_eq!(
                 execute_flow_chunk(&program, DEFAULT_STEP_BUDGET),
