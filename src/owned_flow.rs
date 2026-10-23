@@ -5,7 +5,7 @@
 use crate::expr::{Expr, Statement, TableField, parse_chunk};
 use crate::owned_vm::{floor_div, lua_mod, shift};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::rc::Rc;
 
@@ -17,6 +17,7 @@ const MAX_TABLE_FIELDS: usize = 16_384;
 const MAX_TABLE_CELLS_TOTAL: usize = 65_536;
 const MAX_CLOSURES: usize = 16_384;
 const MAX_CALL_DEPTH: usize = 64;
+const MAX_CELLS_TOTAL: usize = 65_536;
 pub const DEFAULT_STEP_BUDGET: usize = 100_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,7 +103,7 @@ struct FunctionProgram {
     instructions: Vec<Op>,
     slots: usize,
     parameters: Vec<usize>,
-    recursive_slot: Option<usize>,
+    captures: Vec<(usize, usize)>,
 }
 
 impl FlowProgram {
@@ -179,7 +180,6 @@ impl<'a> Compiler<'a> {
         parameters: &[&'a str],
         vararg: bool,
         body: &[Statement<'a>],
-        recursive_name: Option<&'a str>,
     ) -> Result<usize, FlowError> {
         if vararg {
             return Err(FlowError::Unsupported("vararg functions".into()));
@@ -192,7 +192,7 @@ impl<'a> Compiler<'a> {
             instructions: Vec::new(),
             slots: 0,
             parameters: Vec::new(),
-            recursive_slot: None,
+            captures: Vec::new(),
         });
         let mut child = Self {
             code: Vec::new(),
@@ -203,14 +203,24 @@ impl<'a> Compiler<'a> {
             loop_breaks: Vec::new(),
             functions: Rc::clone(&self.functions),
         };
-        let recursive_slot = if let Some(name) = recursive_name {
-            let slot = child.slots;
+        // Eagerly and deterministically capture visible locals; shadowing
+        // resolves from outer to inner scope.
+        let mut visible = BTreeMap::new();
+        for frame in &self.frames {
+            for (&name, &slot) in frame {
+                visible.insert(name, slot);
+            }
+        }
+        let mut captures = Vec::new();
+        for (name, parent_slot) in visible {
+            if child.slots >= MAX_SLOTS {
+                return Err(FlowError::TooLarge);
+            }
+            let child_slot = child.slots;
             child.slots += 1;
-            child.frames[0].insert(name, slot);
-            Some(slot)
-        } else {
-            None
-        };
+            child.frames[0].insert(name, child_slot);
+            captures.push((parent_slot, child_slot));
+        }
         let mut formal_slots = Vec::new();
         for name in parameters {
             if child.slots >= MAX_SLOTS {
@@ -233,7 +243,7 @@ impl<'a> Compiler<'a> {
             instructions: child.code,
             slots: child.slots,
             parameters: formal_slots,
-            recursive_slot,
+            captures,
         };
         Ok(id)
     }
@@ -292,7 +302,7 @@ impl<'a> Compiler<'a> {
                 vararg,
                 body,
             } => {
-                let function = self.compile_function(parameters, *vararg, body, None)?;
+                let function = self.compile_function(parameters, *vararg, body)?;
                 self.push(Op::NewFunction(function))?;
             }
             Expr::Call { callee, arguments } => {
@@ -426,7 +436,7 @@ impl<'a> Compiler<'a> {
                     } else {
                         self.slot(name)?
                     };
-                    let function = self.compile_function(parameters, *vararg, body, Some(name))?;
+                    let function = self.compile_function(parameters, *vararg, body)?;
                     self.push(Op::NewFunction(function))?;
                     self.push(Op::AssignLocals(vec![slot]))?;
                 }
@@ -696,6 +706,12 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
     }
 }
 
+#[derive(Clone)]
+struct Closure {
+    function: usize,
+    captures: Vec<(usize, usize)>,
+}
+
 struct Execution<'a> {
     program: &'a FlowProgram,
     budget: usize,
@@ -703,7 +719,8 @@ struct Execution<'a> {
     depth: usize,
     tables: Vec<Vec<Option<Value>>>,
     table_cells: usize,
-    closures: Vec<usize>,
+    closures: Vec<Closure>,
+    cells: Vec<Option<Value>>,
 }
 
 impl Execution<'_> {
@@ -712,15 +729,28 @@ impl Execution<'_> {
         instructions: &[Op],
         slot_count: usize,
         initial: &[(usize, Value)],
+        captures: &[(usize, usize)],
     ) -> Result<Vec<Value>, FlowError> {
-        if instructions.len() > MAX_CODE || slot_count > MAX_SLOTS {
-            return Err(FlowError::InvalidBytecode);
+        if instructions.len() > MAX_CODE
+            || slot_count > MAX_SLOTS
+            || self.cells.len().saturating_add(slot_count) > MAX_CELLS_TOTAL
+        {
+            return Err(FlowError::TooLarge);
+        }
+        let start = self.cells.len();
+        self.cells.resize(start + slot_count, None);
+        let mut slots: Vec<usize> = (start..start + slot_count).collect();
+        for &(local_slot, cell) in captures {
+            if cell >= start {
+                return Err(FlowError::InvalidBytecode);
+            }
+            *slots.get_mut(local_slot).ok_or(FlowError::InvalidBytecode)? = cell;
+        }
+        for &(slot, value) in initial {
+            let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
+            *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
         }
         let mut stack = Vec::new();
-        let mut slots: Vec<Option<Value>> = vec![None; slot_count];
-        for &(slot, value) in initial {
-            *slots.get_mut(slot).ok_or(FlowError::InvalidBytecode)? = Some(value);
-        }
         let mut pc = 0;
         while pc < instructions.len() {
             if self.steps >= self.budget {
@@ -735,8 +765,17 @@ impl Execution<'_> {
                     {
                         return Err(FlowError::InvalidBytecode);
                     }
+                    let spec = &self.program.functions[*index];
+                    let mut captures = Vec::new();
+                    for &(parent_slot, child_slot) in &spec.captures {
+                        let cell = *slots.get(parent_slot).ok_or(FlowError::InvalidBytecode)?;
+                        captures.push((child_slot, cell));
+                    }
                     let handle = self.closures.len();
-                    self.closures.push(*index);
+                    self.closures.push(Closure {
+                        function: *index,
+                        captures,
+                    });
                     stack.push(Value::Function(handle));
                 }
                 Op::Call(argc) => {
@@ -748,35 +787,40 @@ impl Execution<'_> {
                     else {
                         return Err(FlowError::TypeError);
                     };
-                    let index = *self
+                    let closure = self
                         .closures
                         .get(handle)
+                        .cloned()
                         .ok_or(FlowError::InvalidBytecode)?;
                     let function = self
                         .program
                         .functions
-                        .get(index)
+                        .get(closure.function)
                         .ok_or(FlowError::InvalidBytecode)?
                         .clone();
                     if self.depth >= MAX_CALL_DEPTH {
                         return Err(FlowError::CallDepthExceeded);
                     }
                     let mut initial = Vec::new();
-                    if let Some(slot) = function.recursive_slot {
-                        initial.push((slot, Value::Function(handle)));
-                    }
                     for (position, slot) in function.parameters.iter().enumerate() {
                         initial.push((*slot, args.get(position).copied().unwrap_or(Value::Nil)));
                     }
                     self.depth += 1;
-                    let result = self.run(&function.instructions, function.slots, &initial);
+                    let result = self.run(
+                        &function.instructions,
+                        function.slots,
+                        &initial,
+                        &closure.captures,
+                    );
                     self.depth -= 1;
                     let returned = result?;
                     stack.push(returned.into_iter().next().unwrap_or(Value::Nil));
                 }
                 Op::ReadLocal(slot) => {
-                    let value = slots
-                        .get(*slot)
+                    let cell = *slots.get(*slot).ok_or(FlowError::InvalidBytecode)?;
+                    let value = self
+                        .cells
+                        .get(cell)
                         .copied()
                         .flatten()
                         .ok_or(FlowError::InvalidBytecode)?;
@@ -788,7 +832,8 @@ impl Execution<'_> {
                     }
                     let values = stack.split_off(stack.len() - indices.len());
                     for (index, value) in indices.iter().zip(values) {
-                        *slots.get_mut(*index).ok_or(FlowError::InvalidBytecode)? = Some(value);
+                        let cell = *slots.get(*index).ok_or(FlowError::InvalidBytecode)?;
+                        *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
                     }
                 }
                 Op::NewTable(count) => {
@@ -917,7 +962,8 @@ impl Execution<'_> {
                         return Err(FlowError::InvalidBytecode);
                     }
                     let read = |slot: usize| -> Result<i64, FlowError> {
-                        match slots.get(slot).copied().flatten() {
+                        let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
+                        match self.cells.get(cell).copied().flatten() {
                             Some(Value::Integer(value)) => Ok(value),
                             Some(_) => Err(FlowError::TypeError),
                             None => Err(FlowError::InvalidBytecode),
@@ -947,18 +993,23 @@ impl Execution<'_> {
                     if *exit > instructions.len() {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    let current = match slots.get(*counter).copied().flatten() {
+                    let counter_cell = *slots.get(*counter).ok_or(FlowError::InvalidBytecode)?;
+                    let current = match self.cells.get(counter_cell).copied().flatten() {
                         Some(Value::Integer(value)) => value,
                         Some(_) => return Err(FlowError::TypeError),
                         None => return Err(FlowError::InvalidBytecode),
                     };
-                    let stride = match slots.get(*step).copied().flatten() {
+                    let step_cell = *slots.get(*step).ok_or(FlowError::InvalidBytecode)?;
+                    let stride = match self.cells.get(step_cell).copied().flatten() {
                         Some(Value::Integer(value)) => value,
                         Some(_) => return Err(FlowError::TypeError),
                         None => return Err(FlowError::InvalidBytecode),
                     };
                     if let Some(updated) = current.checked_add(stride) {
-                        *slots.get_mut(*counter).ok_or(FlowError::InvalidBytecode)? =
+                        *self
+                            .cells
+                            .get_mut(counter_cell)
+                            .ok_or(FlowError::InvalidBytecode)? =
                             Some(Value::Integer(updated));
                     } else {
                         pc = *exit;
@@ -995,8 +1046,9 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
         tables: Vec::new(),
         table_cells: 0,
         closures: Vec::new(),
+        cells: Vec::new(),
     };
-    execution.run(&program.instructions, program.slots, &[])
+    execution.run(&program.instructions, program.slots, &[], &[])
 }
 
 /// Preserve the single-value API for existing consumers. Zero or multiple
@@ -1207,10 +1259,17 @@ mod tests {
     }
 
     #[test]
-    fn bounded_calls_reject_captures_and_excessive_recursion() {
-        assert!(
-            compile_flow_chunk("local x=3; local function f() return x end; return f()").is_err()
-        );
+    fn captured_locals_share_mutable_cells_across_calls() {
+        assert_eq!(evaluate("local x=3; local function f() return x end; x=8; return f()"), 8);
+        assert_eq!(evaluate("local x=0; local function next() x=x+1; return x end; return next()+next()"), 3);
+        assert_eq!(evaluate("local function make(start) local n=start; local function next() n=n+1; return n end; return next end; local f=make(5); return f()+f()"), 13);
+        assert_eq!(evaluate("local function make() local n=0; local function next() n=n+1; return n end; return next end; local a=make(); local b=make(); return a()+b()+a()"), 4);
+        assert_eq!(evaluate("local x=1; local function outer() return function() return x end end; local inner=outer(); x=7; return inner()"), 7);
+        assert_eq!(evaluate("local function f(n) if n==0 then return 0 end; return f(n-1) end; local original=f; f=function(x) return 8 end; return original(3)"), 8);
+    }
+
+    #[test]
+    fn bounded_calls_reject_excessive_recursion() {
         let recursion =
             compile_flow_chunk("local function forever() return forever() end; return forever()")
                 .unwrap();

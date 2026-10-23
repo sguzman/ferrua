@@ -72,6 +72,12 @@ const FIXTURES: &[&str] = &[
     "local function fact(n) if n<2 then return 1 end; return n*fact(n-1) end; return fact(5)",
     "local function set(t) t[1]=9 end; local t={2}; set(t); return t[1]",
     "local function f(a) return a end; return f(5,6)",
+    "local x=3; local function f() return x end; x=8; return f()",
+    "local x=0; local function next() x=x+1; return x end; return next()+next()",
+    "local function make(start) local n=start; local function next() n=n+1; return n end; return next end; local f=make(5); return f()+f()",
+    "local function make() local n=0; local function next() n=n+1; return n end; return next end; local a=make(); local b=make(); return a()+b()+a()",
+    "local x=1; local function outer() return function() return x end end; local inner=outer(); x=7; return inner()",
+    "local function f(n) if n==0 then return 0 end; return f(n-1) end; local original=f; f=function(x) return 8 end; return original(3)",
 ];
 
 fn render(values: &[Value]) -> String {
