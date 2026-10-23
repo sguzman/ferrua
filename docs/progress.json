@@ -2451,7 +2451,7 @@
               "id": "T376",
               "emoji": "🧩",
               "name": "Binary bitwise metamethod callbacks with integer operand precedence",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Fall back from integer bitwise operators to bounded __band/__bor/__bxor/__shl/__shr Lua callbacks",
@@ -2465,7 +2465,8 @@
                 },
                 {
                   "text": "Pass Linux formatter, Clippy, Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40032378817: Linux quality, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all successful"
                 }
               ]
             }
