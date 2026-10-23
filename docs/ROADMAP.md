@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 92%` across 61 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 93%` across 64 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -286,6 +286,18 @@
   - [x] Map captured lexical slots directly to existing shared-cell references — src/owned_flow.rs: Execution::run slot mapping
   - [x] Reject duplicate and invalid capture indices while respecting the total cell budget — src/owned_flow.rs: Execution::run inherited slot validation and MAX_CELLS_TOTAL
   - [x] Verify 30,000 repeated captured calls and full Rust/upstream Lua CI — src/owned_flow.rs: repeated_captured_calls_do_not_allocate_duplicate_upvalue_cells; GitHub Actions 39997490573: four jobs successful
+- 🔀 **T337** Parallel mixed local and indexed table assignments — `██████████ 100%`
+  - [x] Resolve indexed table destinations and local slots before evaluating right-hand expressions — src/owned_flow.rs: Op::PrepareLocal, Op::PrepareIndexed, Op::AssignPrepared
+  - [x] Support mixed indexed/local LHS, indexed swaps, keyed LHS side effects, and final-call RHS adjustment — src/owned_flow.rs: mixed_parallel_lvalue_assignment_evaluates_addresses_before_rhs
+  - [x] Pass upstream Lua 5.4.6 and production fer differential CI, Rust 1.96 and action consumer — tests/owned_flow.rs; GitHub Actions 39997991621: all four jobs passed
+- 🔁 **T338** Bounded function-based generic for loops — `██████████ 100%`
+  - [x] Compile evaluated-once iterator/state/control triples and multiple read-only loop variables — src/owned_flow.rs: Statement::GenericFor; Op::GenericForCheck
+  - [x] Support iterator function factories, nil termination, break and step-budget exhaustion — src/owned_flow.rs: generic_iterator_calls_and_early_exit, generic_iterator_rejects_readonly_variable_and_noncallable
+  - [x] Pass four CI jobs including differential Lua 5.4.6 and production fer — tests/owned_flow.rs; GitHub Actions 39998627491: all four jobs passed
+- 🧵 **T339** Per-iteration closure capture identities in numeric and generic loops — `██████████ 100%`
+  - [x] Separate numeric loop-control slots from visible lexical variables and renew captured iteration cells — src/owned_flow.rs: Op::ForCheck; Execution::iteration_cell
+  - [x] Ensure generic-for loop closures capture distinct values across iterations — src/owned_flow.rs: Op::GenericForCheck; loop_closures_capture_distinct_iteration_cells
+  - [x] Verify ascending/descending and function-iterator captures against Lua 5.4.6 and production fer — tests/owned_flow.rs; GitHub Actions 39999404758: all four jobs passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -321,4 +333,7 @@
 - 🧩 Lua last-argument and positional table-tail result expansion — `██████████ 100%`
 - ⤵️ Implicit zero-result return on conditional function fallthrough — `██████████ 100%`
 - 🧠 Reuse captured closure cells without duplicate frame allocation — `██████████ 100%`
+- 🔀 Parallel indexed and local LHS execution — `██████████ 100%`
+- 🔁 Function-based generic for loop execution — `██████████ 100%`
+- 🧵 Fresh captured loop-variable cells — `██████████ 100%`
 

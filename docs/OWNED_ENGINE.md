@@ -167,3 +167,11 @@ The Rust-owned stack VM can now execute function-based Lua generic `for` loops o
 ### Per-iteration lexical cells for Lua loops
 
 The bounded numeric and generic `for` VM paths now give visible loop variables distinct mutable cells per successful iteration, while keeping the hidden iteration control separate. Closures created on different iterations therefore retain the correct iteration's value, including in descending numeric loops. Allocation remains bounded by the execution-local cell cap. This is tested against production `fer` and upstream Lua 5.4.6 and does not imply general garbage collection or closing-variable semantics.
+
+### Verified parallel assignments and generic-loop acceptance
+
+- [CI #39997991621](https://github.com/sguzman/ferrua/actions/runs/39997991621): mixed local/indexed destination evaluation and parallel assignment semantics passed all four jobs.
+- [CI #39998627491](https://github.com/sguzman/ferrua/actions/runs/39998627491): function-based generic `for` iteration, multiple variables, nil termination and `break` passed all four jobs.
+- [CI #39999404758](https://github.com/sguzman/ferrua/actions/runs/39999404758): fresh lexical cells per iteration, including closures from ascending, descending, and generic loops, passed all four jobs.
+
+These milestones cover tested bounded Lua subsets. A full independent Lua 5.4 runtime, closing iterators, general table/hash semantics, release artifacts, and native EndeavourOS acceptance remain unfinished.

@@ -1524,6 +1524,75 @@
                   "evidence": "src/owned_flow.rs: repeated_captured_calls_do_not_allocate_duplicate_upvalue_cells; GitHub Actions 39997490573: four jobs successful"
                 }
               ]
+            },
+            {
+              "id": "T337",
+              "emoji": "🔀",
+              "name": "Parallel mixed local and indexed table assignments",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Resolve indexed table destinations and local slots before evaluating right-hand expressions",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::PrepareLocal, Op::PrepareIndexed, Op::AssignPrepared"
+                },
+                {
+                  "text": "Support mixed indexed/local LHS, indexed swaps, keyed LHS side effects, and final-call RHS adjustment",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: mixed_parallel_lvalue_assignment_evaluates_addresses_before_rhs"
+                },
+                {
+                  "text": "Pass upstream Lua 5.4.6 and production fer differential CI, Rust 1.96 and action consumer",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39997991621: all four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T338",
+              "emoji": "🔁",
+              "name": "Bounded function-based generic for loops",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile evaluated-once iterator/state/control triples and multiple read-only loop variables",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Statement::GenericFor; Op::GenericForCheck"
+                },
+                {
+                  "text": "Support iterator function factories, nil termination, break and step-budget exhaustion",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: generic_iterator_calls_and_early_exit, generic_iterator_rejects_readonly_variable_and_noncallable"
+                },
+                {
+                  "text": "Pass four CI jobs including differential Lua 5.4.6 and production fer",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39998627491: all four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T339",
+              "emoji": "🧵",
+              "name": "Per-iteration closure capture identities in numeric and generic loops",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Separate numeric loop-control slots from visible lexical variables and renew captured iteration cells",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::ForCheck; Execution::iteration_cell"
+                },
+                {
+                  "text": "Ensure generic-for loop closures capture distinct values across iterations",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::GenericForCheck; loop_closures_capture_distinct_iteration_cells"
+                },
+                {
+                  "text": "Verify ascending/descending and function-iterator captures against Lua 5.4.6 and production fer",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39999404758: all four jobs passed"
+                }
+              ]
             }
           ]
         }
@@ -1755,6 +1824,27 @@
           "name": "Reuse captured closure cells without duplicate frame allocation",
           "task_ids": [
             "T336"
+          ]
+        },
+        {
+          "emoji": "🔀",
+          "name": "Parallel indexed and local LHS execution",
+          "task_ids": [
+            "T337"
+          ]
+        },
+        {
+          "emoji": "🔁",
+          "name": "Function-based generic for loop execution",
+          "task_ids": [
+            "T338"
+          ]
+        },
+        {
+          "emoji": "🧵",
+          "name": "Fresh captured loop-variable cells",
+          "task_ids": [
+            "T339"
           ]
         }
       ]
