@@ -12,6 +12,10 @@ const FIXTURES: &[&str] = &[
     "local x=2; if x<0 then return 1 elseif x<=2 then return 8 else return 5 end",
     "local x=0; repeat local next=x+1; x=next until next>=4; return x",
     "local x=3; repeat x=x-1 until x==0; return x",
+    "local s=0; for i=1,5 do s=s+i end; return s",
+    "local s=0; for i=6,2,-2 do s=s+i end; return s",
+    "local s=0; for i=1,10,3 do s=s+i end; return s",
+    "local s=0; local i=3; for i=i,5 do s=s+i end; return s+i",
 ];
 
 fn check(reference: &str) {
