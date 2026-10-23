@@ -261,3 +261,7 @@ Execution now tracks cells allocated by each call frame and recycles only those 
 ### Bounded integer-string arithmetic coercion
 
 Integer-formatted Lua byte strings now participate in integer arithmetic, integer division/modulo, and unary numeric negation. Bitwise operations intentionally retain their strict integer-operand requirement and do not coerce strings. The VM recognizes signed decimal strings and bounded hexadecimal integer strings, and dynamically concatenated numeric text can be converted as well. Malformed text fails with a type error. This deliberately excludes floating-point numeric strings and full Lua 5.4 numeric coercion corner cases; it does not change normal string comparison or table-key identity rules.
+
+### Verified integer-string arithmetic and strict bitwise semantics
+
+[CI #40009615631](https://github.com/sguzman/ferrua/actions/runs/40009615631): signed decimal and bounded hexadecimal integer strings now coerce for integer arithmetic, floor division and modulo, including concatenated numeric strings. Bitwise operators retain strict integer types; production `fer` and upstream Lua 5.4.6 differential fixtures passed. Full floating-point string conversion remains unsupported in this owned engine.

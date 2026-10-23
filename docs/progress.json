@@ -1892,6 +1892,29 @@
                   "evidence": "src/owned_flow.rs; GitHub Actions 40008713256: four jobs passed"
                 }
               ]
+            },
+            {
+              "id": "T353",
+              "emoji": "🔢",
+              "name": "Integer-formatted Lua string arithmetic coercion",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Coerce bounded decimal/hex integer byte strings for arithmetic while preserving normal string identity",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::integer_operand; Op::Binary arithmetic branch"
+                },
+                {
+                  "text": "Keep bitwise operations strict and reject nonnumeric strings",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: integer_formatted_lua_strings_coerce_for_arithmetic; Op::BitNot"
+                },
+                {
+                  "text": "Pass production fer, upstream Lua 5.4.6 and all four GitHub Actions jobs",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI 40009615631: four jobs passed"
+                }
+              ]
             }
           ]
         }
@@ -2235,6 +2258,13 @@
           "name": "Safe reuse of uncaptured Lua call-frame cells",
           "task_ids": [
             "T352"
+          ]
+        },
+        {
+          "emoji": "🔢",
+          "name": "Integer-formatted Lua string arithmetic coercion",
+          "task_ids": [
+            "T353"
           ]
         }
       ]

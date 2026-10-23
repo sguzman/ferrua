@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 94%` across 77 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 94%` across 78 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -350,6 +350,10 @@
   - [x] Track per-frame allocations and recycle only unpinned cells on success or error — src/owned_flow.rs: Execution::run, run_inner, allocate_cell, free_cells, frame_allocations
   - [x] Preserve closure-captured upvalue cells across frame reuse — src/owned_flow.rs: uncaptured_call_frames_reuse_cells_across_many_invocations
   - [x] Verify 70,000 function calls under memory budget and full four-job CI — src/owned_flow.rs; GitHub Actions 40008713256: four jobs passed
+- 🔢 **T353** Integer-formatted Lua string arithmetic coercion — `██████████ 100%`
+  - [x] Coerce bounded decimal/hex integer byte strings for arithmetic while preserving normal string identity — src/owned_flow.rs: Execution::integer_operand; Op::Binary arithmetic branch
+  - [x] Keep bitwise operations strict and reject nonnumeric strings — src/owned_flow.rs: integer_formatted_lua_strings_coerce_for_arithmetic; Op::BitNot
+  - [x] Pass production fer, upstream Lua 5.4.6 and all four GitHub Actions jobs — tests/owned_flow.rs; CI 40009615631: four jobs passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -401,4 +405,5 @@
 - 🧵 Distinct captured cells for repeated block-local declarations — `██████████ 100%`
 - 🧩 Method multireturn expansion in mixed table constructors — `██████████ 100%`
 - ♻️ Safe reuse of uncaptured Lua call-frame cells — `██████████ 100%`
+- 🔢 Integer-formatted Lua string arithmetic coercion — `██████████ 100%`
 
