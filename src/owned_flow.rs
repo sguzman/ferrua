@@ -393,8 +393,10 @@ impl<'a> Compiler<'a> {
                         TableField::Value(value) => {
                             positional += 1;
                             if position + 1 == fields.len()
-                                && self.multiple_expression(value, depth + 1)?
+                                && (matches!(value, Expr::Call { .. })
+                                    || (self.vararg && matches!(value, Expr::Vararg)))
                             {
+                                self.multiple_expression(value, depth + 1)?;
                                 self.push(Op::SetTableTail(positional))?;
                             } else {
                                 self.push(Op::Duplicate)?;
@@ -2014,8 +2016,8 @@ mod tests {
         assert_eq!(evaluate("local t={[3]=7,2,[2]=8}; return t[1]*100+t[2]*10+t[3]"), 287);
         assert_eq!(evaluate("local k=3; local t={[k]=9,1}; return t[1]*10+t[3]"), 19);
         assert_eq!(
-            evaluate("local function vals() return 4,5 end; local t={[3]=9,2,vals()}; return t[1]*1000+t[2]*100+t[3]*10+t[4]"),
-            2495
+            evaluate("local function vals() return 4,5 end; local t={[3]=9,2,vals()}; return t[1]*100+t[2]*10+t[3]"),
+            245
         );
         assert_eq!(
             evaluate("local function vals() return end; local t={[3]=9,2,vals()}; return t[1]*10+t[3]"),
