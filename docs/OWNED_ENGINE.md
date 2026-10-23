@@ -28,6 +28,8 @@ Each cited CI run passed all four existing jobs. The ledger in [`progress.json`]
 
 ## Graduation sequence
 
+The [engine graduation contract](ENGINE_GRADUATION.md) defines the mandatory syntax, compiler/VM, standard library, resource safety, differential, native QA and release gates. Existing bounded stack-VM smoke tests do not approve production cutover.
+
 1. Expand syntax and diagnostics to complete Lua grammar, including function definitions and expression forms.
 2. Implement complete lexical bindings, upvalues, closures, and function call mechanics.
 3. Extend runtime value types, Lua tables/metamethods, general control-flow bytecode, garbage collection, coroutines and standard libraries.
