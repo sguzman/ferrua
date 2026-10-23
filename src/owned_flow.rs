@@ -3479,6 +3479,40 @@ mod tests {
     }
 
     #[test]
+    fn first_class_table_metatables_support_raw_storage_and_protection() {
+        for (source, expected) in [
+            ("local t={}; return getmetatable(t)==nil and 1 or 0", 1),
+            ("return getmetatable(nil)==nil and 1 or 0", 1),
+            ("local m={}; local t={}; setmetatable(t,m); return rawequal(getmetatable(t),m) and 1 or 0", 1),
+            ("local m={}; local t={}; local same=setmetatable(t,m); return rawequal(t,same) and 1 or 0", 1),
+            ("local m={__metatable='shield'}; local t=setmetatable({},m); return getmetatable(t)=='shield' and 1 or 0", 1),
+            ("local m={__metatable=false}; local t=setmetatable({},m); return getmetatable(t)==false and 1 or 0", 1),
+            ("local t=setmetatable({},{}); setmetatable(t,nil); return getmetatable(t)==nil and 1 or 0", 1),
+            ("local m={__metatable='locked'}; local t=setmetatable({},m); rawset(m,'__metatable',nil); setmetatable(t,nil); return getmetatable(t)==nil and 1 or 0", 1),
+            ("local get=getmetatable; local set=setmetatable; local t={}; local m={}; set(t,m); return rawequal(get(t),m) and 1 or 0", 1),
+            ("local getmetatable=function() return 7 end; return getmetatable({})", 7),
+            ("return type(getmetatable)=='function' and type(setmetatable)=='function' and 1 or 0", 1),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        for source in [
+            "return getmetatable()",
+            "return setmetatable()",
+            "return setmetatable({})",
+            "return setmetatable(3,{})",
+            "return setmetatable({},3)",
+            "local t=setmetatable({}, {__metatable='locked'}); return setmetatable(t,nil)",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
     fn first_class_next_pairs_and_ipairs_follow_bounded_lua_raw_iteration() {
         assert_eq!(
             evaluate("local t={[1]=12}; local k,v=next(t); return k*100+v"),
