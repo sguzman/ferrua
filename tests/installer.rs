@@ -21,7 +21,8 @@ fn scratch() -> PathBuf {
     path
 }
 
-fn serve_fixture(archive: Vec<u8>, checksum: Vec<u8>) -> (String, thread::JoinHandle<()>) {
+fn serve_fixture(archive: Vec<u8>, checksum: Vec<u8>, version: &str) -> (String, thread::JoinHandle<()>) {
+    let expected_archive = format!("fer-{version}-linux-x86_64.tar.gz ");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
@@ -53,7 +54,7 @@ fn serve_fixture(archive: Vec<u8>, checksum: Vec<u8>) -> (String, thread::JoinHa
             let body = if line.contains(".sha256 ") {
                 &checksum
             } else {
-                assert!(line.contains("fer-v0.1.0-linux-x86_64.tar.gz "), "{line}");
+                assert!(line.contains(&expected_archive), "{line}");
                 &archive
             };
             let header = format!(
@@ -110,7 +111,7 @@ fn exercise(bad_checksum: bool) {
     let (archive, checksum) = create_fixture(&root, bad_checksum);
     let expected = String::from_utf8_lossy(&checksum);
     let expected = expected.chars().take(64).collect::<String>();
-    let (base, server) = serve_fixture(archive, checksum);
+    let (base, server) = serve_fixture(archive, checksum, "v0.1.0");
     let install = root.join("prefix");
     let run = Command::new("sh")
         .args([
@@ -158,7 +159,7 @@ fn rejects_mismatched_digest_without_installing() {
 fn rejects_consistent_release_with_wrong_independent_digest() {
     let root = scratch();
     let (archive, checksum) = create_fixture(&root, false);
-    let (base, server) = serve_fixture(archive, checksum);
+    let (base, server) = serve_fixture(archive, checksum, "v0.1.0");
     let prefix = root.join("pinned");
     let digest = "0".repeat(64);
     let response = Command::new("sh")
@@ -199,13 +200,22 @@ fn installed_real_archive_executes_outside_checkout() {
         Err(_) => return,
     };
     let root = scratch();
+    let archive_name = Path::new(&tarball)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("release tarball basename");
+    let version = archive_name
+        .strip_prefix("fer-")
+        .and_then(|rest| rest.strip_suffix("-linux-x86_64.tar.gz"))
+        .expect("versioned Linux release archive")
+        .to_owned();
     let archive = fs::read(&tarball).expect("CI built a real release archive");
     let checksum =
         fs::read(format!("{tarball}.sha256")).expect("CI generated the real archive checksum");
-    let (base, server) = serve_fixture(archive, checksum);
+    let (base, server) = serve_fixture(archive, checksum, &version);
     let prefix = root.join("installed");
     let install = Command::new("sh")
-        .args(["scripts/install.sh", "v0.1.0", prefix.to_str().unwrap()])
+        .args(["scripts/install.sh", &version, prefix.to_str().unwrap()])
         .env("FERRUA_RELEASE_BASE", base)
         .output()
         .unwrap();

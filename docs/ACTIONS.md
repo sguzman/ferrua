@@ -42,3 +42,5 @@ Consumers can additionally pin a known digest with `with: {version: v0.1.0, sha2
 CI now has per-job time limits and cancels superseded runs on the same branch/ref. This reduces wasted compute from indefinitely stalled test fixtures. [Run #39950728455](https://github.com/sguzman/ferrua/actions/runs/39950728455) independently exercised a packaged Linux binary outside its source checkout.
 
 **Transport policy:** Official GitHub Release installation accepts HTTPS for the initial request **and every redirect**; the installer refuses plaintext downgrade. The only HTTP exception is a strictly constrained `127.0.0.1:PORT` loopback source for offline tests, where redirects remain HTTP-only. CI tests that nonloopback HTTP overrides fail before a network request.
+
+The tag-triggered publication workflow additionally runs the five-dialect Lua smoke harness and installs/executes the **exact versioned archive** generated for the pushed tag, using a local HTTP fixture, before creating the GitHub Release. The acceptance test derives its version from the archive basename, so later versions do not inherit a hardcoded v0.1.0 assumption.

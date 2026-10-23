@@ -22,10 +22,18 @@ jobs:
           cargo fmt --all -- --check
           cargo clippy --locked --all-targets -- -D warnings
           cargo test --locked --all-targets
+      - name: Verify five Lua dialect smoke scenarios
+        run: |
+          cargo build --locked
+          target/debug/fer tools/check_compat.lua
       - name: Build versioned binary and archive
         run: |
           cargo build --locked --release
           target/release/fer tools/package_release.lua "$GITHUB_REF_NAME"
+      - name: Install and execute the exact tagged release artifact
+        env:
+          FERRUA_RELEASE_TARBALL: ${{ github.workspace }}/fer-${{ github.ref_name }}-linux-x86_64.tar.gz
+        run: cargo test --locked --test installer installed_real_archive -- --nocapture
       - name: Publish versioned GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -37,5 +45,6 @@ jobs:
             opts+=(--prerelease)
           fi
           gh release create "$GITHUB_REF_NAME" "$name" "$name.sha256" \
+            --verify-tag \
             --title "Ferrua $GITHUB_REF_NAME" \
             --generate-notes "${opts[@]}"
