@@ -679,6 +679,28 @@
                   "evidence": "GitHub Actions 40024909050: four primary jobs and status reporter successful; ferrua/ci success"
                 }
               ]
+            },
+            {
+              "id": "T216",
+              "emoji": "🔐",
+              "name": "Enforce tagged GitHub Release gates against native and owned-engine acceptance",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Reject malformed or Cargo-version-mismatched tags and keep pre-1.0 releases distinct from stable major tags",
+                  "passed": true,
+                  "evidence": "tools/roadmap.lua: validate_release_tag"
+                },
+                {
+                  "text": "Run graduation preflight before any GitHub Release build/publication; self-test that an incomplete stable release is rejected",
+                  "passed": true,
+                  "evidence": ".github/workflows/release.yml: Enforce version-matched release and native graduation gates; tools/roadmap.lua: --self-test-gates"
+                },
+                {
+                  "text": "Pass full CI including negative release-tag preflight tests and existing release-mode builds",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -759,6 +781,13 @@
           "name": "Aggregate acceptance through GitHub commit statuses",
           "task_ids": [
             "T215"
+          ]
+        },
+        {
+          "emoji": "🔐",
+          "name": "Automated prepublication stable-release acceptance guard",
+          "task_ids": [
+            "T216"
           ]
         }
       ]
