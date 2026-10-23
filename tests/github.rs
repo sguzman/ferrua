@@ -63,7 +63,6 @@ fn github_helper_rejects_absolute_injected_hosts_and_missing_sandbox() {
     );
 }
 
-
 #[test]
 fn github_rest_json_write_with_explicit_headers_and_no_redirects() {
     let server = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -73,9 +72,18 @@ fn github_rest_json_write_with_explicit_headers_and_no_redirects() {
         let mut bytes = [0u8; 8192];
         let len = stream.read(&mut bytes).unwrap();
         let request = String::from_utf8_lossy(&bytes[..len]).to_ascii_lowercase();
-        assert!(request.starts_with("post /repos/fictional/demo/issues "), "{request}");
-        assert!(request.contains("authorization: bearer fixture-ci-token"), "{request}");
-        assert!(request.contains("content-type: application/json"), "{request}");
+        assert!(
+            request.starts_with("post /repos/fictional/demo/issues "),
+            "{request}"
+        );
+        assert!(
+            request.contains("authorization: bearer fixture-ci-token"),
+            "{request}"
+        );
+        assert!(
+            request.contains("content-type: application/json"),
+            "{request}"
+        );
         assert!(request.contains("x-ferrua-test: yes"), "{request}");
         // No reliance on HTTP payload arriving in a single socket read.
         stream.write_all(b"HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"number\":1}").unwrap();
@@ -83,11 +91,21 @@ fn github_rest_json_write_with_explicit_headers_and_no_redirects() {
     let code = format!(
         "local data,err=github.request_json('POST','/repos/fictional/demo/issues',{{base_url='http://{address}',json_body={{title='Sample'}},headers={{['X-Ferrua-Test']='yes'}}}}); assert(data,err); assert(data.number==1); print('GitHub POST passed')"
     );
-    let out = Command::new(env!("CARGO_BIN_EXE_fer")).args(["-e", &code])
-        .env("GITHUB_TOKEN", "fixture-ci-token").output().unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["-e", &code])
+        .env("GITHUB_TOKEN", "fixture-ci-token")
+        .output()
+        .unwrap();
     handler.join().unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "GitHub POST passed");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).trim(),
+        "GitHub POST passed"
+    );
 }
 
 #[test]
@@ -101,8 +119,11 @@ fn authorization_is_not_forwarded_to_redirect_destinations() {
         let (mut stream, _) = source.accept().unwrap();
         let mut buf = [0u8; 2048];
         let len = stream.read(&mut buf).unwrap();
-        assert!(String::from_utf8_lossy(&buf[..len]).to_lowercase()
-            .contains("authorization: bearer fixture-ci-token"));
+        assert!(
+            String::from_utf8_lossy(&buf[..len])
+                .to_lowercase()
+                .contains("authorization: bearer fixture-ci-token")
+        );
         let reply = format!(
             "HTTP/1.1 302 Found\r\nLocation: http://{destination}/steal\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
         );
@@ -111,10 +132,23 @@ fn authorization_is_not_forwarded_to_redirect_destinations() {
     let code = format!(
         "local r,e=github.request('GET','/repos/fictional/demo',{{base_url='http://{original}'}}); assert(r,e); assert(r.status==302 and not r.ok); print('GitHub redirect blocked')"
     );
-    let out = Command::new(env!("CARGO_BIN_EXE_fer")).args(["-e", &code])
-        .env("GITHUB_TOKEN", "fixture-ci-token").output().unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["-e", &code])
+        .env("GITHUB_TOKEN", "fixture-ci-token")
+        .output()
+        .unwrap();
     handler.join().unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "GitHub redirect blocked");
-    assert!(receiver.accept().is_err(), "unexpected redirected connection");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).trim(),
+        "GitHub redirect blocked"
+    );
+    assert!(
+        receiver.accept().is_err(),
+        "unexpected redirected connection"
+    );
 }
