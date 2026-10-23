@@ -39,7 +39,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [four primary jobs green plus aggregate status; release-mode fer validated inside pinned Arch Linux userspace, with Lua 5.4 differential checks](https://github.com/sguzman/ferrua/actions/runs/40039930789). This container check is not native EndeavourOS/Hyprland QA. Native distro acceptance, a published stable release, and a complete Ferrua-owned Lua VM remain pending.
+**Latest verified CI:** [four primary jobs green plus aggregate status; native-release guard negative tests and pinned Arch userspace release-binary smoke](https://github.com/sguzman/ferrua/actions/runs/40040438112). Arch container verification is not native EndeavourOS/Hyprland QA. Native distro acceptance, a published stable release and a complete Ferrua-owned Lua VM remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
@@ -53,7 +53,7 @@ Ferrua includes a [reusable composite setup action](docs/ACTIONS.md). It install
 
 MIT. The independently maintained `luna-core` runtime is MIT/Apache-2.0 licensed; attribution and its implementation boundary are documented in [architecture](docs/ARCHITECTURE.md).
 
-For a future tagged release, the Python-free packaging entrypoint is `target/release/fer tools/package_release.lua v0.1.0` after a locked release build. It creates a versioned Linux tarball with `fer`, README and LICENSE, plus a verified SHA-256 checksum. The separate release workflow publishes assets only when a matching version tag is explicitly pushed; merely committing to `main` does not inaugurate a stable release.
+For a future tagged release, the Python-free packaging entrypoint is `target/release/fer tools/package_release.lua v0.1.0` after a locked release build. It creates a versioned Linux tarball with `fer`, README and LICENSE, plus a verified SHA-256 checksum. The separate release workflow publishes assets only when a matching version tag is explicitly pushed; merely committing to `main` does not inaugurate a stable release. Before any tagged publication, `fer tools/roadmap.lua --release-gate TAG` checks that the tag matches `Cargo.toml`; 0.x versions remain prereleases, and 1.x is blocked until owned-engine graduation, native EndeavourOS QA, and versioned downstream distribution acceptance.
 
 The [most recent tested preview archive](https://github.com/sguzman/ferrua/actions/runs/39946114053) is named `fer-v0.1.0-linux-x86_64.tar.gz` and includes its `.sha256` checksum. CI verifies the archive after construction. This is an Actions artifact, **not** a published GitHub Release.
 
