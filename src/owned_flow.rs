@@ -3785,20 +3785,62 @@ mod tests {
     fn comparison_metamethods_preserve_identity_truthiness_and_ordering() {
         for (source, expected) in [
             ("return (3<5 and 'a'<'b' and 5>=5) and 1 or 0", 1),
-            ("local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a<b and 1 or 0", 1),
-            ("local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return b>a and 1 or 0", 1),
-            ("local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a<=b and 1 or 0", 1),
-            ("local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a>=b and 1 or 0", 0),
-            ("local mt={__le=function(a,b) return a.x<=b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a<=b and 1 or 0", 1),
-            ("local mt={__le=function(a,b) return a.x<=b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return b>=a and 1 or 0", 1),
-            ("local mt={__le=function() return nil end, __lt=function() return true end}; local a=setmetatable({},mt); return a<=a and 1 or 0", 0),
-            ("local mt={__lt=function() return 0 end}; local a=setmetatable({},mt); return a<a and 1 or 0", 1),
-            ("local mt={__eq=function(a,b) return true end}; local a=setmetatable({},mt); local b=setmetatable({},mt); return a==b and 1 or 0", 1),
-            ("local mt={__eq=function() return false end}; local a=setmetatable({},mt); local b=setmetatable({},mt); return a~=b and 1 or 0", 1),
-            ("local mt={__eq=function() return false end}; local a=setmetatable({},mt); return a==a and 1 or 0", 1),
-            ("local a=setmetatable({}, {__eq=function() return true end}); return a=={} and 1 or 0", 1),
-            ("local a={}; local b=setmetatable({}, {__eq=function() return true end}); return a==b and 1 or 0", 1),
-            ("local a=setmetatable({}, {__eq=function() return true end}); return a==3 and 1 or 0", 0),
+            (
+                "local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a<b and 1 or 0",
+                1,
+            ),
+            (
+                "local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return b>a and 1 or 0",
+                1,
+            ),
+            (
+                "local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a<=b and 1 or 0",
+                1,
+            ),
+            (
+                "local mt={__lt=function(a,b) return a.x<b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a>=b and 1 or 0",
+                0,
+            ),
+            (
+                "local mt={__le=function(a,b) return a.x<=b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return a<=b and 1 or 0",
+                1,
+            ),
+            (
+                "local mt={__le=function(a,b) return a.x<=b.x end}; local a=setmetatable({x=2},mt); local b=setmetatable({x=4},mt); return b>=a and 1 or 0",
+                1,
+            ),
+            (
+                "local mt={__le=function() return nil end, __lt=function() return true end}; local a=setmetatable({},mt); return a<=a and 1 or 0",
+                0,
+            ),
+            (
+                "local mt={__lt=function() return 0 end}; local a=setmetatable({},mt); return a<a and 1 or 0",
+                1,
+            ),
+            (
+                "local mt={__eq=function(a,b) return true end}; local a=setmetatable({},mt); local b=setmetatable({},mt); return a==b and 1 or 0",
+                1,
+            ),
+            (
+                "local mt={__eq=function() return false end}; local a=setmetatable({},mt); local b=setmetatable({},mt); return a~=b and 1 or 0",
+                1,
+            ),
+            (
+                "local mt={__eq=function() return false end}; local a=setmetatable({},mt); return a==a and 1 or 0",
+                1,
+            ),
+            (
+                "local a=setmetatable({}, {__eq=function() return true end}); return a=={} and 1 or 0",
+                1,
+            ),
+            (
+                "local a={}; local b=setmetatable({}, {__eq=function() return true end}); return a==b and 1 or 0",
+                1,
+            ),
+            (
+                "local a=setmetatable({}, {__eq=function() return true end}); return a==3 and 1 or 0",
+                0,
+            ),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
@@ -3814,7 +3856,7 @@ mod tests {
             );
         }
         let program = compile_flow_chunk(
-            "local a={}; setmetatable(a,{__lt=function(x,y) return x<y end}); return a<a"
+            "local a={}; setmetatable(a,{__lt=function(x,y) return x<y end}); return a<a",
         )
         .unwrap();
         assert_eq!(
