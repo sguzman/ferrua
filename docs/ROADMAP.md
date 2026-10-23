@@ -143,11 +143,11 @@
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 95%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 96%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 95%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 96%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -426,10 +426,10 @@
   - [x] Dispatch missing table reads/writes through bounded table-valued metamethod chains — src/owned_flow.rs: Execution::lookup_with_metatable, Execution::assign_with_metatable
   - [x] Preserve rawget/rawset bypass, existing keys, protected metatables, cycle budgets and Lua parity fixtures — src/owned_flow.rs: table_backed_index_and_newindex_fallbacks_remain_bounded; tests/owned_flow.rs
   - [x] Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and upstream Lua 5.4 differential CI — GitHub Actions 40026650737: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and reporter successful
-- 🎭 **T371** Function-valued __index and __newindex Lua metamethod callbacks — `███████░░░ 67%`
+- 🎭 **T371** Function-valued __index and __newindex Lua metamethod callbacks — `██████████ 100%`
   - [x] Reuse existing bounded closure frames for Lua metamethod callback invocation — src/owned_flow.rs: Execution::call_owned_function, Execution::lookup_with_metatable, Execution::assign_with_metatable
   - [x] Cover lexical captures, raw separation, recursion limits, methods, multi-returns and Lua 5.4 differential fixtures — src/owned_flow.rs: callable_index_and_newindex_share_lexical_closure_frames; tests/owned_flow.rs
-  - [ ] Pass Linux rustfmt, clippy, Rust tests, Rust 1.96, composite consumer and Lua 5.4 differential CI
+  - [x] Pass Linux rustfmt, clippy, Rust tests, Rust 1.96, composite consumer and Lua 5.4 differential CI — GitHub Actions 40028891108: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter all succeeded
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -499,5 +499,5 @@
 - 🕳️ Nil table holes without absent-entry heap allocation — `██████████ 100%`
 - 🪞 First-class Lua metatable storage and protection — `██████████ 100%`
 - 🔗 Bounded table-backed __index/__newindex fallback chains — `██████████ 100%`
-- 🎭 Callable __index/__newindex metamethods using owned Lua closures — `███████░░░ 67%`
+- 🎭 Callable __index/__newindex metamethods using owned Lua closures — `██████████ 100%`
 
