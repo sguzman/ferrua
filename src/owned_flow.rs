@@ -891,7 +891,12 @@ impl Execution<'_> {
     /// the prior cell rather than observing later iteration values.
     fn iteration_cell(&mut self, slots: &mut [usize], slot: usize) -> Result<usize, FlowError> {
         let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
-        if self.cells.get(cell).ok_or(FlowError::InvalidBytecode)?.is_none() {
+        if self
+            .cells
+            .get(cell)
+            .ok_or(FlowError::InvalidBytecode)?
+            .is_none()
+        {
             return Ok(cell);
         }
         if self.cells.len() >= MAX_CELLS_TOTAL {
@@ -1560,15 +1565,21 @@ mod tests {
     #[test]
     fn loop_closures_capture_distinct_iteration_cells() {
         assert_eq!(
-            evaluate("local t={}; for i=1,3 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()"),
+            evaluate(
+                "local t={}; for i=1,3 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()"
+            ),
             123
         );
         assert_eq!(
-            evaluate("local function next(s,i) i=i+1; if i<=s then return i end end; local t={}; for i in next,3,0 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()"),
+            evaluate(
+                "local function next(s,i) i=i+1; if i<=s then return i end end; local t={}; for i in next,3,0 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()"
+            ),
             123
         );
         assert_eq!(
-            evaluate("local t={}; for i=3,1,-1 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()"),
+            evaluate(
+                "local t={}; for i=3,1,-1 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()"
+            ),
             123
         );
     }
