@@ -938,7 +938,10 @@ mod tests {
 
     #[test]
     fn parenthesized_call_retains_single_result_boundary() {
-        assert!(matches!(parse_expression("f()").unwrap(), Expr::Call { .. }));
+        assert!(matches!(
+            parse_expression("f()").unwrap(),
+            Expr::Call { .. }
+        ));
         assert!(matches!(
             parse_expression("(f())").unwrap(),
             Expr::Grouped(inner) if matches!(*inner, Expr::Call { .. })
