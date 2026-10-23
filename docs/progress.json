@@ -1018,6 +1018,52 @@
                   "evidence": "tests/owned_vm.rs; GitHub Actions 39961500042 all four jobs passed"
                 }
               ]
+            },
+            {
+              "id": "T315",
+              "emoji": "🧪",
+              "name": "64-bit hexadecimal and generated integer parity coverage",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Accept full-width unsigned hexadecimal literals as wrapped Lua 64-bit integer values",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: hexadecimal u64-to-i64 conversion and edge-case tests"
+                },
+                {
+                  "text": "Compare deterministic signed integer arithmetic and bitwise operator matrix directly against upstream Lua",
+                  "passed": true,
+                  "evidence": "tests/owned_vm.rs: seeded integer operator matrix, division-by-zero reference cases"
+                },
+                {
+                  "text": "Verify Linux, MSRV, standalone distribution and upstream Lua reference jobs",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39962459351: all four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T316",
+              "emoji": "🔠",
+              "name": "Lua short-string escape validation and reference parity",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Validate decimal, hex, Unicode, and whitespace/newline short-string escapes with diagnostics",
+                  "passed": true,
+                  "evidence": "src/lex.rs: quoted scanner, newline normalization and invalid escape tests"
+                },
+                {
+                  "text": "Compare valid and invalid string escape syntax against upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_syntax.rs: 19 cases; CI Lua reference job 39963411673"
+                },
+                {
+                  "text": "Preserve first-party Lua corpus acceptance across all existing jobs",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39963411673: four jobs green, including 27-file lexer corpus"
+                }
+              ]
             }
           ]
         }
@@ -1095,6 +1141,20 @@
           "name": "Static integer chunk bytecode",
           "task_ids": [
             "T314"
+          ]
+        },
+        {
+          "emoji": "🧪",
+          "name": "Generated integer differential coverage",
+          "task_ids": [
+            "T315"
+          ]
+        },
+        {
+          "emoji": "🔠",
+          "name": "Short-string lexical escape parity",
+          "task_ids": [
+            "T316"
           ]
         }
       ]

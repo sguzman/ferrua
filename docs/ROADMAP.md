@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 88%` across 39 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 89%` across 41 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `████████░░ 79%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `████████░░ 81%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `████████░░ 79%`
+### 🔣 P3 — Ferrua-owned language engine — `████████░░ 81%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -198,6 +198,14 @@
   - [x] Compile a bounded straight-line Lua chunk subset to the existing owned integer IR — src/owned_vm.rs: compile_integer_chunk and scoped compile_statements
   - [x] Preserve parallel RHS evaluation, block shadowing, and rejection of unsupported statements — src/owned_vm.rs unit tests for nested do/end, local shadowing, parallel reassignment, invalid call/control-flow forms
   - [x] Verify static chunk results against fer and upstream Lua 5.4.6 — tests/owned_vm.rs; GitHub Actions 39961500042 all four jobs passed
+- 🧪 **T315** 64-bit hexadecimal and generated integer parity coverage — `██████████ 100%`
+  - [x] Accept full-width unsigned hexadecimal literals as wrapped Lua 64-bit integer values — src/owned_vm.rs: hexadecimal u64-to-i64 conversion and edge-case tests
+  - [x] Compare deterministic signed integer arithmetic and bitwise operator matrix directly against upstream Lua — tests/owned_vm.rs: seeded integer operator matrix, division-by-zero reference cases
+  - [x] Verify Linux, MSRV, standalone distribution and upstream Lua reference jobs — GitHub Actions 39962459351: all four jobs passed
+- 🔠 **T316** Lua short-string escape validation and reference parity — `██████████ 100%`
+  - [x] Validate decimal, hex, Unicode, and whitespace/newline short-string escapes with diagnostics — src/lex.rs: quoted scanner, newline normalization and invalid escape tests
+  - [x] Compare valid and invalid string escape syntax against upstream Lua 5.4.6 — tests/owned_syntax.rs: 19 cases; CI Lua reference job 39963411673
+  - [x] Preserve first-party Lua corpus acceptance across all existing jobs — GitHub Actions 39963411673: four jobs green, including 27-file lexer corpus
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -211,4 +219,6 @@
 - 🔢 Experimental integer register VM proof of concept — `██████████ 100%`
 - 🔣 Lua integer arithmetic and bitwise coverage — `██████████ 100%`
 - 🧱 Static integer chunk bytecode — `██████████ 100%`
+- 🧪 Generated integer differential coverage — `██████████ 100%`
+- 🔠 Short-string lexical escape parity — `██████████ 100%`
 
