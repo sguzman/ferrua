@@ -684,7 +684,7 @@
               "id": "T216",
               "emoji": "🔐",
               "name": "Enforce tagged GitHub Release gates against native and owned-engine acceptance",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Reject malformed or Cargo-version-mismatched tags and keep pre-1.0 releases distinct from stable major tags",
@@ -698,7 +698,8 @@
                 },
                 {
                   "text": "Pass full CI including negative release-tag preflight tests and existing release-mode builds",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40040438112: Linux graduation --self-test-gates and roadmap check, Rust tests, MSRV, Lua 5.4 differential, action consumer all green"
                 }
               ]
             }
@@ -2713,6 +2714,29 @@
                   "evidence": "GitHub Actions 40039040755: Linux formatter/lint/tests, Lua 5.4 syntax differential, Rust 1.96, composite consumer and aggregate status successful"
                 }
               ]
+            },
+            {
+              "id": "T385",
+              "emoji": "↪️",
+              "name": "Bounded same-block Lua goto lowering with local-lifetime safety",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile forward and backward same-block goto/label statements to real validated bytecode jumps",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: FlowCompiler::statements lowers Statement::Goto to Op::Jump and patches same-block label targets"
+                },
+                {
+                  "text": "Reject missing labels, cross-block targets and jumps that cross active local lifetimes; bound backward loops",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: same_block_goto_executes_but_cross_scope_jumps_are_rejected; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass full Linux CI and upstream Lua 5.4 differential semantics",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40039264425: Linux quality, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all succeeded"
+                }
+              ]
             }
           ]
         }
@@ -3280,6 +3304,13 @@
           "name": "Lua label/goto parsing (execution remains gated)",
           "task_ids": [
             "T384"
+          ]
+        },
+        {
+          "emoji": "↪️",
+          "name": "Safe bounded same-block Lua goto execution",
+          "task_ids": [
+            "T385"
           ]
         }
       ]
