@@ -60,3 +60,7 @@ The stack-based control-flow prototype reuses Ferrua's existing Rust-owned integ
 ### Lexically nested Lua break statements
 
 The experimental chunk parser now recognizes `break` only inside a loop and only as the final statement of its immediate block, including nested conditional branches. The bounded control-flow VM emits deferred jumps to exit the innermost `while`, `repeat/until`, or numeric `for` loop. Breaking out of a `repeat` skips its `until` condition; exiting a numeric loop skips its normal iteration step. Generic `for` execution remains unsupported, even though its syntax parses. The new examples are checked against production `fer` and upstream Lua 5.4.6.
+
+### Assignment arity, excess values and missing nils
+
+The owned control-flow bytecode now handles ordinary fixed-count Lua local declarations and local assignments with fewer or more RHS expressions than targets. Missing values become `nil`; surplus values are evaluated and discarded, and all RHS values are evaluated before rebinding local slots. This includes zero-initializer `local x` declarations and repeated target slots. Function calls, varargs, and Lua multi-result expansion are still unsupported, so this is not complete Lua assignment semantics. The parity suite checks the supported fixed-result cases directly against production `fer` and upstream Lua 5.4.6.

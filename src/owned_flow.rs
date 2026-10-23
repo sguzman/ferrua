@@ -225,6 +225,22 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    // Lua evaluates every explicit RHS expression, then truncates surplus
+    // values or supplies nil for missing targets. Calls and multireturns
+    // remain unsupported in this intentionally bounded prototype.
+    fn values(&mut self, expressions: &[Expr<'a>], targets: usize) -> Result<(), FlowError> {
+        for expression in expressions {
+            self.expression(expression, 0)?;
+        }
+        for _ in targets..expressions.len() {
+            self.push(Op::Discard)?;
+        }
+        for _ in expressions.len()..targets {
+            self.push(Op::Constant(Value::Nil))?;
+        }
+        Ok(())
+    }
+
     fn scope(&mut self, body: &[Statement<'a>]) -> Result<(), FlowError> {
         if self.depth >= 64 {
             return Err(FlowError::TooLarge);
@@ -260,15 +276,9 @@ impl<'a> Compiler<'a> {
                     names,
                     initializers,
                 } => {
-                    if names.len() != initializers.len() {
-                        return Err(FlowError::Unsupported(
-                            "every local requires exactly one initializer".into(),
-                        ));
-                    }
-                    // All RHS expressions see the previous scope bindings.
-                    for expression in initializers {
-                        self.expression(expression, 0)?;
-                    }
+                    // Initializers see only previous bindings, including
+                    // when extra RHS values are subsequently discarded.
+                    self.values(initializers, names.len())?;
                     let mut targets = Vec::with_capacity(names.len());
                     for name in names {
                         if self.slots >= MAX_SLOTS {
@@ -285,11 +295,6 @@ impl<'a> Compiler<'a> {
                     self.push(Op::AssignLocals(targets))?;
                 }
                 Statement::Assign { targets, values } => {
-                    if targets.len() != values.len() {
-                        return Err(FlowError::Unsupported(
-                            "assignment RHS count mismatch".into(),
-                        ));
-                    }
                     // Resolve targets and evaluate RHS before mutating slots.
                     let slots = targets
                         .iter()
@@ -308,9 +313,7 @@ impl<'a> Compiler<'a> {
                             Ok(slot)
                         })
                         .collect::<Result<Vec<_>, _>>()?;
-                    for value in values {
-                        self.expression(value, 0)?;
-                    }
+                    self.values(values, slots.len())?;
                     self.push(Op::AssignLocals(slots))?;
                 }
                 Statement::Return(values) if values.len() == 1 => {
@@ -825,6 +828,32 @@ mod tests {
         );
     }
     #[test]
+    fn lua_assignment_arity_and_nil_padding() {
+        assert_eq!(evaluate("local x; if x==nil then return 6 else return 0 end"), 6);
+        assert_eq!(evaluate("local x=1,2; return x"), 1);
+        assert_eq!(
+            evaluate("local x,y=3; if y==nil then return x else return 0 end"),
+            3
+        );
+        assert_eq!(
+            evaluate("local x,y=3,4; x,y=7; if y==nil then return x else return 0 end"),
+            7
+        );
+        assert_eq!(evaluate("local x,y=3,4; x=7,8; return x"), 7);
+        assert_eq!(evaluate("local x,y=1,2; x,y=3,4,5; return x+y"), 7);
+        for source in [
+            "local x=1,1//0; return x",
+            "local x=2; x=3,1//0; return x",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_chunk(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::DivisionByZero)
+            );
+        }
+    }
+
+    #[test]
     fn break_targets_innermost_loop_and_skips_repeat_condition() {
         assert_eq!(
             evaluate("local x=0; while true do x=x+1; if x==3 then break end end; return x"),
@@ -868,7 +897,6 @@ mod tests {
             "return 1.2",
             "for k in pairs(t) do return 1 end; return 0",
             "return true",
-            "local x=1; local y; return x",
         ] {
             match compile_flow_chunk(source) {
                 Err(_) => {}

@@ -37,6 +37,12 @@ const FIXTURES: &[&str] = &[
     "local x=0; repeat x=x+1; if x==2 then break end until x==100; return x",
     "local s=0; for i=1,10 do if i==4 then break end; s=s+i end; return s",
     "local x=0; while x<3 do local j=0; while true do j=j+1; break end; x=x+j end; return x",
+    "local x; if x==nil then return 6 else return 0 end",
+    "local x=1,2; return x",
+    "local x,y=3; if y==nil then return x else return 0 end",
+    "local x,y=3,4; x,y=7; if y==nil then return x else return 0 end",
+    "local x,y=3,4; x=7,8; return x",
+    "local x,y=1,2; x,y=3,4,5; return x+y",
 ];
 
 fn check(reference: &str) {
