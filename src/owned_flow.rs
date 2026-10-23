@@ -839,7 +839,9 @@ mod tests {
             6
         );
         assert_eq!(
-            evaluate("local x=0; while x<3 do local j=0; while true do j=j+1; break end; x=x+j end; return x"),
+            evaluate(
+                "local x=0; while x<3 do local j=0; while true do j=j+1; break end; x=x+j end; return x"
+            ),
             3
         );
         assert_eq!(evaluate("while true do break end; return 6"), 6);
