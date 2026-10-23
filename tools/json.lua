@@ -2,6 +2,7 @@
 -- Supports RFC 8259 objects, arrays, numbers, strings and booleans.
 -- Null is represented by json.null to retain array/object slots.
 local json = {null = {}}
+local MAX_DEPTH = 128
 local array_mt, object_mt = {}, {}
 function json.array(value) return setmetatable(value or {}, array_mt) end
 function json.object(value) return setmetatable(value or {}, object_mt) end
@@ -83,7 +84,7 @@ function json.decode(source)
         end
         fail("unterminated string")
     end
-    local function array_value()
+    local function array_value(depth)
         position = position + 1
         local result = json.array()
         whitespace()
@@ -92,7 +93,7 @@ function json.decode(source)
             return result
         end
         while true do
-            result[#result + 1] = parse_value()
+            result[#result + 1] = parse_value(depth + 1)
             whitespace()
             local char = source:sub(position, position)
             if char == "]" then
@@ -103,7 +104,7 @@ function json.decode(source)
             position = position + 1
         end
     end
-    local function object_value()
+    local function object_value(depth)
         position = position + 1
         local result = json.object()
         whitespace()
@@ -117,7 +118,7 @@ function json.decode(source)
             whitespace()
             if source:sub(position, position) ~= ":" then fail("expected colon") end
             position = position + 1
-            result[key] = parse_value()
+            result[key] = parse_value(depth + 1)
             whitespace()
             local char = source:sub(position, position)
             if char == "}" then
@@ -168,12 +169,13 @@ function json.decode(source)
         end
         return result
     end
-    function parse_value()
+    function parse_value(depth)
+        if depth > MAX_DEPTH then fail("nesting limit exceeded") end
         whitespace()
         local char = source:sub(position, position)
         if char == '"' then return string_value() end
-        if char == '[' then return array_value() end
-        if char == '{' then return object_value() end
+        if char == '[' then return array_value(depth) end
+        if char == '{' then return object_value(depth) end
         for _, literal in ipairs({"true", "false", "null"}) do
             if source:sub(position, position + #literal - 1) == literal then
                 position = position + #literal
@@ -187,7 +189,7 @@ function json.decode(source)
         end
         fail("unexpected token")
     end
-    local result = parse_value()
+    local result = parse_value(0)
     whitespace()
     if position <= length then fail("trailing data") end
     return result
@@ -205,7 +207,8 @@ end
 
 function json.encode(value)
     local visited = {}
-    local function encode(item)
+    local function encode(item, depth)
+        assert(depth <= MAX_DEPTH, "JSON nesting limit exceeded")
         if item == json.null or item == nil then return "null" end
         local kind = type(item)
         if kind == "string" then return quote(item) end
@@ -230,7 +233,7 @@ function json.encode(value)
         end
         local elements = {}
         if (array and count == max_index) or (count == 0 and getmetatable(item) == array_mt) then
-            for index = 1, max_index do elements[#elements + 1] = encode(item[index]) end
+            for index = 1, max_index do elements[#elements + 1] = encode(item[index], depth + 1) end
             visited[item] = nil
             return "[" .. table.concat(elements, ",") .. "]"
         end
@@ -239,12 +242,12 @@ function json.encode(value)
         end
         table.sort(keys)
         for _, key in ipairs(keys) do
-            elements[#elements + 1] = quote(key) .. ":" .. encode(item[key])
+            elements[#elements + 1] = quote(key) .. ":" .. encode(item[key], depth + 1)
         end
         visited[item] = nil
         return "{" .. table.concat(elements, ",") .. "}"
     end
-    return encode(value)
+    return encode(value, 0)
 end
 
 return json

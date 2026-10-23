@@ -48,4 +48,13 @@ assert(not pcall(json.encode, 0/0))
 assert(not pcall(json.encode, { [1]="one", [3]="three" }))
 assert(json.encode(json.array({1,2,3})) == "[1,2,3]")
 assert(json.encode(json.object({answer=42})) == '{"answer":42}')
+invalid(string.rep("[", 130) .. "0" .. string.rep("]", 130))
+local nested, root = {}, {}
+root = nested
+for _ = 1, 130 do
+    local child = {}
+    nested[1] = child
+    nested = child
+end
+assert(not pcall(json.encode, root))
 print("JSON conformance smoke passed")
