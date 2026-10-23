@@ -2636,7 +2636,7 @@
               "id": "T384",
               "emoji": "🏷️",
               "name": "First-party Lua label and goto grammar with explicit compilation boundary",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Parse label/goto statements, require identifiers and reject duplicate same-block labels",
@@ -2650,7 +2650,8 @@
                 },
                 {
                   "text": "Pass formatting, strict Clippy, Rust unit tests, Lua 5.4 differential, MSRV and composite CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40039040755: Linux formatter/lint/tests, Lua 5.4 syntax differential, Rust 1.96, composite consumer and aggregate status successful"
                 }
               ]
             }
