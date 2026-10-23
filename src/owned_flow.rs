@@ -54,6 +54,8 @@ pub enum Builtin {
     Pairs,
     Ipairs,
     IpairsIterator,
+    GetMetatable,
+    SetMetatable,
 }
 
 impl Value {
@@ -475,6 +477,12 @@ impl<'a> Compiler<'a> {
                         }
                         Err(_) if *text == "ipairs" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::Ipairs)))?;
+                        }
+                        Err(_) if *text == "getmetatable" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::GetMetatable)))?;
+                        }
+                        Err(_) if *text == "setmetatable" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::SetMetatable)))?;
                         }
                         Err(error) => return Err(error),
                     }
@@ -1387,6 +1395,8 @@ enum PendingTarget {
 struct TableStorage {
     array: Vec<Option<Value>>,
     hashed: HashMap<Value, Value>,
+    /// Optional first-party table metatable; metamethod dispatch remains future work.
+    metatable: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -1558,6 +1568,65 @@ impl Execution<'_> {
         } else {
             vec![Value::Integer(index), value]
         })
+    }
+
+    /// Lua's __metatable field protects a metatable from ordinary base-library
+    /// reads or replacements. Read it raw; metamethod dispatch is not available.
+    fn protected_metatable(&self, handle: usize) -> Result<Option<Value>, FlowError> {
+        let metatable = self
+            .tables
+            .get(handle)
+            .ok_or(FlowError::InvalidBytecode)?
+            .metatable;
+        let Some(metatable) = metatable else {
+            return Ok(None);
+        };
+        let Some(key) = self.strings.iter().position(|bytes| bytes == b"__metatable") else {
+            return Ok(None);
+        };
+        let value = self.read_table(metatable, TableKey::Hashed(Value::String(key)))?;
+        Ok((value != Value::Nil).then_some(value))
+    }
+
+    fn getmetatable_builtin(&self, args: &[Value]) -> Result<Value, FlowError> {
+        let value = *args.first().ok_or(FlowError::TypeError)?;
+        let Value::Table(handle) = value else {
+            // This bounded VM does not install host-defined primitive metatables.
+            return Ok(Value::Nil);
+        };
+        let Some(metatable) = self
+            .tables
+            .get(handle)
+            .ok_or(FlowError::InvalidBytecode)?
+            .metatable
+        else {
+            return Ok(Value::Nil);
+        };
+        Ok(self
+            .protected_metatable(handle)?
+            .unwrap_or(Value::Table(metatable)))
+    }
+
+    fn setmetatable_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
+            return Err(FlowError::TypeError);
+        };
+        let metatable = match *args.get(1).ok_or(FlowError::TypeError)? {
+            Value::Nil => None,
+            Value::Table(handle) => {
+                self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                Some(handle)
+            }
+            _ => return Err(FlowError::TypeError),
+        };
+        if self.protected_metatable(handle)?.is_some() {
+            return Err(FlowError::TypeError);
+        }
+        self.tables
+            .get_mut(handle)
+            .ok_or(FlowError::InvalidBytecode)?
+            .metatable = metatable;
+        Ok(Value::Table(handle))
     }
 
     fn tonumber_builtin(&self, args: &[Value]) -> Result<Value, FlowError> {
@@ -2000,6 +2069,8 @@ impl Execution<'_> {
                                 Value::Table(handle)
                             }
                             Builtin::RawLen => self.raw_len(value)?,
+                            Builtin::GetMetatable => self.getmetatable_builtin(&args)?,
+                            Builtin::SetMetatable => self.setmetatable_builtin(&args)?,
                             Builtin::Select
                             | Builtin::Assert
                             | Builtin::Next
@@ -2254,6 +2325,7 @@ impl Execution<'_> {
                             .map(|value| (value != Value::Nil).then_some(value))
                             .collect(),
                         hashed: HashMap::new(),
+                        metatable: None,
                     });
                     self.table_cells += arity;
                     stack.push(Value::Table(handle));
