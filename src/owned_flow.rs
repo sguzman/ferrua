@@ -3403,13 +3403,19 @@ mod tests {
             5
         );
         assert_eq!(evaluate("return type(pairs)=='function' and 1 or 0"), 1);
-        let program = compile_flow_chunk(
-            "local t={}; for i=1,50 do t[i]=i end; local k,v=next(t); return v",
-        )
-        .unwrap();
+        let entries = (1..=50)
+            .map(|number| number.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let program = compile_flow_chunk(&format!("local t={{{entries}}}; return next(t)"))
+            .unwrap();
         assert_eq!(
-            execute_flow_value(&program, 40),
+            execute_flow_values(&program, 80),
             Err(FlowError::StepBudgetExceeded)
+        );
+        assert_eq!(
+            execute_flow_values(&program, 200),
+            Ok(vec![Value::Integer(1), Value::Integer(1)])
         );
         for source in [
             "return next()",
