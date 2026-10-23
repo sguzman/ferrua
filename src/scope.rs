@@ -85,7 +85,9 @@ impl<'src> Resolver<'src> {
                     self.read_expression(arg, statement);
                 }
             }
-            Expr::MethodCall { object, arguments, .. } => {
+            Expr::MethodCall {
+                object, arguments, ..
+            } => {
                 self.read_expression(object, statement);
                 for arg in arguments {
                     self.read_expression(arg, statement);
@@ -460,11 +462,18 @@ mod tests {
     #[test]
     fn method_name_is_not_resolved_as_a_variable() {
         let scope = analyze("local obj=1; obj:run(obj); return obj").unwrap();
-        let names: Vec<_> = scope.references.iter().map(|reference| reference.name).collect();
+        let names: Vec<_> = scope
+            .references
+            .iter()
+            .map(|reference| reference.name)
+            .collect();
         assert_eq!(names, vec!["obj", "obj", "obj"]);
-        assert!(scope.references.iter().all(|reference| {
-            reference.resolution == Resolution::Local(0)
-        }));
+        assert!(
+            scope
+                .references
+                .iter()
+                .all(|reference| { reference.resolution == Resolution::Local(0) })
+        );
     }
 
     #[test]

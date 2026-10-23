@@ -618,7 +618,11 @@ mod tests {
                 let text = arguments.iter().map(show).collect::<Vec<_>>().join(" ");
                 format!("(call {} [{}])", show(callee), text)
             }
-            Expr::MethodCall { object, method, arguments } => {
+            Expr::MethodCall {
+                object,
+                method,
+                arguments,
+            } => {
                 let text = arguments.iter().map(show).collect::<Vec<_>>().join(" ");
                 format!("(method {} {method} [{}])", show(object), text)
             }
@@ -896,7 +900,10 @@ mod tests {
             "(field (method (field obj child) run [1 2]) value)"
         );
         let statements = parse_chunk("obj:run(1,2); return 0").unwrap();
-        assert!(matches!(&statements[0], Statement::Call(Expr::MethodCall { .. })));
+        assert!(matches!(
+            &statements[0],
+            Statement::Call(Expr::MethodCall { .. })
+        ));
     }
 
     #[test]

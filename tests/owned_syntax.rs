@@ -134,7 +134,11 @@ fn lua_short_string_escape_syntax_matches_upstream_when_requested() {
 
 #[test]
 fn owned_method_call_syntax_matches_lua_54_when_requested() {
-    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() != Some("1") {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
         return;
     }
     for (source, valid) in [
@@ -149,7 +153,8 @@ fn owned_method_call_syntax_matches_lua_54_when_requested() {
     ] {
         let owned = ferrua::expr::parse_expression(source).is_ok();
         assert_eq!(owned, valid, "{source}");
-        let compile_only = format!("local f,err=load('return {source}'); if not f then error(err) end");
+        let compile_only =
+            format!("local f,err=load('return {source}'); if not f then error(err) end");
         let reference = std::process::Command::new("lua5.4")
             .args(["-e", &compile_only])
             .output()
