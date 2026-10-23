@@ -67,6 +67,8 @@ pub enum Op {
     Constant(Value),
     ReadLocal(usize),
     AssignLocals(Vec<usize>),
+    DeclareLocals(Vec<usize>),
+    RenewLocal(usize),
     PrepareLocal(usize),
     PrepareIndexed,
     AssignPrepared(usize),
@@ -702,6 +704,11 @@ impl<'a> Compiler<'a> {
                             self.slot(name)?
                         };
                         let function = self.compile_function(parameters, *vararg, body)?;
+                        if *local {
+                            // A locally recursive function must capture this
+                            // iteration's cell, not an earlier loop visit.
+                            self.push(Op::RenewLocal(slot))?;
+                        }
                         self.push(Op::NewFunction(function))?;
                         self.push(Op::AssignLocals(vec![slot]))?;
                     }
@@ -730,7 +737,7 @@ impl<'a> Compiler<'a> {
                             .expect("root scope")
                             .insert(*name, slot);
                     }
-                    self.push(Op::AssignLocals(targets))?;
+                    self.push(Op::DeclareLocals(targets))?;
                 }
                 Statement::Assign { targets, values } => {
                     // Lua evaluates all LHS references first, then all RHS
@@ -1498,6 +1505,19 @@ impl Execution<'_> {
                         *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
                     }
                 }
+                Op::DeclareLocals(indices) => {
+                    if stack.len() < indices.len() {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let values = stack.split_off(stack.len() - indices.len());
+                    for (index, value) in indices.iter().zip(values) {
+                        let cell = self.iteration_cell(&mut slots, *index)?;
+                        *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
+                    }
+                }
+                Op::RenewLocal(slot) => {
+                    self.iteration_cell(&mut slots, *slot)?;
+                }
                 Op::PrepareLocal(slot) => {
                     let cell = *slots.get(*slot).ok_or(FlowError::InvalidBytecode)?;
                     if prepared.len() >= MAX_SLOTS {
@@ -2042,6 +2062,30 @@ mod tests {
             compile_flow_chunk("local total=0; for i=1,70000 do total=total+1 end; return total")
                 .unwrap();
         assert_eq!(execute_flow_chunk(&program, 1_000_000), Ok(70000));
+    }
+
+    #[test]
+    fn repeated_block_local_declarations_keep_distinct_captured_cells() {
+        assert_eq!(
+            evaluate("local t={}; for i=1,3 do local x=i; t[i]=function() return x end end; return t[1]()*100+t[2]()*10+t[3]()"),
+            123
+        );
+        assert_eq!(
+            evaluate("local t={}; local i=0; while i<3 do i=i+1; local x=i; t[i]=function() return x end end; return t[1]()*100+t[2]()*10+t[3]()"),
+            123
+        );
+        assert_eq!(
+            evaluate("local t={}; local i=0; repeat i=i+1; local x=i; t[i]=function() return x end until i==3; return t[1]()*100+t[2]()*10+t[3]()"),
+            123
+        );
+        assert_eq!(
+            evaluate("local t={}; for i=1,3 do local function f(n) if n==0 then return i end; return f(n-1) end; t[i]=f end; return t[1](1)*100+t[2](1)*10+t[3](1)"),
+            123
+        );
+        assert_eq!(
+            evaluate("local x=2; do local x=x+1; return x end"),
+            3
+        );
     }
 
     #[test]

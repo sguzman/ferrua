@@ -232,3 +232,7 @@ The bounded owned compiler now handles `function table.field(...)` and `function
 ### Bounded general Lua table key identities
 
 The owned VM now stores integer keys outside the positive-array fast path (zero, negative and large), Boolean keys, table-identity keys, and function-identity keys in an execution-local bounded hash map. String keys share that map and compare by their interned byte value; positive in-range integer keys continue through the sequence array. Assigning nil deletes a hash entry; nil itself remains invalid for assignment keys. Table and function keys compare by identity rather than structural contents. No Lua float-key canonicalization, weak tables, garbage collection or metatables are implemented, and hash entries count toward the shared table storage budget.
+
+### Fresh closure cells for repeated local declarations
+
+The independent VM now distinguishes local variable **declarations** from assignments, allocating a fresh execution cell when a repeated declaration would otherwise reuse a cell retained by an older closure. This covers locals declared inside numeric/generic-for bodies, while and repeat loops, and locally recursive functions re-entered across iterations. A dedicated `RenewLocal` instruction runs before constructing each locally recursive closure, preserving that iteration's self-reference. Uncaptured local cells are still reused under the capture-aware memory policy; the shared cell budget remains enforced.
