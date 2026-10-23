@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 93%` across 70 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 94%` across 75 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 93%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 94%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `█████████░ 93%`
+### 🔣 P3 — Ferrua-owned language engine — `█████████░ 94%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -322,6 +322,26 @@
   - [x] Parse valid Lua Unicode scalar escapes and encode into byte-preserving UTF-8 strings — src/owned_flow.rs: decode_lua_string Unicode scalar escape branch
   - [x] Reject invalid Unicode scalars; verify multibyte length and equality — src/owned_flow.rs: unicode_scalar_escapes_encode_utf8_bytes
   - [x] Pass production fer and upstream Lua 5.4.6 differential CI and Rust 1.96 — tests/owned_flow.rs; GitHub Actions 40004973760: four jobs passed
+- 🗃️ **T346** String-keyed Lua tables and named-field syntax — `██████████ 100%`
+  - [x] Compile named constructors, computed string keys, and dotted reads/parallel assignments — src/owned_flow.rs: TableKey::Hashed; Expr::Field; Statement::Assign; TableField::Named
+  - [x] Support nil deletion and bounded string-key storage alongside integer arrays — src/owned_flow.rs: TableStorage::hashed, read_table, write_table; string_keys_and_named_table_fields_share_one_lookup_path
+  - [x] Verify differential parity with production fer and upstream Lua 5.4.6 — tests/owned_flow.rs; CI 40005930603: all four jobs passed
+- 📞 **T347** Receiver-aware Lua method call evaluation — `██████████ 100%`
+  - [x] Evaluate method receiver once and pass it as implicit first argument — src/owned_flow.rs: Compiler::method_call; Op::Swap
+  - [x] Preserve spread argument and multi-return behavior for colon calls — src/owned_flow.rs: method_calls_pass_receiver_once_and_adjust_tail_results
+  - [x] Pass all four CI jobs and production/upstream Lua differential fixtures — tests/owned_flow.rs; CI 40006536721: four jobs passed
+- 📝 **T348** Dotted and colon Lua function declarations — `██████████ 100%`
+  - [x] Compile local-table dotted function declarations into table assignments — src/owned_flow.rs: Statement::Function (fields/method)
+  - [x] Implicitly bind self and preserve nested field paths, lexical closure captures, and returns — src/owned_flow.rs: dotted_and_colon_function_declarations_store_closures_on_tables
+  - [x] Pass production fer and upstream Lua 5.4.6 differential CI — tests/owned_flow.rs; CI 40006536721: four jobs passed
+- 🗝️ **T349** General identity-based Lua hash table keys — `██████████ 100%`
+  - [x] Support zero, negative and large integer keys plus Boolean, table, function, and string keys — src/owned_flow.rs: Value::Hash; TableKey::Hashed; Execution::table_key
+  - [x] Retain bounded array storage, nil removal and hash-key identity semantics — src/owned_flow.rs: TableStorage::hashed; arbitrary_hashable_lua_table_keys_share_bounded_storage
+  - [x] Accept upstream Lua parity after refreshing obsolete positive-only key assertions — tests/owned_flow.rs; CI 40007436327: four jobs passed
+- 🧵 **T350** Distinct captured cells for repeated block-local declarations — `██████████ 100%`
+  - [x] Separate lexical declarations from assignments and renew captured cells on repeated execution — src/owned_flow.rs: Op::DeclareLocals; Execution::iteration_cell
+  - [x] Refresh locally recursive function bindings before closure capture — src/owned_flow.rs: Op::RenewLocal; repeated_block_local_declarations_keep_distinct_captured_cells
+  - [x] Verify while/repeat/for retained closures and recursive locals against Lua 5.4.6 — tests/owned_flow.rs; CI 40007436327: four jobs passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -366,4 +386,9 @@
 - 🔤 Interned immutable Lua byte-string literals and byte length — `██████████ 100%`
 - 🔗 Bounded Lua string concatenation and lexical ordering — `██████████ 100%`
 - 🌐 Unicode scalar Lua string escape encoding — `██████████ 100%`
+- 🗃️ String-keyed Lua tables and named-field syntax — `██████████ 100%`
+- 📞 Receiver-aware Lua method call evaluation — `██████████ 100%`
+- 📝 Dotted and colon Lua function declarations — `██████████ 100%`
+- 🗝️ General identity-based Lua hash table keys — `██████████ 100%`
+- 🧵 Distinct captured cells for repeated block-local declarations — `██████████ 100%`
 

@@ -1731,6 +1731,121 @@
                   "evidence": "tests/owned_flow.rs; GitHub Actions 40004973760: four jobs passed"
                 }
               ]
+            },
+            {
+              "id": "T346",
+              "emoji": "🗃️",
+              "name": "String-keyed Lua tables and named-field syntax",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile named constructors, computed string keys, and dotted reads/parallel assignments",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: TableKey::Hashed; Expr::Field; Statement::Assign; TableField::Named"
+                },
+                {
+                  "text": "Support nil deletion and bounded string-key storage alongside integer arrays",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: TableStorage::hashed, read_table, write_table; string_keys_and_named_table_fields_share_one_lookup_path"
+                },
+                {
+                  "text": "Verify differential parity with production fer and upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI 40005930603: all four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T347",
+              "emoji": "📞",
+              "name": "Receiver-aware Lua method call evaluation",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Evaluate method receiver once and pass it as implicit first argument",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Compiler::method_call; Op::Swap"
+                },
+                {
+                  "text": "Preserve spread argument and multi-return behavior for colon calls",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: method_calls_pass_receiver_once_and_adjust_tail_results"
+                },
+                {
+                  "text": "Pass all four CI jobs and production/upstream Lua differential fixtures",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI 40006536721: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T348",
+              "emoji": "📝",
+              "name": "Dotted and colon Lua function declarations",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile local-table dotted function declarations into table assignments",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Statement::Function (fields/method)"
+                },
+                {
+                  "text": "Implicitly bind self and preserve nested field paths, lexical closure captures, and returns",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: dotted_and_colon_function_declarations_store_closures_on_tables"
+                },
+                {
+                  "text": "Pass production fer and upstream Lua 5.4.6 differential CI",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI 40006536721: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T349",
+              "emoji": "🗝️",
+              "name": "General identity-based Lua hash table keys",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Support zero, negative and large integer keys plus Boolean, table, function, and string keys",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Value::Hash; TableKey::Hashed; Execution::table_key"
+                },
+                {
+                  "text": "Retain bounded array storage, nil removal and hash-key identity semantics",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: TableStorage::hashed; arbitrary_hashable_lua_table_keys_share_bounded_storage"
+                },
+                {
+                  "text": "Accept upstream Lua parity after refreshing obsolete positive-only key assertions",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI 40007436327: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T350",
+              "emoji": "🧵",
+              "name": "Distinct captured cells for repeated block-local declarations",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Separate lexical declarations from assignments and renew captured cells on repeated execution",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::DeclareLocals; Execution::iteration_cell"
+                },
+                {
+                  "text": "Refresh locally recursive function bindings before closure capture",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::RenewLocal; repeated_block_local_declarations_keep_distinct_captured_cells"
+                },
+                {
+                  "text": "Verify while/repeat/for retained closures and recursive locals against Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI 40007436327: four jobs passed"
+                }
+              ]
             }
           ]
         }
@@ -2025,6 +2140,41 @@
           "name": "Unicode scalar Lua string escape encoding",
           "task_ids": [
             "T345"
+          ]
+        },
+        {
+          "emoji": "🗃️",
+          "name": "String-keyed Lua tables and named-field syntax",
+          "task_ids": [
+            "T346"
+          ]
+        },
+        {
+          "emoji": "📞",
+          "name": "Receiver-aware Lua method call evaluation",
+          "task_ids": [
+            "T347"
+          ]
+        },
+        {
+          "emoji": "📝",
+          "name": "Dotted and colon Lua function declarations",
+          "task_ids": [
+            "T348"
+          ]
+        },
+        {
+          "emoji": "🗝️",
+          "name": "General identity-based Lua hash table keys",
+          "task_ids": [
+            "T349"
+          ]
+        },
+        {
+          "emoji": "🧵",
+          "name": "Distinct captured cells for repeated block-local declarations",
+          "task_ids": [
+            "T350"
           ]
         }
       ]

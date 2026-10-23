@@ -236,3 +236,11 @@ The owned VM now stores integer keys outside the positive-array fast path (zero,
 ### Fresh closure cells for repeated local declarations
 
 The independent VM now distinguishes local variable **declarations** from assignments, allocating a fresh execution cell when a repeated declaration would otherwise reuse a cell retained by an older closure. This covers locals declared inside numeric/generic-for bodies, while and repeat loops, and locally recursive functions re-entered across iterations. A dedicated `RenewLocal` instruction runs before constructing each locally recursive closure, preserving that iteration's self-reference. Uncaptured local cells are still reused under the capture-aware memory policy; the shared cell budget remains enforced.
+
+### Verified named tables, methods, hash keys and repeated-local captures
+
+- [CI #40005930603](https://github.com/sguzman/ferrua/actions/runs/40005930603): named and computed string table keys, dotted access and assignment passed all four jobs.
+- [CI #40006536721](https://github.com/sguzman/ferrua/actions/runs/40006536721): receiver-aware method calls, colon/dot method declarations and method multireturns passed all four jobs.
+- [CI #40007436327](https://github.com/sguzman/ferrua/actions/runs/40007436327): generalized Lua table hash keys and fresh captured cells for repeated block-local declarations passed all four jobs.
+
+These are accepted bounded-subset steps. Full Lua globals, metatables, arbitrary float semantics, collectable heaps, standard libraries and native engine graduation remain pending.
