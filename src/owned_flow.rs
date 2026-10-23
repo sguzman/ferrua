@@ -418,17 +418,15 @@ impl<'a> Compiler<'a> {
                         }
                         let slot = self.slots;
                         self.slots += 1;
-                        self.frames.last_mut().expect("root scope").insert(*name, slot);
+                        self.frames
+                            .last_mut()
+                            .expect("root scope")
+                            .insert(*name, slot);
                         slot
                     } else {
                         self.slot(name)?
                     };
-                    let function = self.compile_function(
-                        parameters,
-                        *vararg,
-                        body,
-                        Some(name),
-                    )?;
+                    let function = self.compile_function(parameters, *vararg, body, Some(name))?;
                     self.push(Op::NewFunction(function))?;
                     self.push(Op::AssignLocals(vec![slot]))?;
                 }
@@ -729,249 +727,259 @@ impl Execution<'_> {
                 return Err(FlowError::StepBudgetExceeded);
             }
             self.steps += 1;
-        let next = pc + 1;
-        match &instructions[pc] {
-            Op::Constant(value) => stack.push(*value),
-            Op::NewFunction(index) => {
-                if *index >= self.program.functions.len() || self.closures.len() >= MAX_CLOSURES {
-                    return Err(FlowError::InvalidBytecode);
+            let next = pc + 1;
+            match &instructions[pc] {
+                Op::Constant(value) => stack.push(*value),
+                Op::NewFunction(index) => {
+                    if *index >= self.program.functions.len() || self.closures.len() >= MAX_CLOSURES
+                    {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let handle = self.closures.len();
+                    self.closures.push(*index);
+                    stack.push(Value::Function(handle));
                 }
-                let handle = self.closures.len();
-                self.closures.push(*index);
-                stack.push(Value::Function(handle));
-            }
-            Op::Call(argc) => {
-                if stack.len() < argc.saturating_add(1) {
-                    return Err(FlowError::InvalidBytecode);
+                Op::Call(argc) => {
+                    if stack.len() < argc.saturating_add(1) {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let args = stack.split_off(stack.len() - argc);
+                    let Value::Function(handle) = stack.pop().ok_or(FlowError::InvalidBytecode)?
+                    else {
+                        return Err(FlowError::TypeError);
+                    };
+                    let index = *self
+                        .closures
+                        .get(handle)
+                        .ok_or(FlowError::InvalidBytecode)?;
+                    let function = self
+                        .program
+                        .functions
+                        .get(index)
+                        .ok_or(FlowError::InvalidBytecode)?
+                        .clone();
+                    if self.depth >= MAX_CALL_DEPTH {
+                        return Err(FlowError::CallDepthExceeded);
+                    }
+                    let mut initial = Vec::new();
+                    if let Some(slot) = function.recursive_slot {
+                        initial.push((slot, Value::Function(handle)));
+                    }
+                    for (position, slot) in function.parameters.iter().enumerate() {
+                        initial.push((*slot, args.get(position).copied().unwrap_or(Value::Nil)));
+                    }
+                    self.depth += 1;
+                    let result = self.run(&function.instructions, function.slots, &initial);
+                    self.depth -= 1;
+                    let returned = result?;
+                    stack.push(returned.into_iter().next().unwrap_or(Value::Nil));
                 }
-                let args = stack.split_off(stack.len() - argc);
-                let Value::Function(handle) = stack.pop().ok_or(FlowError::InvalidBytecode)? else {
-                    return Err(FlowError::TypeError);
-                };
-                let index = *self.closures.get(handle).ok_or(FlowError::InvalidBytecode)?;
-                let function = self
-                    .program
-                    .functions
-                    .get(index)
-                    .ok_or(FlowError::InvalidBytecode)?
-                    .clone();
-                if self.depth >= MAX_CALL_DEPTH {
-                    return Err(FlowError::CallDepthExceeded);
-                }
-                let mut initial = Vec::new();
-                if let Some(slot) = function.recursive_slot {
-                    initial.push((slot, Value::Function(handle)));
-                }
-                for (position, slot) in function.parameters.iter().enumerate() {
-                    initial.push((*slot, args.get(position).copied().unwrap_or(Value::Nil)));
-                }
-                self.depth += 1;
-                let result = self.run(&function.instructions, function.slots, &initial);
-                self.depth -= 1;
-                let returned = result?;
-                stack.push(returned.into_iter().next().unwrap_or(Value::Nil));
-            }
-            Op::ReadLocal(slot) => {
-                let value = slots
-                    .get(*slot)
-                    .copied()
-                    .flatten()
-                    .ok_or(FlowError::InvalidBytecode)?;
-                stack.push(value);
-            }
-            Op::AssignLocals(indices) => {
-                if stack.len() < indices.len() {
-                    return Err(FlowError::InvalidBytecode);
-                }
-                let values = stack.split_off(stack.len() - indices.len());
-                for (index, value) in indices.iter().zip(values) {
-                    *slots.get_mut(*index).ok_or(FlowError::InvalidBytecode)? = Some(value);
-                }
-            }
-            Op::NewTable(count) => {
-                if *count > MAX_TABLE_FIELDS
-                    || self.tables.len() >= MAX_TABLES
-                    || self.table_cells.saturating_add(*count) > MAX_TABLE_CELLS_TOTAL
-                    || stack.len() < *count
-                {
-                    return Err(FlowError::TooLarge);
-                }
-                let values = stack.split_off(stack.len() - *count);
-                let handle = self.tables.len();
-                self.tables.push(values.into_iter().map(Some).collect());
-                self.table_cells += *count;
-                stack.push(Value::Table(handle));
-            }
-            Op::GetTable => {
-                let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                let (Value::Table(handle), Value::Integer(index)) = (table, key) else {
-                    return Err(FlowError::TypeError);
-                };
-                let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
-                if field == 0 || field > MAX_TABLE_FIELDS {
-                    return Err(FlowError::TypeError);
-                }
-                let values = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
-                stack.push(
-                    values
-                        .get(field - 1)
+                Op::ReadLocal(slot) => {
+                    let value = slots
+                        .get(*slot)
                         .copied()
                         .flatten()
-                        .unwrap_or(Value::Nil),
-                );
-            }
-            Op::SetTable => {
-                let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                let (Value::Table(handle), Value::Integer(index)) = (table, key) else {
-                    return Err(FlowError::TypeError);
-                };
-                let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
-                if field == 0 || field > MAX_TABLE_FIELDS {
-                    return Err(FlowError::TypeError);
+                        .ok_or(FlowError::InvalidBytecode)?;
+                    stack.push(value);
                 }
-                let values = self.tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
-                if field > values.len() {
-                    let growth = field - values.len();
-                    if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+                Op::AssignLocals(indices) => {
+                    if stack.len() < indices.len() {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let values = stack.split_off(stack.len() - indices.len());
+                    for (index, value) in indices.iter().zip(values) {
+                        *slots.get_mut(*index).ok_or(FlowError::InvalidBytecode)? = Some(value);
+                    }
+                }
+                Op::NewTable(count) => {
+                    if *count > MAX_TABLE_FIELDS
+                        || self.tables.len() >= MAX_TABLES
+                        || self.table_cells.saturating_add(*count) > MAX_TABLE_CELLS_TOTAL
+                        || stack.len() < *count
+                    {
                         return Err(FlowError::TooLarge);
                     }
-                    self.table_cells += growth;
-                    values.resize(field, None);
+                    let values = stack.split_off(stack.len() - *count);
+                    let handle = self.tables.len();
+                    self.tables.push(values.into_iter().map(Some).collect());
+                    self.table_cells += *count;
+                    stack.push(Value::Table(handle));
                 }
-                values[field - 1] = Some(value);
-            }
-            Op::Negate => {
-                let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)? else {
-                    return Err(FlowError::TypeError);
-                };
-                stack.push(Value::Integer(value.wrapping_neg()));
-            }
-            Op::Not => {
-                let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                stack.push(Value::Boolean(!value.truthy()));
-            }
-            Op::BitNot => {
-                let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)? else {
-                    return Err(FlowError::TypeError);
-                };
-                stack.push(Value::Integer(!value));
-            }
-            Op::Binary(op) => {
-                let rhs = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                let lhs = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                stack.push(evaluate_binary(*op, lhs, rhs)?);
-            }
-            Op::JumpIfFalse(target) => {
-                let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                if !value.truthy() {
+                Op::GetTable => {
+                    let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let (Value::Table(handle), Value::Integer(index)) = (table, key) else {
+                        return Err(FlowError::TypeError);
+                    };
+                    let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
+                    if field == 0 || field > MAX_TABLE_FIELDS {
+                        return Err(FlowError::TypeError);
+                    }
+                    let values = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                    stack.push(
+                        values
+                            .get(field - 1)
+                            .copied()
+                            .flatten()
+                            .unwrap_or(Value::Nil),
+                    );
+                }
+                Op::SetTable => {
+                    let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let (Value::Table(handle), Value::Integer(index)) = (table, key) else {
+                        return Err(FlowError::TypeError);
+                    };
+                    let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
+                    if field == 0 || field > MAX_TABLE_FIELDS {
+                        return Err(FlowError::TypeError);
+                    }
+                    let values = self
+                        .tables
+                        .get_mut(handle)
+                        .ok_or(FlowError::InvalidBytecode)?;
+                    if field > values.len() {
+                        let growth = field - values.len();
+                        if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+                            return Err(FlowError::TooLarge);
+                        }
+                        self.table_cells += growth;
+                        values.resize(field, None);
+                    }
+                    values[field - 1] = Some(value);
+                }
+                Op::Negate => {
+                    let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)?
+                    else {
+                        return Err(FlowError::TypeError);
+                    };
+                    stack.push(Value::Integer(value.wrapping_neg()));
+                }
+                Op::Not => {
+                    let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    stack.push(Value::Boolean(!value.truthy()));
+                }
+                Op::BitNot => {
+                    let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)?
+                    else {
+                        return Err(FlowError::TypeError);
+                    };
+                    stack.push(Value::Integer(!value));
+                }
+                Op::Binary(op) => {
+                    let rhs = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let lhs = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    stack.push(evaluate_binary(*op, lhs, rhs)?);
+                }
+                Op::JumpIfFalse(target) => {
+                    let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    if !value.truthy() {
+                        if *target > instructions.len() {
+                            return Err(FlowError::InvalidBytecode);
+                        }
+                        pc = *target;
+                        continue;
+                    }
+                }
+                Op::JumpIfFalseKeep(target) | Op::JumpIfTrueKeep(target) => {
+                    let value = *stack.last().ok_or(FlowError::InvalidBytecode)?;
+                    let should_jump = match instructions[pc] {
+                        Op::JumpIfFalseKeep(_) => !value.truthy(),
+                        Op::JumpIfTrueKeep(_) => value.truthy(),
+                        _ => unreachable!("guarded opcode"),
+                    };
+                    if should_jump {
+                        if *target > instructions.len() {
+                            return Err(FlowError::InvalidBytecode);
+                        }
+                        pc = *target;
+                        continue;
+                    }
+                }
+                Op::Discard => {
+                    stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                }
+                Op::Jump(target) => {
                     if *target > instructions.len() {
                         return Err(FlowError::InvalidBytecode);
                     }
                     pc = *target;
                     continue;
                 }
-            }
-            Op::JumpIfFalseKeep(target) | Op::JumpIfTrueKeep(target) => {
-                let value = *stack.last().ok_or(FlowError::InvalidBytecode)?;
-                let should_jump = match instructions[pc] {
-                    Op::JumpIfFalseKeep(_) => !value.truthy(),
-                    Op::JumpIfTrueKeep(_) => value.truthy(),
-                    _ => unreachable!("guarded opcode"),
-                };
-                if should_jump {
-                    if *target > instructions.len() {
+                Op::ForCheck {
+                    counter,
+                    limit,
+                    step,
+                    exit,
+                } => {
+                    if *exit > instructions.len() {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    pc = *target;
-                    continue;
-                }
-            }
-            Op::Discard => {
-                stack.pop().ok_or(FlowError::InvalidBytecode)?;
-            }
-            Op::Jump(target) => {
-                if *target > instructions.len() {
-                    return Err(FlowError::InvalidBytecode);
-                }
-                pc = *target;
-                continue;
-            }
-            Op::ForCheck {
-                counter,
-                limit,
-                step,
-                exit,
-            } => {
-                if *exit > instructions.len() {
-                    return Err(FlowError::InvalidBytecode);
-                }
-                let read = |slot: usize| -> Result<i64, FlowError> {
-                    match slots.get(slot).copied().flatten() {
-                        Some(Value::Integer(value)) => Ok(value),
-                        Some(_) => Err(FlowError::TypeError),
-                        None => Err(FlowError::InvalidBytecode),
+                    let read = |slot: usize| -> Result<i64, FlowError> {
+                        match slots.get(slot).copied().flatten() {
+                            Some(Value::Integer(value)) => Ok(value),
+                            Some(_) => Err(FlowError::TypeError),
+                            None => Err(FlowError::InvalidBytecode),
+                        }
+                    };
+                    let current = read(*counter)?;
+                    let bound = read(*limit)?;
+                    let stride = read(*step)?;
+                    if stride == 0 {
+                        return Err(FlowError::InvalidForStep);
                     }
-                };
-                let current = read(*counter)?;
-                let bound = read(*limit)?;
-                let stride = read(*step)?;
-                if stride == 0 {
-                    return Err(FlowError::InvalidForStep);
+                    let enters = if stride > 0 {
+                        current <= bound
+                    } else {
+                        current >= bound
+                    };
+                    if !enters {
+                        pc = *exit;
+                        continue;
+                    }
                 }
-                let enters = if stride > 0 {
-                    current <= bound
-                } else {
-                    current >= bound
-                };
-                if !enters {
-                    pc = *exit;
-                    continue;
+                Op::ForStep {
+                    counter,
+                    step,
+                    exit,
+                } => {
+                    if *exit > instructions.len() {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let current = match slots.get(*counter).copied().flatten() {
+                        Some(Value::Integer(value)) => value,
+                        Some(_) => return Err(FlowError::TypeError),
+                        None => return Err(FlowError::InvalidBytecode),
+                    };
+                    let stride = match slots.get(*step).copied().flatten() {
+                        Some(Value::Integer(value)) => value,
+                        Some(_) => return Err(FlowError::TypeError),
+                        None => return Err(FlowError::InvalidBytecode),
+                    };
+                    if let Some(updated) = current.checked_add(stride) {
+                        *slots.get_mut(*counter).ok_or(FlowError::InvalidBytecode)? =
+                            Some(Value::Integer(updated));
+                    } else {
+                        pc = *exit;
+                        continue;
+                    }
+                }
+                Op::Return => {
+                    return Ok(vec![stack.pop().ok_or(FlowError::InvalidBytecode)?]);
+                }
+                Op::ReturnMany(count) => {
+                    if stack.len() < *count {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    return Ok(stack.split_off(stack.len() - *count));
                 }
             }
-            Op::ForStep {
-                counter,
-                step,
-                exit,
-            } => {
-                if *exit > instructions.len() {
-                    return Err(FlowError::InvalidBytecode);
-                }
-                let current = match slots.get(*counter).copied().flatten() {
-                    Some(Value::Integer(value)) => value,
-                    Some(_) => return Err(FlowError::TypeError),
-                    None => return Err(FlowError::InvalidBytecode),
-                };
-                let stride = match slots.get(*step).copied().flatten() {
-                    Some(Value::Integer(value)) => value,
-                    Some(_) => return Err(FlowError::TypeError),
-                    None => return Err(FlowError::InvalidBytecode),
-                };
-                if let Some(updated) = current.checked_add(stride) {
-                    *slots.get_mut(*counter).ok_or(FlowError::InvalidBytecode)? =
-                        Some(Value::Integer(updated));
-                } else {
-                    pc = *exit;
-                    continue;
-                }
+            if stack.len() > MAX_STACK {
+                return Err(FlowError::TooLarge);
             }
-            Op::Return => {
-                return Ok(vec![stack.pop().ok_or(FlowError::InvalidBytecode)?]);
-            }
-            Op::ReturnMany(count) => {
-                if stack.len() < *count {
-                    return Err(FlowError::InvalidBytecode);
-                }
-                return Ok(stack.split_off(stack.len() - *count));
-            }
+            pc = next;
         }
-        if stack.len() > MAX_STACK {
-            return Err(FlowError::TooLarge);
-        }
-        pc = next;
-    }
         Err(FlowError::NoReturn)
     }
 }
@@ -1177,7 +1185,9 @@ mod tests {
             5
         );
         assert_eq!(
-            evaluate("local function fact(n) if n<2 then return 1 end; return n*fact(n-1) end; return fact(5)"),
+            evaluate(
+                "local function fact(n) if n<2 then return 1 end; return n*fact(n-1) end; return fact(5)"
+            ),
             120
         );
         assert_eq!(
@@ -1188,7 +1198,8 @@ mod tests {
             evaluate("local function f(a) return a end; return f(5,6)"),
             5
         );
-        let program = compile_flow_chunk("local function missing(x) return x end; return missing()").unwrap();
+        let program =
+            compile_flow_chunk("local function missing(x) return x end; return missing()").unwrap();
         assert_eq!(
             execute_flow_value(&program, DEFAULT_STEP_BUDGET),
             Ok(Value::Nil)
@@ -1197,10 +1208,12 @@ mod tests {
 
     #[test]
     fn bounded_calls_reject_captures_and_excessive_recursion() {
-        assert!(compile_flow_chunk("local x=3; local function f() return x end; return f()").is_err());
-        let recursion = compile_flow_chunk(
-            "local function forever() return forever() end; return forever()",
-        ).unwrap();
+        assert!(
+            compile_flow_chunk("local x=3; local function f() return x end; return f()").is_err()
+        );
+        let recursion =
+            compile_flow_chunk("local function forever() return forever() end; return forever()")
+                .unwrap();
         assert_eq!(
             execute_flow_chunk(&recursion, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
