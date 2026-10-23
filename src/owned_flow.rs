@@ -2317,22 +2317,30 @@ impl Execution<'_> {
                                 Builtin::Assert => return Err(FlowError::TypeError),
                                 Builtin::Next => self.next_builtin(&args)?,
                                 Builtin::Pairs | Builtin::Ipairs => {
-                                    if !matches!(args[0], Value::Table(_)) {
+                                    let Value::Table(handle) = args[0] else {
                                         return Err(FlowError::TypeError);
+                                    };
+                                    if builtin == Builtin::Pairs {
+                                        if let Some(method) = self.metatable_field(handle, b"__pairs")? {
+                                            let Value::Function(callback) = method else {
+                                                return Err(FlowError::TypeError);
+                                            };
+                                            let values = self.call_owned_function(callback, &[args[0]])?;
+                                            vec![
+                                                values.first().copied().unwrap_or(Value::Nil),
+                                                values.get(1).copied().unwrap_or(Value::Nil),
+                                                values.get(2).copied().unwrap_or(Value::Nil),
+                                            ]
+                                        } else {
+                                            vec![Value::Builtin(Builtin::Next), args[0], Value::Nil]
+                                        }
+                                    } else {
+                                        vec![
+                                            Value::Builtin(Builtin::IpairsIterator),
+                                            args[0],
+                                            Value::Integer(0),
+                                        ]
                                     }
-                                    vec![
-                                        Value::Builtin(if builtin == Builtin::Pairs {
-                                            Builtin::Next
-                                        } else {
-                                            Builtin::IpairsIterator
-                                        }),
-                                        args[0],
-                                        if builtin == Builtin::Pairs {
-                                            Value::Nil
-                                        } else {
-                                            Value::Integer(0)
-                                        },
-                                    ]
                                 }
                                 Builtin::IpairsIterator => self.ipairs_iterator(&args)?,
                                 _ => unreachable!("only multi-result builtins enter this path"),
