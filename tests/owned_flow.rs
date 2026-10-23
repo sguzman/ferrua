@@ -538,8 +538,9 @@ fn check_rejected_source(reference: &str, prefix: &[&str], source: &str, syntax:
             "owned compiler accepted invalid Lua syntax: {source}"
         );
     } else {
-        let program = compile_flow_chunk(source)
-            .unwrap_or_else(|error| panic!("owned compiler rejected runtime-error fixture {source}: {error}"));
+        let program = compile_flow_chunk(source).unwrap_or_else(|error| {
+            panic!("owned compiler rejected runtime-error fixture {source}: {error}")
+        });
         assert!(
             execute_flow_values(&program, DEFAULT_STEP_BUDGET).is_err(),
             "owned VM accepted invalid runtime operation: {source}"
