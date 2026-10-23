@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 89%` across 41 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 89%` across 43 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `████████░░ 81%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `████████░░ 83%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `████████░░ 81%`
+### 🔣 P3 — Ferrua-owned language engine — `████████░░ 83%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -206,6 +206,14 @@
   - [x] Validate decimal, hex, Unicode, and whitespace/newline short-string escapes with diagnostics — src/lex.rs: quoted scanner, newline normalization and invalid escape tests
   - [x] Compare valid and invalid string escape syntax against upstream Lua 5.4.6 — tests/owned_syntax.rs: 19 cases; CI Lua reference job 39963411673
   - [x] Preserve first-party Lua corpus acceptance across all existing jobs — GitHub Actions 39963411673: four jobs green, including 27-file lexer corpus
+- 🔀 **T317** Bounded Lua integer and Boolean control-flow bytecode experiment — `██████████ 100%`
+  - [x] Compile runtime if/elseif/else, while, repeat/until and scoped local assignments into independent control-flow bytecode — src/owned_flow.rs: compile_flow_chunk, stack bytecode, lexical scope frames
+  - [x] Enforce execution budget and reject unsupported calls, globals, types and language features — src/owned_flow.rs: execute_flow_chunk budget, unsupported compilation tests, unbound globals and NoReturn handling
+  - [x] Match production fer and upstream Lua 5.4.6 on supported control-flow fixtures — tests/owned_flow.rs; CI 39965337560: all four jobs successful
+- 🔁 **T318** Bounded numeric for-loop bytecode with read-only iteration variables — `██████████ 100%`
+  - [x] Evaluate control expressions once and execute ascending and descending numeric for loops — src/owned_flow.rs: ForCheck and ForStep, numeric for direction/step tests
+  - [x] Preserve outer binding scope and reject mutation or invalid loop steps; bound overflow and runtime work — src/owned_flow.rs: numeric-for read-only slots, step-zero and boundary tests, step budget
+  - [x] Verify supported numeric for-loop fixtures against production fer and upstream Lua — tests/owned_flow.rs; CI 39966547309: all four jobs successful
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -221,4 +229,6 @@
 - 🧱 Static integer chunk bytecode — `██████████ 100%`
 - 🧪 Generated integer differential coverage — `██████████ 100%`
 - 🔠 Short-string lexical escape parity — `██████████ 100%`
+- 🔀 Experimental bounded control-flow bytecode — `██████████ 100%`
+- 🔁 Numeric iteration on owned control-flow VM — `██████████ 100%`
 

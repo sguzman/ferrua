@@ -30,7 +30,7 @@ Each cited CI run passed all four existing jobs. The ledger in [`progress.json`]
 
 1. Expand syntax and diagnostics to complete Lua grammar, including function definitions and expression forms.
 2. Implement complete lexical bindings, upvalues, closures, and function call mechanics.
-3. Extend runtime value types, Lua tables/metamethods, control-flow bytecode, garbage collection, coroutines and standard libraries.
+3. Extend runtime value types, Lua tables/metamethods, general control-flow bytecode, garbage collection, coroutines and standard libraries.
 4. Grow upstream Lua differential testing beyond deterministic smoke fixtures, including error semantics and real automation workloads.
 5. Integrate the independent engine with `fer` only after passing the full acceptance gates. Do not claim a stable owned runtime prematurely.
 
@@ -39,3 +39,12 @@ Each cited CI run passed all four existing jobs. The ledger in [`progress.json`]
 The integer bytecode prototype now parses full-width hexadecimal integer literals using modulo-64-bit bit patterns, including 0xffffffffffffffff as -1. A deterministic generated reference test compares approximately 1,280 signed arithmetic/bitwise cases, including negative shifts and floor-div/modulo sign behavior, to upstream Lua 5.4.6. Zero-divisor error behavior is also checked. [Verified CI #39962459351](https://github.com/sguzman/ferrua/actions/runs/39962459351).
 
 The source scanner validates short Lua string escapes: simple escapes, decimal byte escapes, two-digit hexadecimal escapes, brace-delimited Unicode escapes, escaped newline pairs, and backslash-z whitespace skipping. It reports malformed or out-of-range forms as lexical errors. Nineteen representative valid/invalid cases are compared to upstream Lua 5.4.6 in CI, in addition to the first-party Lua corpus. [Verified CI #39963411673](https://github.com/sguzman/ferrua/actions/runs/39963411673). Lexical acceptance remains narrower than full Lua compiler conformance.
+
+## Bounded control-flow bytecode experiment
+
+The separate first-party [`owned_flow.rs`](../src/owned_flow.rs) module now compiles limited integer/Boolean Lua chunks into **stack-based control-flow bytecode** with runtime branches, `while`, `repeat/until`, numeric `for` loops, scoped locals, parallel assignment semantics, and a required integer return value. The prototype has an explicit instruction-step budget and no host-side I/O. Numeric `for` control expressions are evaluated once before the read-only loop variable becomes visible; both step directions are supported, with zero-step rejection and loop-boundary overflow handling.
+
+This is a **second experimental execution IR**, separate from the [register-based integer expression prototype](../src/owned_vm.rs). Unifying them into a complete Ferrua-owned Lua compiler/VM is still pending. Functions, generic iterator execution, closures, tables, strings, metatables, full Lua value semantics, coroutines, standard libraries, and production integration remain outside the accepted scope.
+
+- [CI #39965337560](https://github.com/sguzman/ferrua/actions/runs/39965337560): bounded conditionals and loops passed Linux tests, Rust 1.96, composite consumer and Lua 5.4.6 differential checks.
+- [CI #39966547309](https://github.com/sguzman/ferrua/actions/runs/39966547309): numeric `for` scopes and overflow tests passed all four jobs, including upstream Lua fixture comparisons.

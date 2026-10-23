@@ -37,7 +37,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [all four jobs green, including lexer string-escape and owned register VM comparisons against upstream Lua 5.4.6](https://github.com/sguzman/ferrua/actions/runs/39963411673). Native EndeavourOS acceptance, a published stable release, and a complete Ferrua-owned Lua VM remain pending.
+**Latest verified CI:** [all four jobs green, including experimental numeric for-loops and scoped control flow compared with Lua 5.4.6](https://github.com/sguzman/ferrua/actions/runs/39966547309). Native EndeavourOS acceptance, a published stable release, and a complete Ferrua-owned Lua VM remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
@@ -67,6 +67,6 @@ For engine parity work, CI also runs a Lua-authored differential test harness ag
 
 Ferrua's independent language engine is developed separately from the working `fer` CLI, which continues to use the pinned `luna-core` VM. Current Rust-owned library components include a lexical scanner, expression and limited statement parser, nested-scope resolver, and a **bounded integer register-bytecode interpreter**.
 
-The owned bytecode engine executes Lua-compatible integer arithmetic, modulo/floor division, bitwise shifts, and a limited straight-line chunk form with locals, parallel assignments, nested `do/end` scopes and a final return. It is verified against upstream Lua 5.4.6, but does **not** yet execute general Lua scripts, functions, loops, tables, or closures.
+The first owned register-bytecode engine executes Lua-compatible integer arithmetic, modulo/floor division, bitwise shifts, and straight-line chunks. A separate **bounded control-flow bytecode prototype** executes a narrow integer/Boolean Lua subset with `if`, `while`, `repeat/until`, numeric `for`, scoped locals and parallel assignments. Both are compared with Lua 5.4.6; neither provides complete Lua values, functions, tables, generic iterator calls, closures, coroutines or the full runtime.
 
 Read [🔩 independent engine design and acceptance evidence](docs/OWNED_ENGINE.md). The complete independent Lua compiler and VM remain future acceptance gates.

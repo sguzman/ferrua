@@ -1064,6 +1064,52 @@
                   "evidence": "GitHub Actions 39963411673: four jobs green, including 27-file lexer corpus"
                 }
               ]
+            },
+            {
+              "id": "T317",
+              "emoji": "🔀",
+              "name": "Bounded Lua integer and Boolean control-flow bytecode experiment",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile runtime if/elseif/else, while, repeat/until and scoped local assignments into independent control-flow bytecode",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: compile_flow_chunk, stack bytecode, lexical scope frames"
+                },
+                {
+                  "text": "Enforce execution budget and reject unsupported calls, globals, types and language features",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: execute_flow_chunk budget, unsupported compilation tests, unbound globals and NoReturn handling"
+                },
+                {
+                  "text": "Match production fer and upstream Lua 5.4.6 on supported control-flow fixtures",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI 39965337560: all four jobs successful"
+                }
+              ]
+            },
+            {
+              "id": "T318",
+              "emoji": "🔁",
+              "name": "Bounded numeric for-loop bytecode with read-only iteration variables",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Evaluate control expressions once and execute ascending and descending numeric for loops",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: ForCheck and ForStep, numeric for direction/step tests"
+                },
+                {
+                  "text": "Preserve outer binding scope and reject mutation or invalid loop steps; bound overflow and runtime work",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: numeric-for read-only slots, step-zero and boundary tests, step budget"
+                },
+                {
+                  "text": "Verify supported numeric for-loop fixtures against production fer and upstream Lua",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI 39966547309: all four jobs successful"
+                }
+              ]
             }
           ]
         }
@@ -1155,6 +1201,20 @@
           "name": "Short-string lexical escape parity",
           "task_ids": [
             "T316"
+          ]
+        },
+        {
+          "emoji": "🔀",
+          "name": "Experimental bounded control-flow bytecode",
+          "task_ids": [
+            "T317"
+          ]
+        },
+        {
+          "emoji": "🔁",
+          "name": "Numeric iteration on owned control-flow VM",
+          "task_ids": [
+            "T318"
           ]
         }
       ]
