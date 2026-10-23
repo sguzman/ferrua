@@ -1167,7 +1167,6 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
     Ok(result)
 }
 
-
 /// Decode a bounded Lua hexadecimal floating literal independently of Rust's
 /// decimal-only f64 parser. The lexer already validates lexical digits.
 fn parse_lua_hex_float(source: &str) -> Option<f64> {
