@@ -408,8 +408,14 @@ The owned VM now tries its existing integer-only bitwise operation first for `&`
 [CI #40032378817](https://github.com/sguzman/ferrua/actions/runs/40032378817) passed all four primary jobs and aggregate status reporting, including upstream Lua 5.4 differential cases. It does not add bitwise metamethods for callable-table/builtin values, generalized primitive metatables, comprehensive coercion of all numeric-string representations or remaining comparison metamethods. Production `fer` remains unchanged.
 
 
-### Bounded Lua byte concatenation metamethods (pending CI)
+### Verified bounded Lua byte concatenation metamethods
 
 The independent stack VM concatenates Lua byte strings and numeric values directly, retaining its bounded interned-string budget. If direct concatenation fails on operand types, it resolves `__concat` from a left-hand table before a right-hand table and invokes the first-party Lua closure with the original operands. The existing callback executor enforces frame depth and execution limits, and only the first returned value contributes to the concatenation expression. Ordinary string concatenation does not consult metatables.
 
-Regression and Lua 5.4 differential fixtures cover both operand orders, callback return adjustment, byte concatenation, nil returns, and recursion. This is **pending CI acceptance**. Table/builtin-valued `__concat`, generalized primitive metatables, and full Lua conformance remain outside the scope. The production `fer` backend stays pinned to `luna-core`.
+Regression and Lua 5.4 differential fixtures cover both operand orders, callback return adjustment, byte concatenation, nil returns, and recursion. [CI #40033236408](https://github.com/sguzman/ferrua/actions/runs/40033236408) passed all four primary acceptance jobs plus aggregate status reporting, including Lua 5.4 differential fixtures. Table/builtin-valued `__concat`, generalized primitive metatables, and full Lua conformance remain outside the scope. The production `fer` backend stays pinned to `luna-core`.
+
+### Table comparison metamethod callbacks (pending CI)
+
+The independent interpreter retains direct numeric and byte-string ordering. Distinct tables can use function-valued `__eq`, `__lt`, and `__le` metamethods through the existing bounded first-party closure executor. Identical table handles compare equal without calling `__eq`; `~=` negates the callback's Lua truthiness. The `>` and `>=` operators reverse the operands and use the appropriate less-than metamethod. When `__le` is absent, `<=` or `>=` can fall back to negating the reversed `__lt` result. A missing callback is distinguished from a present but unsupported metamethod value.
+
+The unit and upstream Lua 5.4 differential fixtures cover primitive comparisons, table identity, distinct-table equality, one-sided callback lookup, reversed operand ordering, nil/false/truthy results and recursion bounds. This work remains **pending CI acceptance**. Callable tables and builtin metatable callbacks, complete primitive metatables, garbage collection, error-message conformance and native first-party production integration remain future gates.
