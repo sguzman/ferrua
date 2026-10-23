@@ -251,7 +251,9 @@ pub enum Statement<'a> {
 
 impl<'a> Parser<'a> {
     fn name(&mut self) -> Result<&'a str, ParseError> {
-        let token = self.pop().ok_or_else(|| self.error("expected identifier"))?;
+        let token = self
+            .pop()
+            .ok_or_else(|| self.error("expected identifier"))?;
         if token.kind != Kind::Identifier {
             return Err(ParseError {
                 line: token.line,
@@ -302,7 +304,10 @@ impl<'a> Parser<'a> {
             return Ok(Statement::Return(values));
         }
         let first = self.expression(0)?;
-        if self.peek().is_some_and(|token| matches!(token.spelling, "," | "=")) {
+        if self
+            .peek()
+            .is_some_and(|token| matches!(token.spelling, "," | "="))
+        {
             let mut targets = vec![first];
             while self.peek().is_some_and(|token| token.spelling == ",") {
                 self.pop();
@@ -455,7 +460,10 @@ mod tests {
         let parsed = parse_chunk("local a,b=2,3; a,b=b,a; print(a,b); return a+b").unwrap();
         assert_eq!(parsed.len(), 4);
         match &parsed[0] {
-            Statement::Local { names, initializers } => {
+            Statement::Local {
+                names,
+                initializers,
+            } => {
                 assert_eq!(names, &["a", "b"]);
                 assert_eq!(initializers.len(), 2);
             }
