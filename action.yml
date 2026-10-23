@@ -5,6 +5,10 @@ inputs:
     description: Versioned release to install (e.g. v0.1.0); leave empty to build the pinned action source
     required: false
     default: ''
+  sha256:
+    description: Optional expected SHA-256 digest of release archive (lowercase hex)
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -26,9 +30,10 @@ runs:
       env:
         FERRUA_SOURCE_DIR: ${{ github.action_path }}
         FERRUA_RELEASE_VERSION: ${{ inputs.version }}
+        FERRUA_EXPECTED_SHA256: ${{ inputs.sha256 }}
       run: |
         set -euo pipefail
-        sh "$FERRUA_SOURCE_DIR/scripts/install.sh" "$FERRUA_RELEASE_VERSION" "$RUNNER_TEMP/ferrua"
+        sh "$FERRUA_SOURCE_DIR/scripts/install.sh" "$FERRUA_RELEASE_VERSION" "$RUNNER_TEMP/ferrua" "$FERRUA_EXPECTED_SHA256"
         echo "$RUNNER_TEMP/ferrua/bin" >> "$GITHUB_PATH"
     - name: Verify interpreter
       shell: bash

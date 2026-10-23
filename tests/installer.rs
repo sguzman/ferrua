@@ -89,8 +89,15 @@ fn exercise(bad_checksum: bool) {
     let (archive, checksum) = create_fixture(&root, bad_checksum);
     let (base, server) = serve_fixture(archive, checksum);
     let install = root.join("prefix");
+    let expected = String::from_utf8_lossy(&checksum);
+    let expected = expected.chars().take(64).collect::<String>();
     let run = Command::new("sh")
-        .args(["scripts/install.sh", "v0.1.0", install.to_str().unwrap()])
+        .args([
+            "scripts/install.sh",
+            "v0.1.0",
+            install.to_str().unwrap(),
+            if bad_checksum { "" } else { &expected },
+        ])
         .env("FERRUA_RELEASE_BASE", base)
         .output()
         .unwrap();
@@ -124,6 +131,26 @@ fn installs_verified_versioned_archive_from_local_http() {
 #[test]
 fn rejects_mismatched_digest_without_installing() {
     exercise(true);
+}
+
+#[test]
+fn rejects_consistent_release_with_wrong_independent_digest() {
+    let root = scratch();
+    let (archive, checksum) = create_fixture(&root, false);
+    let (base, server) = serve_fixture(archive, checksum);
+    let prefix = root.join("pinned");
+    let digest = "0".repeat(64);
+    let response = Command::new("sh")
+        .args(["scripts/install.sh", "v0.1.0", prefix.to_str().unwrap(), &digest])
+        .env("FERRUA_RELEASE_BASE", base)
+        .output()
+        .unwrap();
+    server.join().unwrap();
+    assert!(!response.status.success());
+    assert!(!prefix.join("bin/fer").exists());
+    assert!(String::from_utf8_lossy(&response.stderr)
+        .contains("independently pinned SHA-256 mismatch"));
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
