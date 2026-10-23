@@ -2313,7 +2313,7 @@
               "id": "T370",
               "emoji": "🔗",
               "name": "Bounded table-backed Lua __index and __newindex metamethod chains",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Dispatch missing table reads/writes through bounded table-valued metamethod chains",
@@ -2327,7 +2327,8 @@
                 },
                 {
                   "text": "Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and upstream Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40026650737: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and reporter successful"
                 }
               ]
             }
