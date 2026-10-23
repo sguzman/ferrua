@@ -135,3 +135,57 @@ fn rejects_nonsemantic_version_without_network_access() {
     assert!(!run.status.success());
     assert!(String::from_utf8_lossy(&run.stderr).contains("expected explicit semver"));
 }
+
+#[test]
+fn installed_real_archive_executes_outside_checkout() {
+    // Set in the release-packaging CI step. This is an extra acceptance gate
+    // for the compiled artifact, not just the tiny shell-script fixture above.
+    let tarball = match std::env::var("FERRUA_RELEASE_TARBALL") {
+        Ok(tarball) => tarball,
+        Err(_) => return,
+    };
+    let root = scratch();
+    let archive = fs::read(&tarball).expect("CI built a real release archive");
+    let checksum = fs::read(format!("{tarball}.sha256"))
+        .expect("CI generated the real archive checksum");
+    let (base, server) = serve_fixture(archive, checksum);
+    let prefix = root.join("installed");
+    let install = Command::new("sh")
+        .args(["scripts/install.sh", "v0.1.0", prefix.to_str().unwrap()])
+        .env("FERRUA_RELEASE_BASE", base)
+        .output()
+        .unwrap();
+    server.join().unwrap();
+    assert!(
+        install.status.success(),
+        "{}",
+        String::from_utf8_lossy(&install.stderr)
+    );
+    let binary = prefix.join("bin/fer");
+    let script = root.join("independent.lua");
+    fs::write(
+        &script,
+        r#"assert(json.decode('{"answer":42}').answer==42)
+local result=process.check('printf', {'%s','independent'})
+assert(result.stdout=='independent')
+assert(fs.exists('independent.lua'))
+print('standalone Ferrua archive accepted')
+"#,
+    )
+    .unwrap();
+    let result = Command::new(binary)
+        .current_dir(&root)
+        .arg("independent.lua")
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&result.stdout).trim(),
+        "standalone Ferrua archive accepted"
+    );
+    fs::remove_dir_all(&root).unwrap();
+}
