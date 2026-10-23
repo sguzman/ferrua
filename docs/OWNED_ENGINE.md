@@ -452,8 +452,8 @@ The first-party parser accepts `::name::` labels and `goto name` statements as e
 
 General Lua `goto` remains incomplete: cross-block visibility, upvalue closing on jumps across scopes, and all nuanced local-lifetime cases are **not implemented**. Unsupported forms return an explicit compiler error rather than silently skipping the jump. This bounded subset does not complete T301/T302 grammar/compiler graduation; production `fer` retains the pinned external VM.
 
-### Deterministic generated numeric differential corpus (pending CI)
+### Verified deterministic generated numeric differential corpus
 
 The Rust integration test now constructs 128 reproducible arithmetic, floor-division/remainder, bitwise, and comparison Lua chunks from a fixed-seed, non-cryptographic integer generator. Generated chunks use bounded input values with no external data, Python scripts, network or unstable random seed. The **same** fixture runner executes these programs through the Ferrua-owned VM and the working production `fer` CLI; the Lua 5.4 CI job additionally compares output to the upstream reference interpreter. A separate unit assertion checks generator determinism.
 
-This increment is **pending full CI acceptance**. Generated integer expressions complement the curated semantic cases and must not be treated as comprehensive Lua conformance, especially for parser errors, metatables, coroutines, GC, standard libraries or native production graduation.
+[CI #40041470699](https://github.com/sguzman/ferrua/actions/runs/40041470699) passed all four primary acceptance jobs and the aggregate reporter, including upstream Lua 5.4 comparisons for all 128 generated chunks. Generated integer expressions complement the curated semantic cases and must not be treated as comprehensive Lua conformance, especially for parser errors, metatables, coroutines, GC, standard libraries or native production graduation.
