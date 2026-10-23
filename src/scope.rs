@@ -8,6 +8,7 @@ use std::collections::HashMap;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resolution {
     Local(usize),
+    Upvalue(usize),
     Global,
 }
 
@@ -48,6 +49,7 @@ struct Resolver<'src> {
     scopes: Vec<HashMap<&'src str, usize>>,
     next_statement: usize,
     result: ScopeSummary<'src>,
+    function_bases: Vec<usize>,
 }
 
 impl<'src> Resolver<'src> {
@@ -55,9 +57,16 @@ impl<'src> Resolver<'src> {
         let resolution = self
             .scopes
             .iter()
+            .enumerate()
             .rev()
-            .find_map(|frame| frame.get(name).copied())
-            .map_or(Resolution::Global, Resolution::Local);
+            .find_map(|(depth, frame)| frame.get(name).map(|slot| (depth, *slot)))
+            .map_or(Resolution::Global, |(depth, slot)| {
+                if self.function_bases.last().is_some_and(|base| depth < *base) {
+                    Resolution::Upvalue(slot)
+                } else {
+                    Resolution::Local(slot)
+                }
+            });
         self.result.references.push(Reference {
             name,
             resolution,
@@ -98,6 +107,10 @@ impl<'src> Resolver<'src> {
                 self.read_expression(object, statement);
                 self.read_expression(key, statement);
             }
+            Expr::Function {
+                parameters, body, ..
+            } => self.function_scope(parameters, body),
+            Expr::Vararg => {}
         }
     }
 
@@ -125,6 +138,20 @@ impl<'src> Resolver<'src> {
             statement,
             scope_depth: self.scopes.len() - 1,
         });
+    }
+
+    fn function_scope(&mut self, parameters: &[&'src str], body: &[Statement<'src>]) {
+        self.function_bases.push(self.scopes.len());
+        self.scopes.push(HashMap::new());
+        let declaration = self.next_statement;
+        for name in parameters {
+            self.bind(name, declaration);
+        }
+        for node in body {
+            self.statement(node);
+        }
+        self.scopes.pop();
+        self.function_bases.pop();
     }
 
     fn scoped_statements(&mut self, nodes: &[Statement<'src>]) {
@@ -161,6 +188,21 @@ impl<'src> Resolver<'src> {
                 }
             }
             Statement::Call(call) => self.read_expression(call, number),
+            Statement::Function {
+                name,
+                local,
+                parameters,
+                body,
+                ..
+            } => {
+                if *local {
+                    // The local function name is in scope for its own body.
+                    self.bind(name, number);
+                } else {
+                    self.record(name, Access::Write, number);
+                }
+                self.function_scope(parameters, body);
+            }
             Statement::Break => {}
             Statement::Return(values) => {
                 for value in values {
@@ -246,6 +288,7 @@ pub fn analyze(source: &str) -> Result<ScopeSummary<'_>, ParseError> {
     let mut resolver = Resolver {
         scopes: vec![HashMap::new()],
         next_statement: 0,
+        function_bases: Vec::new(),
         result: ScopeSummary {
             bindings: Vec::new(),
             references: Vec::new(),
@@ -478,7 +521,22 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_grammar_is_rejected_instead_of_analyzed() {
-        assert!(analyze("function f() return 1 end").is_err());
+    fn function_parameters_and_closure_captures_have_distinct_resolution() {
+        let summary = analyze("local outer=2; local function f(n) if n==0 then return outer end; return f(n-1) end; return f(2)").unwrap();
+        let binding = summary.bindings.iter().find(|b| b.name=="f").unwrap();
+        let parameter = summary.bindings.iter().find(|b| b.name=="n").unwrap();
+        assert!(summary.references.iter().any(|r| r.name=="f" && r.resolution==Resolution::Upvalue(binding.slot)));
+        assert!(summary.references.iter().any(|r| r.name=="outer" && r.resolution==Resolution::Upvalue(0)));
+        assert!(summary.references.iter().any(|r| r.name=="n" && r.resolution==Resolution::Local(parameter.slot)));
+        assert!(summary.references.iter().any(|r| r.name=="f" && r.scope_depth==0 && r.resolution==Resolution::Local(binding.slot)));
+    }
+
+    #[test]
+    fn anonymous_function_captures_and_shadowed_parameters() {
+        let summary = analyze("local x=10; local f=function(x) return function(y) return x+y end end; return x").unwrap();
+        let xs: Vec<_> = summary.references.iter().filter(|r| r.name=="x").collect();
+        assert!(xs.iter().any(|r| r.resolution==Resolution::Upvalue(1)));
+        assert!(xs.iter().any(|r| r.resolution==Resolution::Local(0)));
+        assert!(!xs.iter().any(|r| r.resolution==Resolution::Upvalue(0)));
     }
 }

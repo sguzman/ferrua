@@ -32,6 +32,12 @@ pub enum Expr<'a> {
         object: Box<Expr<'a>>,
         key: Box<Expr<'a>>,
     },
+    Function {
+        parameters: Vec<&'a str>,
+        vararg: bool,
+        body: Vec<Statement<'a>>,
+    },
+    Vararg,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,6 +73,8 @@ struct Parser<'a> {
     index: usize,
     length: usize,
     loop_depth: usize,
+    function_depth: usize,
+    vararg_allowed: bool,
 }
 
 fn binding_power(op: &str) -> Option<(u8, u8)> {
@@ -110,6 +118,15 @@ impl<'a> Parser<'a> {
             return Err(self.error("expected an expression"));
         };
         match token.spelling {
+            "function" => {
+                let (parameters, vararg, body) = self.function_body()?;
+                Ok(Expr::Function {
+                    parameters,
+                    vararg,
+                    body,
+                })
+            }
+            "..." if self.vararg_allowed => Ok(Expr::Vararg),
             "-" | "not" | "#" | "~" => {
                 let rhs = self.expression(21)?;
                 Ok(Expr::Unary {
@@ -256,6 +273,8 @@ pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
         index: 0,
         length: source.len(),
         loop_depth: 0,
+        function_depth: 0,
+        vararg_allowed: true,
     };
     let result = parser.expression(0)?;
     if parser.peek().is_some() {
@@ -281,6 +300,13 @@ pub enum Statement<'a> {
         values: Vec<Expr<'a>>,
     },
     Call(Expr<'a>),
+    Function {
+        name: &'a str,
+        local: bool,
+        parameters: Vec<&'a str>,
+        vararg: bool,
+        body: Vec<Statement<'a>>,
+    },
     Break,
     /// A lexical scope closed with `end`. Nested Lua blocks are supported
     /// by this experimental subset, not arbitrary control-flow statements.
@@ -327,6 +353,51 @@ impl<'a> Parser<'a> {
         Ok(token.spelling)
     }
 
+    fn function_body(&mut self) -> Result<(Vec<&'a str>, bool, Vec<Statement<'a>>), ParseError> {
+        if self.function_depth >= 64 {
+            return Err(self.error("Lua function nesting limit exceeded"));
+        }
+        if self.peek().map(|t| t.spelling) != Some("(") {
+            return Err(self.error("expected opening parenthesis for function"));
+        }
+        self.pop();
+        let mut parameters = Vec::new();
+        let mut vararg = false;
+        while self.peek().map(|t| t.spelling) != Some(")") {
+            if self.peek().is_none() {
+                return Err(self.error("unterminated function parameters"));
+            }
+            if self.peek().map(|t| t.spelling) == Some("...") {
+                self.pop();
+                vararg = true;
+                break;
+            }
+            parameters.push(self.name()?);
+            if self.peek().map(|t| t.spelling) != Some(",") {
+                break;
+            }
+            self.pop();
+        }
+        if self.peek().map(|t| t.spelling) != Some(")") {
+            return Err(self.error("expected closing parenthesis for function"));
+        }
+        self.pop();
+        let previous_loops = self.loop_depth;
+        let previous_vararg = self.vararg_allowed;
+        self.loop_depth = 0;
+        self.vararg_allowed = vararg;
+        self.function_depth += 1;
+        let body = self.block(&["end"], self.function_depth)?;
+        self.function_depth -= 1;
+        self.loop_depth = previous_loops;
+        self.vararg_allowed = previous_vararg;
+        if self.peek().map(|t| t.spelling) != Some("end") {
+            return Err(self.error("expected end to close function"));
+        }
+        self.pop();
+        Ok((parameters, vararg, body))
+    }
+
     fn expressions(&mut self) -> Result<Vec<Expr<'a>>, ParseError> {
         let mut values = vec![self.expression(0)?];
         while self.peek().is_some_and(|token| token.spelling == ",") {
@@ -337,6 +408,18 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self, depth: usize) -> Result<Statement<'a>, ParseError> {
+        if self.peek().is_some_and(|token| token.spelling == "function") {
+            self.pop();
+            let name = self.name()?;
+            let (parameters, vararg, body) = self.function_body()?;
+            return Ok(Statement::Function {
+                name,
+                local: false,
+                parameters,
+                vararg,
+                body,
+            });
+        }
         if self.peek().is_some_and(|token| token.spelling == "do") {
             self.pop();
             let body = self.block(&["end"], depth + 1)?;
@@ -478,6 +561,18 @@ impl<'a> Parser<'a> {
         }
         if self.peek().is_some_and(|token| token.spelling == "local") {
             self.pop();
+            if self.peek().map(|token| token.spelling) == Some("function") {
+                self.pop();
+                let name = self.name()?;
+                let (parameters, vararg, body) = self.function_body()?;
+                return Ok(Statement::Function {
+                    name,
+                    local: true,
+                    parameters,
+                    vararg,
+                    body,
+                });
+            }
             let mut names = vec![self.name()?];
             while self.peek().is_some_and(|token| token.spelling == ",") {
                 self.pop();
@@ -618,6 +713,8 @@ pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
         index: 0,
         length: source.len(),
         loop_depth: 0,
+        function_depth: 0,
+        vararg_allowed: true,
     };
     parser.block(&[], 0)
 }
@@ -647,7 +744,42 @@ mod tests {
             }
             Expr::Field { object, name } => format!("(field {} {name})", show(object)),
             Expr::Index { object, key } => format!("(index {} {})", show(object), show(key)),
+            Expr::Function {
+                parameters,
+                vararg,
+                body,
+            } => format!("(function [{}] {} {})", parameters.join(" "), vararg, body.len()),
+            Expr::Vararg => "...".to_owned(),
         }
+    }
+
+    #[test]
+    fn owned_parser_recognizes_function_scopes_and_varargs() {
+        let tree = parse_chunk(
+            "local function fib(n) if n<=1 then return n end; return fib(n-1)+fib(n-2) end; return fib(5)"
+        ).unwrap();
+        assert!(matches!(&tree[0], Statement::Function {name: "fib", local: true, parameters, vararg: false, body} if parameters == &["n"] && body.len() == 2));
+        let tree = parse_chunk("function f(a,...) return a,... end; return f(1,2)").unwrap();
+        assert!(matches!(&tree[0], Statement::Function {name: "f", local: false, vararg: true, body, ..} if matches!(&body[0], Statement::Return(xs) if xs.len()==2 && matches!(&xs[1], Expr::Vararg))));
+        assert!(matches!(parse_expression("function(x) return x end").unwrap(), Expr::Function { .. }));
+        assert!(parse_chunk("local f=function(a) return a end; return f(4)").is_ok());
+    }
+
+    #[test]
+    fn function_syntax_rejects_invalid_parameters_and_escaped_break() {
+        for source in [
+            "local function f(a,) return a end",
+            "local function f(a a) return a end",
+            "local function f(a,...,b) return a end",
+            "function f(x) return ... end",
+            "while true do local function f() break end; break end",
+            "local function f( return 1 end",
+            "function f() return 1",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
+        assert!(parse_chunk("local function f(...) return ... end").is_ok());
+        assert!(parse_chunk("return ...").is_ok());
     }
 
     #[test]
