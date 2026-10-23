@@ -1133,6 +1133,98 @@
                   "evidence": "tests/owned_flow.rs; GitHub Actions 39967285721 all four jobs succeeded"
                 }
               ]
+            },
+            {
+              "id": "T320",
+              "emoji": "🔣",
+              "name": "Shared Lua integer and bitwise semantics in owned control-flow VM",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Reuse the Ferrua-owned integer floor/modulo/shift semantics across both experimental VM prototypes",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs; src/owned_vm.rs"
+                },
+                {
+                  "text": "Verify signed, bitwise, lazy error skipping and divide-by-zero behavior",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: control_flow_reuses_register_vm_integer_semantics"
+                },
+                {
+                  "text": "Compare supported arithmetic output against fer and upstream Lua 5.4.6 in four CI jobs",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39985589783: four jobs successful"
+                }
+              ]
+            },
+            {
+              "id": "T321",
+              "emoji": "⛓️",
+              "name": "Loop break parsing and innermost control-flow jump patching",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Parse break only inside a loop and as last statement of its immediate block",
+                  "passed": true,
+                  "evidence": "src/expr.rs: break_is_scoped_to_loops_and_must_terminate_its_block"
+                },
+                {
+                  "text": "Compile nested while, repeat and numeric-for break to the innermost loop exit",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: break_targets_innermost_loop_and_skips_repeat_condition"
+                },
+                {
+                  "text": "Verify bounded loop-exit parity with fer and upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39986059053: four jobs successful"
+                }
+              ]
+            },
+            {
+              "id": "T322",
+              "emoji": "🧩",
+              "name": "Fixed-result assignment arity with nil padding and excess evaluation",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Supply nil for omitted local initializers and assignment values",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Compiler::values, lua_assignment_arity_and_nil_padding"
+                },
+                {
+                  "text": "Evaluate all explicit RHS expressions before discarding excess values or updating locals",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Compiler::values; division-by-zero surplus RHS regression"
+                },
+                {
+                  "text": "Compare fixed-result assignment cases with fer and upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39986717040: four jobs successful"
+                }
+              ]
+            },
+            {
+              "id": "T323",
+              "emoji": "🎭",
+              "name": "Typed Boolean and nil return values from bounded owned flow",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Return the restricted Value enum through a new typed experimental API",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: execute_flow_value, returns_lua_boolean_nil_and_lazy_operand_values"
+                },
+                {
+                  "text": "Keep existing integer-return execution API and explicit noninteger rejection",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: execute_flow_chunk wrapper and regression test"
+                },
+                {
+                  "text": "Verify Boolean, nil and integer representations against fer and upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39987091738: four jobs successful"
+                }
+              ]
             }
           ]
         }
@@ -1245,6 +1337,34 @@
           "name": "Lua short-circuit logical expressions",
           "task_ids": [
             "T319"
+          ]
+        },
+        {
+          "emoji": "🔣",
+          "name": "Shared integer arithmetic across owned VM prototypes",
+          "task_ids": [
+            "T320"
+          ]
+        },
+        {
+          "emoji": "⛓️",
+          "name": "Lexically scoped loop break execution",
+          "task_ids": [
+            "T321"
+          ]
+        },
+        {
+          "emoji": "🧩",
+          "name": "Lua fixed-result assignment padding",
+          "task_ids": [
+            "T322"
+          ]
+        },
+        {
+          "emoji": "🎭",
+          "name": "Experimental typed flow return values",
+          "task_ids": [
+            "T323"
           ]
         }
       ]

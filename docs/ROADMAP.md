@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 89%` across 44 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 90%` across 48 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `████████░░ 84%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 87%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `████████░░ 84%`
+### 🔣 P3 — Ferrua-owned language engine — `█████████░ 87%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -218,6 +218,22 @@
   - [x] Short-circuit and/or without evaluating skipped operands; preserve selected operand values — src/owned_flow.rs: JumpIfFalseKeep, JumpIfTrueKeep, Discard and logical expression codegen
   - [x] Honor Lua truthiness (including truthy zero), Boolean/not and nil in conditions — src/owned_flow.rs: logical_and_or_preserve_values_and_short_circuit unit test
   - [x] Compare supported lazy logical cases against fer and official Lua 5.4.6 in CI — tests/owned_flow.rs; GitHub Actions 39967285721 all four jobs succeeded
+- 🔣 **T320** Shared Lua integer and bitwise semantics in owned control-flow VM — `██████████ 100%`
+  - [x] Reuse the Ferrua-owned integer floor/modulo/shift semantics across both experimental VM prototypes — src/owned_flow.rs; src/owned_vm.rs
+  - [x] Verify signed, bitwise, lazy error skipping and divide-by-zero behavior — src/owned_flow.rs: control_flow_reuses_register_vm_integer_semantics
+  - [x] Compare supported arithmetic output against fer and upstream Lua 5.4.6 in four CI jobs — tests/owned_flow.rs; GitHub Actions 39985589783: four jobs successful
+- ⛓️ **T321** Loop break parsing and innermost control-flow jump patching — `██████████ 100%`
+  - [x] Parse break only inside a loop and as last statement of its immediate block — src/expr.rs: break_is_scoped_to_loops_and_must_terminate_its_block
+  - [x] Compile nested while, repeat and numeric-for break to the innermost loop exit — src/owned_flow.rs: break_targets_innermost_loop_and_skips_repeat_condition
+  - [x] Verify bounded loop-exit parity with fer and upstream Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 39986059053: four jobs successful
+- 🧩 **T322** Fixed-result assignment arity with nil padding and excess evaluation — `██████████ 100%`
+  - [x] Supply nil for omitted local initializers and assignment values — src/owned_flow.rs: Compiler::values, lua_assignment_arity_and_nil_padding
+  - [x] Evaluate all explicit RHS expressions before discarding excess values or updating locals — src/owned_flow.rs: Compiler::values; division-by-zero surplus RHS regression
+  - [x] Compare fixed-result assignment cases with fer and upstream Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 39986717040: four jobs successful
+- 🎭 **T323** Typed Boolean and nil return values from bounded owned flow — `██████████ 100%`
+  - [x] Return the restricted Value enum through a new typed experimental API — src/owned_flow.rs: execute_flow_value, returns_lua_boolean_nil_and_lazy_operand_values
+  - [x] Keep existing integer-return execution API and explicit noninteger rejection — src/owned_flow.rs: execute_flow_chunk wrapper and regression test
+  - [x] Verify Boolean, nil and integer representations against fer and upstream Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 39987091738: four jobs successful
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -236,4 +252,8 @@
 - 🔀 Experimental bounded control-flow bytecode — `██████████ 100%`
 - 🔁 Numeric iteration on owned control-flow VM — `██████████ 100%`
 - 🔀 Lua short-circuit logical expressions — `██████████ 100%`
+- 🔣 Shared integer arithmetic across owned VM prototypes — `██████████ 100%`
+- ⛓️ Lexically scoped loop break execution — `██████████ 100%`
+- 🧩 Lua fixed-result assignment padding — `██████████ 100%`
+- 🎭 Experimental typed flow return values — `██████████ 100%`
 

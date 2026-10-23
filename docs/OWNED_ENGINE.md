@@ -68,3 +68,12 @@ The owned control-flow bytecode now handles ordinary fixed-count Lua local decla
 ### Typed values returned by bounded owned flow
 
 The experimental `execute_flow_value` API returns the VM's currently supported `Integer`, `Boolean` or `Nil` value without losing the original short-circuit operand type. The original `execute_flow_chunk` API remains integer-only for backwards compatibility, explicitly rejecting Boolean and nil return values. The differential suite checks the text representation of all three supported return types against production `fer` and upstream Lua 5.4.6. Strings, tables, floats, functions and all other general Lua runtime values remain unsupported.
+
+### Verified continuation acceptance
+
+- [CI #39985589783](https://github.com/sguzman/ferrua/actions/runs/39985589783): shared integer floor/modulo/bitwise flow semantics — all four jobs passed.
+- [CI #39986059053](https://github.com/sguzman/ferrua/actions/runs/39986059053): lexically scoped nested loop breaks — all four jobs passed.
+- [CI #39986717040](https://github.com/sguzman/ferrua/actions/runs/39986717040): Lua fixed-result assignment arity and nil padding — all four jobs passed.
+- [CI #39987091738](https://github.com/sguzman/ferrua/actions/runs/39987091738): typed Boolean/nil/integer flow return values — all four jobs passed.
+
+These are bounded first-party prototypes, not a certified replacement for the production `luna-core` interpreter.
