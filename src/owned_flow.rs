@@ -3590,9 +3590,7 @@ mod tests {
             3
         );
         assert_eq!(
-            evaluate(
-                "local t=setmetatable({}, {__len=function() return 4,5 end}); return #t"
-            ),
+            evaluate("local t=setmetatable({}, {__len=function() return 4,5 end}); return #t"),
             4
         );
         assert_eq!(
@@ -3607,24 +3605,17 @@ mod tests {
             ),
             6
         );
-        assert_eq!(
-            evaluate("local t=setmetatable({1,2,3},{}); return #t"),
-            3
-        );
-        assert_eq!(
-            evaluate("return #('é')"),
-            2
-        );
-        let program = compile_flow_chunk(
-            "local t=setmetatable({}, {__len=7}); return #t"
-        ).unwrap();
+        assert_eq!(evaluate("local t=setmetatable({1,2,3},{}); return #t"), 3);
+        assert_eq!(evaluate("return #('é')"), 2);
+        let program = compile_flow_chunk("local t=setmetatable({}, {__len=7}); return #t").unwrap();
         assert_eq!(
             execute_flow_value(&program, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
         let program = compile_flow_chunk(
-            "local t={}; setmetatable(t,{__len=function(self) return #self end}); return #t"
-        ).unwrap();
+            "local t={}; setmetatable(t,{__len=function(self) return #self end}); return #t",
+        )
+        .unwrap();
         assert_eq!(
             execute_flow_value(&program, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
