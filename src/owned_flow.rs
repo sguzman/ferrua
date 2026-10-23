@@ -2445,14 +2445,17 @@ impl Execution<'_> {
                                         let Value::Function(callback) = method else {
                                             return Err(FlowError::TypeError);
                                         };
-                                        let returned = self.call_owned_function(callback, &[value])?;
+                                        let returned =
+                                            self.call_owned_function(callback, &[value])?;
                                         let text = returned.first().copied().unwrap_or(Value::Nil);
                                         if !matches!(text, Value::String(_)) {
                                             return Err(FlowError::TypeError);
                                         }
                                         text
                                     } else {
-                                        self.intern_string(format!("table: 0x{handle:x}").into_bytes())?
+                                        self.intern_string(
+                                            format!("table: 0x{handle:x}").into_bytes(),
+                                        )?
                                     }
                                 }
                                 Value::Function(handle) => self.intern_string(
@@ -3839,10 +3842,7 @@ mod tests {
                 "return tostring(nil)=='nil' and tostring(false)=='false' and 1 or 0",
                 1,
             ),
-            (
-                "return tostring(7)=='7' and 1 or 0",
-                1,
-            ),
+            ("return tostring(7)=='7' and 1 or 0", 1),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
