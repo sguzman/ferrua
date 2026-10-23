@@ -315,6 +315,10 @@ const FIXTURES: &[&str] = &[
     "local key={}; local t={[key]=4}; local k,v=next(t); return rawequal(k,key) and v or 0",
     "local t={10,20}; local f={}; for i,v in ipairs(t) do f[i]=function() return v end end; return f[1]()+f[2]()",
     "local t={3,4}; local iter,state,k=pairs(t); return type(iter)=='function' and rawequal(state,t) and k==nil and 1 or 0",
+    "local total=0; for i=1,8 do local t={}; t[16384]=nil; t[1]=i; total=total+t[1] end; return total",
+    "local t={nil,5,nil}; return next(t)==2 and 1 or 0",
+    "local function holes() return nil,4,nil end; local t={holes()}; return t[2]",
+    "local t={[1]=5}; rawset(t,1,nil); return next(t)==nil and 1 or 0",
 ];
 
 fn render(values: &[Value]) -> String {
