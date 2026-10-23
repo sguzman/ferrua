@@ -2469,6 +2469,28 @@
                   "evidence": "GitHub Actions 40032378817: Linux quality, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all successful"
                 }
               ]
+            },
+            {
+              "id": "T377",
+              "emoji": "🔗",
+              "name": "First-class Lua __concat fallback after byte concatenation",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Preserve numeric/string byte concatenation and dispatch function-valued __concat only for incompatible operands",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::concat_with_metamethod"
+                },
+                {
+                  "text": "Cover left/right selection, byte strings, closure returns, recursion limits and Lua 5.4 differential fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: concat_metamethod_preserves_byte_concat_and_bounded_callbacks; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -2980,6 +3002,13 @@
           "name": "Bitwise binary metamethod callbacks with numeric precedence",
           "task_ids": [
             "T376"
+          ]
+        },
+        {
+          "emoji": "🔗",
+          "name": "Lua concat callbacks after native byte concatenation",
+          "task_ids": [
+            "T377"
           ]
         }
       ]
