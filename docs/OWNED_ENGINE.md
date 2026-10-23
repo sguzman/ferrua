@@ -425,3 +425,9 @@ The unit and upstream Lua 5.4 differential fixtures cover primitive comparisons,
 The owned Lua runtime's first-class `pairs(table)` function now checks a raw `__pairs` metatable entry before falling back to `next, table, nil`. A first-party Lua function is invoked with the table; its results are adjusted to exactly three iterator-triple positions (iterator, state, initial control), matching Lua 5.4. The normal generic-for compiler and VM then execute that iterator without a special loop path. `ipairs` is unchanged, and direct `next` and raw table access do not consult `__pairs`.
 
 The pending regression and upstream Lua 5.4 differential fixtures cover custom iterators, lexical captures, missing/excess return values, generic-for updates and recursive hook limits. This increment is **pending CI acceptance**. Callable-table/builtin metamethod values, resource-closing iterator values and complete standard-library/metatable semantics remain outside its scope. Production `fer` stays on the pinned external interpreter.
+
+### Native-stack-safe recursive Lua callbacks (pending CI)
+
+The bounded owned VM caps recursive Lua calls and table-metatable fallback chains at 16 levels. This conservative experimental cap is intentional: the widening opcode dispatcher increased Rust host stack use, and CI exposed a native stack abort before the prior 64-level guard could respond. The smaller cap allows the owned engine to return `CallDepthExceeded` rather than aborting the process. Tests specifically recurse through `__index`, `__add`, `__pairs` and `__len` to guard against the regression.
+
+This safety remediation is **pending full CI acceptance**. The recursion cap is a bounded-prototype constraint, not a claim that this runtime matches Lua's general recursion capacity. Production `fer` continues to use the pinned external interpreter.
