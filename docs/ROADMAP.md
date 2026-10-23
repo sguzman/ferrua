@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 96%` across 104 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 95%` across 105 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -458,6 +458,10 @@
   - [x] Preserve native number/string comparisons and add table __eq, __lt, __le callbacks with Lua truthiness and reverse-order fallbacks — src/owned_flow.rs: Execution::equality_with_metamethod and Execution::ordering_with_metamethod
   - [x] Exercise identity, left/right selection, <= via __lt, reversed >/>=, invalid types, recursion and Lua 5.4 differential fixtures — src/owned_flow.rs: comparison_metamethods_preserve_identity_truthiness_and_ordering; tests/owned_flow.rs
   - [x] Pass Linux formatter, Clippy, Rust tests, Rust 1.96, composite consumer and Lua 5.4 differential CI — GitHub Actions 40033892089: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all succeeded
+- 🔄 **T379** Lua __pairs custom iterator triples through first-party closures — `███████░░░ 67%`
+  - [x] Call table __pairs Lua functions and adjust results to iterator, state and initial control while preserving native raw pairs — src/owned_flow.rs: Builtin::Pairs multiple-result execution
+  - [x] Cover custom generic-for closure iterators, return adjustment, shadowing, raw next, recursion and Lua 5.4 differential fixtures — src/owned_flow.rs: pairs_metatable_hook_preserves_generic_for_and_multiple_results; tests/owned_flow.rs
+  - [ ] Pass Linux formatter, Clippy, Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -535,4 +539,5 @@
 - 🧩 Bitwise binary metamethod callbacks with numeric precedence — `██████████ 100%`
 - 🔗 Lua concat callbacks after native byte concatenation — `██████████ 100%`
 - ⚖️ Lua equality and ordering metamethod callbacks — `██████████ 100%`
+- 🔄 Lua pairs table metamethod custom iterator triples — `███████░░░ 67%`
 
