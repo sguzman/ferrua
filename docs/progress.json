@@ -2359,7 +2359,7 @@
               "id": "T372",
               "emoji": "📏",
               "name": "Function-valued __len with raw Lua length separation",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Dispatch table __len closures via shared call executor while preserving raw string/table length",
@@ -2373,7 +2373,8 @@
                 },
                 {
                   "text": "Pass Linux fmt/clippy/tests, Rust 1.96, downstream consumer and upstream Lua 5.4 CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40029449968: Linux, Rust 1.96, Lua 5.4 differential, action consumer and reporter succeeded"
                 }
               ]
             }
