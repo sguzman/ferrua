@@ -526,10 +526,7 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
 
 /// Run owned control-flow bytecode and return fixed-count supported Lua values.
 /// No syscalls, global environment, host callbacks, or I/O.
-pub fn execute_flow_values(
-    program: &FlowProgram,
-    budget: usize,
-) -> Result<Vec<Value>, FlowError> {
+pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<Value>, FlowError> {
     if program.instructions.len() > MAX_CODE || program.slots > MAX_SLOTS {
         return Err(FlowError::InvalidBytecode);
     }
