@@ -75,13 +75,22 @@ fn emit(program: &mut Program, expression: &Expr<'_>, depth: usize) -> Result<us
         Expr::Unary { op, right } if matches!(*op, "-" | "~") => {
             let input = emit(program, right, depth + 1)?;
             if *op == "-" {
-                Instruction::Neg { dest: program.registers, input }
+                Instruction::Neg {
+                    dest: program.registers,
+                    input,
+                }
             } else {
-                Instruction::BitNot { dest: program.registers, input }
+                Instruction::BitNot {
+                    dest: program.registers,
+                    input,
+                }
             }
         }
         Expr::Binary { op, left, right }
-            if matches!(*op, "+" | "-" | "*" | "//" | "%" | "&" | "|" | "~" | "<<" | ">>") =>
+            if matches!(
+                *op,
+                "+" | "-" | "*" | "//" | "%" | "&" | "|" | "~" | "<<" | ">>"
+            ) =>
         {
             let lhs = emit(program, left, depth + 1)?;
             let rhs = emit(program, right, depth + 1)?;
@@ -128,25 +137,43 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 
 // Lua integer floor division rounds toward minus infinity, unlike Rust /.
 fn floor_div(a: i64, b: i64) -> Result<i64, Error> {
-    if b == 0 { return Err(Error::DivisionByZero); }
-    if b == -1 { return Ok(a.wrapping_neg()); }
+    if b == 0 {
+        return Err(Error::DivisionByZero);
+    }
+    if b == -1 {
+        return Ok(a.wrapping_neg());
+    }
     let q = a / b;
     let r = a % b;
-    if r != 0 && ((r ^ b) < 0) { Ok(q.wrapping_sub(1)) } else { Ok(q) }
+    if r != 0 && ((r ^ b) < 0) {
+        Ok(q.wrapping_sub(1))
+    } else {
+        Ok(q)
+    }
 }
 
 fn lua_mod(a: i64, b: i64) -> Result<i64, Error> {
-    if b == 0 { return Err(Error::DivisionByZero); }
-    if b == -1 { return Ok(0); }
+    if b == 0 {
+        return Err(Error::DivisionByZero);
+    }
+    if b == -1 {
+        return Ok(0);
+    }
     let r = a % b;
-    if r != 0 && ((r ^ b) < 0) { Ok(r.wrapping_add(b)) } else { Ok(r) }
+    if r != 0 && ((r ^ b) < 0) {
+        Ok(r.wrapping_add(b))
+    } else {
+        Ok(r)
+    }
 }
 
 // Lua shifts operate on an unsigned bit pattern and negative shift counts
 // reverse direction. A count >= 64 clears all bits.
 fn shift(value: i64, distance: i64, left: bool) -> i64 {
     let count = distance.unsigned_abs();
-    if count >= i64::BITS as u64 { return 0; }
+    if count >= i64::BITS as u64 {
+        return 0;
+    }
     if left != (distance < 0) {
         (value as u64).wrapping_shl(count as u32) as i64
     } else {
@@ -186,22 +213,32 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
                 dest,
                 read(&registers, lhs)?.wrapping_mul(read(&registers, rhs)?),
             ),
-            Instruction::FloorDiv { dest, lhs, rhs } =>
-                (dest, floor_div(read(&registers, lhs)?, read(&registers, rhs)?)?),
-            Instruction::Mod { dest, lhs, rhs } =>
-                (dest, lua_mod(read(&registers, lhs)?, read(&registers, rhs)?)?),
-            Instruction::BitAnd { dest, lhs, rhs } =>
-                (dest, read(&registers, lhs)? & read(&registers, rhs)?),
-            Instruction::BitOr { dest, lhs, rhs } =>
-                (dest, read(&registers, lhs)? | read(&registers, rhs)?),
-            Instruction::BitXor { dest, lhs, rhs } =>
-                (dest, read(&registers, lhs)? ^ read(&registers, rhs)?),
-            Instruction::BitNot { dest, input } =>
-                (dest, !read(&registers, input)?),
-            Instruction::Shl { dest, lhs, rhs } =>
-                (dest, shift(read(&registers, lhs)?, read(&registers, rhs)?, true)),
-            Instruction::Shr { dest, lhs, rhs } =>
-                (dest, shift(read(&registers, lhs)?, read(&registers, rhs)?, false)),
+            Instruction::FloorDiv { dest, lhs, rhs } => (
+                dest,
+                floor_div(read(&registers, lhs)?, read(&registers, rhs)?)?,
+            ),
+            Instruction::Mod { dest, lhs, rhs } => (
+                dest,
+                lua_mod(read(&registers, lhs)?, read(&registers, rhs)?)?,
+            ),
+            Instruction::BitAnd { dest, lhs, rhs } => {
+                (dest, read(&registers, lhs)? & read(&registers, rhs)?)
+            }
+            Instruction::BitOr { dest, lhs, rhs } => {
+                (dest, read(&registers, lhs)? | read(&registers, rhs)?)
+            }
+            Instruction::BitXor { dest, lhs, rhs } => {
+                (dest, read(&registers, lhs)? ^ read(&registers, rhs)?)
+            }
+            Instruction::BitNot { dest, input } => (dest, !read(&registers, input)?),
+            Instruction::Shl { dest, lhs, rhs } => (
+                dest,
+                shift(read(&registers, lhs)?, read(&registers, rhs)?, true),
+            ),
+            Instruction::Shr { dest, lhs, rhs } => (
+                dest,
+                shift(read(&registers, lhs)?, read(&registers, rhs)?, false),
+            ),
         };
         let target = registers.get_mut(dest).ok_or(Error::InvalidBytecode)?;
         if target.is_some() {
@@ -247,7 +284,10 @@ mod tests {
     fn division_by_zero_returns_error() {
         for source in ["1//0", "1%0", "1//(2-2)"] {
             let program = compile_integer_expression(source).unwrap();
-            assert_eq!(execute_integer_program(&program), Err(Error::DivisionByZero));
+            assert_eq!(
+                execute_integer_program(&program),
+                Err(Error::DivisionByZero)
+            );
         }
     }
     #[test]
