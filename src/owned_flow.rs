@@ -3574,9 +3574,7 @@ mod tests {
             9
         );
         assert_eq!(
-            evaluate(
-                "local t=setmetatable({}, {__index=function() return 4,5 end}); return t.x"
-            ),
+            evaluate("local t=setmetatable({}, {__index=function() return 4,5 end}); return t.x"),
             4
         );
         assert_eq!(
@@ -3634,7 +3632,7 @@ mod tests {
             10
         );
         let program = compile_flow_chunk(
-            "local t={}; setmetatable(t,{__index=function(self,k) return self[k] end}); return t.x"
+            "local t={}; setmetatable(t,{__index=function(self,k) return self[k] end}); return t.x",
         )
         .unwrap();
         assert_eq!(
