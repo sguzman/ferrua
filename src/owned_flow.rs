@@ -3403,6 +3403,22 @@ mod tests {
             5
         );
         assert_eq!(evaluate("return type(pairs)=='function' and 1 or 0"), 1);
+        assert_eq!(
+            evaluate("local t={name=6}; local k,v=next(t); return k=='name' and v or 0"),
+            6
+        );
+        assert_eq!(
+            evaluate("local key={}; local t={[key]=4}; local k,v=next(t); return rawequal(k,key) and v or 0"),
+            4
+        );
+        assert_eq!(
+            evaluate("local t={10,20}; local f={}; for i,v in ipairs(t) do f[i]=function() return v end end; return f[1]()+f[2]()"),
+            30
+        );
+        assert_eq!(
+            evaluate("local t={3,4}; local iter,state,k=pairs(t); return type(iter)=='function' and rawequal(state,t) and k==nil and 1 or 0"),
+            1
+        );
         let entries = (1..=50)
             .map(|number| number.to_string())
             .collect::<Vec<_>>()
