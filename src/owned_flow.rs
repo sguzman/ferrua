@@ -3094,10 +3094,7 @@ mod tests {
         assert_eq!(evaluate("return rawlen('é')"), 2);
         assert_eq!(evaluate("return rawlen({1,2,3})"), 3);
         assert_eq!(evaluate("local t={a=4}; return rawlen(t)"), 0);
-        assert_eq!(
-            evaluate("local t={1,2}; t[3]=4; return rawlen(t)"),
-            3
-        );
+        assert_eq!(evaluate("local t={1,2}; t[3]=4; return rawlen(t)"), 3);
         assert_eq!(evaluate("local f=rawlen; return f('xyz')"), 3);
         assert_eq!(
             evaluate("local rawlen=function() return 6 end; return rawlen({})"),
