@@ -208,3 +208,7 @@ The experimental byte-string pool now supports dynamically created strings throu
 - [CI #40004295352](https://github.com/sguzman/ferrua/actions/runs/40004295352): bounded Lua concatenation, integer coercion and lexicographic byte comparisons passed all four jobs.
 
 The independent VM still lacks general associative string-keyed tables, metatables, full function and float behavior, GC and the standard Lua runtime; no production engine switch has been accepted.
+
+### Unicode scalar string escapes
+
+The owned string decoder now accepts valid Unicode scalar values in Lua \u{hex} escapes and emits their UTF-8 byte sequences, including multibyte code points. Invalid scalars and unfinished or overflowing escapes reject explicitly rather than silently changing bytes. Lua also permits certain extended non-scalar escape encodings; those remain outside this narrowed compiler subset and are not claimed compatible. Upstream differential tests exercise accepted scalar escapes.

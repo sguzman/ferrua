@@ -990,6 +990,35 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
                 i += 2;
                 Some((a * 16 + b) as u8)
             }
+            b'u' => {
+                if bytes.get(i) != Some(&b'{') {
+                    return Err(FlowError::Unsupported("invalid Unicode escape".into()));
+                }
+                i += 1;
+                let mut scalar = 0u32;
+                let mut digits = 0;
+                while let Some(next) = bytes.get(i).copied() {
+                    let Some(value) = (next as char).to_digit(16) else {
+                        break;
+                    };
+                    scalar = scalar
+                        .checked_mul(16)
+                        .and_then(|number| number.checked_add(value))
+                        .ok_or_else(|| FlowError::Unsupported("Unicode escape overflow".into()))?;
+                    digits += 1;
+                    i += 1;
+                }
+                if digits == 0 || bytes.get(i) != Some(&b'}') {
+                    return Err(FlowError::Unsupported("unfinished Unicode escape".into()));
+                }
+                i += 1;
+                let ch = char::from_u32(scalar).ok_or_else(|| {
+                    FlowError::Unsupported("Unicode escape requires a valid scalar".into())
+                })?;
+                let mut encoded = [0; 4];
+                result.extend_from_slice(ch.encode_utf8(&mut encoded).as_bytes());
+                None
+            }
             b'0'..=b'9' => {
                 let mut value = u32::from(escaped - b'0');
                 for _ in 0..2 {
@@ -2276,6 +2305,14 @@ mod tests {
             evaluate("local a='hello'; local b=\"hello\"; return (a==b) and #a or 0"),
             5
         );
+    }
+
+    #[test]
+    fn unicode_scalar_escapes_encode_utf8_bytes() {
+        assert_eq!(evaluate(r#"return #"\u{1F600}""#), 4);
+        assert_eq!(evaluate(r#"return #"\u{E9}""#), 2);
+        assert_eq!(evaluate(r#"return ("\u{E9}" == "é") and 1 or 0"#), 1);
+        assert!(compile_flow_chunk(r#"return "\u{D800}""#).is_err());
     }
 
     #[test]
