@@ -62,6 +62,9 @@ pub enum Op {
     Constant(Value),
     ReadLocal(usize),
     AssignLocals(Vec<usize>),
+    PrepareLocal(usize),
+    PrepareIndexed,
+    AssignPrepared(usize),
     NewTable(usize),
     NewFunction(usize),
     Call(usize),
@@ -552,35 +555,33 @@ impl<'a> Compiler<'a> {
                     self.push(Op::AssignLocals(targets))?;
                 }
                 Statement::Assign { targets, values } => {
-                    if let ([Expr::Index { object, key }], [value]) =
-                        (targets.as_slice(), values.as_slice())
-                    {
-                        self.expression(object, 0)?;
-                        self.expression(key, 0)?;
-                        self.expression(value, 0)?;
-                        self.push(Op::SetTable)?;
-                        continue;
-                    }
-                    // Resolve targets and evaluate RHS before mutating slots.
-                    let slots = targets
-                        .iter()
-                        .map(|target| {
-                            let Expr::Atom(name) = target else {
+                    // Lua evaluates all LHS references first, then all RHS
+                    // expressions, then performs the assignments.
+                    for target in targets {
+                        match target {
+                            Expr::Atom(name) => {
+                                let slot = self.slot(name)?;
+                                if self.read_only.contains(&slot) {
+                                    return Err(FlowError::Unsupported(
+                                        "numeric for control variable is read-only".into(),
+                                    ));
+                                }
+                                self.push(Op::PrepareLocal(slot))?;
+                            }
+                            Expr::Index { object, key } => {
+                                self.expression(object, 0)?;
+                                self.expression(key, 0)?;
+                                self.push(Op::PrepareIndexed)?;
+                            }
+                            _ => {
                                 return Err(FlowError::Unsupported(
-                                    "only local assignment targets".into(),
-                                ));
-                            };
-                            let slot = self.slot(name)?;
-                            if self.read_only.contains(&slot) {
-                                return Err(FlowError::Unsupported(
-                                    "numeric for control variable is read-only".into(),
+                                    "only local and integer-index assignment targets".into(),
                                 ));
                             }
-                            Ok(slot)
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
-                    self.values(values, slots.len())?;
-                    self.push(Op::AssignLocals(slots))?;
+                        }
+                    }
+                    self.values(values, targets.len())?;
+                    self.push(Op::AssignPrepared(targets.len()))?;
                 }
                 Statement::Return(values) => {
                     if let Some((last, before)) = values.split_last() {
@@ -798,6 +799,12 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
     }
 }
 
+#[derive(Clone, Copy)]
+enum PendingTarget {
+    Local(usize),
+    Indexed { table: usize, field: usize },
+}
+
 #[derive(Clone)]
 struct Closure {
     function: usize,
@@ -860,6 +867,7 @@ impl Execution<'_> {
             *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
         }
         let mut stack = Vec::new();
+        let mut prepared = Vec::new();
         let mut last_multiple = None;
         let mut pc = 0;
         while pc < instructions.len() {
@@ -988,6 +996,58 @@ impl Execution<'_> {
                     for (index, value) in indices.iter().zip(values) {
                         let cell = *slots.get(*index).ok_or(FlowError::InvalidBytecode)?;
                         *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
+                    }
+                }
+                Op::PrepareLocal(slot) => {
+                    let cell = *slots.get(*slot).ok_or(FlowError::InvalidBytecode)?;
+                    if prepared.len() >= MAX_SLOTS {
+                        return Err(FlowError::TooLarge);
+                    }
+                    prepared.push(PendingTarget::Local(cell));
+                }
+                Op::PrepareIndexed => {
+                    let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let (Value::Table(handle), Value::Integer(index)) = (table, key) else {
+                        return Err(FlowError::TypeError);
+                    };
+                    let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
+                    if field == 0 || field > MAX_TABLE_FIELDS {
+                        return Err(FlowError::TypeError);
+                    }
+                    if handle >= self.tables.len() {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    if prepared.len() >= MAX_SLOTS {
+                        return Err(FlowError::TooLarge);
+                    }
+                    prepared.push(PendingTarget::Indexed { table: handle, field });
+                }
+                Op::AssignPrepared(count) => {
+                    if stack.len() < *count || prepared.len() < *count {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let values = stack.split_off(stack.len() - count);
+                    let addresses = prepared.split_off(prepared.len() - count);
+                    for (address, value) in addresses.into_iter().zip(values) {
+                        match address {
+                            PendingTarget::Local(cell) => {
+                                *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? =
+                                    Some(value);
+                            }
+                            PendingTarget::Indexed { table, field } => {
+                                let cells = self.tables.get_mut(table).ok_or(FlowError::InvalidBytecode)?;
+                                if field > cells.len() {
+                                    let growth = field - cells.len();
+                                    if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+                                        return Err(FlowError::TooLarge);
+                                    }
+                                    self.table_cells += growth;
+                                    cells.resize(field, None);
+                                }
+                                cells[field - 1] = Some(value);
+                            }
+                        }
                     }
                 }
                 Op::NewTable(count) | Op::NewTableTail(count) => {
@@ -1628,6 +1688,43 @@ mod tests {
         assert_eq!(
             evaluate("local a={1}; local b={1}; return (a==b) and 1 or 0"),
             0
+        );
+    }
+
+    #[test]
+    fn mixed_parallel_lvalue_assignment_evaluates_addresses_before_rhs() {
+        assert_eq!(
+            evaluate("local t={1,2}; local x=7; t[1],x=5,9; return t[1]+x"),
+            14
+        );
+        assert_eq!(
+            evaluate("local t={1}; local x=3; x,t[1]=9,8; return x+t[1]"),
+            17
+        );
+        assert_eq!(
+            evaluate("local t={1,2}; local i=1; i,t[i]=2,9; return t[1]*10+t[2]"),
+            92
+        );
+        assert_eq!(
+            evaluate("local a={1}; local old=a; a,a[1]={4},6; return old[1]+a[1]"),
+            10
+        );
+        assert_eq!(
+            evaluate("local t={1,2}; local i=0; local function at() i=i+1; return i end; t[at()],t[at()]=8,9; return t[1]*10+t[2]"),
+            89
+        );
+        assert_eq!(
+            evaluate("local t={1}; local x; local function f() return 4,5 end; t[1],x=f(); return t[1]*10+x"),
+            45
+        );
+        assert_eq!(
+            evaluate("local t={1,2}; t[1],t[2]=t[2],t[1]; return t[1]*10+t[2]"),
+            21
+        );
+        let invalid = compile_flow_chunk("local t={1}; t[0],t[1]=8,9; return t[1]").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
         );
     }
 
