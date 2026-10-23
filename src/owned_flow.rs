@@ -2076,8 +2076,11 @@ impl Execution<'_> {
                             Value::Float(current.to_bits()),
                         )
                     } else {
-                        let (Value::Integer(current), Value::Integer(bound), Value::Integer(stride)) =
-                            (current, bound, stride)
+                        let (
+                            Value::Integer(current),
+                            Value::Integer(bound),
+                            Value::Integer(stride),
+                        ) = (current, bound, stride)
                         else {
                             return Err(FlowError::TypeError);
                         };
@@ -2116,8 +2119,7 @@ impl Execution<'_> {
                     if *exit > instructions.len() {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    let counter_cell =
-                        *slots.get(*counter).ok_or(FlowError::InvalidBytecode)?;
+                    let counter_cell = *slots.get(*counter).ok_or(FlowError::InvalidBytecode)?;
                     let step_cell = *slots.get(*step).ok_or(FlowError::InvalidBytecode)?;
                     let current = self
                         .cells
@@ -2490,10 +2492,7 @@ mod tests {
             evaluate("local s=0; for i=1,2,0.5 do s=s+i end; return (s==4.5) and 1 or 0"),
             1
         );
-        assert_eq!(
-            evaluate("local n=0; for i=1.0,4 do n=n+1 end; return n"),
-            4
-        );
+        assert_eq!(evaluate("local n=0; for i=1.0,4 do n=n+1 end; return n"), 4);
         assert_eq!(
             evaluate("local s=0; for i=1.5,0,-0.5 do s=s+i end; return (s==3.0) and 1 or 0"),
             1
