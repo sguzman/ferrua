@@ -43,6 +43,7 @@ impl Value {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Binary {
+    Concat,
     Add,
     Sub,
     Mul,
@@ -471,6 +472,7 @@ impl<'a> Compiler<'a> {
             }
             Expr::Binary { op, left, right } => {
                 let operation = match *op {
+                    ".." => Binary::Concat,
                     "+" => Binary::Add,
                     "-" => Binary::Sub,
                     "*" => Binary::Mul,
@@ -1068,9 +1070,38 @@ struct Execution<'a> {
     closures: Vec<Closure>,
     cells: Vec<Option<Value>>,
     captured_cells: HashSet<usize>,
+    strings: Vec<Vec<u8>>,
 }
 
 impl Execution<'_> {
+    fn string_bytes(&self, value: Value) -> Result<Vec<u8>, FlowError> {
+        match value {
+            Value::String(handle) => self
+                .strings
+                .get(handle)
+                .cloned()
+                .ok_or(FlowError::InvalidBytecode),
+            Value::Integer(number) => Ok(number.to_string().into_bytes()),
+            _ => Err(FlowError::TypeError),
+        }
+    }
+
+    fn intern_string(&mut self, bytes: Vec<u8>) -> Result<Value, FlowError> {
+        if let Some(handle) = self.strings.iter().position(|item| item == &bytes) {
+            return Ok(Value::String(handle));
+        }
+        if self.strings.len() >= MAX_STRINGS
+            || bytes.len() > MAX_STRING_POOL_BYTES
+            || self.strings.iter().map(Vec::len).sum::<usize>()
+                > MAX_STRING_POOL_BYTES.saturating_sub(bytes.len())
+        {
+            return Err(FlowError::TooLarge);
+        }
+        let handle = self.strings.len();
+        self.strings.push(bytes);
+        Ok(Value::String(handle))
+    }
+
     /// Fresh lexical cell on successive loop iterations; old closures retain
     /// the prior cell rather than observing later iteration values.
     fn iteration_cell(&mut self, slots: &mut [usize], slot: usize) -> Result<usize, FlowError> {
@@ -1437,7 +1468,6 @@ impl Execution<'_> {
                 Op::Length => {
                     let length = match stack.pop().ok_or(FlowError::InvalidBytecode)? {
                         Value::String(handle) => self
-                            .program
                             .strings
                             .get(handle)
                             .ok_or(FlowError::InvalidBytecode)?
@@ -1466,7 +1496,36 @@ impl Execution<'_> {
                 Op::Binary(op) => {
                     let rhs = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     let lhs = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                    stack.push(evaluate_binary(*op, lhs, rhs)?);
+                    let result = match *op {
+                        Binary::Concat => {
+                            let mut bytes = self.string_bytes(lhs)?;
+                            let right = self.string_bytes(rhs)?;
+                            if bytes.len().saturating_add(right.len()) > MAX_STRING_POOL_BYTES {
+                                return Err(FlowError::TooLarge);
+                            }
+                            bytes.extend_from_slice(&right);
+                            self.intern_string(bytes)?
+                        }
+                        Binary::Less | Binary::LessEqual | Binary::Greater | Binary::GreaterEqual
+                            if matches!((lhs, rhs), (Value::String(_), Value::String(_))) =>
+                        {
+                            let (Value::String(a), Value::String(b)) = (lhs, rhs) else {
+                                unreachable!("string operands guarded")
+                            };
+                            let a = self.strings.get(a).ok_or(FlowError::InvalidBytecode)?;
+                            let b = self.strings.get(b).ok_or(FlowError::InvalidBytecode)?;
+                            let matches = match *op {
+                                Binary::Less => a < b,
+                                Binary::LessEqual => a <= b,
+                                Binary::Greater => a > b,
+                                Binary::GreaterEqual => a >= b,
+                                _ => unreachable!("guarded comparison operator"),
+                            };
+                            Value::Boolean(matches)
+                        }
+                        _ => evaluate_binary(*op, lhs, rhs)?,
+                    };
+                    stack.push(result);
                 }
                 Op::JumpIfFalse(target) => {
                     let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
@@ -1639,6 +1698,7 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
         closures: Vec::new(),
         cells: Vec::new(),
         captured_cells: HashSet::new(),
+        strings: program.strings.clone(),
     };
     execution.run(&program.instructions, program.slots, &[], &[], &[])
 }
@@ -2177,6 +2237,20 @@ mod tests {
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
+    }
+
+    #[test]
+    fn lua_string_concat_and_lexical_order_use_bounded_byte_values() {
+        assert_eq!(evaluate("return #('ab'..'cd')"), 4);
+        assert_eq!(evaluate("return #('é'..'ñ')"), 4);
+        assert_eq!(evaluate("return #(12 .. 'x')"), 3);
+        assert_eq!(evaluate("return (('a'..'b')=='ab') and 1 or 0"), 1);
+        assert_eq!(evaluate("return (('a'..'b')~='abc') and 1 or 0"), 1);
+        assert_eq!(evaluate("return ('abc'<'abd') and 1 or 0"), 1);
+        assert_eq!(evaluate("return ('abc'>='abc') and 1 or 0"), 1);
+        assert_eq!(evaluate("local a='ab'; local function join(x) return a..x end; return #join('cd')"), 4);
+        let invalid = compile_flow_chunk("return true .. 7").unwrap();
+        assert_eq!(execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET), Err(FlowError::TypeError));
     }
 
     #[test]

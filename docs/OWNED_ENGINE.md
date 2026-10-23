@@ -195,3 +195,7 @@ The owned-flow VM now supports Lua's unary `#` operator on its bounded positive-
 ### Immutable Lua byte-string literals
 
 The experimental VM now interns string literals by byte content in a bounded, compile-time-owned pool. String identity in this subset is content-based, so equality between distinct quote styles compares the same bytes. Unary `#` returns the **byte count**, not Unicode character count. Supported string decoding covers long-bracket text, short-string escapes for simple controls, decimal and hexadecimal byte escapes, and the whitespace-skipping `\\z` escape. Unicode code-point escapes and general runtime concatenation remain separate work; unsupported spellings reject explicitly rather than silently accepting incorrect values. This has no effect on production `fer`.
+
+### Bounded runtime string concatenation and ordering
+
+The experimental byte-string pool now supports dynamically created strings through Lua's right-associative `..` operator, with integer-to-decimal-string concatenation as a supported Lua coercion. Result strings are interned by byte content with a hard 65,536-byte pool cap, preserving equality across literal and computed values. Ordered string comparisons use lexicographic byte ordering; `#` measures the actual byte length of computed strings. General numeric parsing, float strings, full Unicode escapes, garbage collection and metatables are still outside this VM subset. The working production `fer` interpreter is unchanged.
