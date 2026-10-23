@@ -2451,11 +2451,7 @@ mod tests {
             evaluate("local t={1,2}; t[1],t[2]=t[2],t[1]; return t[1]*10+t[2]"),
             21
         );
-        let invalid = compile_flow_chunk("local t={1}; t[0],t[1]=8,9; return t[1]").unwrap();
-        assert_eq!(
-            execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
-            Err(FlowError::TypeError)
-        );
+        assert_eq!(evaluate("local t={1}; t[0],t[1]=8,9; return t[1]"), 9);
     }
 
     #[test]
@@ -2666,11 +2662,7 @@ mod tests {
             57
         );
         assert_eq!(evaluate("local t={name=7}; return t.name"), 7);
-        let unsupported = compile_flow_chunk("local t={[0]=7,1}; return t[1]").unwrap();
-        assert_eq!(
-            execute_flow_chunk(&unsupported, DEFAULT_STEP_BUDGET),
-            Err(FlowError::TypeError)
-        );
+        assert_eq!(evaluate("local t={[0]=7,1}; return t[0]*10+t[1]"), 71);
     }
 
     #[test]
