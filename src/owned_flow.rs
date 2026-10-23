@@ -1297,8 +1297,7 @@ impl Execution<'_> {
                 // Lua normalizes an integral floating table key to the
                 // corresponding integer key, including both signed zeros.
                 if number.fract() == 0.0
-                    && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
-                        .contains(&number)
+                    && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&number)
                 {
                     let integer = number as i64;
                     if (1..=MAX_TABLE_FIELDS as i64).contains(&integer) {
@@ -2843,9 +2842,15 @@ mod tests {
         assert_eq!(evaluate("local t={}; t[1.5]=9; return t[1.5]"), 9);
         assert_eq!(evaluate("local t={}; t[1.5]=9; return t[1] or 4"), 4);
         assert_eq!(evaluate("local t={}; t[2^3]=5; return t[8]"), 5);
-        assert_eq!(evaluate("local t={}; t[0.0]=3; t[0]=nil; return t[-0.0] or 6"), 6);
+        assert_eq!(
+            evaluate("local t={}; t[0.0]=3; t[0]=nil; return t[-0.0] or 6"),
+            6
+        );
         let invalid = compile_flow_chunk("local t={}; t[0/0]=1; return 0").unwrap();
-        assert_eq!(execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET), Err(FlowError::TypeError));
+        assert_eq!(
+            execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
     }
 
     #[test]
