@@ -37,7 +37,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [40 passing Rust tests, 3 green GitHub Actions jobs, Lua release packaging and SHA-256 verification](https://github.com/sguzman/ferrua/actions/runs/39946114053). Native EndeavourOS acceptance and the tagged stable v1.0.0 release remain outstanding.
+**Latest verified CI:** [42 passing Rust tests, Lua 5.1–5.5 matrix, 3 green jobs, locked builds and checksummed release packaging](https://github.com/sguzman/ferrua/actions/runs/39947311765). Native EndeavourOS runtime acceptance and tagged stable v1.0.0 release remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 

@@ -2,9 +2,9 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `████████░░ 77%` across 26 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `████████░░ 79%` across 29 atomic tasks. This describes recorded work, not full Lua compatibility.
 
-## 🌙 M0 — Working fer interpreter MVP — `█████████░ 93%`
+## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
 **Acceptance gate:** A usable fer CLI executes basic Lua scripts and passes Linux CI; stable v1.0.0 requires release acceptance.
 
@@ -21,7 +21,7 @@
   - [x] Rust fer crate and GitHub workflow checked in — Cargo.toml; .github/workflows/ci.yml
   - [x] Rust compile, lint and formatting verified in CI — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
 
-### ⚙️ P1 — Lua interpreter and command interface — `█████████░ 90%`
+### ⚙️ P1 — Lua interpreter and command interface — `█████████░ 92%`
 
 - 🧠 **T101** Compile and execute Lua bytecode in pure Rust — `██████████ 100%`
   - [x] Pinned pure-Rust Lua VM integrated — Cargo.toml; src/main.rs; docs/ARCHITECTURE.md
@@ -48,6 +48,10 @@
   - [x] Release-mode Linux preview binary built and uploaded — GitHub Actions 39894224746: fer-linux-x86_64-preview artifact
   - [ ] Runtime independently verified on EndeavourOS
   - [ ] Versioned v1.0.0 release after acceptance
+- 📝 **T108** Non-executing syntax-only compilation for CI — `██████████ 100%`
+  - [x] Accept --check for script paths, expressions and piped Lua source — src/main.rs: check_source, parse and execute
+  - [x] Never run validated Lua during syntax-only check — tests/cli.rs and src/main.rs unit test; GitHub Actions 39947311765
+  - [x] Report syntax errors with nonzero exit status — GitHub Actions 39947311765: --check invalid Lua rejects, 42 tests green
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -56,12 +60,13 @@
 - 🛡️ Opt-in sandbox — `██████████ 100%`
 - 📋 Documented, auditable progress — `██████████ 100%`
 - 📦 Distribution readiness — `███░░░░░░░ 33%`
+- 📝 Side-effect-free source validation — `██████████ 100%`
 
-## 🧰 M1 — Daily automation and Python replacement — `█████████░ 89%`
+## 🧰 M1 — Daily automation and Python replacement — `█████████░ 91%`
 
 **Acceptance gate:** Representative filesystem, JSON, process, HTTP, structured-data and versioned downstream CI scripts run without Python. Stable distribution and adoption acceptance required.
 
-### 🗂️ P2 — Everyday host and data capabilities — `██████████ 95%`
+### 🗂️ P2 — Everyday host and data capabilities — `██████████ 96%`
 
 - 📂 **T201** Read, write and iterate local files — `██████████ 100%`
   - [x] Lua io and os library available in trusted mode — src/main.rs
@@ -86,6 +91,14 @@
   - [x] Read streams after capture ceiling instead of blocking child — src/process.rs: limited_read drains all output and caps capture at 2 MiB
   - [x] Exercise verbose child without artificial timeout — GitHub Actions 39946114053: verbose_child_is_drained_without_spurious_timeout accepted
   - [x] Preserve explicit truncation and timeout result flags — src/process.rs; GitHub Actions 39946114053: all Rust tests passed
+- 🛡️ **T213** Bound JSON recursion for robust restricted execution — `██████████ 100%`
+  - [x] Limit encoder and decoder nesting to 128 levels — tools/json.lua: MAX_DEPTH
+  - [x] Reject malformed deep arrays and Lua table encoding without crashing — tests/json_spec.lua: 130-level decode and encode regressions
+  - [x] Pass cross-dialect and restricted CI fixtures — GitHub Actions 39947311765: tests/json_spec.lua across 5 Lua dialects
+- 🔬 **T214** Run basic automation smoke across Lua 5.1–5.5 — `██████████ 100%`
+  - [x] Build first-party Lua QA harness without Python — tools/check_compat.lua
+  - [x] Exercise JSON, TOML/YAML, ordinary Lua, syntax and sandbox checks across five dialects — tools/check_compat.lua; .github/workflows/ci.yml
+  - [x] Verify all five dialect runs and three CI jobs — GitHub Actions 39947311765: five dialect matrix passed
 
 ### 🌐 P4 — Portable data and CI graduation — `████████░░ 83%`
 
@@ -124,6 +137,7 @@
 - 🧵 Reliable bounded subprocess capture — `██████████ 100%`
 - 🐙 Native GitHub REST automation — `██████████ 100%`
 - 🌙 Release packaging and dependency reproducibility — `███████░░░ 67%`
+- 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
 ## 🔩 M2 — Independent Ferrua VM and compatibility — `░░░░░░░░░░ 0%`
 

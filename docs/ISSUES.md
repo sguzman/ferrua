@@ -8,3 +8,5 @@ Milestones, phases, atomic tasks and evidence live in [`progress.json`](progress
 - 🔩 [**M2/P3 — Independent engine**](https://github.com/sguzman/ferrua/issues/4): Ferrua-owned compiler, register VM and conformance suite.
 
 Acceptance evidence must be attached before flipping a check to passed. Do not list completed tasks at 100% in routine progress reports; see the roadmap for their provenance.
+
+- 🌐 [**M1/P4 — Versioned releases and CI adoption**](https://github.com/sguzman/ferrua/issues/5): signed/versioned distribution and adoption acceptance separate from the verified preview.

@@ -222,6 +222,29 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T108",
+              "emoji": "📝",
+              "name": "Non-executing syntax-only compilation for CI",
+              "checks": [
+                {
+                  "text": "Accept --check for script paths, expressions and piped Lua source",
+                  "passed": true,
+                  "evidence": "src/main.rs: check_source, parse and execute"
+                },
+                {
+                  "text": "Never run validated Lua during syntax-only check",
+                  "passed": true,
+                  "evidence": "tests/cli.rs and src/main.rs unit test; GitHub Actions 39947311765"
+                },
+                {
+                  "text": "Report syntax errors with nonzero exit status",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39947311765: --check invalid Lua rejects, 42 tests green"
+                }
+              ],
+              "progress": 100
             }
           ]
         }
@@ -266,6 +289,13 @@
           "name": "Distribution readiness",
           "task_ids": [
             "T107"
+          ]
+        },
+        {
+          "emoji": "📝",
+          "name": "Side-effect-free source validation",
+          "task_ids": [
+            "T108"
           ]
         }
       ]
@@ -412,6 +442,52 @@
                   "evidence": "src/process.rs; GitHub Actions 39946114053: all Rust tests passed"
                 }
               ]
+            },
+            {
+              "id": "T213",
+              "emoji": "🛡️",
+              "name": "Bound JSON recursion for robust restricted execution",
+              "checks": [
+                {
+                  "text": "Limit encoder and decoder nesting to 128 levels",
+                  "passed": true,
+                  "evidence": "tools/json.lua: MAX_DEPTH"
+                },
+                {
+                  "text": "Reject malformed deep arrays and Lua table encoding without crashing",
+                  "passed": true,
+                  "evidence": "tests/json_spec.lua: 130-level decode and encode regressions"
+                },
+                {
+                  "text": "Pass cross-dialect and restricted CI fixtures",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39947311765: tests/json_spec.lua across 5 Lua dialects"
+                }
+              ],
+              "progress": 100
+            },
+            {
+              "id": "T214",
+              "emoji": "🔬",
+              "name": "Run basic automation smoke across Lua 5.1–5.5",
+              "checks": [
+                {
+                  "text": "Build first-party Lua QA harness without Python",
+                  "passed": true,
+                  "evidence": "tools/check_compat.lua"
+                },
+                {
+                  "text": "Exercise JSON, TOML/YAML, ordinary Lua, syntax and sandbox checks across five dialects",
+                  "passed": true,
+                  "evidence": "tools/check_compat.lua; .github/workflows/ci.yml"
+                },
+                {
+                  "text": "Verify all five dialect runs and three CI jobs",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39947311765: five dialect matrix passed"
+                }
+              ],
+              "progress": 100
             }
           ]
         },
@@ -619,6 +695,14 @@
             "T209",
             "T212",
             "T208"
+          ]
+        },
+        {
+          "emoji": "🔬",
+          "name": "Dialect matrix and JSON resilience",
+          "task_ids": [
+            "T213",
+            "T214"
           ]
         }
       ]
