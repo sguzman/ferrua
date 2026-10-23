@@ -39,6 +39,18 @@ pub struct Reference<'src> {
 pub struct ScopeSummary<'src> {
     pub bindings: Vec<Binding<'src>>,
     pub references: Vec<Reference<'src>>,
+    pub functions: Vec<FunctionInfo<'src>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FunctionInfo<'src> {
+    pub id: usize,
+    pub parent: Option<usize>,
+    pub parameters: Vec<&'src str>,
+    pub implicit_self: bool,
+    /// Lexical binding slots required by this closure, including captures
+    /// needed transitively by its nested closures.
+    pub captures: Vec<usize>,
 }
 
 fn identifier(text: &str) -> bool {
@@ -50,23 +62,36 @@ struct Resolver<'src> {
     next_statement: usize,
     result: ScopeSummary<'src>,
     function_bases: Vec<usize>,
+    function_ids: Vec<usize>,
 }
 
 impl<'src> Resolver<'src> {
     fn record(&mut self, name: &'src str, access: Access, statement: usize) {
-        let resolution = self
+        let binding = self
             .scopes
             .iter()
             .enumerate()
             .rev()
-            .find_map(|(depth, frame)| frame.get(name).map(|slot| (depth, *slot)))
-            .map_or(Resolution::Global, |(depth, slot)| {
-                if self.function_bases.last().is_some_and(|base| depth < *base) {
-                    Resolution::Upvalue(slot)
-                } else {
-                    Resolution::Local(slot)
+            .find_map(|(depth, frame)| frame.get(name).map(|slot| (depth, *slot)));
+        let resolution = binding.map_or(Resolution::Global, |(depth, slot)| {
+            if self.function_bases.last().is_some_and(|base| depth < *base) {
+                Resolution::Upvalue(slot)
+            } else {
+                Resolution::Local(slot)
+            }
+        });
+        if let Some((depth, slot)) = binding {
+            // An inner closure may require an outer function to carry a
+            // captured binding even if that outer function never reads it.
+            for (&base, &id) in self.function_bases.iter().zip(&self.function_ids) {
+                if depth < base {
+                    let captures = &mut self.result.functions[id].captures;
+                    if !captures.contains(&slot) {
+                        captures.push(slot);
+                    }
                 }
-            });
+            }
+        }
         self.result.references.push(Reference {
             name,
             resolution,
@@ -146,7 +171,16 @@ impl<'src> Resolver<'src> {
         body: &[Statement<'src>],
         implicit_self: bool,
     ) {
+        let id = self.result.functions.len();
+        self.result.functions.push(FunctionInfo {
+            id,
+            parent: self.function_ids.last().copied(),
+            parameters: parameters.to_vec(),
+            implicit_self,
+            captures: Vec::new(),
+        });
         self.function_bases.push(self.scopes.len());
+        self.function_ids.push(id);
         self.scopes.push(HashMap::new());
         let declaration = self.next_statement;
         if implicit_self {
@@ -160,6 +194,7 @@ impl<'src> Resolver<'src> {
         }
         self.scopes.pop();
         self.function_bases.pop();
+        self.function_ids.pop();
     }
 
     fn scoped_statements(&mut self, nodes: &[Statement<'src>]) {
@@ -302,9 +337,11 @@ pub fn analyze(source: &str) -> Result<ScopeSummary<'_>, ParseError> {
         scopes: vec![HashMap::new()],
         next_statement: 0,
         function_bases: Vec::new(),
+        function_ids: Vec::new(),
         result: ScopeSummary {
             bindings: Vec::new(),
             references: Vec::new(),
+            functions: Vec::new(),
         },
     };
     for stmt in &statements {
@@ -531,6 +568,24 @@ mod tests {
                 .iter()
                 .all(|reference| { reference.resolution == Resolution::Local(0) })
         );
+    }
+
+    #[test]
+    fn nested_closure_captures_are_transitive_and_stable() {
+        let summary = analyze(
+            "local root=1; local function outer(a) local middle=function(b) return function(c) return root+a+b+c end end; return middle end",
+        )
+        .unwrap();
+        assert_eq!(summary.functions.len(), 3);
+        assert_eq!(summary.functions[0].parent, None);
+        assert_eq!(summary.functions[1].parent, Some(0));
+        assert_eq!(summary.functions[2].parent, Some(1));
+        assert_eq!(summary.functions[0].parameters, vec!["a"]);
+        assert_eq!(summary.functions[1].parameters, vec!["b"]);
+        assert_eq!(summary.functions[2].parameters, vec!["c"]);
+        assert_eq!(summary.functions[0].captures, vec![0]);
+        assert_eq!(summary.functions[1].captures, vec![0, 2]);
+        assert_eq!(summary.functions[2].captures, vec![0, 2, 4]);
     }
 
     #[test]

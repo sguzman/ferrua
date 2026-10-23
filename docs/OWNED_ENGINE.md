@@ -87,3 +87,7 @@ The experimental `execute_flow_values` API now returns a list of supported value
 ### Experimental function syntax and lexical captures
 
 Ferrua's independent expression/chunk parser now recognizes simple named and local function declarations, anonymous function expressions, parameters and terminal varargs. The syntax tree preserves function-body statements, while parser state isolates loop `break` from an enclosing function. The lexical analyzer records parameter slots and distinguishes references captured from an enclosing function (`Upvalue`) from direct locals; local function names are bound before their bodies for recursion. The Rust-owned execution backends still reject function construction and calls; this is **syntax and binding analysis**, not executable closure support or complete Lua function grammar. Full vararg execution and complete Lua compatibility are not yet accepted. Dotted function declarations and method declarations now preserve their member names; method bodies bind an implicit `self` parameter, but still cannot execute on the owned VM.
+
+### Closure capture descriptors
+
+The independent scope analyzer now emits ordered `FunctionInfo` descriptors for nested functions: lexical parent ID, explicit parameter names, implicit method `self`, and unique captured binding slots. Captures propagate through intermediate function scopes where needed to construct deeper closures. The descriptor is an analysis artifact; the production VM is unchanged, and Ferrua's experimental backends do not yet allocate closures or execute calls. 
