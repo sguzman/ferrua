@@ -14,7 +14,9 @@ fn github_repository_metadata_works_with_local_fixture() {
         let input = String::from_utf8_lossy(&request[..size]);
         assert!(input.starts_with("GET /repos/fictional/demo "), "{input}");
         assert!(
-            input.to_ascii_lowercase().contains("authorization: bearer fixture-ci-token"),
+            input
+                .to_ascii_lowercase()
+                .contains("authorization: bearer fixture-ci-token"),
             "{input}"
         );
         let body = r#"{"name":"demo","full_name":"fictional/demo"}"#;
@@ -39,7 +41,10 @@ fn github_repository_metadata_works_with_local_fixture() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "GitHub fixture passed");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).trim(),
+        "GitHub fixture passed"
+    );
 }
 
 #[test]
@@ -51,5 +56,9 @@ fn github_helper_rejects_absolute_injected_hosts_and_missing_sandbox() {
         ])
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }

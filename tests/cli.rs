@@ -207,11 +207,7 @@ fn structured_data_modules_are_not_in_sandbox() {
 
 #[test]
 fn github_module_is_only_available_in_trusted_mode() {
-    let out = fer(&[
-        "--sandbox",
-        "-e",
-        "assert(github == nil and http == nil)",
-    ]);
+    let out = fer(&["--sandbox", "-e", "assert(github == nil and http == nil)"]);
     assert!(
         out.status.success(),
         "{}",
