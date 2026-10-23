@@ -85,7 +85,11 @@ fn malformed_unicode_and_numeric_corners_do_not_panic() {
 
 #[test]
 fn lua_short_string_escape_syntax_matches_upstream_when_requested() {
-    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() != Some("1") {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
         return;
     }
     let cases = [
@@ -111,7 +115,10 @@ fn lua_short_string_escape_syntax_matches_upstream_when_requested() {
     ];
     for (source, expected_ok) in cases {
         let accepted_by_owned_lexer = tokenize(source).is_ok();
-        assert_eq!(accepted_by_owned_lexer, expected_ok, "owned lexer case: {source:?}");
+        assert_eq!(
+            accepted_by_owned_lexer, expected_ok,
+            "owned lexer case: {source:?}"
+        );
         let upstream = std::process::Command::new("lua5.4")
             .args(["-e", source])
             .output()
