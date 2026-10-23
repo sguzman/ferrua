@@ -420,14 +420,14 @@ The independent interpreter retains direct numeric and byte-string ordering. Dis
 
 The unit and upstream Lua 5.4 differential fixtures cover primitive comparisons, table identity, distinct-table equality, one-sided callback lookup, reversed operand ordering, nil/false/truthy results and recursion bounds. [CI #40033892089](https://github.com/sguzman/ferrua/actions/runs/40033892089) verified the comparison subset through all four primary jobs and the aggregate reporter, including Lua 5.4 differential fixtures. Callable tables and builtin metatable callbacks, complete primitive metatables, garbage collection, error-message conformance and native first-party production integration remain future gates.
 
-### Lua __pairs custom iteration (pending CI)
+### Verified Lua __pairs custom iteration
 
 The owned Lua runtime's first-class `pairs(table)` function now checks a raw `__pairs` metatable entry before falling back to `next, table, nil`. A first-party Lua function is invoked with the table; its results are adjusted to exactly three iterator-triple positions (iterator, state, initial control), matching Lua 5.4. The normal generic-for compiler and VM then execute that iterator without a special loop path. `ipairs` is unchanged, and direct `next` and raw table access do not consult `__pairs`.
 
-The pending regression and upstream Lua 5.4 differential fixtures cover custom iterators, lexical captures, missing/excess return values, generic-for updates and recursive hook limits. This increment is **pending CI acceptance**. Callable-table/builtin metamethod values, resource-closing iterator values and complete standard-library/metatable semantics remain outside its scope. Production `fer` stays on the pinned external interpreter.
+The pending regression and upstream Lua 5.4 differential fixtures cover custom iterators, lexical captures, missing/excess return values, generic-for updates and recursive hook limits. [CI #40034746881](https://github.com/sguzman/ferrua/actions/runs/40034746881) accepted custom iterator triples with Lua 5.4 differential tests and all four primary jobs. Callable-table/builtin metamethod values, resource-closing iterator values and complete standard-library/metatable semantics remain outside its scope. Production `fer` stays on the pinned external interpreter.
 
-### Native-stack-safe recursive Lua callbacks (pending CI)
+### Verified native-stack-safe recursive Lua callbacks
 
 The bounded owned VM caps recursive Lua calls and table-metatable fallback chains at 16 levels. This conservative experimental cap is intentional: the widening opcode dispatcher increased Rust host stack use, and CI exposed a native stack abort before the prior 64-level guard could respond. The smaller cap allows the owned engine to return `CallDepthExceeded` rather than aborting the process. Tests specifically recurse through `__index`, `__add`, `__pairs` and `__len` to guard against the regression.
 
-This safety remediation is **pending full CI acceptance**. The recursion cap is a bounded-prototype constraint, not a claim that this runtime matches Lua's general recursion capacity. Production `fer` continues to use the pinned external interpreter.
+[CI #40034746881](https://github.com/sguzman/ferrua/actions/runs/40034746881) confirmed recursive callback guards safely return a VM error, with all four primary acceptance jobs and reporter passing. The recursion cap is a bounded-prototype constraint, not a claim that this runtime matches Lua's general recursion capacity. Production `fer` continues to use the pinned external interpreter.
