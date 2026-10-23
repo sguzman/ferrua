@@ -2526,14 +2526,23 @@ mod tests {
     fn arbitrary_hashable_lua_table_keys_share_bounded_storage() {
         assert_eq!(evaluate("local t={}; t[0]=7; return t[0]"), 7);
         assert_eq!(evaluate("local t={}; t[-2]=5; return t[-2]"), 5);
-        assert_eq!(evaluate("local t={[true]=7,[false]=3}; return t[true]*10+t[false]"), 73);
-        assert_eq!(evaluate("local t={}; local key={}; t[key]=8; return t[key]"), 8);
+        assert_eq!(
+            evaluate("local t={[true]=7,[false]=3}; return t[true]*10+t[false]"),
+            73
+        );
+        assert_eq!(
+            evaluate("local t={}; local key={}; t[key]=8; return t[key]"),
+            8
+        );
         assert_eq!(
             evaluate("local f=function() return 1 end; local t={}; t[f]=9; return t[f]"),
             9
         );
         assert_eq!(evaluate("local t={}; t[20000]=4; return t[20000]"), 4);
-        assert_eq!(evaluate("local t={}; t[false]=8; t[false]=nil; return t[false] or 3"), 3);
+        assert_eq!(
+            evaluate("local t={}; t[false]=8; t[false]=nil; return t[false] or 3"),
+            3
+        );
         assert_eq!(evaluate("local t={}; t[0]=7; return #t"), 0);
     }
 
@@ -2623,10 +2632,7 @@ mod tests {
     #[test]
     fn bounded_tables_reject_unsupported_keys_and_fields() {
         assert_eq!(evaluate("local t={name=2}; return t.name"), 2);
-        for source in [
-            "local t={1}; t[nil]=7; return 1",
-            "local t=1; return t[1]",
-        ] {
+        for source in ["local t={1}; t[nil]=7; return 1", "local t=1; return t[1]"] {
             let program = compile_flow_chunk(source).unwrap();
             assert_eq!(
                 execute_flow_chunk(&program, DEFAULT_STEP_BUDGET),
