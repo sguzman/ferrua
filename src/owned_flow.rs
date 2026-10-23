@@ -3598,6 +3598,81 @@ mod tests {
     }
 
     #[test]
+    fn callable_tables_forward_lua_args_and_obey_bounded_call_depth() {
+        for (source, expected) in [
+            (
+                "local t=setmetatable({base=4},{__call=function(self,x) return self.base+x end}); return t(3)",
+                7,
+            ),
+            (
+                "local t=setmetatable({}, {__call=function(self,x) return x*2 end}); local f=t; return f(6)",
+                12,
+            ),
+            (
+                "local n=0; local t=setmetatable({}, {__call=function(self,x) n=n+1; return x+n end}); return t(2)+t(3)",
+                8,
+            ),
+            (
+                "local t=setmetatable({}, {__call=function(self,f) return f(3) end}); return t(function(n) return n+5 end)",
+                8,
+            ),
+            (
+                "local t=setmetatable({}, {__call=type}); return t()=='table' and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({}, {__call=function() end}); return t()==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local a={}; local b={}; setmetatable(b,{__call=function(x,y,z) return rawequal(x,b) and rawequal(y,a) and z+3 or 0 end}); setmetatable(a,{__call=b}); return a(5)",
+                8,
+            ),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        let program = compile_flow_chunk(
+            "local t=setmetatable({}, {__call=function(self,...) return select('#',...),... end}); return t(3,4)"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Ok(vec![
+                Value::Integer(2),
+                Value::Integer(3),
+                Value::Integer(4)
+            ])
+        );
+        let program = compile_flow_chunk(
+            "local t=setmetatable({}, {__call=function() return 3,4 end}); return t()"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Ok(vec![Value::Integer(3), Value::Integer(4)])
+        );
+        for source in [
+            "local t={}; return t(1)",
+            "local t=setmetatable({}, {__call=12}); return t()",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError),
+                "{source}"
+            );
+        }
+        let program = compile_flow_chunk(
+            "local t={}; setmetatable(t,{__call=t}); return t()"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+    }
+
+    #[test]
     fn length_metamethod_uses_owned_closures_and_preserves_rawlen() {
         assert_eq!(
             evaluate(
