@@ -744,7 +744,9 @@ impl Execution<'_> {
             if cell >= start {
                 return Err(FlowError::InvalidBytecode);
             }
-            *slots.get_mut(local_slot).ok_or(FlowError::InvalidBytecode)? = cell;
+            *slots
+                .get_mut(local_slot)
+                .ok_or(FlowError::InvalidBytecode)? = cell;
         }
         for &(slot, value) in initial {
             let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
@@ -1009,8 +1011,7 @@ impl Execution<'_> {
                         *self
                             .cells
                             .get_mut(counter_cell)
-                            .ok_or(FlowError::InvalidBytecode)? =
-                            Some(Value::Integer(updated));
+                            .ok_or(FlowError::InvalidBytecode)? = Some(Value::Integer(updated));
                     } else {
                         pc = *exit;
                         continue;
@@ -1260,12 +1261,38 @@ mod tests {
 
     #[test]
     fn captured_locals_share_mutable_cells_across_calls() {
-        assert_eq!(evaluate("local x=3; local function f() return x end; x=8; return f()"), 8);
-        assert_eq!(evaluate("local x=0; local function next() x=x+1; return x end; return next()+next()"), 3);
-        assert_eq!(evaluate("local function make(start) local n=start; local function next() n=n+1; return n end; return next end; local f=make(5); return f()+f()"), 13);
-        assert_eq!(evaluate("local function make() local n=0; local function next() n=n+1; return n end; return next end; local a=make(); local b=make(); return a()+b()+a()"), 4);
-        assert_eq!(evaluate("local x=1; local function outer() return function() return x end end; local inner=outer(); x=7; return inner()"), 7);
-        assert_eq!(evaluate("local function f(n) if n==0 then return 0 end; return f(n-1) end; local original=f; f=function(x) return 8 end; return original(3)"), 8);
+        assert_eq!(
+            evaluate("local x=3; local function f() return x end; x=8; return f()"),
+            8
+        );
+        assert_eq!(
+            evaluate("local x=0; local function next() x=x+1; return x end; return next()+next()"),
+            3
+        );
+        assert_eq!(
+            evaluate(
+                "local function make(start) local n=start; local function next() n=n+1; return n end; return next end; local f=make(5); return f()+f()"
+            ),
+            13
+        );
+        assert_eq!(
+            evaluate(
+                "local function make() local n=0; local function next() n=n+1; return n end; return next end; local a=make(); local b=make(); return a()+b()+a()"
+            ),
+            4
+        );
+        assert_eq!(
+            evaluate(
+                "local x=1; local function outer() return function() return x end end; local inner=outer(); x=7; return inner()"
+            ),
+            7
+        );
+        assert_eq!(
+            evaluate(
+                "local function f(n) if n==0 then return 0 end; return f(n-1) end; local original=f; f=function(x) return 8 end; return original(3)"
+            ),
+            8
+        );
     }
 
     #[test]
