@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 96%` across 112 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 96%` across 113 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -67,7 +67,7 @@
 - 📝 Side-effect-free source validation — `██████████ 100%`
 - 🐧 Arch Linux release-binary portability smoke (not native EndeavourOS) — `██████████ 100%`
 
-## 🧰 M1 — Daily automation and Python replacement — `█████████░ 92%`
+## 🧰 M1 — Daily automation and Python replacement — `█████████░ 94%`
 
 **Acceptance gate:** Representative filesystem, JSON, process, HTTP, structured-data and versioned downstream CI scripts run without Python. Stable distribution and adoption acceptance required.
 
@@ -105,7 +105,7 @@
   - [x] Exercise JSON, TOML/YAML, ordinary Lua, syntax and sandbox checks across five dialects — tools/check_compat.lua; .github/workflows/ci.yml
   - [x] Verify all five dialect runs and three CI jobs — GitHub Actions 39947311765: five dialect matrix passed
 
-### 🌐 P4 — Portable data and CI graduation — `█████████░ 88%`
+### 🌐 P4 — Portable data and CI graduation — `█████████░ 92%`
 
 - 🌐 **T206** First-party HTTP API and GitHub REST client — `██████████ 100%`
   - [x] Provide documented HTTP GET, POST and response contracts with timeouts — docs/HTTP.md and tools/http.lua specify methods, output, limits and errors
@@ -134,10 +134,10 @@
 - 📡 **T215** Machine-readable aggregate acceptance status on main — `██████████ 100%`
   - [x] Publish one status after four primary CI jobs with write scope restricted to reporter — .github/workflows/ci.yml: acceptance-status
   - [x] Verify aggregate success maps to completed four-job run on main — GitHub Actions 40024909050: four primary jobs and status reporter successful; ferrua/ci success
-- 🔐 **T216** Enforce tagged GitHub Release gates against native and owned-engine acceptance — `███████░░░ 67%`
+- 🔐 **T216** Enforce tagged GitHub Release gates against native and owned-engine acceptance — `██████████ 100%`
   - [x] Reject malformed or Cargo-version-mismatched tags and keep pre-1.0 releases distinct from stable major tags — tools/roadmap.lua: validate_release_tag
   - [x] Run graduation preflight before any GitHub Release build/publication; self-test that an incomplete stable release is rejected — .github/workflows/release.yml: Enforce version-matched release and native graduation gates; tools/roadmap.lua: --self-test-gates
-  - [ ] Pass full CI including negative release-tag preflight tests and existing release-mode builds
+  - [x] Pass full CI including negative release-tag preflight tests and existing release-mode builds — GitHub Actions 40040438112: Linux graduation --self-test-gates and roadmap check, Rust tests, MSRV, Lua 5.4 differential, action consumer all green
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -151,7 +151,7 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
-- 🔐 Automated prepublication stable-release acceptance guard — `███████░░░ 67%`
+- 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
 ## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
 
@@ -492,6 +492,10 @@
   - [x] Parse label/goto statements, require identifiers and reject duplicate same-block labels — src/expr.rs: Statement::Label/Goto and owned_parser label/goto syntax tests
   - [x] Prove compiler rejects unlowered jumps and differential-test valid/invalid source against Lua 5.4 — src/owned_flow.rs: parsed_goto_and_labels_never_silently_compile_as_noops; tests/owned_syntax.rs
   - [x] Pass formatting, strict Clippy, Rust unit tests, Lua 5.4 differential, MSRV and composite CI — GitHub Actions 40039040755: Linux formatter/lint/tests, Lua 5.4 syntax differential, Rust 1.96, composite consumer and aggregate status successful
+- ↪️ **T385** Bounded same-block Lua goto lowering with local-lifetime safety — `██████████ 100%`
+  - [x] Compile forward and backward same-block goto/label statements to real validated bytecode jumps — src/owned_flow.rs: FlowCompiler::statements lowers Statement::Goto to Op::Jump and patches same-block label targets
+  - [x] Reject missing labels, cross-block targets and jumps that cross active local lifetimes; bound backward loops — src/owned_flow.rs: same_block_goto_executes_but_cross_scope_jumps_are_rejected; tests/owned_flow.rs
+  - [x] Pass full Linux CI and upstream Lua 5.4 differential semantics — GitHub Actions 40039264425: Linux quality, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all succeeded
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -575,4 +579,5 @@
 - 🔎 Metamethod-aware sequential ipairs with raw-access separation — `██████████ 100%`
 - 🔒 Machine-enforced owned-engine and stable-release graduation guards — `██████████ 100%`
 - 🏷️ Lua label/goto parsing (execution remains gated) — `██████████ 100%`
+- ↪️ Safe bounded same-block Lua goto execution — `██████████ 100%`
 
