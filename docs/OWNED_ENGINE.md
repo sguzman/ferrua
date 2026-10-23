@@ -433,8 +433,8 @@ The bounded owned VM caps recursive Lua calls and table-metatable fallback chain
 [CI #40034746881](https://github.com/sguzman/ferrua/actions/runs/40034746881) confirmed recursive callback guards safely return a VM error, with all four primary acceptance jobs and reporter passing. The recursion cap is a bounded-prototype constraint, not a claim that this runtime matches Lua's general recursion capacity. Production `fer` continues to use the pinned external interpreter.
 
 
-### Lua table stringification hooks (pending CI acceptance)
+### Verified Lua table stringification hooks
 
 The owned Lua runtime's first-class `tostring(table)` builtin can now invoke a first-party function-valued `__tostring` field on the table's raw metatable. The original table is passed as the callback's sole argument through the existing bounded closure executor. Only the first return value is used, and it must be a Lua byte string. Extra callback results are discarded; missing or non-string results raise the experimental VM's type error. Without `__tostring`, the existing bounded table identity string is retained. Primitive `tostring` behavior is unchanged.
 
-The pending unit and upstream Lua 5.4 differential fixtures cover lexical captures, string return validation, multiple returns, fallback stringification and recursive callback limits. This work is **not yet CI accepted**. Primitive metatable overrides, callable-table metamethods, Lua-compatible error strings and full runtime conformance are still outside the accepted subset. Production `fer` remains pinned to the existing external engine.
+The pending unit and upstream Lua 5.4 differential fixtures cover lexical captures, string return validation, multiple returns, fallback stringification and recursive callback limits. [CI #40036891366](https://github.com/sguzman/ferrua/actions/runs/40036891366) passed all four primary jobs and the status reporter, including Lua 5.4 differential fixtures. Primitive metatable overrides, callable-table metamethods, Lua-compatible error strings and full runtime conformance are still outside the accepted subset. Production `fer` remains pinned to the existing external engine.
