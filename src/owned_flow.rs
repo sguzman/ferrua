@@ -1509,9 +1509,7 @@ impl Execution<'_> {
         self.steps += scan_cost;
         let mut entries = Vec::new();
         for (index, value) in table.array.iter().enumerate() {
-            if let Some(value) = *value
-                && value != Value::Nil
-            {
+            if let Some(value) = *value && value != Value::Nil {
                 entries.push((Value::Integer((index + 1) as i64), value));
             }
         }
