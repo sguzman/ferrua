@@ -66,7 +66,10 @@ pub enum Op {
     NewFunction(usize),
     Call(usize),
     CallMany(usize),
-    CallSpread { prefix: usize, many: bool },
+    CallSpread {
+        prefix: usize,
+        many: bool,
+    },
     NewTableTail(usize),
     VarargSingle,
     VarargMany,
@@ -419,11 +422,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn multiple_expression(
-        &mut self,
-        expr: &Expr<'a>,
-        depth: usize,
-    ) -> Result<bool, FlowError> {
+    fn multiple_expression(&mut self, expr: &Expr<'a>, depth: usize) -> Result<bool, FlowError> {
         if depth > 128 {
             return Err(FlowError::TooLarge);
         }
@@ -879,9 +878,7 @@ impl Execution<'_> {
                     });
                     stack.push(Value::Function(handle));
                 }
-                Op::Call(argc)
-                | Op::CallMany(argc)
-                | Op::CallSpread { prefix: argc, .. } => {
+                Op::Call(argc) | Op::CallMany(argc) | Op::CallSpread { prefix: argc, .. } => {
                     let arity = if matches!(instructions[pc], Op::CallSpread { .. }) {
                         let expanded = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
                         argc.checked_add(expanded).ok_or(FlowError::TooLarge)?
@@ -1421,19 +1418,27 @@ mod tests {
     #[test]
     fn last_call_argument_and_table_field_expand_results() {
         assert_eq!(
-            evaluate("local function pair() return 3,4 end; local function add(a,b) return a+b end; return add(pair())"),
+            evaluate(
+                "local function pair() return 3,4 end; local function add(a,b) return a+b end; return add(pair())"
+            ),
             7
         );
         assert_eq!(
-            evaluate("local function pair() return 3,4 end; local function sum(a,b,c) return a+b+c end; return sum(2,pair())"),
+            evaluate(
+                "local function pair() return 3,4 end; local function sum(a,b,c) return a+b+c end; return sum(2,pair())"
+            ),
             9
         );
         assert_eq!(
-            evaluate("local function pair() return 3,4 end; local function f(a,b,c) return a*100+b*10+c end; return f(pair(),8,9)"),
+            evaluate(
+                "local function pair() return 3,4 end; local function f(a,b,c) return a*100+b*10+c end; return f(pair(),8,9)"
+            ),
             389
         );
         assert_eq!(
-            evaluate("local function f(...) return ... end; local function sum(a,b) return a+b end; return sum(f(4,5))"),
+            evaluate(
+                "local function f(...) return ... end; local function sum(a,b) return a+b end; return sum(f(4,5))"
+            ),
             9
         );
         assert_eq!(
@@ -1441,7 +1446,9 @@ mod tests {
             9
         );
         assert_eq!(
-            evaluate("local function pair() return 4,5 end; local t={2,(pair())}; return t[3] or 7"),
+            evaluate(
+                "local function pair() return 4,5 end; local t={2,(pair())}; return t[3] or 7"
+            ),
             7
         );
         assert_eq!(
