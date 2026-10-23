@@ -91,3 +91,11 @@ Ferrua's independent expression/chunk parser now recognizes simple named and loc
 ### Closure capture descriptors
 
 The independent scope analyzer now emits ordered `FunctionInfo` descriptors for nested functions: lexical parent ID, explicit parameter names, implicit method `self`, and unique captured binding slots. Captures propagate through intermediate function scopes where needed to construct deeper closures. The descriptor is an analysis artifact; the production VM is unchanged, and Ferrua's experimental backends do not yet allocate closures or execute calls. 
+
+### Verified function syntax and capture analysis
+
+- [CI #39989539203](https://github.com/sguzman/ferrua/actions/runs/39989539203): function declaration/expression syntax, local recursion and basic lexical capture detection accepted in all four jobs.
+- [CI #39990190628](https://github.com/sguzman/ferrua/actions/runs/39990190628): dotted/colon method AST and upstream Lua 5.4 syntax fixture parity accepted in all four jobs.
+- [CI #39990585046](https://github.com/sguzman/ferrua/actions/runs/39990585046): transitive nested closure capture descriptors accepted in all four jobs.
+
+The full parser, executable call frames and closure runtime are **not** yet complete; these checks validate bounded syntax/scoping infrastructure only.

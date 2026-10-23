@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 90%` across 49 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 91%` across 52 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 88%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 89%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `█████████░ 88%`
+### 🔣 P3 — Ferrua-owned language engine — `█████████░ 89%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -238,6 +238,18 @@
   - [x] Compile zero, single, and multiple return expressions into bounded stack bytecode — src/owned_flow.rs: ReturnMany and compile_flow_chunk
   - [x] Expose ordered typed return lists without breaking older single-value and integer return APIs — src/owned_flow.rs: execute_flow_values, execute_flow_value, execute_flow_chunk; returns_fixed_count_lua_values_and_preserves_single_value_apis
   - [x] Verify fixed-arity result lists against production fer and upstream Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 39987809090: all four jobs successful
+- 🌿 **T325** Function AST, parameters, varargs and recursive lexical scopes — `██████████ 100%`
+  - [x] Parse local, named and anonymous Lua function bodies while enforcing valid parameter syntax and break isolation — src/expr.rs: function_body, owned_parser_recognizes_function_scopes_and_varargs, function_syntax_rejects_invalid_parameters_and_escaped_break
+  - [x] Distinguish direct locals from upvalues and support recursive local function binding — src/scope.rs: function_scope, function_parameters_and_closure_captures_have_distinct_resolution, anonymous_function_captures_and_shadowed_parameters
+  - [x] Pass Linux, Rust 1.96, downstream action and Lua reference CI after acceptance fixes — GitHub Actions 39989539203: all four jobs successful
+- 🧭 **T326** Dotted function/method syntax and upstream Lua parser parity — `██████████ 100%`
+  - [x] Parse dotted member functions and colon-method declarations with implicit self metadata — src/expr.rs: named_fields_and_methods_parse_as_function_statements; src/scope.rs: named_methods_have_implicit_self_and_read_the_base_table
+  - [x] Compare valid and invalid function syntax directly to upstream Lua 5.4 — tests/owned_syntax.rs: owned_function_syntax_matches_lua_54_when_requested
+  - [x] Pass all four CI jobs including upstream Lua 5.4.6 — GitHub Actions 39990190628: four jobs successful
+- 🪢 **T327** Stable transitive capture descriptors for nested closures — `██████████ 100%`
+  - [x] Record lexical parent, parameter list, implicit self and distinct captured binding slots — src/scope.rs: FunctionInfo, function_scope
+  - [x] Propagate captures through intermediate nested closures in deterministic slot order — src/scope.rs: record, nested_closure_captures_are_transitive_and_stable
+  - [x] Pass four CI jobs with upvalue descriptor regression tests — GitHub Actions 39990585046: all four jobs successful
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -261,4 +273,7 @@
 - 🧩 Lua fixed-result assignment padding — `██████████ 100%`
 - 🎭 Experimental typed flow return values — `██████████ 100%`
 - 🎭 Fixed-arity experimental return lists — `██████████ 100%`
+- 🌿 Owned function syntax and lexical upvalues — `██████████ 100%`
+- 🧭 Lua dotted/method function syntax — `██████████ 100%`
+- 🪢 Nested closure capture descriptors — `██████████ 100%`
 
