@@ -1286,6 +1286,33 @@ impl Execution<'_> {
         Ok(())
     }
 
+    fn integer_operand(&self, value: Value) -> Result<i64, FlowError> {
+        let Value::String(handle) = value else {
+            return match value {
+                Value::Integer(number) => Ok(number),
+                _ => Err(FlowError::TypeError),
+            };
+        };
+        let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
+        let source = std::str::from_utf8(bytes).map_err(|_| FlowError::TypeError)?;
+        let source = source.trim();
+        let (negative, unsigned) = if let Some(value) = source.strip_prefix('-') {
+            (true, value)
+        } else {
+            (false, source.strip_prefix('+').unwrap_or(source))
+        };
+        if let Some(hex) = unsigned.strip_prefix("0x").or_else(|| unsigned.strip_prefix("0X")) {
+            let number = i64::from_str_radix(hex, 16).map_err(|_| FlowError::TypeError)?;
+            if negative {
+                number.checked_neg().ok_or(FlowError::TypeError)
+            } else {
+                Ok(number)
+            }
+        } else {
+            source.parse::<i64>().map_err(|_| FlowError::TypeError)
+        }
+    }
+
     fn string_bytes(&self, value: Value) -> Result<Vec<u8>, FlowError> {
         match value {
             Value::String(handle) => self
@@ -1679,10 +1706,9 @@ impl Execution<'_> {
                     self.write_table(handle, key, value)?;
                 }
                 Op::Negate => {
-                    let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)?
-                    else {
-                        return Err(FlowError::TypeError);
-                    };
+                    let value = self.integer_operand(
+                        stack.pop().ok_or(FlowError::InvalidBytecode)?,
+                    )?;
                     stack.push(Value::Integer(value.wrapping_neg()));
                 }
                 Op::Not => {
@@ -1714,16 +1740,29 @@ impl Execution<'_> {
                     stack.push(Value::Integer(length as i64));
                 }
                 Op::BitNot => {
-                    let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)?
-                    else {
-                        return Err(FlowError::TypeError);
-                    };
+                    let value = self.integer_operand(
+                        stack.pop().ok_or(FlowError::InvalidBytecode)?,
+                    )?;
                     stack.push(Value::Integer(!value));
                 }
                 Op::Binary(op) => {
                     let rhs = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     let lhs = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     let result = match *op {
+                        Binary::Add
+                        | Binary::Sub
+                        | Binary::Mul
+                        | Binary::FloorDiv
+                        | Binary::Mod
+                        | Binary::BitAnd
+                        | Binary::BitOr
+                        | Binary::BitXor
+                        | Binary::Shl
+                        | Binary::Shr => evaluate_binary(
+                            *op,
+                            Value::Integer(self.integer_operand(lhs)?),
+                            Value::Integer(self.integer_operand(rhs)?),
+                        )?,
                         Binary::Concat => {
                             let mut bytes = self.string_bytes(lhs)?;
                             let right = self.string_bytes(rhs)?;
@@ -2509,6 +2548,23 @@ mod tests {
             21
         );
         assert_eq!(evaluate("local t={1}; t[0],t[1]=8,9; return t[1]"), 9);
+    }
+
+    #[test]
+    fn integer_formatted_lua_strings_coerce_for_arithmetic() {
+        assert_eq!(evaluate("return '7'+5"), 12);
+        assert_eq!(evaluate("return '10'-'3'"), 7);
+        assert_eq!(evaluate("return '6'*'7'"), 42);
+        assert_eq!(evaluate("return '7'//'2'"), 3);
+        assert_eq!(evaluate("return '0x10'+1"), 17);
+        assert_eq!(evaluate("return -'5'"), -5);
+        assert_eq!(evaluate("return '7'&3"), 3);
+        assert_eq!(evaluate("return ('7'..'0')+2"), 72);
+        let invalid = compile_flow_chunk("return 'hello'+1").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
     }
 
     #[test]

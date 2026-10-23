@@ -257,3 +257,7 @@ Execution now tracks cells allocated by each call frame and recycles only those 
 
 - [CI #40008327899](https://github.com/sguzman/ferrua/actions/runs/40008327899): mixed table constructors now expand final method-call results and preserve grouped single-result semantics; four jobs passed.
 - [CI #40008713256](https://github.com/sguzman/ferrua/actions/runs/40008713256): uncaptured call-frame cells are recycled on successful returns and execution errors; a 70,000-invocation stress test and all four CI jobs passed. Captured upvalues remain pinned; this is not a fully garbage-collected runtime.
+
+### Bounded integer-string arithmetic coercion
+
+Integer-formatted Lua byte strings now participate in integer arithmetic, integer division/modulo, bitwise operators, and unary numeric operations. The VM recognizes signed decimal strings and bounded hexadecimal integer strings, and dynamically concatenated numeric text can be converted as well. Malformed text fails with a type error. This deliberately excludes floating-point numeric strings and full Lua 5.4 numeric coercion corner cases; it does not change normal string comparison or table-key identity rules.
