@@ -2492,6 +2492,28 @@
                   "evidence": "GitHub Actions 40033236408: Linux, Rust 1.96, Lua 5.4 differential, action consumer and status reporter all passed"
                 }
               ]
+            },
+            {
+              "id": "T378",
+              "emoji": "⚖️",
+              "name": "Lua table equality and ordering metamethods with reversed fallbacks",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Preserve native number/string comparisons and add table __eq, __lt, __le callbacks with Lua truthiness and reverse-order fallbacks",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::equality_with_metamethod and Execution::ordering_with_metamethod"
+                },
+                {
+                  "text": "Exercise identity, left/right selection, <= via __lt, reversed >/>=, invalid types, recursion and Lua 5.4 differential fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: comparison_metamethods_preserve_identity_truthiness_and_ordering; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux formatter, Clippy, Rust tests, Rust 1.96, composite consumer and Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3010,6 +3032,13 @@
           "name": "Lua concat callbacks after native byte concatenation",
           "task_ids": [
             "T377"
+          ]
+        },
+        {
+          "emoji": "⚖️",
+          "name": "Lua equality and ordering metamethod callbacks",
+          "task_ids": [
+            "T378"
           ]
         }
       ]
