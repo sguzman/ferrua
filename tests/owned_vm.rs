@@ -171,7 +171,11 @@ fn static_integer_chunk_matches_upstream_lua_when_requested() {
 
 #[test]
 fn deterministic_integer_operator_matrix_matches_lua_54_when_requested() {
-    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() != Some("1") {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
         return;
     }
     // Stable generated corpus with both signs, negative shifts, zero, and
@@ -201,21 +205,39 @@ fn deterministic_integer_operator_matrix_matches_lua_54_when_requested() {
             expected.push(actual);
         }
     }
-    let output = Command::new("lua5.4").args(["-e", &script]).output().unwrap();
-    assert!(output.status.success(), "Lua reference failed: {}",
-        String::from_utf8_lossy(&output.stderr));
+    let output = Command::new("lua5.4")
+        .args(["-e", &script])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "Lua reference failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let lines: Vec<_> = stdout.lines().collect();
-    assert_eq!(lines.len(), expected.len(), "reference result count mismatch");
+    assert_eq!(
+        lines.len(),
+        expected.len(),
+        "reference result count mismatch"
+    );
     for (index, line) in lines.iter().enumerate() {
         let official: i64 = line.parse().unwrap();
-        assert_eq!(expected[index], official, "Lua 5.4 diverged: {}", sources[index]);
+        assert_eq!(
+            expected[index], official,
+            "Lua 5.4 diverged: {}",
+            sources[index]
+        );
     }
 }
 
 #[test]
 fn division_by_zero_matches_upstream_error_when_requested() {
-    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() != Some("1") {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
         return;
     }
     for source in ["1//0", "1%0"] {
@@ -223,6 +245,9 @@ fn division_by_zero_matches_upstream_error_when_requested() {
         assert!(execute_integer_program(&bytecode).is_err(), "{source}");
         let code = format!("print({source})");
         let reference = Command::new("lua5.4").args(["-e", &code]).output().unwrap();
-        assert!(!reference.status.success(), "upstream Lua accepted {source}");
+        assert!(
+            !reference.status.success(),
+            "upstream Lua accepted {source}"
+        );
     }
 }
