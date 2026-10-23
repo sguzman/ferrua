@@ -1,5 +1,5 @@
 //! Experimental local-name resolver for the Ferrua-owned chunk AST.
-//! Only a single un-nested scope is supported; this is not Lua's full binder.
+//! This handles nested do/end blocks, not function scopes or closures.
 
 use crate::expr::{Expr, ParseError, Statement, parse_chunk};
 use crate::lex::{Kind, tokenize};
@@ -22,6 +22,7 @@ pub struct Binding<'src> {
     pub name: &'src str,
     pub slot: usize,
     pub statement: usize,
+    pub scope_depth: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -30,6 +31,7 @@ pub struct Reference<'src> {
     pub resolution: Resolution,
     pub access: Access,
     pub statement: usize,
+    pub scope_depth: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -43,22 +45,21 @@ fn identifier(text: &str) -> bool {
 }
 
 struct Resolver<'src> {
-    locals: HashMap<&'src str, usize>,
+    scopes: Vec<HashMap<&'src str, usize>>,
+    next_statement: usize,
     result: ScopeSummary<'src>,
 }
 
 impl<'src> Resolver<'src> {
     fn record(&mut self, name: &'src str, access: Access, statement: usize) {
-        let resolution = self
-            .locals
-            .get(name)
-            .copied()
+        let resolution = self.scopes.iter().rev().find_map(|frame| frame.get(name).copied())
             .map_or(Resolution::Global, Resolution::Local);
         self.result.references.push(Reference {
             name,
             resolution,
             access,
             statement,
+            scope_depth: self.scopes.len() - 1,
         });
     }
 
@@ -102,15 +103,18 @@ impl<'src> Resolver<'src> {
 
     fn bind(&mut self, name: &'src str, statement: usize) {
         let slot = self.result.bindings.len();
-        self.locals.insert(name, slot);
+        self.scopes.last_mut().expect("at least root scope").insert(name, slot);
         self.result.bindings.push(Binding {
             name,
             slot,
             statement,
+            scope_depth: self.scopes.len() - 1,
         });
     }
 
-    fn statement(&mut self, node: &Statement<'src>, number: usize) {
+    fn statement(&mut self, node: &Statement<'src>) {
+        let number = self.next_statement;
+        self.next_statement += 1;
         match node {
             Statement::Local {
                 names,
@@ -139,23 +143,32 @@ impl<'src> Resolver<'src> {
                     self.read_expression(value, number);
                 }
             }
+            Statement::Block(body) => {
+                self.scopes.push(HashMap::new());
+                for child in body {
+                    self.statement(child);
+                }
+                self.scopes.pop();
+            }
         }
     }
 }
 
 /// Analyze binding slots and references for the deliberately restricted
-/// semicolon-delimited Lua chunk subset. No block, function or closure scopes.
+/// semicolon-delimited Lua chunk subset. Supports nested do/end scopes;
+/// no function, upvalue, closure, or flow-sensitive resolution.
 pub fn analyze(source: &str) -> Result<ScopeSummary<'_>, ParseError> {
     let statements = parse_chunk(source)?;
     let mut resolver = Resolver {
-        locals: HashMap::new(),
+        scopes: vec![HashMap::new()],
+        next_statement: 0,
         result: ScopeSummary {
             bindings: Vec::new(),
             references: Vec::new(),
         },
     };
-    for (index, stmt) in statements.iter().enumerate() {
-        resolver.statement(stmt, index);
+    for stmt in &statements {
+        resolver.statement(stmt);
     }
     Ok(resolver.result)
 }
@@ -210,6 +223,50 @@ mod tests {
         assert_eq!(result.references.len(), 1);
         assert_eq!(result.references[0].name, "x");
         assert_eq!(result.references[0].resolution, Resolution::Local(0));
+    }
+
+    #[test]
+    fn nested_blocks_shadow_and_restore_local_bindings() {
+        let result = analyze(
+            "local x=1; do local x=x+1; do local y=x; print(y,x) end; print(x) end; return x"
+        ).unwrap();
+        assert_eq!(result.bindings.len(), 3);
+        assert_eq!(result.bindings[0].scope_depth, 0);
+        assert_eq!(result.bindings[1].scope_depth, 1);
+        assert_eq!(result.bindings[2].scope_depth, 2);
+        assert!(result.references.iter().any(|r|
+            r.name == "x" && r.scope_depth == 1 && r.resolution == Resolution::Local(0)
+        ));
+        assert!(result.references.iter().any(|r|
+            r.name == "x" && r.scope_depth == 2 && r.resolution == Resolution::Local(1)
+        ));
+        assert!(result.references.iter().any(|r|
+            r.name == "x" && r.scope_depth == 0 && r.resolution == Resolution::Local(0)
+        ));
+        assert!(result.references.iter().any(|r|
+            r.name == "y" && r.scope_depth == 2 && r.resolution == Resolution::Local(2)
+        ));
+    }
+
+    #[test]
+    fn escaped_block_locals_are_not_visible_after_end() {
+        let result = analyze("do local hidden=1 end; print(hidden)").unwrap();
+        assert_eq!(result.bindings.len(), 1);
+        let hidden = result.references.iter().find(|r| r.name == "hidden").unwrap();
+        assert_eq!(hidden.scope_depth, 0);
+        assert_eq!(hidden.resolution, Resolution::Global);
+    }
+
+    #[test]
+    fn assignments_in_inner_blocks_resolve_nearest_visible_local() {
+        let result = analyze("local x=1; do x=2; local x=3; x=4 end; x=5").unwrap();
+        let writes: Vec<_> = result.references.iter()
+            .filter(|r| r.name == "x" && r.access == Access::Write)
+            .collect();
+        assert_eq!(writes.len(), 3);
+        assert_eq!(writes[0].resolution, Resolution::Local(0));
+        assert_eq!(writes[1].resolution, Resolution::Local(1));
+        assert_eq!(writes[2].resolution, Resolution::Local(0));
     }
 
     #[test]
