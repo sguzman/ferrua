@@ -136,6 +136,20 @@ impl<'src> Resolver<'src> {
                 parameters, body, ..
             } => self.function_scope(parameters, body, false),
             Expr::Vararg => {}
+            Expr::Table(fields) => {
+                for field in fields {
+                    match field {
+                        crate::expr::TableField::Named { value, .. }
+                        | crate::expr::TableField::Value(value) => {
+                            self.read_expression(value, statement);
+                        }
+                        crate::expr::TableField::Indexed { key, value } => {
+                            self.read_expression(key, statement);
+                            self.read_expression(value, statement);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -568,6 +582,14 @@ mod tests {
                 .iter()
                 .all(|reference| { reference.resolution == Resolution::Local(0) })
         );
+    }
+
+    #[test]
+    fn table_field_names_are_not_variable_references() {
+        let summary = analyze("local a=1; local k=2; local t={named=a,[k]=a,a}; return t").unwrap();
+        let names: Vec<_> = summary.references.iter().map(|r| r.name).collect();
+        assert_eq!(names, vec!["a", "k", "a", "a", "t"]);
+        assert!(!names.contains(&"named"));
     }
 
     #[test]

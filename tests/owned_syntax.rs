@@ -210,3 +210,40 @@ fn owned_function_syntax_matches_lua_54_when_requested() {
         );
     }
 }
+
+#[test]
+fn owned_table_constructor_syntax_matches_lua_54_when_requested() {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
+        return;
+    }
+    for (source, expected_ok) in [
+        ("local t={}", true),
+        ("local t={a=1,[2]=3,4;}", true),
+        ("local t={inner={x=1},[true]=nil}", true),
+        ("return {function(x) return x end, x=3}", true),
+        ("local t={a=}", false),
+        ("local t={[a] 2}", false),
+        ("local t={a=1,,b=2}", false),
+        ("local t={1 2}", false),
+        ("local t={1", false),
+        ("local t={]}", false),
+    ] {
+        let owned = ferrua::expr::parse_chunk(source).is_ok();
+        assert_eq!(owned, expected_ok, "owned table grammar: {source}");
+        let reference = format!("assert(load([==[{source}]==]))");
+        let lua = std::process::Command::new("lua5.4")
+            .args(["-e", &reference])
+            .output()
+            .unwrap();
+        assert_eq!(
+            owned,
+            lua.status.success(),
+            "upstream Lua differs on {source}: {}",
+            String::from_utf8_lossy(&lua.stderr)
+        );
+    }
+}

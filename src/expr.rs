@@ -38,6 +38,14 @@ pub enum Expr<'a> {
         body: Vec<Statement<'a>>,
     },
     Vararg,
+    Table(Vec<TableField<'a>>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TableField<'a> {
+    Named { name: &'a str, value: Expr<'a> },
+    Indexed { key: Expr<'a>, value: Expr<'a> },
+    Value(Expr<'a>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -127,6 +135,7 @@ impl<'a> Parser<'a> {
                 })
             }
             "..." if self.vararg_allowed => Ok(Expr::Vararg),
+            "{" => self.table(),
             "-" | "not" | "#" | "~" => {
                 let rhs = self.expression(21)?;
                 Ok(Expr::Unary {
@@ -156,6 +165,55 @@ impl<'a> Parser<'a> {
             }),
         }
     }
+    fn table(&mut self) -> Result<Expr<'a>, ParseError> {
+        let mut fields = Vec::new();
+        while self.peek().map(|token| token.spelling) != Some("}") {
+            if self.peek().is_none() {
+                return Err(self.error("expected closing brace in table"));
+            }
+            let field = if self.peek().map(|token| token.spelling) == Some("[") {
+                self.pop();
+                let key = self.expression(0)?;
+                if self.peek().map(|token| token.spelling) != Some("]") {
+                    return Err(self.error("expected closing bracket in table key"));
+                }
+                self.pop();
+                if self.peek().map(|token| token.spelling) != Some("=") {
+                    return Err(self.error("expected equals after table key"));
+                }
+                self.pop();
+                TableField::Indexed {
+                    key,
+                    value: self.expression(0)?,
+                }
+            } else if self.peek().is_some_and(|token| token.kind == Kind::Identifier)
+                && self.tokens.get(self.index + 1).map(|token| token.spelling) == Some("=")
+            {
+                let name = self.name()?;
+                self.pop();
+                TableField::Named {
+                    name,
+                    value: self.expression(0)?,
+                }
+            } else {
+                TableField::Value(self.expression(0)?)
+            };
+            fields.push(field);
+            match self.peek().map(|token| token.spelling) {
+                Some("}") => break,
+                Some("," | ";") => {
+                    self.pop();
+                }
+                _ => return Err(self.error("expected table field separator")),
+            }
+        }
+        if self.peek().map(|token| token.spelling) != Some("}") {
+            return Err(self.error("expected closing brace in table"));
+        }
+        self.pop();
+        Ok(Expr::Table(fields))
+    }
+
     fn postfix(&mut self, mut left: Expr<'a>) -> Result<Expr<'a>, ParseError> {
         loop {
             match self.peek().map(|token| token.spelling) {
@@ -778,6 +836,7 @@ mod tests {
                 body.len()
             ),
             Expr::Vararg => "...".to_owned(),
+            Expr::Table(fields) => format!("(table {} fields)", fields.len()),
         }
     }
 
@@ -798,6 +857,36 @@ mod tests {
             Expr::Function { .. }
         ));
         assert!(parse_chunk("local f=function(a) return a end; return f(4)").is_ok());
+    }
+
+    #[test]
+    fn table_constructor_fields_and_nested_expressions() {
+        let table = parse_expression("{ 2, x=3; [4]=5, inner={7,8}, }").unwrap();
+        let Expr::Table(fields) = table else {
+            panic!("expected table constructor");
+        };
+        assert_eq!(fields.len(), 4);
+        assert!(matches!(&fields[0], TableField::Value(Expr::Atom("2"))));
+        assert!(matches!(&fields[1], TableField::Named { name: "x", .. }));
+        assert!(matches!(&fields[2], TableField::Indexed { .. }));
+        assert!(matches!(&fields[3], TableField::Named { name: "inner", value: Expr::Table(nested) } if nested.len() == 2));
+        assert!(matches!(parse_expression("{}"), Ok(Expr::Table(fields)) if fields.is_empty()));
+        assert!(parse_chunk("local t={a=1}; return t.a").is_ok());
+    }
+
+    #[test]
+    fn invalid_table_constructor_fields_are_rejected() {
+        for source in [
+            "{a=}",
+            "{[x] y}",
+            "{a=1,,b=2}",
+            "{1 2}",
+            "{1",
+            "{]}",
+            "{a=1; b=}",
+        ] {
+            assert!(parse_expression(source).is_err(), "{source}");
+        }
     }
 
     #[test]
