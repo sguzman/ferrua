@@ -2613,7 +2613,7 @@
               "id": "T383",
               "emoji": "🔒",
               "name": "Machine-enforced engine graduation and release acceptance guards",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Reject ledger claims of native engine cutover before parser, VM and conformance acceptance",
@@ -2627,7 +2627,8 @@
                 },
                 {
                   "text": "Pass Linux CI roadmap integrity and negative gate tests alongside Rust 1.96 and Lua 5.4 differential acceptance",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40038040445: Linux roadmap --check and --self-test-gates, Rust tests and lint, MSRV, Lua 5.4 differential, composite consumer all successful"
                 }
               ]
             }
