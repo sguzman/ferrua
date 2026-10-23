@@ -62,3 +62,7 @@ The CI acceptance suite also runs `fer tools/check_compat.lua`, a Lua-authored t
 On Linux x86-64, `sh scripts/install.sh v0.1.0` installs a SHA-256-verified `fer` into `~/.local/bin`, provided that the tagged release has been published. Optionally provide a custom installation prefix as the second argument. The installer uses standard Linux utilities and does not use Python or Cargo. A versioned GitHub Release is **not yet published**; use the source-build installation until one exists.
 
 For engine parity work, CI also runs a Lua-authored differential test harness against the Ubuntu Lua 5.4 reference interpreter. The suite presently compares twelve deterministic semantic fixtures and is explicitly not a complete Lua certification.
+
+### Rust-owned language components
+
+Experimental independent Rust lexer and expression parser components are available through the `ferrua` library. They are not connected to the production `fer` VM. See [owned-engine architecture](docs/OWNED_ENGINE.md) for exact scope and remaining work.

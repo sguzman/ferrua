@@ -31,3 +31,5 @@ Ferrua's interpreter CLI provides `--check` syntax-only compilation using the en
 ### Differential Lua reference testing
 
 A separate Linux CI job installs the distribution-provided Lua 5.4 reference interpreter and uses Ferrua's own `process` module to compare deterministic output from twelve small, non-IO semantic fixtures. The comparator, `tools/diff_lua.lua`, is written in Lua and invokes `target/debug/fer` with `--lua=5.4`. The reference is checked against upstream Lua 5.4.6 at runtime, and CI reports its version in the logs. This is a deliberately narrow smoke suite and **not** full Lua conformance or a claim of Ferrua-owned VM implementation. Future M2 work should grow the fixture corpus and pin a separate reproducible upstream source build.
+
+Ferrua now also exposes experimental owned Rust `lex` and `expr` modules through its library target. These are unconnected lexical and standalone-expression parsing components; they do not replace the existing `luna-core` backend. See [owned engine](OWNED_ENGINE.md) for the explicit coverage boundary and graduation sequence.
