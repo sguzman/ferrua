@@ -2,69 +2,74 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `███░░░░░░░ 34%` across 17 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████░░░░ 63%` across 18 atomic tasks. This describes recorded work, not full Lua compatibility.
 
-## 🌙 M0 — Working fer interpreter MVP — `██████░░░░ 59%`
+## 🌙 M0 — Working fer interpreter MVP — `█████████░ 93%`
 
-**Acceptance gate:** A usable fer CLI executes basic Lua scripts on Linux; CI passes compile, tests, CLI smoke and roadmap checks.
+**Acceptance gate:** A usable fer CLI executes basic Lua scripts and passes Linux CI; stable v1.0.0 requires release acceptance.
 
-### 🧭 P0 — Foundation and identity — `███████░░░ 72%`
+### 🧭 P0 — Foundation and identity — `██████████ 100%`
 
 - 🎨 **T001** Select OKLCH identity and README swatch — `██████████ 100%`
   - [x] Document perceptual accent — docs/COLOR.md
   - [x] Ship accessible SVG swatch — assets/ferrua-color.svg
-- 📋 **T002** Roadmap, machine ledger and evidence policy — `███████░░░ 67%`
+- 📋 **T002** Roadmap, machine ledger and evidence policy — `██████████ 100%`
   - [x] Structured ledger committed — docs/progress.json
   - [x] Generator and README roadmap links committed — tools/roadmap.lua; docs/ROADMAP.md; README.md
-  - [ ] Generator passes CI comparison
-- 🦀 **T003** Rust binary scaffold and quality gates — `█████░░░░░ 50%`
+  - [x] Generator passes CI comparison — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
+- 🦀 **T003** Rust binary scaffold and quality gates — `██████████ 100%`
   - [x] Rust fer crate and GitHub workflow checked in — Cargo.toml; .github/workflows/ci.yml
-  - [ ] Rust compile, lint and formatting verified in CI
+  - [x] Rust compile, lint and formatting verified in CI — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
 
-### ⚙️ P1 — Lua interpreter and command interface — `█████░░░░░ 53%`
+### ⚙️ P1 — Lua interpreter and command interface — `█████████░ 90%`
 
-- 🧠 **T101** Compile and execute Lua bytecode in pure Rust — `█████░░░░░ 50%`
+- 🧠 **T101** Compile and execute Lua bytecode in pure Rust — `██████████ 100%`
   - [x] Pinned pure-Rust Lua VM integrated — Cargo.toml; src/main.rs; docs/ARCHITECTURE.md
-  - [ ] Lua execution verified by CI
-- ⌨️ **T102** Execute script paths, -e and stdin — `███████░░░ 67%`
+  - [x] Lua execution verified by CI — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
+- ⌨️ **T102** Execute script paths, -e and stdin — `██████████ 100%`
   - [x] CLI entry points implemented — src/main.rs
   - [x] Integration tests authored — tests/cli.rs
-  - [ ] CLI integration tests pass CI
-- 💬 **T103** Interactive Lua REPL — `█████░░░░░ 50%`
+  - [x] CLI integration tests pass CI — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
+- 💬 **T103** Interactive Lua REPL — `██████████ 100%`
   - [x] Persistent-session REPL implemented — src/main.rs
-  - [ ] Interactive pseudo-terminal acceptance verified
-- 🧳 **T104** Arguments and actionable errors — `█████░░░░░ 50%`
+  - [x] Interactive pseudo-terminal acceptance verified — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
+- 🧳 **T104** Arguments and actionable errors — `██████████ 100%`
   - [x] arg table and Lua error rendering implemented — src/main.rs
-  - [ ] CLI argument and traceback assertions pass CI
-- 🛡️ **T105** Optional restricted execution — `███████░░░ 67%`
+  - [x] CLI argument and traceback assertions pass CI — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
+- 🛡️ **T105** Optional restricted execution — `██████████ 100%`
   - [x] Safe-library opt-in and instruction budget implemented — src/main.rs
   - [x] Sandbox tests authored — tests/cli.rs; src/main.rs
-  - [ ] Sandbox and budget verified under CI
-- 🧪 **T106** Linux build, tests and CI — `███░░░░░░░ 33%`
+  - [x] Sandbox and budget verified under CI — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
+- 🧪 **T106** Linux build, tests and CI — `██████████ 100%`
   - [x] Tests and CI workflow authored — tests/cli.rs; .github/workflows/ci.yml
-  - [ ] CI all checks green
-  - [ ] Clean release build verified
+  - [x] CI all checks green — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
+  - [x] Clean release build verified — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
+- 📦 **T107** Distribution and MVP inauguration — `███░░░░░░░ 33%`
+  - [x] Release-mode Linux preview binary built and uploaded — GitHub Actions 39894224746: fer-linux-x86_64-preview artifact
+  - [ ] Runtime independently verified on EndeavourOS
+  - [ ] Versioned v1.0.0 release after acceptance
 
 **Feature inventory** (computed from associated atomic task progress):
 
-- 🌙 Lua interpreter — `██████░░░░ 59%`
-- ⌨️ CLI and REPL — `██████░░░░ 56%`
-- 🛡️ Opt-in sandbox — `███████░░░ 67%`
-- 📋 Documented, auditable progress — `██████░░░░ 63%`
+- 🌙 Lua interpreter — `██████████ 100%`
+- ⌨️ CLI and REPL — `██████████ 100%`
+- 🛡️ Opt-in sandbox — `██████████ 100%`
+- 📋 Documented, auditable progress — `██████████ 100%`
+- 📦 Distribution readiness — `███░░░░░░░ 33%`
 
-## 🧰 M1 — Daily automation and Python replacement — `█░░░░░░░░░ 13%`
+## 🧰 M1 — Daily automation and Python replacement — `█████░░░░░ 50%`
 
 **Acceptance gate:** Representative filesystem, JSON, process and release automation scripts run under fer without Python.
 
-### 🗂️ P2 — Everyday host and data capabilities — `█░░░░░░░░░ 13%`
+### 🗂️ P2 — Everyday host and data capabilities — `█████░░░░░ 50%`
 
-- 📂 **T201** Read, write and iterate local files — `█████░░░░░ 50%`
+- 📂 **T201** Read, write and iterate local files — `██████████ 100%`
   - [x] Lua io and os library available in trusted mode — src/main.rs
-  - [ ] Filesystem smoke passes CI
-- 🧾 **T202** First-party JSON and structured data modules — `░░░░░░░░░░ 0%`
-  - [ ] Document supported JSON interface and cases
-  - [ ] JSON decoding and encoding implemented
-  - [ ] Round-trip integration cases accepted
+  - [x] Filesystem smoke passes CI — GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed
+- 🧾 **T202** First-party JSON and structured data modules — `██████████ 100%`
+  - [x] Document supported JSON interface and cases — README.md, docs/ARCHITECTURE.md, tools/json.lua
+  - [x] JSON decoding and encoding implemented — tools/json.lua, embedded src/main.rs
+  - [x] Round-trip integration cases accepted — GitHub Actions 39894224746: JSON encoding/decoding and empty-collection Rust/CLI tests passed
 - 🔧 **T203** Reliable subprocess and Git automation — `░░░░░░░░░░ 0%`
   - [ ] Document process execution and exit status contract
   - [ ] Safe argv-based child process module
@@ -76,7 +81,7 @@
 
 **Feature inventory** (computed from associated atomic task progress):
 
-- 📂 Filesystem and data workflows — `███░░░░░░░ 25%`
+- 📂 Filesystem and data workflows — `██████████ 100%`
 - 🔧 Processes and CI reuse — `░░░░░░░░░░ 0%`
 
 ## 🔩 M2 — Independent Ferrua VM and compatibility — `░░░░░░░░░░ 0%`

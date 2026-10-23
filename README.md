@@ -18,7 +18,7 @@ printf 'print(6 * 7)\n' | cargo run -- -
 cargo run -- --sandbox -e 'assert(os == nil and io == nil)'
 ```
 
-After building or installing, run `fer` in place of `cargo run --`. On each successful CI run for `main`, GitHub Actions also uploads a Linux x86-64 preview binary artifact; this is not yet a stable release. Without input, `fer` opens a simple REPL if standard input is a terminal; use `=expression` to display a value. Script parameters are available as `arg[1]`, `arg[2]`, etc., with the script path at `arg[0]`. `--lua=5.4` selects a Lua dialect and `--budget=N` limits executed VM instructions.
+After building or installing, run `fer` in place of `cargo run --`. On each successful CI run for `main`, GitHub Actions also uploads a [Linux x86-64 preview binary artifact](https://github.com/sguzman/ferrua/actions/runs/39894224746); this is not yet a stable release. After extracting the artifact ZIP, make the binary executable with `chmod +x fer`. Without input, `fer` opens a simple REPL if standard input is a terminal; use `=expression` to display a value. Script parameters are available as `arg[1]`, `arg[2]`, etc., with the script path at `arg[0]`. `--lua=5.4` selects a Lua dialect and `--budget=N` limits executed VM instructions.
 
 Ferrua also installs a first-party Lua `json` global in every session, with `json.decode(text)` and `json.encode(value)`; no third-party Lua package is required. The JSON implementation preserves empty arrays versus objects after decoding, provides `json.null` for null values, and supports `json.array()` / `json.object()` to construct empty collections. It rejects cycles, invalid input and unsupported types. Its full compatibility matrix is still under development.
 
@@ -32,6 +32,8 @@ cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
 cargo run -- tools/roadmap.lua --check
 ```
+
+**Latest verified CI:** [17 passing Rust tests, Lua roadmap validation, sandbox/REPL smoke and release build](https://github.com/sguzman/ferrua/actions/runs/39894224746). Native EndeavourOS validation and the v1.0.0 inauguration remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md).
 

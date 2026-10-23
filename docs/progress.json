@@ -6,7 +6,7 @@
       "id": "M0",
       "emoji": "🌙",
       "name": "Working fer interpreter MVP",
-      "gate": "A usable fer CLI executes basic Lua scripts on Linux; CI passes compile, tests, CLI smoke and roadmap checks.",
+      "gate": "A usable fer CLI executes basic Lua scripts and passes Linux CI; stable v1.0.0 requires release acceptance.",
       "phases": [
         {
           "id": "P0",
@@ -48,10 +48,11 @@
                 },
                 {
                   "text": "Generator passes CI comparison",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed"
                 }
               ],
-              "progress": 67
+              "progress": 100
             },
             {
               "id": "T003",
@@ -65,10 +66,11 @@
                 },
                 {
                   "text": "Rust compile, lint and formatting verified in CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed"
                 }
               ],
-              "progress": 50
+              "progress": 100
             }
           ]
         },
@@ -89,10 +91,11 @@
                 },
                 {
                   "text": "Lua execution verified by CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed"
                 }
               ],
-              "progress": 50
+              "progress": 100
             },
             {
               "id": "T102",
@@ -111,10 +114,11 @@
                 },
                 {
                   "text": "CLI integration tests pass CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed"
                 }
               ],
-              "progress": 67
+              "progress": 100
             },
             {
               "id": "T103",
@@ -128,10 +132,11 @@
                 },
                 {
                   "text": "Interactive pseudo-terminal acceptance verified",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed"
                 }
               ],
-              "progress": 50
+              "progress": 100
             },
             {
               "id": "T104",
@@ -145,10 +150,11 @@
                 },
                 {
                   "text": "CLI argument and traceback assertions pass CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed"
                 }
               ],
-              "progress": 50
+              "progress": 100
             },
             {
               "id": "T105",
@@ -167,10 +173,11 @@
                 },
                 {
                   "text": "Sandbox and budget verified under CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed"
                 }
               ],
-              "progress": 67
+              "progress": 100
             },
             {
               "id": "T106",
@@ -184,14 +191,37 @@
                 },
                 {
                   "text": "CI all checks green",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed"
                 },
                 {
                   "text": "Clean release build verified",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed"
                 }
               ],
-              "progress": 33
+              "progress": 100
+            },
+            {
+              "id": "T107",
+              "emoji": "📦",
+              "name": "Distribution and MVP inauguration",
+              "progress": 33,
+              "checks": [
+                {
+                  "text": "Release-mode Linux preview binary built and uploaded",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: fer-linux-x86_64-preview artifact"
+                },
+                {
+                  "text": "Runtime independently verified on EndeavourOS",
+                  "passed": false
+                },
+                {
+                  "text": "Versioned v1.0.0 release after acceptance",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -230,6 +260,13 @@
             "T003",
             "T106"
           ]
+        },
+        {
+          "emoji": "📦",
+          "name": "Distribution readiness",
+          "task_ids": [
+            "T107"
+          ]
         }
       ]
     },
@@ -256,10 +293,11 @@
                 },
                 {
                   "text": "Filesystem smoke passes CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: Rust 8+9 tests, fmt, clippy, roadmap check, CLI smoke, release build, artifact upload passed"
                 }
               ],
-              "progress": 50
+              "progress": 100
             },
             {
               "id": "T202",
@@ -268,18 +306,21 @@
               "checks": [
                 {
                   "text": "Document supported JSON interface and cases",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "README.md, docs/ARCHITECTURE.md, tools/json.lua"
                 },
                 {
                   "text": "JSON decoding and encoding implemented",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "tools/json.lua, embedded src/main.rs"
                 },
                 {
                   "text": "Round-trip integration cases accepted",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39894224746: JSON encoding/decoding and empty-collection Rust/CLI tests passed"
                 }
               ],
-              "progress": 0
+              "progress": 100
             },
             {
               "id": "T203",
