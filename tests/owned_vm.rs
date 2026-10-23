@@ -5,15 +5,31 @@ use std::process::Command;
 
 #[test]
 fn integer_register_subset_matches_production_interpreter() {
-    let samples = ["1+2*3", "(4+6)*2", "10- -3", "0xF+1", "-(7-4)", "9223372036854775807+1"];
+    let samples = [
+        "1+2*3",
+        "(4+6)*2",
+        "10- -3",
+        "0xF+1",
+        "-(7-4)",
+        "9223372036854775807+1",
+    ];
     for source in samples {
         let program = compile_integer_expression(source).unwrap();
         let owned = execute_integer_program(&program).unwrap();
         let code = format!("print({source})");
         let output = Command::new(env!("CARGO_BIN_EXE_fer"))
-            .args(["--lua=5.4", "-e", &code]).output().unwrap();
-        assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
-        let expected: i64 = String::from_utf8_lossy(&output.stdout).trim().parse().unwrap();
+            .args(["--lua=5.4", "-e", &code])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let expected: i64 = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse()
+            .unwrap();
         assert_eq!(owned, expected, "integer subset diverged: {source}");
     }
 }

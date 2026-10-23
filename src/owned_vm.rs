@@ -20,8 +20,12 @@ pub struct Program {
     result: usize,
 }
 impl Program {
-    pub fn instructions(&self) -> &[Instruction] { &self.code }
-    pub fn register_count(&self) -> usize { self.registers }
+    pub fn instructions(&self) -> &[Instruction] {
+        &self.code
+    }
+    pub fn register_count(&self) -> usize {
+        self.registers
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -46,27 +50,51 @@ fn emit(program: &mut Program, expression: &Expr<'_>, depth: usize) -> Result<us
     }
     let instruction = match expression {
         Expr::Atom(text) => {
-            let integer = if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
-                i64::from_str_radix(hex, 16)
-            } else {
-                text.parse::<i64>()
-            }.map_err(|_| Error::Unsupported(format!("not an integer literal: {text}")))?;
-            Instruction::Load { dest: program.registers, value: integer }
+            let integer =
+                if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+                    i64::from_str_radix(hex, 16)
+                } else {
+                    text.parse::<i64>()
+                }
+                .map_err(|_| Error::Unsupported(format!("not an integer literal: {text}")))?;
+            Instruction::Load {
+                dest: program.registers,
+                value: integer,
+            }
         }
         Expr::Unary { op: "-", right } => {
             let input = emit(program, right, depth + 1)?;
-            Instruction::Neg { dest: program.registers, input }
+            Instruction::Neg {
+                dest: program.registers,
+                input,
+            }
         }
         Expr::Binary { op, left, right } if matches!(*op, "+" | "-" | "*") => {
             let lhs = emit(program, left, depth + 1)?;
             let rhs = emit(program, right, depth + 1)?;
             match *op {
-                "+" => Instruction::Add { dest: program.registers, lhs, rhs },
-                "-" => Instruction::Sub { dest: program.registers, lhs, rhs },
-                _ => Instruction::Mul { dest: program.registers, lhs, rhs },
+                "+" => Instruction::Add {
+                    dest: program.registers,
+                    lhs,
+                    rhs,
+                },
+                "-" => Instruction::Sub {
+                    dest: program.registers,
+                    lhs,
+                    rhs,
+                },
+                _ => Instruction::Mul {
+                    dest: program.registers,
+                    lhs,
+                    rhs,
+                },
             }
         }
-        _ => return Err(Error::Unsupported("only integer +, -, * and unary minus".into())),
+        _ => {
+            return Err(Error::Unsupported(
+                "only integer +, -, * and unary minus".into(),
+            ));
+        }
     };
     let output = program.registers;
     program.registers += 1;
@@ -78,7 +106,11 @@ fn emit(program: &mut Program, expression: &Expr<'_>, depth: usize) -> Result<us
 /// Variables, functions, floats, tables and side effects are unsupported.
 pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
     let ast = parse_expression(source).map_err(|err| Error::Unsupported(err.to_string()))?;
-    let mut program = Program { code: Vec::new(), registers: 0, result: 0 };
+    let mut program = Program {
+        code: Vec::new(),
+        registers: 0,
+        result: 0,
+    };
     let result = emit(&mut program, &ast, 0)?;
     program.result = result;
     Ok(program)
@@ -86,26 +118,41 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 
 /// Run the tiny integer register IR with initialized-register validation.
 pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
-    if program.registers == 0 || program.registers > MAX_REGISTERS || program.code.len() > MAX_REGISTERS {
+    if program.registers == 0
+        || program.registers > MAX_REGISTERS
+        || program.code.len() > MAX_REGISTERS
+    {
         return Err(Error::InvalidBytecode);
     }
     let mut registers: Vec<Option<i64>> = vec![None; program.registers];
     fn read(registers: &[Option<i64>], at: usize) -> Result<i64, Error> {
-        registers.get(at).copied().flatten().ok_or(Error::InvalidBytecode)
+        registers
+            .get(at)
+            .copied()
+            .flatten()
+            .ok_or(Error::InvalidBytecode)
     }
     for instruction in &program.code {
         let (dest, value) = match *instruction {
             Instruction::Load { dest, value } => (dest, value),
             Instruction::Neg { dest, input } => (dest, read(&registers, input)?.wrapping_neg()),
-            Instruction::Add { dest, lhs, rhs } =>
-                (dest, read(&registers, lhs)?.wrapping_add(read(&registers, rhs)?)),
-            Instruction::Sub { dest, lhs, rhs } =>
-                (dest, read(&registers, lhs)?.wrapping_sub(read(&registers, rhs)?)),
-            Instruction::Mul { dest, lhs, rhs } =>
-                (dest, read(&registers, lhs)?.wrapping_mul(read(&registers, rhs)?)),
+            Instruction::Add { dest, lhs, rhs } => (
+                dest,
+                read(&registers, lhs)?.wrapping_add(read(&registers, rhs)?),
+            ),
+            Instruction::Sub { dest, lhs, rhs } => (
+                dest,
+                read(&registers, lhs)?.wrapping_sub(read(&registers, rhs)?),
+            ),
+            Instruction::Mul { dest, lhs, rhs } => (
+                dest,
+                read(&registers, lhs)?.wrapping_mul(read(&registers, rhs)?),
+            ),
         };
         let target = registers.get_mut(dest).ok_or(Error::InvalidBytecode)?;
-        if target.is_some() { return Err(Error::InvalidBytecode); }
+        if target.is_some() {
+            return Err(Error::InvalidBytecode);
+        }
         *target = Some(value);
     }
     read(&registers, program.result)
@@ -134,19 +181,34 @@ mod tests {
     #[test]
     fn rejects_noninteger_or_side_effectful_expressions() {
         for source in ["1.5+2", "1/2", "math.abs(1)", "x+1", "true", "2^3", "t[1]"] {
-            assert!(matches!(compile_integer_expression(source), Err(Error::Unsupported(_))), "{source}");
+            assert!(
+                matches!(
+                    compile_integer_expression(source),
+                    Err(Error::Unsupported(_))
+                ),
+                "{source}"
+            );
         }
     }
     #[test]
     fn rejects_invalid_register_bytecode() {
         let p = Program {
-            code: vec![Instruction::Add { dest: 0, lhs: 1, rhs: 2 }],
-            registers: 3, result: 0
+            code: vec![Instruction::Add {
+                dest: 0,
+                lhs: 1,
+                rhs: 2,
+            }],
+            registers: 3,
+            result: 0,
         };
         assert_eq!(execute_integer_program(&p), Err(Error::InvalidBytecode));
         let p = Program {
-            code: vec![Instruction::Load { dest: 0, value: 1 }, Instruction::Load { dest: 0, value: 2 }],
-            registers: 1, result: 0
+            code: vec![
+                Instruction::Load { dest: 0, value: 1 },
+                Instruction::Load { dest: 0, value: 2 },
+            ],
+            registers: 1,
+            result: 0,
         };
         assert_eq!(execute_integer_program(&p), Err(Error::InvalidBytecode));
     }

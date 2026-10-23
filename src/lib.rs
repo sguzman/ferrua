@@ -1,5 +1,5 @@
 //! Ferrua library for experimental Rust-owned Lua infrastructure.
 pub mod expr;
 pub mod lex;
-pub mod scope;
 pub mod owned_vm;
+pub mod scope;
