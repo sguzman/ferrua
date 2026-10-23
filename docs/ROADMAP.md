@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 95%` across 91 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 94%` across 93 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -406,6 +406,14 @@
   - [x] Compile lexically shadowable assert builtin with truthiness and bounded error behavior — src/owned_flow.rs: Builtin::Assert
   - [x] Return all provided arguments in multi-result positions and reject nil/false conditions — src/owned_flow.rs: first_class_assert_preserves_successful_lua_multi_values
   - [x] Pass all four CI jobs and production/upstream Lua differential fixtures — tests/owned_flow.rs; GitHub Actions 40017471285: all four jobs successful
+- 🔁 **T367** First-class bounded raw and sequential Lua iteration — `███████░░░ 67%`
+  - [x] Compile lexically shadowable next, pairs and ipairs over bounded table storage — src/owned_flow.rs: Builtin::Next, Builtin::Pairs, Builtin::Ipairs, Execution::next_builtin
+  - [x] Add raw key traversal, sequential-stop, closure, type/error and execution-budget regression fixtures — src/owned_flow.rs: first_class_next_pairs_and_ipairs_follow_bounded_lua_raw_iteration; tests/owned_flow.rs
+  - [ ] Pass Rust 1.96, formatter, clippy, production fer and upstream Lua 5.4 differential CI
+- 🕳️ **T368** Nil-value table holes and allocation-free absent deletes — `███████░░░ 67%`
+  - [x] Avoid allocating absent positive array fields when assigning nil — src/owned_flow.rs: Execution::write_table
+  - [x] Normalize nil constructor/tail cells and add heap-budget plus Lua parity regression fixtures — src/owned_flow.rs: nil_table_fields_do_not_allocate_nonexistent_array_storage; tests/owned_flow.rs
+  - [ ] Pass all four primary CI jobs with upstream Lua differential verification
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -471,4 +479,6 @@
 - 📏 First-class rawlen and shared Lua length implementation — `██████████ 100%`
 - 🎛️ First-class select with bounded multiple-result lists — `██████████ 100%`
 - ✅ First-class assert with truthy multi-result preservation — `██████████ 100%`
+- 🔁 First-class bounded next, pairs and ipairs table iteration — `███████░░░ 67%`
+- 🕳️ Nil table holes without absent-entry heap allocation — `███████░░░ 67%`
 
