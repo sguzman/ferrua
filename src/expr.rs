@@ -259,6 +259,13 @@ pub enum Statement<'a> {
         body: Vec<Statement<'a>>,
         condition: Expr<'a>,
     },
+    NumericFor {
+        variable: &'a str,
+        start: Expr<'a>,
+        limit: Expr<'a>,
+        step: Option<Expr<'a>>,
+        body: Vec<Statement<'a>>,
+    },
     If {
         branches: Vec<(Expr<'a>, Vec<Statement<'a>>)>,
         else_branch: Option<Vec<Statement<'a>>>,
@@ -298,6 +305,36 @@ impl<'a> Parser<'a> {
             }
             self.pop();
             return Ok(Statement::Block(body));
+        }
+        if self.peek().is_some_and(|token| token.spelling == "for") {
+            self.pop();
+            let variable = self.name()?;
+            if self.peek().map(|token| token.spelling) != Some("=") {
+                return Err(self.error("only numeric for loops are supported"));
+            }
+            self.pop();
+            let start = self.expression(0)?;
+            if self.peek().map(|token| token.spelling) != Some(",") {
+                return Err(self.error("expected comma after numeric for start"));
+            }
+            self.pop();
+            let limit = self.expression(0)?;
+            let step = if self.peek().map(|token| token.spelling) == Some(",") {
+                self.pop();
+                Some(self.expression(0)?)
+            } else {
+                None
+            };
+            if self.peek().map(|token| token.spelling) != Some("do") {
+                return Err(self.error("expected do in numeric for"));
+            }
+            self.pop();
+            let body = self.block(&["end"], depth + 1)?;
+            if self.peek().map(|token| token.spelling) != Some("end") {
+                return Err(self.error("expected end to close numeric for"));
+            }
+            self.pop();
+            return Ok(Statement::NumericFor { variable, start, limit, step, body });
         }
         if self.peek().is_some_and(|token| token.spelling == "repeat") {
             self.pop();
@@ -487,8 +524,9 @@ impl<'a> Parser<'a> {
 
 /// Parse a deliberately limited Lua chunk: semicolon-separated locals,
 /// assignments, call statements and final returns, plus nested do/end
-/// lexical blocks, conditional branches, while and repeat loops. Newline
-/// boundaries can separate supported statements. Other control-flow is pending.
+/// lexical blocks, conditionals, while/repeat loops and numeric for loops.
+/// Newline boundaries can separate supported statements. Generic for loops
+/// and remaining Lua control-flow constructs are not yet supported.
 pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
     let tokens = tokenize(source)?;
     let mut parser = Parser {
@@ -721,6 +759,31 @@ mod tests {
             "local a=1 print(a)",
             "return 1\nprint(2)",
             "repeat local x=1; return 2; print(x) until true",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
+    }
+
+    #[test]
+    fn parses_numeric_for_with_optional_step() {
+        let parsed = parse_chunk(
+            "local total=0\nfor i=1,10,2 do\ntotal=total+i\nend\nreturn total"
+        ).unwrap();
+        assert_eq!(parsed.len(), 3);
+        assert!(matches!(&parsed[1], Statement::NumericFor { variable, step: Some(_), body, .. }
+            if *variable == "i" && body.len() == 1));
+        let omitted_step = parse_chunk("for i=1,3 do print(i) end").unwrap();
+        assert!(matches!(&omitted_step[0], Statement::NumericFor { step: None, .. }));
+    }
+
+    #[test]
+    fn rejects_unsupported_generic_or_malformed_numeric_for() {
+        for source in [
+            "for i in list do print(i) end",
+            "for i=1 do print(i) end",
+            "for i=1,10 print(i) end",
+            "for i=1,10, do print(i) end",
+            "for i=1,10 do print(i)",
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
         }

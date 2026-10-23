@@ -174,6 +174,21 @@ impl<'src> Resolver<'src> {
                 self.read_expression(condition, number);
                 self.scopes.pop();
             }
+            Statement::NumericFor { variable, start, limit, step, body } => {
+                // Lua numeric for control expressions evaluate before binding
+                // the loop variable; that name belongs only to the loop frame.
+                self.read_expression(start, number);
+                self.read_expression(limit, number);
+                if let Some(step) = step {
+                    self.read_expression(step, number);
+                }
+                self.scopes.push(HashMap::new());
+                self.bind(variable, number);
+                for child in body {
+                    self.statement(child);
+                }
+                self.scopes.pop();
+            }
             Statement::If {
                 branches,
                 else_branch,
@@ -382,7 +397,23 @@ mod tests {
     }
 
     #[test]
+    fn numeric_for_initializer_uses_outer_variable_and_body_shadows_it() {
+        let summary = analyze(
+            "local i=3; for i=i,10 do print(i) end; return i"
+        ).unwrap();
+        assert_eq!(summary.bindings.len(), 2);
+        assert_eq!(summary.bindings[0].scope_depth, 0);
+        assert_eq!(summary.bindings[1].scope_depth, 1);
+        let uses: Vec<_> = summary.references.iter()
+            .filter(|r| r.name == "i").collect();
+        assert_eq!(uses.len(), 3);
+        assert_eq!(uses[0].resolution, Resolution::Local(0));
+        assert_eq!(uses[1].resolution, Resolution::Local(1));
+        assert_eq!(uses[2].resolution, Resolution::Local(0));
+    }
+
+    #[test]
     fn unsupported_grammar_is_rejected_instead_of_analyzed() {
-        assert!(analyze("for i=1,3 do local a=1 end").is_err());
+        assert!(analyze("for i in pairs(values) do local a=1 end").is_err());
     }
 }
