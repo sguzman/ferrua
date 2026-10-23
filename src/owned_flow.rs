@@ -727,6 +727,11 @@ impl<'a> Compiler<'a> {
     fn statements(&mut self, nodes: &[Statement<'a>]) -> Result<(), FlowError> {
         for statement in nodes {
             match statement {
+                Statement::Label(_) | Statement::Goto(_) => {
+                    return Err(FlowError::Unsupported(
+                        "goto and label execution requires scope-aware jump lowering".into(),
+                    ));
+                }
                 Statement::Function {
                     name,
                     fields,
