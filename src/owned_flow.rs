@@ -425,7 +425,9 @@ impl<'a> Compiler<'a> {
                     self.push(Op::Constant(value))?;
                 } else {
                     match self.slot(text) {
-                        Ok(slot) => self.push(Op::ReadLocal(slot))?,
+                        Ok(slot) => {
+                            self.push(Op::ReadLocal(slot))?;
+                        }
                         Err(_) if *text == "type" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::Type)))?;
                         }
