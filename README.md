@@ -22,11 +22,11 @@ After building or installing, run `fer` in place of `cargo run --`. On each succ
 
 Ferrua also installs a first-party Lua `json` global in every session, with `json.decode(text)` and `json.encode(value)`; no third-party Lua package is required. The JSON implementation preserves empty arrays versus objects after decoding, provides `json.null` for null values, and supports `json.array()` / `json.object()` to construct empty collections. It rejects cycles, invalid input and unsupported types. Its full compatibility matrix is still under development.
 
-Trusted mode exposes the standard Lua `io`, `os`, `math`, `string`, `table`, `utf8`, `coroutine` and `package` libraries. Its shell access carries the caller's OS permissions. `--sandbox` is an explicit restricted-library option, not a promise of audited containment. Native JSON, filesystem helpers and argv-based process execution are included in preview builds; portable releases and a reusable setup action remain upcoming.
+Trusted mode exposes the standard Lua `io`, `os`, `math`, `string`, `table`, `utf8`, `coroutine` and `package` libraries. Its shell access carries the caller's OS permissions. `--sandbox` is an explicit restricted-library option, not a promise of audited containment. Native JSON, filesystem helpers, direct HTTP requests and argv-based process execution are included in preview builds; portable releases and a reusable setup action remain upcoming.
 
 ### Running other tools
 
-In trusted mode, use `process.run("git", {"status", "--short"})` for structured exit codes and captured output, or `process.check("git", {"status", "--short"})` to raise a Lua error on failure. Arguments are passed directly without invoking a shell. Options include `cwd`, `env`, `stdin`, and `timeout_ms`. The host command inherits the caller's permissions. See [process API](docs/PROCESS.md), [filesystem API](docs/FILESYSTEM.md) and [examples](examples/).
+In trusted mode, use `process.run("git", {"status", "--short"})` for structured exit codes and captured output, or `process.check("git", {"status", "--short"})` to raise a Lua error on failure. Arguments are passed directly without invoking a shell. Options include `cwd`, `env`, `stdin`, and `timeout_ms`. The host command inherits the caller's permissions. See [process API](docs/PROCESS.md), [filesystem API](docs/FILESYSTEM.md), [HTTP API](docs/HTTP.md) and [examples](examples/).
 
 ## Development and progress
 

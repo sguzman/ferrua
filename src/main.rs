@@ -4,6 +4,7 @@
 use luna_core::{version::LuaVersion, vm::Vm};
 
 mod fs;
+mod http;
 mod process;
 use std::io::{self, BufRead, IsTerminal, Read, Write};
 
@@ -162,6 +163,17 @@ fn vm_for(options: &Options) -> Vm {
             .expect("embedded fs module must return a table");
         vm.set_global("fs", fs_module)
             .expect("fs module must register");
+        let http_bridge = vm.native_typed(http::serialized as fn(String) -> String);
+        vm.set_global("__fer_http_call", http_bridge)
+            .expect("HTTP bridge must register");
+        let http_module = vm
+            .eval_chunk(include_str!("../tools/http.lua"), "@ferrua/http.lua")
+            .expect("embedded HTTP module must compile")
+            .into_iter()
+            .next()
+            .expect("embedded HTTP module must return a table");
+        vm.set_global("http", http_module)
+            .expect("HTTP module must register");
     }
     // User-supplied budget applies to the user script, not runtime initialization.
     if let Some(budget) = options.budget {
