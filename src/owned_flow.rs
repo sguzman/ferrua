@@ -52,8 +52,8 @@ pub enum Builtin {
     Assert,
     Next,
     Pairs,
-    IPairs,
-    IPairsIterator,
+    Ipairs,
+    IpairsIterator,
 }
 
 impl Value {
@@ -474,7 +474,7 @@ impl<'a> Compiler<'a> {
                             self.push(Op::Constant(Value::Builtin(Builtin::Pairs)))?;
                         }
                         Err(_) if *text == "ipairs" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::IPairs)))?;
+                            self.push(Op::Constant(Value::Builtin(Builtin::Ipairs)))?;
                         }
                         Err(error) => return Err(error),
                     }
@@ -1901,14 +1901,14 @@ impl Execution<'_> {
                         if matches!(
                             builtin,
                             Builtin::Select | Builtin::Assert | Builtin::Next
-                                | Builtin::Pairs | Builtin::IPairs | Builtin::IPairsIterator
+                                | Builtin::Pairs | Builtin::Ipairs | Builtin::IpairsIterator
                         ) {
                             let returned = match builtin {
                                 Builtin::Select => self.select_builtin(&args)?,
                                 Builtin::Assert if args[0].truthy() => args,
                                 Builtin::Assert => return Err(FlowError::TypeError),
                                 Builtin::Next => self.next_builtin(&args)?,
-                                Builtin::Pairs | Builtin::IPairs => {
+                                Builtin::Pairs | Builtin::Ipairs => {
                                     if !matches!(args[0], Value::Table(_)) {
                                         return Err(FlowError::TypeError);
                                     }
@@ -1916,7 +1916,7 @@ impl Execution<'_> {
                                         Value::Builtin(if builtin == Builtin::Pairs {
                                             Builtin::Next
                                         } else {
-                                            Builtin::IPairsIterator
+                                            Builtin::IpairsIterator
                                         }),
                                         args[0],
                                         if builtin == Builtin::Pairs {
@@ -1926,7 +1926,7 @@ impl Execution<'_> {
                                         },
                                     ]
                                 }
-                                Builtin::IPairsIterator => self.ipairs_iterator(&args)?,
+                                Builtin::IpairsIterator => self.ipairs_iterator(&args)?,
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
@@ -1997,8 +1997,8 @@ impl Execution<'_> {
                             | Builtin::Assert
                             | Builtin::Next
                             | Builtin::Pairs
-                            | Builtin::IPairs
-                            | Builtin::IPairsIterator => {
+                            | Builtin::Ipairs
+                            | Builtin::IpairsIterator => {
                                 unreachable!("iteration/selection builtins handled as multiple results")
                             }
                             Builtin::ToString => match value {
