@@ -368,11 +368,13 @@ mod tests {
 
     #[test]
     fn repeat_condition_sees_body_local_but_later_code_does_not() {
-        let summary = analyze(
-            "repeat local inner=1\nprint(inner)\nuntil inner>2\nprint(inner)"
-        ).unwrap();
-        let uses: Vec<_> = summary.references.iter()
-            .filter(|r| r.name == "inner").collect();
+        let summary =
+            analyze("repeat local inner=1\nprint(inner)\nuntil inner>2\nprint(inner)").unwrap();
+        let uses: Vec<_> = summary
+            .references
+            .iter()
+            .filter(|r| r.name == "inner")
+            .collect();
         assert_eq!(uses.len(), 3);
         assert_eq!(uses[0].resolution, Resolution::Local(0));
         assert_eq!(uses[1].resolution, Resolution::Local(0));

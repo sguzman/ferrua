@@ -376,10 +376,9 @@ impl<'a> Parser<'a> {
         if self.peek().is_some_and(|token| token.spelling == "return") {
             self.pop();
             let values = if self.peek().is_none()
-                || self.peek().is_some_and(|token| matches!(
-                    token.spelling, ";" | "end" | "else" | "elseif" | "until"
-                ))
-            {
+                || self.peek().is_some_and(|token| {
+                    matches!(token.spelling, ";" | "end" | "else" | "elseif" | "until")
+                }) {
                 Vec::new()
             } else {
                 self.expressions()?
@@ -448,17 +447,20 @@ impl<'a> Parser<'a> {
             let statement = self.statement(depth)?;
             let terminal = matches!(statement, Statement::Return(_));
             result.push(statement);
-            let ending_line = self.tokens.get(self.index.saturating_sub(1)).map_or(0, |token| {
-                let mut line = token.line;
-                let mut cr = false;
-                for byte in token.spelling.bytes() {
-                    if byte == b'\r' || (byte == b'\n' && !cr) {
-                        line += 1;
+            let ending_line = self
+                .tokens
+                .get(self.index.saturating_sub(1))
+                .map_or(0, |token| {
+                    let mut line = token.line;
+                    let mut cr = false;
+                    for byte in token.spelling.bytes() {
+                        if byte == b'\r' || (byte == b'\n' && !cr) {
+                            line += 1;
+                        }
+                        cr = byte == b'\r';
                     }
-                    cr = byte == b'\r';
-                }
-                line
-            });
+                    line
+                });
             if self.peek().is_some_and(|token| token.spelling == ";") {
                 self.pop();
             } else if self
