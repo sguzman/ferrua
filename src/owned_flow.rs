@@ -338,7 +338,10 @@ impl<'a> Compiler<'a> {
             Expr::Vararg if self.vararg => {
                 self.push(Op::VarargSingle)?;
             }
-            Expr::Atom(text) if text.starts_with(['\'', '"', '[']) => {
+            Expr::Atom(text)
+                if text.starts_with('\'')
+                    || text.starts_with('"')
+                    || text.starts_with('[') => {
                 let index = self.intern_literal(text)?;
                 self.push(Op::Constant(Value::String(index)))?;
             }
