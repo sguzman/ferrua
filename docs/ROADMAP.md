@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 93%` across 65 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 93%` across 69 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -302,6 +302,22 @@
   - [x] Track captured cell identifiers at closure construction to avoid renewing uncaptured loop cells — src/owned_flow.rs: Execution::captured_cells, Op::NewFunction, iteration_cell
   - [x] Retain per-iteration captured values without exhausting the heap for noncapturing loops — src/owned_flow.rs: loop_closures_capture_distinct_iteration_cells; noncapturing_numeric_loops_do_not_exhaust_cell_heap
   - [x] Pass Linux, Rust 1.96, action-consumer and Lua 5.4.6 differential CI — GitHub Actions 40000123176: all four jobs successful
+- 🗂️ **T341** Mixed positional and computed integer-key table construction — `██████████ 100%`
+  - [x] Compile computed integer-key fields with single-evaluation, source-order construction — src/owned_flow.rs: Expr::Table Indexed branch; Op::Duplicate; Op::SetTable
+  - [x] Preserve final positional multiple-result expansion with bounded heap allocation — src/owned_flow.rs: Op::SetTableTail; computed_integer_keys_in_mixed_table_constructors
+  - [x] Pass cross-interpreter parity fixtures excluding unspecified overlapping-key order — tests/owned_flow.rs; GitHub Actions 40002668288: four jobs passed
+- 📏 **T342** Lua bounded table length and sequence-border behavior — `██████████ 100%`
+  - [x] Implement unary table length on bounded positive-index tables and dense arrays — src/owned_flow.rs: Op::Length
+  - [x] Verify empty, dense, computed-key and nil-hole table lengths — src/owned_flow.rs: table_length_uses_positive_index_border
+  - [x] Pass production fer and upstream Lua 5.4.6 differential CI — tests/owned_flow.rs; GitHub Actions 40002966676: four jobs passed
+- 🔤 **T343** Interned immutable Lua byte-string literals and byte length — `██████████ 100%`
+  - [x] Decode bounded Lua quoted and long-bracket literal bytes and intern string contents — src/owned_flow.rs: decode_lua_string, Compiler::intern_literal; FlowProgram::strings
+  - [x] Implement content-based string equality and byte-count unary length — src/owned_flow.rs: Value::String, Op::Length; lua_byte_strings_are_interned_by_content_and_measure_bytes
+  - [x] Accept Lua 5.4.6 differential, Rust 1.96 and downstream action CI — tests/owned_flow.rs; GitHub Actions 40003835476: four jobs passed
+- 🔗 **T344** Bounded Lua string concatenation and lexical ordering — `██████████ 100%`
+  - [x] Compile right-associative string concatenation with supported integer coercion and runtime byte interning — src/owned_flow.rs: Binary::Concat, Execution::string_bytes, Execution::intern_string
+  - [x] Support lexicographic string comparisons and bounded computed byte lengths — src/owned_flow.rs: lua_string_concat_and_lexical_order_use_bounded_byte_values
+  - [x] Accept full CI against production fer and upstream Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 40004295352: four jobs passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -341,4 +357,8 @@
 - 🔁 Function-based generic for loop execution — `██████████ 100%`
 - 🧵 Fresh captured loop-variable cells — `██████████ 100%`
 - ♻️ Capture-aware loop-cell allocation — `██████████ 100%`
+- 🗂️ Mixed positional and computed integer-key table construction — `██████████ 100%`
+- 📏 Lua bounded table length and sequence-border behavior — `██████████ 100%`
+- 🔤 Interned immutable Lua byte-string literals and byte length — `██████████ 100%`
+- 🔗 Bounded Lua string concatenation and lexical ordering — `██████████ 100%`
 

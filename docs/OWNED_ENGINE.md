@@ -199,3 +199,12 @@ The experimental VM now interns string literals by byte content in a bounded, co
 ### Bounded runtime string concatenation and ordering
 
 The experimental byte-string pool now supports dynamically created strings through Lua's right-associative `..` operator, with integer-to-decimal-string concatenation as a supported Lua coercion. Result strings are interned by byte content with a hard 65,536-byte pool cap, preserving equality across literal and computed values. Ordered string comparisons use lexicographic byte ordering; `#` measures the actual byte length of computed strings. General numeric parsing, float strings, full Unicode escapes, garbage collection and metatables are still outside this VM subset. The working production `fer` interpreter is unchanged.
+
+### Verified table and string value milestones
+
+- [CI #40002668288](https://github.com/sguzman/ferrua/actions/runs/40002668288): mixed positional and computed integer-key table construction passed all four jobs; overlapping explicit/list writes are not assumed deterministic across independent Lua engines.
+- [CI #40002966676](https://github.com/sguzman/ferrua/actions/runs/40002966676): dense Lua table length and bounded positive-index border handling passed all four jobs.
+- [CI #40003835476](https://github.com/sguzman/ferrua/actions/runs/40003835476): immutable interned Lua byte strings, escapes and byte length passed all four jobs.
+- [CI #40004295352](https://github.com/sguzman/ferrua/actions/runs/40004295352): bounded Lua concatenation, integer coercion and lexicographic byte comparisons passed all four jobs.
+
+The independent VM still lacks general associative string-keyed tables, metatables, full function and float behavior, GC and the standard Lua runtime; no production engine switch has been accepted.

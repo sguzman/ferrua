@@ -1616,6 +1616,98 @@
                   "evidence": "GitHub Actions 40000123176: all four jobs successful"
                 }
               ]
+            },
+            {
+              "id": "T341",
+              "emoji": "🗂️",
+              "name": "Mixed positional and computed integer-key table construction",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile computed integer-key fields with single-evaluation, source-order construction",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Expr::Table Indexed branch; Op::Duplicate; Op::SetTable"
+                },
+                {
+                  "text": "Preserve final positional multiple-result expansion with bounded heap allocation",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::SetTableTail; computed_integer_keys_in_mixed_table_constructors"
+                },
+                {
+                  "text": "Pass cross-interpreter parity fixtures excluding unspecified overlapping-key order",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 40002668288: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T342",
+              "emoji": "📏",
+              "name": "Lua bounded table length and sequence-border behavior",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Implement unary table length on bounded positive-index tables and dense arrays",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::Length"
+                },
+                {
+                  "text": "Verify empty, dense, computed-key and nil-hole table lengths",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: table_length_uses_positive_index_border"
+                },
+                {
+                  "text": "Pass production fer and upstream Lua 5.4.6 differential CI",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 40002966676: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T343",
+              "emoji": "🔤",
+              "name": "Interned immutable Lua byte-string literals and byte length",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Decode bounded Lua quoted and long-bracket literal bytes and intern string contents",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: decode_lua_string, Compiler::intern_literal; FlowProgram::strings"
+                },
+                {
+                  "text": "Implement content-based string equality and byte-count unary length",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Value::String, Op::Length; lua_byte_strings_are_interned_by_content_and_measure_bytes"
+                },
+                {
+                  "text": "Accept Lua 5.4.6 differential, Rust 1.96 and downstream action CI",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 40003835476: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T344",
+              "emoji": "🔗",
+              "name": "Bounded Lua string concatenation and lexical ordering",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile right-associative string concatenation with supported integer coercion and runtime byte interning",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Binary::Concat, Execution::string_bytes, Execution::intern_string"
+                },
+                {
+                  "text": "Support lexicographic string comparisons and bounded computed byte lengths",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: lua_string_concat_and_lexical_order_use_bounded_byte_values"
+                },
+                {
+                  "text": "Accept full CI against production fer and upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 40004295352: four jobs passed"
+                }
+              ]
             }
           ]
         }
@@ -1875,6 +1967,34 @@
           "name": "Capture-aware loop-cell allocation",
           "task_ids": [
             "T340"
+          ]
+        },
+        {
+          "emoji": "🗂️",
+          "name": "Mixed positional and computed integer-key table construction",
+          "task_ids": [
+            "T341"
+          ]
+        },
+        {
+          "emoji": "📏",
+          "name": "Lua bounded table length and sequence-border behavior",
+          "task_ids": [
+            "T342"
+          ]
+        },
+        {
+          "emoji": "🔤",
+          "name": "Interned immutable Lua byte-string literals and byte length",
+          "task_ids": [
+            "T343"
+          ]
+        },
+        {
+          "emoji": "🔗",
+          "name": "Bounded Lua string concatenation and lexical ordering",
+          "task_ids": [
+            "T344"
           ]
         }
       ]
