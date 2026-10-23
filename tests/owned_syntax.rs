@@ -54,7 +54,10 @@ fn scans_real_checked_in_lua_scripts_without_losing_source_slices() {
                 Some(token.spelling),
                 "token spelling does not reproduce bytes in {relative}"
             );
-            assert!(token.line >= last_line, "lexer line regressed in {relative}");
+            assert!(
+                token.line >= last_line,
+                "lexer line regressed in {relative}"
+            );
             last_end = token.byte_offset + token.spelling.len();
             last_line = token.line;
         }
