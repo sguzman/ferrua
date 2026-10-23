@@ -2046,32 +2046,67 @@ impl Execution<'_> {
                     if *exit > instructions.len() {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    let read = |slot: usize| -> Result<i64, FlowError> {
+                    let read = |slot: usize| -> Result<Value, FlowError> {
                         let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
-                        match self.cells.get(cell).copied().flatten() {
-                            Some(Value::Integer(value)) => Ok(value),
-                            Some(_) => Err(FlowError::TypeError),
-                            None => Err(FlowError::InvalidBytecode),
-                        }
+                        self.cells
+                            .get(cell)
+                            .copied()
+                            .flatten()
+                            .ok_or(FlowError::InvalidBytecode)
                     };
-                    let current = read(*counter)?;
-                    let bound = read(*limit)?;
-                    let stride = read(*step)?;
-                    if stride == 0 {
-                        return Err(FlowError::InvalidForStep);
-                    }
-                    let enters = if stride > 0 {
-                        current <= bound
+                    let current = self.arithmetic_operand(read(*counter)?)?;
+                    let bound = self.arithmetic_operand(read(*limit)?)?;
+                    let stride = self.arithmetic_operand(read(*step)?)?;
+                    let floating = [current, bound, stride]
+                        .iter()
+                        .any(|value| matches!(value, Value::Float(_)));
+                    let (enters, visible) = if floating {
+                        let current = number_to_f64(current)?;
+                        let bound = number_to_f64(bound)?;
+                        let stride = number_to_f64(stride)?;
+                        if stride == 0.0 {
+                            return Err(FlowError::InvalidForStep);
+                        }
+                        (
+                            if stride > 0.0 {
+                                current <= bound
+                            } else {
+                                current >= bound
+                            },
+                            Value::Float(current.to_bits()),
+                        )
                     } else {
-                        current >= bound
+                        let (Value::Integer(current), Value::Integer(bound), Value::Integer(stride)) =
+                            (current, bound, stride)
+                        else {
+                            return Err(FlowError::TypeError);
+                        };
+                        if stride == 0 {
+                            return Err(FlowError::InvalidForStep);
+                        }
+                        (
+                            if stride > 0 {
+                                current <= bound
+                            } else {
+                                current >= bound
+                            },
+                            Value::Integer(current),
+                        )
                     };
                     if !enters {
                         pc = *exit;
                         continue;
                     }
+                    if floating {
+                        let counter_cell =
+                            *slots.get(*counter).ok_or(FlowError::InvalidBytecode)?;
+                        *self
+                            .cells
+                            .get_mut(counter_cell)
+                            .ok_or(FlowError::InvalidBytecode)? = Some(visible);
+                    }
                     let cell = self.iteration_cell(&mut slots, *variable)?;
-                    *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? =
-                        Some(Value::Integer(current));
+                    *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(visible);
                 }
                 Op::ForStep {
                     counter,
@@ -2081,27 +2116,39 @@ impl Execution<'_> {
                     if *exit > instructions.len() {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    let counter_cell = *slots.get(*counter).ok_or(FlowError::InvalidBytecode)?;
-                    let current = match self.cells.get(counter_cell).copied().flatten() {
-                        Some(Value::Integer(value)) => value,
-                        Some(_) => return Err(FlowError::TypeError),
-                        None => return Err(FlowError::InvalidBytecode),
-                    };
+                    let counter_cell =
+                        *slots.get(*counter).ok_or(FlowError::InvalidBytecode)?;
                     let step_cell = *slots.get(*step).ok_or(FlowError::InvalidBytecode)?;
-                    let stride = match self.cells.get(step_cell).copied().flatten() {
-                        Some(Value::Integer(value)) => value,
-                        Some(_) => return Err(FlowError::TypeError),
-                        None => return Err(FlowError::InvalidBytecode),
+                    let current = self
+                        .cells
+                        .get(counter_cell)
+                        .copied()
+                        .flatten()
+                        .ok_or(FlowError::InvalidBytecode)?;
+                    let stride = self
+                        .cells
+                        .get(step_cell)
+                        .copied()
+                        .flatten()
+                        .ok_or(FlowError::InvalidBytecode)?;
+                    let current = self.arithmetic_operand(current)?;
+                    let stride = self.arithmetic_operand(stride)?;
+                    let updated = match (current, stride) {
+                        (Value::Integer(current), Value::Integer(stride)) => {
+                            let Some(updated) = current.checked_add(stride) else {
+                                pc = *exit;
+                                continue;
+                            };
+                            Value::Integer(updated)
+                        }
+                        (current, stride) => Value::Float(
+                            (number_to_f64(current)? + number_to_f64(stride)?).to_bits(),
+                        ),
                     };
-                    if let Some(updated) = current.checked_add(stride) {
-                        *self
-                            .cells
-                            .get_mut(counter_cell)
-                            .ok_or(FlowError::InvalidBytecode)? = Some(Value::Integer(updated));
-                    } else {
-                        pc = *exit;
-                        continue;
-                    }
+                    *self
+                        .cells
+                        .get_mut(counter_cell)
+                        .ok_or(FlowError::InvalidBytecode)? = Some(updated);
                 }
                 Op::GenericForCheck {
                     control,
@@ -2426,6 +2473,39 @@ mod tests {
         assert_eq!(
             execute_flow_chunk(&program, 25),
             Err(FlowError::StepBudgetExceeded)
+        );
+    }
+
+    #[test]
+    fn numeric_for_handles_fractional_bounds_and_steps() {
+        assert_eq!(
+            evaluate("local n=0; for i=1.0,2.0,0.5 do n=n+1 end; return n"),
+            3
+        );
+        assert_eq!(
+            evaluate("local n=0; for i=3.0,1.0,-0.5 do n=n+1 end; return n"),
+            5
+        );
+        assert_eq!(
+            evaluate("local s=0; for i=1,2,0.5 do s=s+i end; return (s==4.5) and 1 or 0"),
+            1
+        );
+        assert_eq!(
+            evaluate("local n=0; for i=1.0,4 do n=n+1 end; return n"),
+            4
+        );
+        assert_eq!(
+            evaluate("local s=0; for i=1.5,0,-0.5 do s=s+i end; return (s==3.0) and 1 or 0"),
+            1
+        );
+        assert_eq!(
+            evaluate("local n=0; for i='1.0','2.0','0.5' do n=n+1 end; return n"),
+            3
+        );
+        let invalid = compile_flow_chunk("for i=1.0,2.0,0.0 do end; return 1").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
+            Err(FlowError::InvalidForStep)
         );
     }
 

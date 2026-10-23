@@ -281,3 +281,7 @@ Lua hexadecimal floating-point forms such as `0x1.8p1`, `0X.8P+2`, `0x1p-1`, and
 ### Exact mixed integer/float numeric ordering
 
 Cross-type Lua comparisons now avoid converting a 64-bit integer to an imprecise double before ordering. The bounded runtime compares integral portions exactly, then considers floating fractional sign, with explicit handling of NaN and out-of-range double magnitudes. Differential tests cover integers beyond the 53-bit IEEE-754 exact-integer window and signed 64-bit boundaries. Equality still uses the separately guarded exact integral-float comparison.
+
+### Float-mode Lua numeric for iteration
+
+Numeric `for` loops now choose integer mode when all three controls are integral VM values, retaining checked integer overflow behavior, and float mode when any control is floating-point. In float mode, the hidden counter and visible per-iteration variable carry IEEE-754 values and advance with double arithmetic; descending loops and fractional step values are supported. Bounded decimal numeric-string controls are coerced by the existing arithmetic operand reader, and zero steps are rejected in both modes. The existing instruction budget and captured per-iteration cell semantics remain in force. This does not claim exact handling of every Lua 5.4 float-loop edge case, including NaN and infinite steps.
