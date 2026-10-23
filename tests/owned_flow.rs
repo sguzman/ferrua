@@ -470,24 +470,66 @@ fn render(values: &[Value]) -> String {
         .join("\t")
 }
 
+/// Reproducible deterministic numeric corpus: no random dependency, network
+/// data, Python generator, or floating nondeterminism. Each generated chunk
+/// is run through the same owned, production and upstream Lua comparisons.
+fn generated_numeric_fixtures() -> Vec<String> {
+    let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut sample = || {
+        seed = seed
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        ((seed >> 32) % 101) as i64 - 50
+    };
+    let mut fixtures = Vec::with_capacity(128);
+    for _ in 0..32 {
+        let a = sample();
+        let b = sample().unsigned_abs() as i64 + 1;
+        let c = sample();
+        fixtures.push(format!(
+            "local a={a}; local b={b}; local c={c}; return (a+b)*c-a*b"
+        ));
+        fixtures.push(format!("local a={a}; local b={b}; return a//b, a%b"));
+        fixtures.push(format!("local a={a}; local b={b}; return a&b, a|b, a~b"));
+        fixtures.push(format!(
+            "local a={a}; local c={c}; return a<c,a<=c,a==c,a>=c,a>c,a~=c"
+        ));
+    }
+    fixtures
+}
+
+fn check_source(reference: &str, prefix: &[&str], source: &str) {
+    let compiled = compile_flow_chunk(source).unwrap();
+    let owned = render(&execute_flow_values(&compiled, DEFAULT_STEP_BUDGET).unwrap());
+    let code = format!("print((function() {source} end)())");
+    let output = Command::new(reference)
+        .args(prefix)
+        .args(["-e", &code])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{source}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let expected = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    assert_eq!(owned, expected, "{reference} differs on {source}");
+}
+
 fn check(reference: &str, prefix: &[&str]) {
     for source in FIXTURES {
-        let compiled = compile_flow_chunk(source).unwrap();
-        let owned = render(&execute_flow_values(&compiled, DEFAULT_STEP_BUDGET).unwrap());
-        let code = format!("print((function() {source} end)())");
-        let output = Command::new(reference)
-            .args(prefix)
-            .args(["-e", &code])
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{source}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let expected = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-        assert_eq!(owned, expected, "{reference} differs on {source}");
+        check_source(reference, prefix, source);
     }
+    for source in generated_numeric_fixtures() {
+        check_source(reference, prefix, &source);
+    }
+}
+
+#[test]
+fn generated_numeric_inputs_are_deterministic() {
+    let inputs = generated_numeric_fixtures();
+    assert_eq!(inputs.len(), 128);
+    assert_eq!(inputs, generated_numeric_fixtures());
 }
 
 #[test]
