@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 95%` across 99 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 95%` across 100 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -438,6 +438,10 @@
   - [x] Forward table call values and arguments through bounded __call chains, preserving normal Lua call result adjustment — src/owned_flow.rs: Op::Call, Op::CallMany, Op::CallSpread and Execution::metatable_field
   - [x] Add first-class table, nested callback, builtin, multireturn, cycle and Lua 5.4 differential fixtures — src/owned_flow.rs: callable_tables_forward_lua_args_and_obey_bounded_call_depth; tests/owned_flow.rs
   - [x] Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and upstream Lua 5.4 differential CI — GitHub Actions 40030079883: four primary jobs and status reporter successful, including Lua 5.4.6 differential fixture
+- ➕ **T374** Function-valued Lua arithmetic metamethods after numeric coercion — `███████░░░ 67%`
+  - [x] Fall back from Lua numeric coercion to bounded first-party __add/__sub/__mul/__div/__idiv/__mod/__pow callbacks — src/owned_flow.rs: Execution::arithmetic_with_metamethod and Execution::binary_metamethod
+  - [x] Test operand order, left/right precedence, recursion, result adjustment and Lua 5.4 differential fixtures — src/owned_flow.rs: arithmetic_metamethods_reuse_owned_lua_closure_frames; tests/owned_flow.rs
+  - [ ] Pass Linux formatting, lint, tests, Rust 1.96, action consumer and Lua 5.4 differential CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -510,4 +514,5 @@
 - 🎭 Callable __index/__newindex metamethods using owned Lua closures — `██████████ 100%`
 - 📏 Callable Lua __len and rawlen separation — `██████████ 100%`
 - 📞 Callable Lua tables with bounded __call chains — `██████████ 100%`
+- ➕ Function-valued arithmetic metamethods with numeric precedence — `███████░░░ 67%`
 
