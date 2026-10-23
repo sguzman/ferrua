@@ -1225,6 +1225,29 @@
                   "evidence": "tests/owned_flow.rs; GitHub Actions 39987091738: four jobs successful"
                 }
               ]
+            },
+            {
+              "id": "T324",
+              "emoji": "🎭",
+              "name": "Fixed-arity Lua return lists in bounded owned flow",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile zero, single, and multiple return expressions into bounded stack bytecode",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: ReturnMany and compile_flow_chunk"
+                },
+                {
+                  "text": "Expose ordered typed return lists without breaking older single-value and integer return APIs",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: execute_flow_values, execute_flow_value, execute_flow_chunk; returns_fixed_count_lua_values_and_preserves_single_value_apis"
+                },
+                {
+                  "text": "Verify fixed-arity result lists against production fer and upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39987809090: all four jobs successful"
+                }
+              ]
             }
           ]
         }
@@ -1365,6 +1388,13 @@
           "name": "Experimental typed flow return values",
           "task_ids": [
             "T323"
+          ]
+        },
+        {
+          "emoji": "🎭",
+          "name": "Fixed-arity experimental return lists",
+          "task_ids": [
+            "T324"
           ]
         }
       ]

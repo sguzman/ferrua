@@ -81,3 +81,5 @@ These are bounded first-party prototypes, not a certified replacement for the pr
 ### Fixed-arity Lua return lists
 
 The experimental `execute_flow_values` API now returns a list of supported values from a `return` statement, including empty and multi-value lists. It keeps the result order and the original value types. The existing `execute_flow_value` and `execute_flow_chunk` APIs explicitly reject results of any arity other than one. This adds support for syntactically fixed return lists only; evaluation of function calls, vararg expansion and full Lua multiple-result adjustment remain future work. The production `fer` and upstream Lua 5.4.6 tests compare printed multi-result forms, including empty return lists.
+
+- [CI #39987809090](https://github.com/sguzman/ferrua/actions/runs/39987809090): fixed-arity Lua return lists and backward-compatible single-result interfaces — all four jobs passed.

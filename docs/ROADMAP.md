@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 90%` across 48 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 90%` across 49 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 87%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 88%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `█████████░ 87%`
+### 🔣 P3 — Ferrua-owned language engine — `█████████░ 88%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -234,6 +234,10 @@
   - [x] Return the restricted Value enum through a new typed experimental API — src/owned_flow.rs: execute_flow_value, returns_lua_boolean_nil_and_lazy_operand_values
   - [x] Keep existing integer-return execution API and explicit noninteger rejection — src/owned_flow.rs: execute_flow_chunk wrapper and regression test
   - [x] Verify Boolean, nil and integer representations against fer and upstream Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 39987091738: four jobs successful
+- 🎭 **T324** Fixed-arity Lua return lists in bounded owned flow — `██████████ 100%`
+  - [x] Compile zero, single, and multiple return expressions into bounded stack bytecode — src/owned_flow.rs: ReturnMany and compile_flow_chunk
+  - [x] Expose ordered typed return lists without breaking older single-value and integer return APIs — src/owned_flow.rs: execute_flow_values, execute_flow_value, execute_flow_chunk; returns_fixed_count_lua_values_and_preserves_single_value_apis
+  - [x] Verify fixed-arity result lists against production fer and upstream Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 39987809090: all four jobs successful
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -256,4 +260,5 @@
 - ⛓️ Lexically scoped loop break execution — `██████████ 100%`
 - 🧩 Lua fixed-result assignment padding — `██████████ 100%`
 - 🎭 Experimental typed flow return values — `██████████ 100%`
+- 🎭 Fixed-arity experimental return lists — `██████████ 100%`
 
