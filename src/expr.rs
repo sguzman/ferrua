@@ -186,7 +186,9 @@ impl<'a> Parser<'a> {
                     key,
                     value: self.expression(0)?,
                 }
-            } else if self.peek().is_some_and(|token| token.kind == Kind::Identifier)
+            } else if self
+                .peek()
+                .is_some_and(|token| token.kind == Kind::Identifier)
                 && self.tokens.get(self.index + 1).map(|token| token.spelling) == Some("=")
             {
                 let name = self.name()?;
@@ -869,7 +871,9 @@ mod tests {
         assert!(matches!(&fields[0], TableField::Value(Expr::Atom("2"))));
         assert!(matches!(&fields[1], TableField::Named { name: "x", .. }));
         assert!(matches!(&fields[2], TableField::Indexed { .. }));
-        assert!(matches!(&fields[3], TableField::Named { name: "inner", value: Expr::Table(nested) } if nested.len() == 2));
+        assert!(
+            matches!(&fields[3], TableField::Named { name: "inner", value: Expr::Table(nested) } if nested.len() == 2)
+        );
         assert!(matches!(parse_expression("{}"), Ok(Expr::Table(fields)) if fields.is_empty()));
         assert!(parse_chunk("local t={a=1}; return t.a").is_ok());
     }
