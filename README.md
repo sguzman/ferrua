@@ -8,6 +8,8 @@
 
 > **CI-validated development preview, not a stable release.** The Rust `fer` CLI, Lua automation libraries, and release packaging are exercised by Linux CI. Ferrua still embeds the independent [luna-core](https://crates.io/crates/luna-core) pure-Rust Lua compiler and VM; the fully owned VM is a future milestone.
 
+**Owned engine cutover:** the [graduation contract](docs/ENGINE_GRADUATION.md) defines the full implementation, conformance and native release gates. Roadmap percentages count accepted atomic tasks; they are **not** Lua compatibility percentages.
+
 ## Try it
 
 ```sh
@@ -37,7 +39,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [four primary jobs green plus aggregate status; Lua __pairs custom iteration, comparison and concat metamethods, native-stack-safe recursion and Lua 5.4.6 differentials](https://github.com/sguzman/ferrua/actions/runs/40034746881). Native EndeavourOS acceptance, a published stable release, and a complete Ferrua-owned Lua VM remain pending.
+**Latest verified CI:** [four primary jobs green plus aggregate status; Lua __tostring callbacks, __index-aware ipairs, prior metatable functionality and Lua 5.4.6 differential checks](https://github.com/sguzman/ferrua/actions/runs/40037327110). Native EndeavourOS acceptance, a published stable release, and a complete Ferrua-owned Lua VM remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
