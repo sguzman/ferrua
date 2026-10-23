@@ -442,10 +442,10 @@
   - [x] Fall back from Lua numeric coercion to bounded first-party __add/__sub/__mul/__div/__idiv/__mod/__pow callbacks — src/owned_flow.rs: Execution::arithmetic_with_metamethod and Execution::binary_metamethod
   - [x] Test operand order, left/right precedence, recursion, result adjustment and Lua 5.4 differential fixtures — src/owned_flow.rs: arithmetic_metamethods_reuse_owned_lua_closure_frames; tests/owned_flow.rs
   - [x] Pass Linux formatting, lint, tests, Rust 1.96, action consumer and Lua 5.4 differential CI — GitHub Actions 40031328390: Linux, Rust 1.96, Lua 5.4 differential, action consumer and status reporter passed
-- ➖ **T375** Bounded unary __unm and __bnot metamethod callbacks — `███████░░░ 67%`
+- ➖ **T375** Bounded unary __unm and __bnot metamethod callbacks — `██████████ 100%`
   - [x] Preserve numeric unary operators and fall back to first-party __unm and __bnot closures — src/owned_flow.rs: Op::Negate and Op::BitNot via Execution::binary_metamethod
   - [x] Verify Lua duplicate-operand callback convention, recursion limits, return adjustment and differential fixtures — src/owned_flow.rs: unary_metamethods_pass_duplicate_operand_and_keep_numeric_fallback; tests/owned_flow.rs
-  - [ ] Pass Rust formatter, Clippy, Rust 1.96, full tests, action consumer and Lua 5.4 differential CI
+  - [x] Pass Rust formatter, Clippy, Rust 1.96, full tests, action consumer and Lua 5.4 differential CI — GitHub Actions 40031937707: Linux tests/lint/formatter, Rust 1.96, upstream Lua 5.4, composite consumer and status reporter passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -519,5 +519,5 @@
 - 📏 Callable Lua __len and rawlen separation — `██████████ 100%`
 - 📞 Callable Lua tables with bounded __call chains — `██████████ 100%`
 - ➕ Function-valued arithmetic metamethods with numeric precedence — `██████████ 100%`
-- ➖ Unary negative and bitwise complement metamethods — `███████░░░ 67%`
+- ➖ Unary negative and bitwise complement metamethods — `██████████ 100%`
 
