@@ -38,8 +38,19 @@ function json.decode(source)
                     if not hex:match("^%x%x%x%x$") then fail("invalid unicode escape") end
                     position = position + 4
                     local point = tonumber(hex, 16)
-                    if point >= 0xD800 and point <= 0xDFFF then
-                        fail("surrogate escape not supported by this tooling decoder")
+                    if point >= 0xD800 and point <= 0xDBFF then
+                        if source:sub(position, position + 1) ~= "\\u" then
+                            fail("missing low surrogate")
+                        end
+                        position = position + 2
+                        local low = source:sub(position, position + 3)
+                        if not low:match("^%x%x%x%x$") then fail("invalid low surrogate") end
+                        position = position + 4
+                        low = tonumber(low, 16)
+                        if low < 0xDC00 or low > 0xDFFF then fail("invalid low surrogate") end
+                        point = 0x10000 + (point - 0xD800) * 0x400 + (low - 0xDC00)
+                    elseif point >= 0xDC00 and point <= 0xDFFF then
+                        fail("unexpected low surrogate")
                     end
                     chunks[#chunks + 1] = utf8.char(point)
                 else
@@ -121,6 +132,60 @@ function json.decode(source)
     whitespace()
     if position <= length then fail("trailing data") end
     return result
+end
+
+
+-- Deterministic first-party encoder. Cyclic or unsupported values are rejected.
+local escapes = {['"']='\\"', ['\\']='\\\\', ['\b']='\\b',
+    ['\f']='\\f', ['\n']='\\n', ['\r']='\\r', ['\t']='\\t'}
+local function quote(value)
+    return '"' .. value:gsub('[%z\1-\31\\"]', function(char)
+        return escapes[char] or string.format("\\u%04x", char:byte())
+    end) .. '"'
+end
+
+function json.encode(value)
+    local visited = {}
+    local function encode(item)
+        if item == json.null or item == nil then return "null" end
+        local kind = type(item)
+        if kind == "string" then return quote(item) end
+        if kind == "boolean" then return item and "true" or "false" end
+        if kind == "number" then
+            assert(item == item and item ~= math.huge and item ~= -math.huge,
+                "JSON does not support non-finite numbers")
+            return tostring(item)
+        end
+        assert(kind == "table", "JSON cannot encode " .. kind)
+        assert(not visited[item], "JSON cannot encode cycles")
+        visited[item] = true
+        local keys, count, max_index, array = {}, 0, 0, true
+        for key in pairs(item) do
+            count = count + 1
+            keys[#keys + 1] = key
+            if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then
+                array = false
+            elseif key > max_index then
+                max_index = key
+            end
+        end
+        local elements = {}
+        if array and count == max_index then
+            for index = 1, max_index do elements[#elements + 1] = encode(item[index]) end
+            visited[item] = nil
+            return "[" .. table.concat(elements, ",") .. "]"
+        end
+        for _, key in ipairs(keys) do
+            assert(type(key) == "string", "JSON object keys must be strings")
+        end
+        table.sort(keys)
+        for _, key in ipairs(keys) do
+            elements[#elements + 1] = quote(key) .. ":" .. encode(item[key])
+        end
+        visited[item] = nil
+        return "{" .. table.concat(elements, ",") .. "}"
+    end
+    return encode(value)
 end
 
 return json
