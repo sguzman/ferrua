@@ -2790,6 +2790,28 @@
                   "evidence": "GitHub Actions 40041470699: Linux formatter/lint/tests, Rust 1.96, Lua 5.4 differential fixtures and composite consumer passed"
                 }
               ]
+            },
+            {
+              "id": "T387",
+              "emoji": "🚫",
+              "name": "Differential syntax and runtime rejection corpus",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Add deterministic invalid-source fixtures partitioned into parser rejection and owned-VM runtime failures",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs: SYNTAX_ERROR_FIXTURES, RUNTIME_ERROR_FIXTURES, check_rejected_source"
+                },
+                {
+                  "text": "Exercise the same failure fixtures against production fer and opt-in upstream Lua 5.4; compare stages and failure exit statuses without falsely matching diagnostics",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs: check and check_rejected_source integration harness"
+                },
+                {
+                  "text": "Pass full Linux quality/test suite and upstream Lua 5.4 rejection parity in CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3371,6 +3393,13 @@
           "name": "Generated deterministic owned-VM numeric differential coverage",
           "task_ids": [
             "T386"
+          ]
+        },
+        {
+          "emoji": "🚫",
+          "name": "Intentional syntax and runtime failure parity",
+          "task_ids": [
+            "T387"
           ]
         }
       ]
