@@ -321,3 +321,12 @@ The independent stack VM now exposes first-class, lexically shadowable `rawequal
 ### Bounded first-class rawlen
 
 The owned stack VM now exposes a first-class, lexically shadowable `rawlen` builtin. It returns byte lengths for strings and a valid sequence border for the current bounded Lua table representation, sharing the existing table-length logic rather than introducing inconsistent implementations. It rejects unsupported operand types and preserves the existing execution budgets. Metamethods are not yet implemented, so raw-versus-metamethod length differences remain untested. Production `fer` remains unchanged.
+
+### Accepted core Lua conversion and raw-table builtins
+
+- [CI #40014074135](https://github.com/sguzman/ferrua/actions/runs/40014074135): first-class, shadowable `type` passed all four CI jobs.
+- [CI #40014718963](https://github.com/sguzman/ferrua/actions/runs/40014718963): bounded `tostring` value formatting passed all four jobs.
+- [CI #40015672831](https://github.com/sguzman/ferrua/actions/runs/40015672831): first-class `tonumber` plus `rawequal`, `rawget`, and `rawset` passed all four jobs, after correcting the missing-argument error semantics and maintaining upstream Lua differential parity.
+- [CI #40016120064](https://github.com/sguzman/ferrua/actions/runs/40016120064): bounded `rawlen`, using the shared underlying Lua byte-string and table-border length handler, passed all four jobs.
+
+These checks cover only the recorded, bounded first-party runtime subsets. There is still no full Lua standard library, garbage-collected production VM, metatable implementation, or accepted engine migration.

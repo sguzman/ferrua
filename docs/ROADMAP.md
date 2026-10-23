@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 94%` across 84 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 95%` across 89 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -378,6 +378,26 @@
   - [x] Convert only exact, finite, in-range integral float operands to Lua integers — src/owned_flow.rs: Execution::exact_integer_operand
   - [x] Apply conversion to unary and binary bitwise operators without coercing strings — src/owned_flow.rs: Op::BitNot, Op::Binary; bitwise_ops_accept_exact_integral_floats_only
   - [x] Pass upstream Lua parity, Rust 1.96 and downstream consumer CI — tests/owned_flow.rs; CI #40012977915: four jobs passed
+- 🏷️ **T360** First-class lexical Lua type builtin — `██████████ 100%`
+  - [x] Compile a first-class, lexically shadowable type function — src/owned_flow.rs: Builtin::Type, Compiler::expression
+  - [x] Classify bounded Lua nil, Boolean, number, string, table and function values — src/owned_flow.rs: first_class_type_builtin_reports_lua_value_categories
+  - [x] Accept Lua 5.4.6 differential and all four CI jobs — tests/owned_flow.rs; GitHub Actions 40014074135 all four jobs successful
+- 🔤 **T361** First-class bounded Lua tostring builtin — `██████████ 100%`
+  - [x] Compile a first-class, lexically shadowable stringification function — src/owned_flow.rs: Builtin::ToString, Compiler::expression
+  - [x] Format bounded primitive values and return byte strings with identity-shaped labels for tables/functions — src/owned_flow.rs: first_class_tostring_builtin_formats_bounded_lua_values
+  - [x] Accept upstream Lua parity and Linux/Rust/action CI — tests/owned_flow.rs; GitHub Actions 40014718963 all four jobs successful
+- 🔢 **T362** First-class Lua tonumber with bounded numeric conversions — `██████████ 100%`
+  - [x] Compile a first-class, lexically shadowable numeric conversion function — src/owned_flow.rs: Builtin::ToNumber, Compiler::expression
+  - [x] Handle decimal/hex floating and integer forms, optional bases 2–36 and malformed-string nil while rejecting missing arguments — src/owned_flow.rs: tonumber_builtin, first_class_tonumber_builtin_converts_bounded_numerals
+  - [x] Pass Lua 5.4.6 and production fer differential after fixing no-argument error semantics — tests/owned_flow.rs; GitHub Actions 40015672831 all four jobs successful
+- 🗝️ **T363** First-class raw equality and raw table access — `██████████ 100%`
+  - [x] Compile lexically shadowable rawequal, rawget and rawset builtin functions — src/owned_flow.rs: Builtin::RawEqual, Builtin::RawGet, Builtin::RawSet
+  - [x] Preserve numeric equality, table/function identity, bounded raw key reads and writes, and nil deletion — src/owned_flow.rs: first_class_raw_table_builtins_preserve_lua_key_and_identity_semantics
+  - [x] Pass upstream Lua 5.4.6 and production fer differential acceptance — tests/owned_flow.rs; GitHub Actions 40015672831 all four jobs successful
+- 📏 **T364** First-class rawlen and shared Lua length implementation — `██████████ 100%`
+  - [x] Compile lexically shadowable rawlen and share the VM's bounded byte/string-table length implementation — src/owned_flow.rs: Builtin::RawLen, Execution::raw_len, Op::Length
+  - [x] Test string byte length, table sequence borders, first-class values and invalid operands — src/owned_flow.rs: rawlen_reports_bounded_string_bytes_and_table_borders
+  - [x] Pass all four CI jobs and upstream Lua 5.4 differential checks — tests/owned_flow.rs; GitHub Actions 40016120064 all four jobs successful
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -436,4 +456,9 @@
 - ⚖️ Exact large-integer versus floating numeric ordering — `██████████ 100%`
 - 🔁 Fractional numeric for loops and float step controls — `██████████ 100%`
 - 🧩 Integral floating operands in Lua bitwise operations — `██████████ 100%`
+- 🏷️ First-class lexical Lua type builtin — `██████████ 100%`
+- 🔤 First-class bounded Lua tostring builtin — `██████████ 100%`
+- 🔢 First-class Lua tonumber with bounded numeric conversions — `██████████ 100%`
+- 🗝️ First-class raw equality and raw table access — `██████████ 100%`
+- 📏 First-class rawlen and shared Lua length implementation — `██████████ 100%`
 

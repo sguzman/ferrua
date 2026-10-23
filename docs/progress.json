@@ -2053,6 +2053,121 @@
                   "evidence": "tests/owned_flow.rs; CI #40012977915: four jobs passed"
                 }
               ]
+            },
+            {
+              "id": "T360",
+              "emoji": "🏷️",
+              "name": "First-class lexical Lua type builtin",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile a first-class, lexically shadowable type function",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Builtin::Type, Compiler::expression"
+                },
+                {
+                  "text": "Classify bounded Lua nil, Boolean, number, string, table and function values",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: first_class_type_builtin_reports_lua_value_categories"
+                },
+                {
+                  "text": "Accept Lua 5.4.6 differential and all four CI jobs",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 40014074135 all four jobs successful"
+                }
+              ]
+            },
+            {
+              "id": "T361",
+              "emoji": "🔤",
+              "name": "First-class bounded Lua tostring builtin",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile a first-class, lexically shadowable stringification function",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Builtin::ToString, Compiler::expression"
+                },
+                {
+                  "text": "Format bounded primitive values and return byte strings with identity-shaped labels for tables/functions",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: first_class_tostring_builtin_formats_bounded_lua_values"
+                },
+                {
+                  "text": "Accept upstream Lua parity and Linux/Rust/action CI",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 40014718963 all four jobs successful"
+                }
+              ]
+            },
+            {
+              "id": "T362",
+              "emoji": "🔢",
+              "name": "First-class Lua tonumber with bounded numeric conversions",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile a first-class, lexically shadowable numeric conversion function",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Builtin::ToNumber, Compiler::expression"
+                },
+                {
+                  "text": "Handle decimal/hex floating and integer forms, optional bases 2–36 and malformed-string nil while rejecting missing arguments",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: tonumber_builtin, first_class_tonumber_builtin_converts_bounded_numerals"
+                },
+                {
+                  "text": "Pass Lua 5.4.6 and production fer differential after fixing no-argument error semantics",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 40015672831 all four jobs successful"
+                }
+              ]
+            },
+            {
+              "id": "T363",
+              "emoji": "🗝️",
+              "name": "First-class raw equality and raw table access",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile lexically shadowable rawequal, rawget and rawset builtin functions",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Builtin::RawEqual, Builtin::RawGet, Builtin::RawSet"
+                },
+                {
+                  "text": "Preserve numeric equality, table/function identity, bounded raw key reads and writes, and nil deletion",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: first_class_raw_table_builtins_preserve_lua_key_and_identity_semantics"
+                },
+                {
+                  "text": "Pass upstream Lua 5.4.6 and production fer differential acceptance",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 40015672831 all four jobs successful"
+                }
+              ]
+            },
+            {
+              "id": "T364",
+              "emoji": "📏",
+              "name": "First-class rawlen and shared Lua length implementation",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile lexically shadowable rawlen and share the VM's bounded byte/string-table length implementation",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Builtin::RawLen, Execution::raw_len, Op::Length"
+                },
+                {
+                  "text": "Test string byte length, table sequence borders, first-class values and invalid operands",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: rawlen_reports_bounded_string_bytes_and_table_borders"
+                },
+                {
+                  "text": "Pass all four CI jobs and upstream Lua 5.4 differential checks",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 40016120064 all four jobs successful"
+                }
+              ]
             }
           ]
         }
@@ -2445,6 +2560,41 @@
           "name": "Integral floating operands in Lua bitwise operations",
           "task_ids": [
             "T359"
+          ]
+        },
+        {
+          "emoji": "🏷️",
+          "name": "First-class lexical Lua type builtin",
+          "task_ids": [
+            "T360"
+          ]
+        },
+        {
+          "emoji": "🔤",
+          "name": "First-class bounded Lua tostring builtin",
+          "task_ids": [
+            "T361"
+          ]
+        },
+        {
+          "emoji": "🔢",
+          "name": "First-class Lua tonumber with bounded numeric conversions",
+          "task_ids": [
+            "T362"
+          ]
+        },
+        {
+          "emoji": "🗝️",
+          "name": "First-class raw equality and raw table access",
+          "task_ids": [
+            "T363"
+          ]
+        },
+        {
+          "emoji": "📏",
+          "name": "First-class rawlen and shared Lua length implementation",
+          "task_ids": [
+            "T364"
           ]
         }
       ]
