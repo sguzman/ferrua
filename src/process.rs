@@ -2,7 +2,7 @@
 //! Every argument is passed to Command directly; no string is reinterpreted by a shell.
 
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
@@ -152,6 +152,7 @@ pub fn run_serialized(request: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
 
     #[test]
     fn rejects_invalid_request_and_empty_program() {
