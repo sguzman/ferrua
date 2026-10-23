@@ -47,8 +47,17 @@ pub enum Op {
     Binary(Binary),
     JumpIfFalse(usize),
     Jump(usize),
-    ForCheck { counter: usize, limit: usize, step: usize, exit: usize },
-    ForStep { counter: usize, step: usize, exit: usize },
+    ForCheck {
+        counter: usize,
+        limit: usize,
+        step: usize,
+        exit: usize,
+    },
+    ForStep {
+        counter: usize,
+        step: usize,
+        exit: usize,
+    },
     Return,
 }
 
@@ -194,8 +203,10 @@ impl<'a> Compiler<'a> {
             return Err(FlowError::InvalidBytecode);
         }
         match self.code.get_mut(address) {
-            Some(Op::JumpIfFalse(place)) | Some(Op::Jump(place)) |
-            Some(Op::ForCheck { exit: place, .. }) | Some(Op::ForStep { exit: place, .. }) => *place = target,
+            Some(Op::JumpIfFalse(place))
+            | Some(Op::Jump(place))
+            | Some(Op::ForCheck { exit: place, .. })
+            | Some(Op::ForStep { exit: place, .. }) => *place = target,
             _ => return Err(FlowError::InvalidBytecode),
         }
         Ok(())
@@ -294,7 +305,13 @@ impl<'a> Compiler<'a> {
                     self.push(Op::Jump(begin))?;
                     self.patch(exit, self.code.len())?;
                 }
-                Statement::NumericFor { variable, start, limit, step, body } => {
+                Statement::NumericFor {
+                    variable,
+                    start,
+                    limit,
+                    step,
+                    body,
+                } => {
                     if self.depth >= 64 || self.slots > MAX_SLOTS.saturating_sub(3) {
                         return Err(FlowError::TooLarge);
                     }
@@ -313,17 +330,25 @@ impl<'a> Compiler<'a> {
                     self.slots += 3;
                     self.push(Op::AssignLocals(vec![counter, bound, stride]))?;
                     self.frames.push(HashMap::new());
-                    self.frames.last_mut().expect("numeric for scope").insert(*variable, counter);
+                    self.frames
+                        .last_mut()
+                        .expect("numeric for scope")
+                        .insert(*variable, counter);
                     self.read_only.insert(counter);
                     self.depth += 1;
                     let compiled = (|| {
                         let begin = self.code.len();
                         let check = self.push(Op::ForCheck {
-                            counter, limit: bound, step: stride, exit: usize::MAX
+                            counter,
+                            limit: bound,
+                            step: stride,
+                            exit: usize::MAX,
                         })?;
                         self.scope(body)?;
                         let next = self.push(Op::ForStep {
-                            counter, step: stride, exit: usize::MAX
+                            counter,
+                            step: stride,
+                            exit: usize::MAX,
                         })?;
                         self.push(Op::Jump(begin))?;
                         let exit = self.code.len();
@@ -468,7 +493,12 @@ pub fn execute_flow_chunk(program: &FlowProgram, budget: usize) -> Result<i64, F
                 pc = *target;
                 continue;
             }
-            Op::ForCheck { counter, limit, step, exit } => {
+            Op::ForCheck {
+                counter,
+                limit,
+                step,
+                exit,
+            } => {
                 if *exit > program.instructions.len() {
                     return Err(FlowError::InvalidBytecode);
                 }
@@ -482,14 +512,24 @@ pub fn execute_flow_chunk(program: &FlowProgram, budget: usize) -> Result<i64, F
                 let current = read(*counter)?;
                 let bound = read(*limit)?;
                 let stride = read(*step)?;
-                if stride == 0 { return Err(FlowError::InvalidForStep); }
-                let enters = if stride > 0 { current <= bound } else { current >= bound };
+                if stride == 0 {
+                    return Err(FlowError::InvalidForStep);
+                }
+                let enters = if stride > 0 {
+                    current <= bound
+                } else {
+                    current >= bound
+                };
                 if !enters {
                     pc = *exit;
                     continue;
                 }
             }
-            Op::ForStep { counter, step, exit } => {
+            Op::ForStep {
+                counter,
+                step,
+                exit,
+            } => {
                 if *exit > program.instructions.len() {
                     return Err(FlowError::InvalidBytecode);
                 }
@@ -576,32 +616,52 @@ mod tests {
         assert_eq!(evaluate("local x=3; repeat x=x-1 until x==0; return x"), 0);
     }
 
-
     #[test]
     fn numeric_for_supports_both_directions_and_precomputed_bounds() {
         assert_eq!(evaluate("local s=0; for i=1,5 do s=s+i end; return s"), 15);
-        assert_eq!(evaluate("local s=0; for i=6,2,-2 do s=s+i end; return s"), 12);
-        assert_eq!(evaluate("local s=0; for i=1,10,3 do s=s+i end; return s"), 22);
+        assert_eq!(
+            evaluate("local s=0; for i=6,2,-2 do s=s+i end; return s"),
+            12
+        );
+        assert_eq!(
+            evaluate("local s=0; for i=1,10,3 do s=s+i end; return s"),
+            22
+        );
         assert_eq!(evaluate("local s=0; for i=5,1 do s=s+1 end; return s"), 0);
-        assert_eq!(evaluate("local s=0; local i=3; for i=i,5 do s=s+i end; return s+i"), 15);
-        assert_eq!(evaluate("local s=0; for i=1,3 do local x=i; s=s+x end; return s"), 6);
+        assert_eq!(
+            evaluate("local s=0; local i=3; for i=i,5 do s=s+i end; return s+i"),
+            15
+        );
+        assert_eq!(
+            evaluate("local s=0; for i=1,3 do local x=i; s=s+x end; return s"),
+            6
+        );
     }
 
     #[test]
     fn numeric_for_rejects_mutation_and_zero_step() {
         assert!(compile_flow_chunk("for i=1,3 do i=2 end; return 1").is_err());
         let compiled = compile_flow_chunk("for i=1,3,0 do end; return 0").unwrap();
-        assert_eq!(execute_flow_chunk(&compiled, 40), Err(FlowError::InvalidForStep));
+        assert_eq!(
+            execute_flow_chunk(&compiled, 40),
+            Err(FlowError::InvalidForStep)
+        );
     }
 
     #[test]
     fn numeric_for_overflow_does_not_wrap_into_another_cycle() {
-        assert_eq!(evaluate(
-            "local s=0; for i=0x7ffffffffffffffe,0x7fffffffffffffff do s=s+1 end; return s"
-        ), 2);
-        assert_eq!(evaluate(
-            "local s=0; for i=-9223372036854775807,-9223372036854775807,-2 do s=s+1 end; return s"
-        ), 1);
+        assert_eq!(
+            evaluate(
+                "local s=0; for i=0x7ffffffffffffffe,0x7fffffffffffffff do s=s+1 end; return s"
+            ),
+            2
+        );
+        assert_eq!(
+            evaluate(
+                "local s=0; for i=-9223372036854775807,-9223372036854775807,-2 do s=s+1 end; return s"
+            ),
+            1
+        );
     }
     #[test]
     fn budget_prevents_infinite_loops() {
