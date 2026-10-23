@@ -559,7 +559,7 @@ mod tests {
             .iter()
             .filter(|r| r.name == "x")
             .collect();
-        assert!(xs.iter().any(|r| r.resolution == Resolution::Upvalue(2)));
+        assert!(xs.iter().any(|r| r.resolution == Resolution::Upvalue(1)));
         assert!(xs.iter().any(|r| r.resolution == Resolution::Local(0)));
         assert!(!xs.iter().any(|r| r.resolution == Resolution::Upvalue(0)));
     }

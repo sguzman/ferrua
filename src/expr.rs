@@ -377,6 +377,9 @@ impl<'a> Parser<'a> {
                 break;
             }
             self.pop();
+            if self.peek().map(|t| t.spelling) == Some(")") {
+                return Err(self.error("expected parameter after comma"));
+            }
         }
         if self.peek().map(|t| t.spelling) != Some(")") {
             return Err(self.error("expected closing parenthesis for function"));
