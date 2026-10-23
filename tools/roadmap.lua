@@ -50,6 +50,35 @@ for _, milestone in ipairs(ledger.milestones) do
         end
     end
 end
+-- Cross-milestone graduation invariants supplement per-task check arithmetic.
+-- A passing narrow smoke suite must never authorize production engine cutover.
+local graduation = assert(lookup.T304, "missing owned-engine graduation gate")
+local release = assert(lookup.T107, "missing distribution acceptance gate")
+local packaging = assert(lookup.T204, "missing tagged-release acceptance gate")
+local adoption = assert(lookup.T208, "missing pinned-consumer acceptance gate")
+if graduation.checks[2].passed then
+    assert(graduation.checks[1].passed,
+        "cannot switch production interpreter before graduation criteria are documented")
+    for _, id in ipairs({ "T301", "T302", "T303" }) do
+        assert(lookup[id] and lookup[id].progress == 100,
+            "cannot graduate owned VM while " .. id .. " remains unaccepted")
+    end
+end
+if graduation.checks[3].passed then
+    assert(graduation.checks[2].passed,
+        "cannot release the stable owned runtime before the backend switch is accepted")
+    assert(release.checks[2].passed,
+        "cannot release the owned runtime before native EndeavourOS acceptance")
+end
+if release.checks[3].passed then
+    assert(release.checks[2].passed,
+        "cannot accept a stable fer release without native EndeavourOS QA")
+    assert(packaging.checks[1].passed,
+        "cannot accept a stable fer release without a verified tagged artifact")
+    assert(adoption.checks[1].passed and adoption.checks[3].passed,
+        "cannot accept a stable fer release before checksums and pinned downstream QA")
+end
+
 local lines = {
     "# 🗺️ Ferrua roadmap", "",
     "**Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.",
