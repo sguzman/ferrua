@@ -197,7 +197,10 @@ mod tests {
         assert_eq!(decoded["ok"], true, "{response}");
         assert_eq!(decoded["timed_out"], false);
         assert_eq!(decoded["stdout_truncated"], true);
-        assert_eq!(decoded["stdout"].as_str().unwrap().len(), MAX_OUTPUT as usize);
+        assert_eq!(
+            decoded["stdout"].as_str().unwrap().len(),
+            MAX_OUTPUT as usize
+        );
     }
 
     #[test]
