@@ -379,8 +379,10 @@ Lua's ordinary `#table` operator now consults a table's raw `__len` metatable en
 
 [CI #40029449968](https://github.com/sguzman/ferrua/actions/runs/40029449968) passed the four primary verification jobs and aggregate status reporting, including upstream Lua 5.4 differential fixtures. `__len` via a callable table or a host builtin is not yet accepted, nor are string metatable overrides, other arithmetic metamethods or garbage-collected production integration. Ordinary table `__call` dispatch is tracked separately below. The production `fer` executable continues using the pinned `luna-core` runtime.
 
-### Callable Lua tables and __call forwarding (pending CI)
+### Verified callable Lua tables and __call forwarding
 
 Normal `Op::Call`, `Op::CallMany` and `Op::CallSpread` can now resolve a table's raw `__call` metatable entry. The original called table is prepended to its existing argument list before invoking the metamethod, and nested table-valued `__call` entries repeat this Lua-compatible forwarding rule. Callbacks ultimately delegate to the existing first-party closure or builtin code path, preserving return-list adjustment, captures, varargs and lexical call depth. Each forwarding step consumes the shared instruction budget, with a maximum chain length and stack quota so cyclic callable tables return a bounded error.
 
-The pending unit and Lua 5.4 differential fixtures cover aliasing a callable table as a first-class value, extra argument forwarding, multiple returns, builtin call targets, nested callable-table chains, and invalid or cyclic metamethods. The change does not add userdata, full arithmetic/comparison metamethods, garbage collection or host-side function callbacks. Production `fer` is unchanged.
+The CI-accepted unit and Lua 5.4 differential fixtures cover aliasing a callable table as a first-class value, extra argument forwarding, multiple returns, builtin call targets, nested callable-table chains, and invalid or cyclic metamethods. The change does not add userdata, full arithmetic/comparison metamethods, garbage collection or host-side function callbacks. Production `fer` is unchanged.
+
+[CI #40030079883](https://github.com/sguzman/ferrua/actions/runs/40030079883) passed all four primary jobs plus aggregate status reporting, including upstream Lua 5.4.6 differential fixtures.
