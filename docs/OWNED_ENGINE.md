@@ -252,3 +252,8 @@ The mixed named/computed/positional table constructor compiler now treats an unp
 ### Bounded reuse of uncaptured function-frame cells
 
 Execution now tracks cells allocated by each call frame and recycles only those that have **not** been captured by a closure. Each `run` invocation owns cleanup even across early returns or execution errors, with a free-cell pool shared across recursive frames. Captured upvalue cells remain pinned, protecting escaped closure state. A 70,000-invocation function-loop regression verifies that repeated ordinary calls no longer consume the lifetime cell budget, without weakening call-depth or instruction budgets. A fully collectable/garbage-collected heap and reclaiming unreachable closures remain future work.
+
+### Verified mixed method results and uncaptured call-frame reclamation
+
+- [CI #40008327899](https://github.com/sguzman/ferrua/actions/runs/40008327899): mixed table constructors now expand final method-call results and preserve grouped single-result semantics; four jobs passed.
+- [CI #40008713256](https://github.com/sguzman/ferrua/actions/runs/40008713256): uncaptured call-frame cells are recycled on successful returns and execution errors; a 70,000-invocation stress test and all four CI jobs passed. Captured upvalues remain pinned; this is not a fully garbage-collected runtime.

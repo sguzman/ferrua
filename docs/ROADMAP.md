@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 94%` across 75 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 94%` across 77 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -342,6 +342,14 @@
   - [x] Separate lexical declarations from assignments and renew captured cells on repeated execution — src/owned_flow.rs: Op::DeclareLocals; Execution::iteration_cell
   - [x] Refresh locally recursive function bindings before closure capture — src/owned_flow.rs: Op::RenewLocal; repeated_block_local_declarations_keep_distinct_captured_cells
   - [x] Verify while/repeat/for retained closures and recursive locals against Lua 5.4.6 — tests/owned_flow.rs; CI 40007436327: four jobs passed
+- 🧩 **T351** Method multireturn expansion in mixed table constructors — `██████████ 100%`
+  - [x] Preserve Lua single-result grouping and unparenthesized final colon-call expansion — src/owned_flow.rs: Expr::Table mixed-field final-expression dispatch
+  - [x] Compare mixed positional/method tail-adjustment cases against production and upstream Lua — src/owned_flow.rs: mixed_table_constructor_expands_last_method_result_list; tests/owned_flow.rs
+  - [x] Pass Linux, Rust 1.96, Lua 5.4 differential, and composite action consumer — GitHub Actions 40008327899: four jobs passed
+- ♻️ **T352** Safe reuse of uncaptured Lua call-frame cells — `██████████ 100%`
+  - [x] Track per-frame allocations and recycle only unpinned cells on success or error — src/owned_flow.rs: Execution::run, run_inner, allocate_cell, free_cells, frame_allocations
+  - [x] Preserve closure-captured upvalue cells across frame reuse — src/owned_flow.rs: uncaptured_call_frames_reuse_cells_across_many_invocations
+  - [x] Verify 70,000 function calls under memory budget and full four-job CI — src/owned_flow.rs; GitHub Actions 40008713256: four jobs passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -391,4 +399,6 @@
 - 📝 Dotted and colon Lua function declarations — `██████████ 100%`
 - 🗝️ General identity-based Lua hash table keys — `██████████ 100%`
 - 🧵 Distinct captured cells for repeated block-local declarations — `██████████ 100%`
+- 🧩 Method multireturn expansion in mixed table constructors — `██████████ 100%`
+- ♻️ Safe reuse of uncaptured Lua call-frame cells — `██████████ 100%`
 

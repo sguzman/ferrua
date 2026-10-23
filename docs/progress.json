@@ -1846,6 +1846,52 @@
                   "evidence": "tests/owned_flow.rs; CI 40007436327: four jobs passed"
                 }
               ]
+            },
+            {
+              "id": "T351",
+              "emoji": "🧩",
+              "name": "Method multireturn expansion in mixed table constructors",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Preserve Lua single-result grouping and unparenthesized final colon-call expansion",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Expr::Table mixed-field final-expression dispatch"
+                },
+                {
+                  "text": "Compare mixed positional/method tail-adjustment cases against production and upstream Lua",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: mixed_table_constructor_expands_last_method_result_list; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux, Rust 1.96, Lua 5.4 differential, and composite action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40008327899: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T352",
+              "emoji": "♻️",
+              "name": "Safe reuse of uncaptured Lua call-frame cells",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Track per-frame allocations and recycle only unpinned cells on success or error",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::run, run_inner, allocate_cell, free_cells, frame_allocations"
+                },
+                {
+                  "text": "Preserve closure-captured upvalue cells across frame reuse",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: uncaptured_call_frames_reuse_cells_across_many_invocations"
+                },
+                {
+                  "text": "Verify 70,000 function calls under memory budget and full four-job CI",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs; GitHub Actions 40008713256: four jobs passed"
+                }
+              ]
             }
           ]
         }
@@ -2175,6 +2221,20 @@
           "name": "Distinct captured cells for repeated block-local declarations",
           "task_ids": [
             "T350"
+          ]
+        },
+        {
+          "emoji": "🧩",
+          "name": "Method multireturn expansion in mixed table constructors",
+          "task_ids": [
+            "T351"
+          ]
+        },
+        {
+          "emoji": "♻️",
+          "name": "Safe reuse of uncaptured Lua call-frame cells",
+          "task_ids": [
+            "T352"
           ]
         }
       ]
