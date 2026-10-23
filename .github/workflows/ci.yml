@@ -125,6 +125,10 @@ jobs:
         env:
           FERRUA_COMPARE_OWNED_WITH_LUA: "1"
         run: cargo test --locked --test owned_vm -- --nocapture
+      - name: Compare bounded integer control flow with upstream Lua
+        env:
+          FERRUA_COMPARE_OWNED_WITH_LUA: "1"
+        run: cargo test --locked --test owned_flow -- --nocapture
       - name: Compare owned short-string escape syntax with upstream Lua
         env:
           FERRUA_COMPARE_OWNED_WITH_LUA: "1"

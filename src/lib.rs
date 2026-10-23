@@ -2,4 +2,5 @@
 pub mod expr;
 pub mod lex;
 pub mod owned_vm;
+pub mod owned_flow;
 pub mod scope;
