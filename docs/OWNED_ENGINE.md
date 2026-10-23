@@ -359,3 +359,10 @@ The experimental stack VM now includes first-class, lexically shadowable `next`,
 The experimental stack VM now carries an optional metatable handle on each bounded table. Its first-class, lexically shadowable `getmetatable` and `setmetatable` functions can attach a table metatable, remove it with nil, return the original table, and expose the existing metatable by identity. If the metatable has a non-nil raw `__metatable` key, `getmetatable` returns that protected value and `setmetatable` refuses replacement until the protection is removed. Unit and upstream Lua 5.4 differential fixtures cover the common table-only behavior.
 
 [CI #40025867923](https://github.com/sguzman/ferrua/actions/runs/40025867923) passed all four primary jobs, including Lua 5.4 differential checks, after precise Rust formatter corrections. It does **not** implement `__index`, `__newindex`, arithmetic metamethod dispatch, `__len`, `__pairs`, primitive string metatables, garbage collection, or general Lua metatable compatibility. It does not change production `fer`.
+
+
+### Table-backed index and assignment metamethod chains (pending CI)
+
+The owned VM now attempts raw table indexing and assignment first, then follows table-valued `__index` or `__newindex` fallbacks for absent fields. It preserves the distinction between ordinary Lua field operations and `rawget`/`rawset`, including simultaneous prepared indexed assignments and methods resolved through a fallback table. Each chain consumes the VM's shared instruction budget and has a fixed maximum traversal depth; cyclic fallback graphs return an explicit error rather than running indefinitely. Unit and upstream Lua 5.4 differential fixtures exercise table-backed chains.
+
+This remains **pending CI acceptance**. Function-valued metamethod callbacks, arithmetic and comparison metamethods, `__len`, `__call`, full primitive metatables, and complete Lua error messages remain unsupported. No change is made to production `fer`.
