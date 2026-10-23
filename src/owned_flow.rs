@@ -2791,7 +2791,7 @@ mod tests {
         assert_eq!(evaluate("return (9007199254740993>9007199254740992.0) and 1 or 0"), 1);
         assert_eq!(evaluate("return (-9007199254740993<-9007199254740992.0) and 1 or 0"), 1);
         assert_eq!(evaluate("return (9223372036854775807<9223372036854775808.0) and 1 or 0"), 1);
-        assert_eq!(evaluate("return (-9223372036854775808<=-9223372036854775808.0) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (0x8000000000000000<=-9223372036854775808.0) and 1 or 0"), 1);
         assert_eq!(evaluate("return (9007199254740993==9007199254740992.0) and 1 or 0"), 0);
         assert_eq!(evaluate("return (0/0<0) and 1 or 0"), 0);
     }
