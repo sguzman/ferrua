@@ -335,7 +335,7 @@ mod tests {
     }
     #[test]
     fn lua_z_escape_skips_whitespace_and_tracks_line() {
-        let source = "local s=\"a\\\\z   \\n b\"\\nlocal t=1";
+        let source = "local s=\"a\\z   \n b\"\nlocal t=1";
         let tokens = tokenize(source).unwrap();
         assert_eq!(tokens[3].kind, Kind::ShortString);
         assert_eq!(tokens[4].spelling, "local");
