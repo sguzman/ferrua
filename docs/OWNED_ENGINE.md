@@ -345,3 +345,10 @@ The owned VM now exposes first-class, lexically shadowable `assert`. When the fi
 - [CI #40017471285](https://github.com/sguzman/ferrua/actions/runs/40017471285): first-class `assert`, truthy argument preservation and false/nil rejection passed all four CI jobs. The experimental engine still uses a generic error type rather than reproducing Lua's message and traceback semantics.
 
 Neither milestone implies complete Lua standard-library support or graduation of the first-party interpreter into production.
+
+
+### Bounded raw table iteration (pending CI acceptance)
+
+The experimental stack VM now includes first-class, lexically shadowable `next`, `pairs` and `ipairs`. `next` returns raw key/value pairs from the bounded array and hash stores, or nil at exhaustion; invalid previous keys are rejected. `pairs` yields a `next` iterator, the table and initial nil control; `ipairs` yields a sequential raw integer iterator starting at zero and stopping at the first nil. They reuse the existing generic-for control flow, including distinct iteration-local captures. The hash portion has unspecified order, and tests deliberately avoid depending on its order. Repeated `next` scans consume the shared execution budget.
+
+This increment is **not yet CI-accepted**. It does not implement `__pairs`, `__index`, metatables, mutation-safe traversal, to-be-closed generic-for iterator values, or complete Lua resource semantics. The production `fer` backend is unchanged.
