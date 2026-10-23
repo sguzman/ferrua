@@ -3560,6 +3560,98 @@ mod tests {
     }
 
     #[test]
+    fn callable_index_and_newindex_share_lexical_closure_frames() {
+        assert_eq!(
+            evaluate(
+                "local n=0; local t=setmetatable({}, {__index=function(_,k) n=n+1; if k=='x' then return 10 end end}); return t.x+t.x+n"
+            ),
+            22
+        );
+        assert_eq!(
+            evaluate(
+                "local t={x=9}; setmetatable(t,{__index=function() return 2 end}); return t.x"
+            ),
+            9
+        );
+        assert_eq!(
+            evaluate(
+                "local t=setmetatable({}, {__index=function() return 4,5 end}); return t.x"
+            ),
+            4
+        );
+        assert_eq!(
+            evaluate(
+                "local t=setmetatable({}, {__index=function() end}); return t.x==nil and 1 or 0"
+            ),
+            1
+        );
+        assert_eq!(
+            evaluate(
+                "local t=setmetatable({}, {__index=function(_,k) return k*2 end}); return t[3]"
+            ),
+            6
+        );
+        assert_eq!(
+            evaluate(
+                "local dest={}; local t=setmetatable({}, {__newindex=function(_,k,v) dest[k]=v*2 end}); t.x=5; return dest.x"
+            ),
+            10
+        );
+        assert_eq!(
+            evaluate(
+                "local t=setmetatable({}, {__newindex=function(self,k,v) rawset(self,k,v+1) end}); t.x=6; return t.x"
+            ),
+            7
+        );
+        assert_eq!(
+            evaluate(
+                "local t={x=2}; local n=0; setmetatable(t,{__newindex=function() n=n+1 end}); t.x=4; return t.x*10+n"
+            ),
+            40
+        );
+        assert_eq!(
+            evaluate(
+                "local dest={}; local t=setmetatable({}, {__newindex=function(_,k,v) dest[k]=v end}); t.x,t.y=3,4; return dest.x*10+dest.y"
+            ),
+            34
+        );
+        assert_eq!(
+            evaluate(
+                "local t=setmetatable({}, {__index=function(self,k) return function(_,x) return x+2 end end}); return t:add(5)"
+            ),
+            7
+        );
+        assert_eq!(
+            evaluate(
+                "local target=setmetatable({}, {__index=function() return 8 end}); local t=setmetatable({}, {__index=target}); return t.m"
+            ),
+            8
+        );
+        assert_eq!(
+            evaluate(
+                "local t=setmetatable({}, {__index=function(self,k) rawset(self,k,5); return 5 end}); return t.x+t.x"
+            ),
+            10
+        );
+        let program = compile_flow_chunk(
+            "local t={}; setmetatable(t,{__index=function(self,k) return self[k] end}); return t.x"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+        let program = compile_flow_chunk(
+            "local t={}; setmetatable(t,{__newindex=function(self,k,v) self[k]=v end}); t.x=1; return 0"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+    }
+
+    #[test]
     fn table_backed_index_and_newindex_fallbacks_remain_bounded() {
         for (source, expected) in [
             ("local t=setmetatable({}, {__index={x=7}}); return t.x", 7),
