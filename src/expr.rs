@@ -312,7 +312,14 @@ impl<'a> Parser<'a> {
                 return Err(self.error("expected assignment equals"));
             }
             for target in &targets {
-                if !matches!(target, Expr::Atom(_) | Expr::Field { .. } | Expr::Index { .. }) {
+                let valid = match target {
+                    Expr::Atom(text) => tokenize(text).is_ok_and(|tokens| {
+                        tokens.len() == 1 && tokens[0].kind == Kind::Identifier
+                    }),
+                    Expr::Field { .. } | Expr::Index { .. } => true,
+                    _ => false,
+                };
+                if !valid {
                     return Err(self.error("invalid assignment target"));
                 }
             }
@@ -480,6 +487,8 @@ mod tests {
             "local = 1",
             "local a,=2",
             "a+1=2",
+            "1=2",
+            "true=3",
             "a",
             "1+2",
             "return 1; print(2)",
