@@ -16,7 +16,9 @@ const MAX_TABLES: usize = 16_384;
 const MAX_TABLE_FIELDS: usize = 16_384;
 const MAX_TABLE_CELLS_TOTAL: usize = 65_536;
 const MAX_CLOSURES: usize = 16_384;
-const MAX_CALL_DEPTH: usize = 64;
+// Keep interpreter recursion well inside the default Rust test-thread stack.
+// Lua recursion remains deliberately bounded in this experimental engine.
+const MAX_CALL_DEPTH: usize = 16;
 const MAX_CELLS_TOTAL: usize = 65_536;
 const MAX_STRING_POOL_BYTES: usize = 65_536;
 const MAX_STRINGS: usize = 16_384;
