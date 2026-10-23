@@ -404,18 +404,21 @@
               "checks": [
                 {
                   "text": "Provide documented HTTP GET, POST and response contracts with timeouts",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "docs/HTTP.md and tools/http.lua specify methods, output, limits and errors"
                 },
                 {
                   "text": "Expose trusted Rust HTTP client with no Python dependency",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "src/http.rs, tools/http.lua, src/main.rs"
                 },
                 {
                   "text": "Offline/local-server fixture tests pass CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39897603798: loopback GET, POST, 404 and sandbox tests pass"
                 }
               ],
-              "progress": 0
+              "progress": 100
             },
             {
               "id": "T207",
@@ -424,18 +427,21 @@
               "checks": [
                 {
                   "text": "Document round-trip formats, supported types and limits",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "docs/DATA.md documents JSON-compatible TOML/YAML conversions and format limitations"
                 },
                 {
                   "text": "Implement native TOML and YAML modules",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "src/data.rs, tools/data.lua, deps toml/yaml_serde"
                 },
                 {
                   "text": "Schema and round-trip fixtures pass CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 39897603798: tests/data.lua round trips and sandbox tests pass in Linux and composite consumer"
                 }
               ],
-              "progress": 0
+              "progress": 100
             },
             {
               "id": "T208",

@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████░░░░ 64%` across 22 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `███████░░░ 73%` across 22 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 93%`
 
@@ -57,7 +57,7 @@
 - 📋 Documented, auditable progress — `██████████ 100%`
 - 📦 Distribution readiness — `███░░░░░░░ 33%`
 
-## 🧰 M1 — Daily automation and Python replacement — `██████░░░░ 58%`
+## 🧰 M1 — Daily automation and Python replacement — `████████░░ 83%`
 
 **Acceptance gate:** Representative filesystem, JSON, process, HTTP, structured-data and versioned downstream CI scripts run without Python. Stable distribution and adoption acceptance required.
 
@@ -83,16 +83,16 @@
   - [x] Expose trusted filesystem API with sandbox separation — src/fs.rs, tools/fs.lua, src/main.rs
   - [x] Native and composite action consumer filesystem smoke pass — GitHub Actions 39896443549: temporary-dir read/write/copy/walk and sandbox tests
 
-### 🌐 P4 — Portable data and CI graduation — `░░░░░░░░░░ 0%`
+### 🌐 P4 — Portable data and CI graduation — `███████░░░ 67%`
 
-- 🌐 **T206** First-party HTTP API and GitHub REST client — `░░░░░░░░░░ 0%`
-  - [ ] Provide documented HTTP GET, POST and response contracts with timeouts
-  - [ ] Expose trusted Rust HTTP client with no Python dependency
-  - [ ] Offline/local-server fixture tests pass CI
-- 🗃️ **T207** TOML and YAML parsing and serialization — `░░░░░░░░░░ 0%`
-  - [ ] Document round-trip formats, supported types and limits
-  - [ ] Implement native TOML and YAML modules
-  - [ ] Schema and round-trip fixtures pass CI
+- 🌐 **T206** First-party HTTP API and GitHub REST client — `██████████ 100%`
+  - [x] Provide documented HTTP GET, POST and response contracts with timeouts — docs/HTTP.md and tools/http.lua specify methods, output, limits and errors
+  - [x] Expose trusted Rust HTTP client with no Python dependency — src/http.rs, tools/http.lua, src/main.rs
+  - [x] Offline/local-server fixture tests pass CI — GitHub Actions 39897603798: loopback GET, POST, 404 and sandbox tests pass
+- 🗃️ **T207** TOML and YAML parsing and serialization — `██████████ 100%`
+  - [x] Document round-trip formats, supported types and limits — docs/DATA.md documents JSON-compatible TOML/YAML conversions and format limitations
+  - [x] Implement native TOML and YAML modules — src/data.rs, tools/data.lua, deps toml/yaml_serde
+  - [x] Schema and round-trip fixtures pass CI — GitHub Actions 39897603798: tests/data.lua round trips and sandbox tests pass in Linux and composite consumer
 - 📦 **T208** Stable binary distribution and cross-repository adoption — `░░░░░░░░░░ 0%`
   - [ ] Publish semver-tagged Linux artifacts with reproducible SHA-256 checksums
   - [ ] Offer installer that consumes versioned release binaries
@@ -103,7 +103,7 @@
 - 📂 Filesystem and data workflows — `██████████ 100%`
 - 🔧 Processes and CI reuse — `████████░░ 84%`
 - 🗂️ Directory traversal and file automation — `██████████ 100%`
-- 🌐 HTTP and structured external data — `░░░░░░░░░░ 0%`
+- 🌐 HTTP and structured external data — `██████████ 100%`
 - 📦 Versioned CI reuse — `███░░░░░░░ 34%`
 
 ## 🔩 M2 — Independent Ferrua VM and compatibility — `░░░░░░░░░░ 0%`
