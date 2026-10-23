@@ -1458,6 +1458,25 @@ impl Execution<'_> {
         }
     }
 
+    fn exact_integer_operand(&self, value: Value) -> Result<i64, FlowError> {
+        match value {
+            Value::Integer(number) => Ok(number),
+            Value::Float(bits) => {
+                let number = f64::from_bits(bits);
+                if number.is_finite()
+                    && number.fract() == 0.0
+                    && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
+                        .contains(&number)
+                {
+                    Ok(number as i64)
+                } else {
+                    Err(FlowError::TypeError)
+                }
+            }
+            _ => Err(FlowError::TypeError),
+        }
+    }
+
     fn integer_operand(&self, value: Value) -> Result<i64, FlowError> {
         let Value::String(handle) = value else {
             return match value {
@@ -1919,10 +1938,9 @@ impl Execution<'_> {
                     stack.push(Value::Integer(length as i64));
                 }
                 Op::BitNot => {
-                    let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)?
-                    else {
-                        return Err(FlowError::TypeError);
-                    };
+                    let value = self.exact_integer_operand(
+                        stack.pop().ok_or(FlowError::InvalidBytecode)?,
+                    )?;
                     stack.push(Value::Integer(!value));
                 }
                 Op::Binary(op) => {
@@ -1940,6 +1958,15 @@ impl Execution<'_> {
                             let b = self.arithmetic_operand(rhs)?;
                             evaluate_number_binary(*op, a, b)?
                         }
+                        Binary::BitAnd
+                        | Binary::BitOr
+                        | Binary::BitXor
+                        | Binary::Shl
+                        | Binary::Shr => evaluate_binary(
+                            *op,
+                            Value::Integer(self.exact_integer_operand(lhs)?),
+                            Value::Integer(self.exact_integer_operand(rhs)?),
+                        )?,
                         Binary::Concat => {
                             let mut bytes = self.string_bytes(lhs)?;
                             let right = self.string_bytes(rhs)?;
@@ -2853,6 +2880,25 @@ mod tests {
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
+    }
+
+    #[test]
+    fn bitwise_ops_accept_exact_integral_floats_only() {
+        assert_eq!(evaluate("return 3.0&1"), 1);
+        assert_eq!(evaluate("return 4.0|1"), 5);
+        assert_eq!(evaluate("return 7.0~3"), 4);
+        assert_eq!(evaluate("return 8.0>>1.0"), 4);
+        assert_eq!(evaluate("return ~3.0"), -4);
+        assert_eq!(evaluate("return (0x1p2)&2"), 0);
+        assert_eq!(evaluate("return (3.0&1)==1 and 1 or 0"), 1);
+        for source in ["return 3.5&1", "return ~1.5", "return 2.0<<1.2"] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_chunk(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError),
+                "{source}"
+            );
+        }
     }
 
     #[test]

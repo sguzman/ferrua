@@ -285,3 +285,7 @@ Cross-type Lua comparisons now avoid converting a 64-bit integer to an imprecise
 ### Float-mode Lua numeric for iteration
 
 Numeric `for` loops now choose integer mode when all three controls are integral VM values, retaining checked integer overflow behavior, and float mode when any control is floating-point. In float mode, the hidden counter and visible per-iteration variable carry IEEE-754 values and advance with double arithmetic; descending loops and fractional step values are supported. Bounded decimal numeric-string controls are coerced by the existing arithmetic operand reader, and zero steps are rejected in both modes. The existing instruction budget and captured per-iteration cell semantics remain in force. This does not claim exact handling of every Lua 5.4 float-loop edge case, including NaN and infinite steps.
+
+### Integral floating operands for bitwise operations
+
+The owned VM now accepts mathematically integral, representable IEEE-754 double operands in bitwise unary and binary operators, including shifts. It checks finiteness, zero fractional part and the signed 64-bit range before conversion; fractional doubles remain type errors. String operands remain rejected for bitwise operators, while decimal numeric-string coercion continues only for arithmetic. Upstream Lua 5.4.6 and production `fer` differential fixtures cover the accepted cases.
