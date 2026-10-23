@@ -1781,6 +1781,35 @@ impl Execution<'_> {
         }
     }
 
+    /// Bitwise operators keep the existing bounded integer semantics.
+    /// A type mismatch consults table-valued operand metamethods left first.
+    fn bitwise_with_metamethod(
+        &mut self,
+        op: Binary,
+        left: Value,
+        right: Value,
+    ) -> Result<Value, FlowError> {
+        let direct = self
+            .exact_integer_operand(left)
+            .and_then(|a| self.exact_integer_operand(right).map(|b| (a, b)))
+            .and_then(|(a, b)| evaluate_binary(op, Value::Integer(a), Value::Integer(b)));
+        match direct {
+            Ok(value) => Ok(value),
+            Err(FlowError::TypeError) => {
+                let name: &[u8] = match op {
+                    Binary::BitAnd => b"__band",
+                    Binary::BitOr => b"__bor",
+                    Binary::BitXor => b"__bxor",
+                    Binary::Shl => b"__shl",
+                    Binary::Shr => b"__shr",
+                    _ => return Err(FlowError::InvalidBytecode),
+                };
+                self.binary_metamethod(name, left, right)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     /// Metamethod callbacks reuse closure frames, depth and step limits.
     /// The right-hand table is checked only when the left lacks the field.
     fn binary_metamethod(
@@ -2571,11 +2600,7 @@ impl Execution<'_> {
                         | Binary::BitOr
                         | Binary::BitXor
                         | Binary::Shl
-                        | Binary::Shr => evaluate_binary(
-                            *op,
-                            Value::Integer(self.exact_integer_operand(lhs)?),
-                            Value::Integer(self.exact_integer_operand(rhs)?),
-                        )?,
+                        | Binary::Shr => self.bitwise_with_metamethod(*op, lhs, rhs)?,
                         Binary::Concat => {
                             let mut bytes = self.string_bytes(lhs)?;
                             let right = self.string_bytes(rhs)?;
