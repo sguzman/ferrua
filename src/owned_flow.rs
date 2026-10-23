@@ -1873,8 +1873,8 @@ impl Execution<'_> {
         }))
     }
 
-    /// > and >= reverse operands. Lua <= falls back to not (right < left)
-    /// only when no __le metamethod is present.
+    /// Greater-than operators reverse operands. Lua less-equal falls back
+    /// to negating the reversed less-than result when __le is absent.
     fn ordering_with_metamethod(
         &mut self,
         op: Binary,
