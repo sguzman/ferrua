@@ -26,14 +26,22 @@ pub struct ParseError {
 
 impl fmt::Display for ParseError {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(out, "Lua expression at line {}, byte {}: {}", self.line, self.byte_offset, self.message)
+        write!(
+            out,
+            "Lua expression at line {}, byte {}: {}",
+            self.line, self.byte_offset, self.message
+        )
     }
 }
 impl std::error::Error for ParseError {}
 
 impl From<LexError> for ParseError {
     fn from(err: LexError) -> Self {
-        Self { line: err.line, byte_offset: err.byte_offset, message: err.message }
+        Self {
+            line: err.line,
+            byte_offset: err.byte_offset,
+            message: err.message,
+        }
     }
 }
 
@@ -66,7 +74,9 @@ impl<'a> Parser<'a> {
     }
     fn pop(&mut self) -> Option<Token<'a>> {
         let token = self.tokens.get(self.index).cloned();
-        if token.is_some() { self.index += 1; }
+        if token.is_some() {
+            self.index += 1;
+        }
         token
     }
     fn error(&self, message: &'static str) -> ParseError {
@@ -84,7 +94,10 @@ impl<'a> Parser<'a> {
         match token.spelling {
             "-" | "not" | "#" | "~" => {
                 let rhs = self.expression(21)?;
-                Ok(Expr::Unary { op: token.spelling, right: Box::new(rhs) })
+                Ok(Expr::Unary {
+                    op: token.spelling,
+                    right: Box::new(rhs),
+                })
             }
             "(" => {
                 let inner = self.expression(0)?;
@@ -94,8 +107,10 @@ impl<'a> Parser<'a> {
                 self.pop();
                 Ok(inner)
             }
-            _ if matches!(token.kind, Kind::Identifier | Kind::Number | Kind::ShortString | Kind::LongString)
-                || matches!(token.spelling, "true" | "false" | "nil") =>
+            _ if matches!(
+                token.kind,
+                Kind::Identifier | Kind::Number | Kind::ShortString | Kind::LongString
+            ) || matches!(token.spelling, "true" | "false" | "nil") =>
             {
                 Ok(Expr::Atom(token.spelling))
             }
@@ -109,8 +124,12 @@ impl<'a> Parser<'a> {
     fn expression(&mut self, min_bp: u8) -> Result<Expr<'a>, ParseError> {
         let mut left = self.prefix()?;
         while let Some(op) = self.peek().map(|t| t.spelling) {
-            let Some((l_bp, r_bp)) = binding_power(op) else { break; };
-            if l_bp < min_bp { break; }
+            let Some((l_bp, r_bp)) = binding_power(op) else {
+                break;
+            };
+            if l_bp < min_bp {
+                break;
+            }
             self.pop();
             let right = self.expression(r_bp)?;
             left = Expr::Binary {
@@ -128,7 +147,11 @@ impl<'a> Parser<'a> {
 /// are not implemented. The working fer interpreter is unaffected.
 pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
     let tokens = tokenize(source)?;
-    let mut parser = Parser { tokens, index: 0, length: source.len() };
+    let mut parser = Parser {
+        tokens,
+        index: 0,
+        length: source.len(),
+    };
     let result = parser.expression(0)?;
     if parser.peek().is_some() {
         return Err(parser.error("unexpected trailing token"));
@@ -163,8 +186,10 @@ mod tests {
     #[test]
     fn right_associative_power_and_concatenation() {
         assert_eq!(show(&parse_expression("2^3^4").unwrap()), "(^ 2 (^ 3 4))");
-        assert_eq!(show(&parse_expression("'a'..'b'..'c'").unwrap()),
-            "(.. 'a' (.. 'b' 'c'))");
+        assert_eq!(
+            show(&parse_expression("'a'..'b'..'c'").unwrap()),
+            "(.. 'a' (.. 'b' 'c'))"
+        );
     }
 
     #[test]
