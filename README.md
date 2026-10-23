@@ -39,9 +39,13 @@ cargo run -- tools/roadmap.lua --check
 
 **Latest verified CI:** [17 passing Rust tests, Lua roadmap validation, sandbox/REPL smoke and release build](https://github.com/sguzman/ferrua/actions/runs/39894224746). Native EndeavourOS validation and the v1.0.0 inauguration remain pending.
 
-Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md).
+Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
 The public repository contains only project source and generic fixtures; no user workstation paths, private scripting data, secrets or private conversation text.
+
+## GitHub Actions
+
+Ferrua includes a [reusable composite setup action](docs/ACTIONS.md). It installs `fer` from this repository's source on an Ubuntu runner, and adds it to `PATH`. The independent CI consumer job verifies that it can execute Lua and subprocess automation without Python.
 
 ## License
 

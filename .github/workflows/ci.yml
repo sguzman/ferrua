@@ -42,3 +42,17 @@ jobs:
           name: fer-linux-x86_64-preview
           path: target/release/fer
           if-no-files-found: error
+
+  action-consumer:
+    name: Composite action consumer
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+      - name: Run fer from PATH
+        shell: bash
+        run: |
+          command -v fer
+          fer examples/count.lua | grep -x 55
+          fer examples/process.lua | grep -x "process module smoke passed"
+          fer --sandbox -e "assert(process == nil and __fer_process_run == nil)"
