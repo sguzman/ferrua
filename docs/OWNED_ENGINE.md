@@ -309,3 +309,7 @@ The `type` builtin requires at least one argument, matching Lua's missing-value 
 ### Bounded first-class Lua tostring builtin
 
 The experimental engine now exposes `tostring` as a first-class, lexically shadowable pure callable alongside `type`. It preserves existing string values, renders nil/Boolean/integer and ordinary double values into the bounded runtime string pool, and emits stable identity labels for tables and functions. A missing argument is rejected; additional arguments are ignored. Lua's `__tostring` metamethod and exact implementation-specific formatting of addresses, very large floats, NaN and infinity remain unsupported, so differential fixtures assert only the defined common subset. Production `fer` is unchanged.
+
+### Bounded first-class Lua tonumber conversion
+
+The owned runtime now exposes `tonumber` as a pure, lexically shadowable callable. Numeric inputs remain numeric; decimal and hex integer strings and bounded decimal/hex floating forms parse to VM numbers, and nonnumeric input yields nil. The optional explicit base supports signed 64-bit strings in bases 2 through 36, with invalid digits producing nil. A missing argument yields nil. Full Lua overflow/wrap semantics for extremely large base-number strings, locale-sensitive parsing and every Lua 5.4 conversion corner case remain unsupported. Both production `fer` and Lua 5.4.6 differential fixtures cover the accepted subset.

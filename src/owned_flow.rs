@@ -43,6 +43,7 @@ pub enum Value {
 pub enum Builtin {
     Type,
     ToString,
+    ToNumber,
 }
 
 impl Value {
@@ -434,6 +435,9 @@ impl<'a> Compiler<'a> {
                         }
                         Err(_) if *text == "tostring" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::ToString)))?;
+                        }
+                        Err(_) if *text == "tonumber" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::ToNumber)))?;
                         }
                         Err(error) => return Err(error),
                     }
@@ -1451,6 +1455,56 @@ impl Execution<'_> {
         Ok(())
     }
 
+
+    fn tonumber_builtin(&self, args: &[Value]) -> Result<Value, FlowError> {
+        let value = args.first().copied().unwrap_or(Value::Nil);
+        if let Some(base_value) = args.get(1).copied().filter(|arg| *arg != Value::Nil) {
+            let base = self.exact_integer_operand(base_value)?;
+            if !(2..=36).contains(&base) {
+                return Err(FlowError::TypeError);
+            }
+            let Value::String(handle) = value else {
+                return Err(FlowError::TypeError);
+            };
+            let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
+            let source = std::str::from_utf8(bytes).map_err(|_| FlowError::TypeError)?;
+            let source = source.trim();
+            let (negative, unsigned) = if let Some(rest) = source.strip_prefix('-') {
+                (true, rest)
+            } else {
+                (false, source.strip_prefix('+').unwrap_or(source))
+            };
+            let Ok(number) = u64::from_str_radix(unsigned, base as u32) else {
+                return Ok(Value::Nil);
+            };
+            if negative {
+                if number == (i64::MAX as u64) + 1 {
+                    return Ok(Value::Integer(i64::MIN));
+                }
+                if let Ok(integer) = i64::try_from(number) {
+                    return Ok(Value::Integer(-integer));
+                }
+            } else if let Ok(integer) = i64::try_from(number) {
+                return Ok(Value::Integer(integer));
+            }
+            return Ok(Value::Nil);
+        }
+        match value {
+            Value::Integer(_) | Value::Float(_) => Ok(value),
+            Value::String(handle) => {
+                if let Ok(converted) = self.arithmetic_operand(value) {
+                    return Ok(converted);
+                }
+                let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                let source = std::str::from_utf8(bytes).map_err(|_| FlowError::TypeError)?;
+                Ok(parse_lua_hex_float(source.trim())
+                    .map(|number| Value::Float(number.to_bits()))
+                    .unwrap_or(Value::Nil))
+            }
+            _ => Ok(Value::Nil),
+        }
+    }
+
     fn arithmetic_operand(&self, value: Value) -> Result<Value, FlowError> {
         match value {
             Value::Integer(_) | Value::Float(_) => Ok(value),
@@ -1690,7 +1744,10 @@ impl Execution<'_> {
                     let args = stack.split_off(stack.len() - arity);
                     let callable = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     if let Value::Builtin(builtin) = callable {
-                        let value = *args.first().ok_or(FlowError::TypeError)?;
+                        if args.is_empty() && builtin != Builtin::ToNumber {
+                            return Err(FlowError::TypeError);
+                        }
+                        let value = args.first().copied().unwrap_or(Value::Nil);
                         let result = match builtin {
                             Builtin::Type => {
                                 let name: &[u8] = match value {
@@ -1703,6 +1760,7 @@ impl Execution<'_> {
                                 };
                                 self.intern_string(name.to_vec())?
                             }
+                            Builtin::ToNumber => self.tonumber_builtin(&args)?,
                             Builtin::ToString => match value {
                                 Value::String(_) => value,
                                 Value::Integer(number) => {
@@ -2942,6 +3000,30 @@ mod tests {
         );
         assert_eq!(evaluate("return ('7'..'0')+2"), 72);
         let invalid = compile_flow_chunk("return 'hello'+1").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
+    }
+
+    #[test]
+    fn first_class_tonumber_builtin_converts_bounded_numerals() {
+        assert_eq!(evaluate("return tonumber('7')+2"), 9);
+        assert_eq!(evaluate("return (tonumber('2.5')==2.5) and 1 or 0"), 1);
+        assert_eq!(evaluate("return tonumber('ff',16)"), 255);
+        assert_eq!(evaluate("return tonumber('101',2)"), 5);
+        assert_eq!(evaluate("return tonumber('  -10  ',2)"), -2);
+        assert_eq!(evaluate("return tonumber('0x10')"), 16);
+        assert_eq!(evaluate("return (tonumber('0x1.8p1')==3.0) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (tonumber('bad')==nil) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (tonumber(true)==nil) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (tonumber()==nil) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (tonumber('g',16)==nil) and 1 or 0"), 1);
+        assert_eq!(
+            evaluate("local tonumber=function() return 8 end; return tonumber('no')"),
+            8
+        );
+        let invalid = compile_flow_chunk("return tonumber(3,2)").unwrap();
         assert_eq!(
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
