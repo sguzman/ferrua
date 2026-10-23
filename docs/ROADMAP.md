@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 95%` across 95 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 95%` across 96 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -143,11 +143,11 @@
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 96%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 95%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 96%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 95%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -422,6 +422,10 @@
   - [x] Represent bounded table metatables and compile shadowable getmetatable/setmetatable builtins — src/owned_flow.rs: TableStorage::metatable, Builtin::GetMetatable, Builtin::SetMetatable
   - [x] Implement protected __metatable reads/replacements with identity and regression coverage — src/owned_flow.rs: protected_metatable, first_class_table_metatables_support_raw_storage_and_protection; tests/owned_flow.rs
   - [x] Pass formatter, clippy, Rust 1.96, production fer and Lua 5.4 differential CI — GitHub Actions 40025867923: four primary jobs and aggregate status passed
+- 🔗 **T370** Bounded table-backed Lua __index and __newindex metamethod chains — `███████░░░ 67%`
+  - [x] Dispatch missing table reads/writes through bounded table-valued metamethod chains — src/owned_flow.rs: Execution::lookup_with_metatable, Execution::assign_with_metatable
+  - [x] Preserve rawget/rawset bypass, existing keys, protected metatables, cycle budgets and Lua parity fixtures — src/owned_flow.rs: table_backed_index_and_newindex_fallbacks_remain_bounded; tests/owned_flow.rs
+  - [ ] Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and upstream Lua 5.4 differential CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -490,4 +494,5 @@
 - 🔁 First-class bounded next, pairs and ipairs table iteration — `██████████ 100%`
 - 🕳️ Nil table holes without absent-entry heap allocation — `██████████ 100%`
 - 🪞 First-class Lua metatable storage and protection — `██████████ 100%`
+- 🔗 Bounded table-backed __index/__newindex fallback chains — `███████░░░ 67%`
 
