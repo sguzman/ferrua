@@ -1594,7 +1594,11 @@ impl Execution<'_> {
     }
 
     /// Table-valued __index fallbacks form a bounded chain.
-    fn lookup_with_metatable(&mut self, mut handle: usize, key: TableKey) -> Result<Value, FlowError> {
+    fn lookup_with_metatable(
+        &mut self,
+        mut handle: usize,
+        key: TableKey,
+    ) -> Result<Value, FlowError> {
         for _ in 0..MAX_CALL_DEPTH {
             if self.steps >= self.budget {
                 return Err(FlowError::StepBudgetExceeded);
@@ -1614,7 +1618,12 @@ impl Execution<'_> {
     }
 
     /// Existing keys bypass __newindex; absent keys may redirect to a table.
-    fn assign_with_metatable(&mut self, mut handle: usize, key: TableKey, value: Value) -> Result<(), FlowError> {
+    fn assign_with_metatable(
+        &mut self,
+        mut handle: usize,
+        key: TableKey,
+        value: Value,
+    ) -> Result<(), FlowError> {
         for _ in 0..MAX_CALL_DEPTH {
             if self.steps >= self.budget {
                 return Err(FlowError::StepBudgetExceeded);
@@ -3526,15 +3535,42 @@ mod tests {
     fn table_backed_index_and_newindex_fallbacks_remain_bounded() {
         for (source, expected) in [
             ("local t=setmetatable({}, {__index={x=7}}); return t.x", 7),
-            ("local t=setmetatable({}, {__index={x=7}}); return rawget(t,'x')==nil and 1 or 0", 1),
-            ("local t={x=2}; setmetatable(t,{__index={x=7}}); return t.x", 2),
-            ("local t=setmetatable({}, {__index=setmetatable({}, {__index={x=7}})}); return t.x", 7),
-            ("local dest={}; local t=setmetatable({}, {__newindex=dest}); t.x=9; return dest.x", 9),
-            ("local dest={}; local t={x=2}; setmetatable(t,{__newindex=dest}); t.x=7; return t.x*10+(dest.x or 0)", 70),
-            ("local dest={}; local t=setmetatable({}, {__newindex=dest}); t['x']=9; return (rawget(t,'x')==nil and dest.x==9) and 1 or 0", 1),
-            ("local fallback={}; local t=setmetatable({}, {__newindex=fallback}); local i=1; t[i],i=8,2; return fallback[1]*10+i", 82),
-            ("local dest={}; local t=setmetatable({}, {__newindex=dest}); rawset(t,'x',8); return rawget(t,'x')==8 and dest.x==nil and 1 or 0", 1),
-            ("local t=setmetatable({}, {__index={add=function(self,x) return x+3 end}}); return t:add(4)", 7),
+            (
+                "local t=setmetatable({}, {__index={x=7}}); return rawget(t,'x')==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local t={x=2}; setmetatable(t,{__index={x=7}}); return t.x",
+                2,
+            ),
+            (
+                "local t=setmetatable({}, {__index=setmetatable({}, {__index={x=7}})}); return t.x",
+                7,
+            ),
+            (
+                "local dest={}; local t=setmetatable({}, {__newindex=dest}); t.x=9; return dest.x",
+                9,
+            ),
+            (
+                "local dest={}; local t={x=2}; setmetatable(t,{__newindex=dest}); t.x=7; return t.x*10+(dest.x or 0)",
+                70,
+            ),
+            (
+                "local dest={}; local t=setmetatable({}, {__newindex=dest}); t['x']=9; return (rawget(t,'x')==nil and dest.x==9) and 1 or 0",
+                1,
+            ),
+            (
+                "local fallback={}; local t=setmetatable({}, {__newindex=fallback}); local i=1; t[i],i=8,2; return fallback[1]*10+i",
+                82,
+            ),
+            (
+                "local dest={}; local t=setmetatable({}, {__newindex=dest}); rawset(t,'x',8); return rawget(t,'x')==8 and dest.x==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({}, {__index={add=function(self,x) return x+3 end}}); return t:add(4)",
+                7,
+            ),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
