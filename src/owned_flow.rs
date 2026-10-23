@@ -1463,6 +1463,11 @@ impl Execution<'_> {
             .ok_or(FlowError::InvalidBytecode)?;
         match key {
             TableKey::Positive(field) => {
+                // Deleting a nonexistent field is a no-op, not a reason to
+                // grow the bounded array or consume execution heap quota.
+                if value == Value::Nil && field > table.array.len() {
+                    return Ok(());
+                }
                 if field > table.array.len() {
                     let growth = field - table.array.len();
                     if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
@@ -1471,7 +1476,7 @@ impl Execution<'_> {
                     self.table_cells += growth;
                     table.array.resize(field, None);
                 }
-                table.array[field - 1] = Some(value);
+                table.array[field - 1] = (value != Value::Nil).then_some(value);
             }
             TableKey::Hashed(field) => {
                 if value == Value::Nil {
@@ -2218,7 +2223,7 @@ impl Execution<'_> {
                         cells.resize(end, None);
                     }
                     for (offset, value) in results.into_iter().enumerate() {
-                        cells[first + offset] = Some(value);
+                        cells[first + offset] = (value != Value::Nil).then_some(value);
                     }
                 }
                 Op::NewTable(count) | Op::NewTableTail(count) => {
@@ -2238,7 +2243,10 @@ impl Execution<'_> {
                     let values = stack.split_off(stack.len() - arity);
                     let handle = self.tables.len();
                     self.tables.push(TableStorage {
-                        array: values.into_iter().map(Some).collect(),
+                        array: values
+                            .into_iter()
+                            .map(|value| (value != Value::Nil).then_some(value))
+                            .collect(),
                         hashed: HashMap::new(),
                     });
                     self.table_cells += arity;
@@ -3362,6 +3370,32 @@ mod tests {
                 Err(FlowError::TypeError)
             );
         }
+    }
+
+    #[test]
+    fn nil_table_fields_do_not_allocate_nonexistent_array_storage() {
+        // Eight empty high-index deletions previously consumed the entire
+        // bounded table cell budget despite not inserting any Lua keys.
+        assert_eq!(
+            evaluate("local total=0; for i=1,8 do local t={}; t[16384]=nil; t[1]=i; total=total+t[1] end; return total"),
+            36
+        );
+        assert_eq!(
+            evaluate("local t={1,2,3}; t[2]=nil; return t[2]==nil and 1 or 0"),
+            1
+        );
+        assert_eq!(
+            evaluate("local t={nil,5,nil}; return next(t)==2 and 1 or 0"),
+            1
+        );
+        assert_eq!(
+            evaluate("local function holes() return nil,4,nil end; local t={holes()}; return t[2]"),
+            4
+        );
+        assert_eq!(
+            evaluate("local t={[1]=5}; rawset(t,1,nil); return next(t)==nil and 1 or 0"),
+            1
+        );
     }
 
     #[test]
