@@ -77,7 +77,8 @@ fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
                 None
             }
             s if s.starts_with("--budget=") => {
-                let value = s[9..].parse::<i64>()
+                let value = s[9..]
+                    .parse::<i64>()
                     .map_err(|_| format!("invalid instruction budget: {s}"))?;
                 if value <= 0 {
                     return Err("instruction budget must be positive".into());
@@ -89,7 +90,12 @@ fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
             _ => Some(Action::Script(arg.clone(), args[i + 1..].to_vec())),
         };
         if let Some(action) = action {
-            return Ok(Options { lua, sandbox, budget, action });
+            return Ok(Options {
+                lua,
+                sandbox,
+                budget,
+                action,
+            });
         }
         i += 1;
     }
@@ -97,7 +103,11 @@ fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
         lua,
         sandbox,
         budget,
-        action: if interactive_stdin { Action::Repl } else { Action::Stdin },
+        action: if interactive_stdin {
+            Action::Repl
+        } else {
+            Action::Stdin
+        },
     })
 }
 
@@ -134,11 +144,12 @@ fn set_args(vm: &mut Vm, name: &str, args: &[String]) -> Result<(), String> {
 
 fn error_message(vm: &mut Vm, err: &luna_core::vm::LuaError) -> String {
     let mut message = vm.error_text(err);
-    if let Some(trace) = vm.take_error_traceback() {
-        if !trace.is_empty() && !message.contains(&trace) {
-            message.push('\n');
-            message.push_str(&trace);
-        }
+    if let Some(trace) = vm.take_error_traceback()
+        && !trace.is_empty()
+        && !message.contains(&trace)
+    {
+        message.push('\n');
+        message.push_str(&trace);
     }
     message
 }
@@ -150,7 +161,10 @@ fn run_source(vm: &mut Vm, source: &str, name: &str) -> Result<(), String> {
 }
 
 fn repl(vm: &mut Vm) -> Result<(), String> {
-    eprintln!("Ferrua {} (Lua VM) - Ctrl-D to exit", env!("CARGO_PKG_VERSION"));
+    eprintln!(
+        "Ferrua {} (Lua VM) - Ctrl-D to exit",
+        env!("CARGO_PKG_VERSION")
+    );
     let input = io::stdin();
     let mut lines = input.lock();
     let mut line = String::new();
@@ -192,7 +206,10 @@ fn execute(options: Options) -> Result<(), String> {
             Ok(())
         }
         Action::Version => {
-            println!("fer {} (Ferrua; pure Rust Lua VM via luna-core 4.0.2)", env!("CARGO_PKG_VERSION"));
+            println!(
+                "fer {} (Ferrua; pure Rust Lua VM via luna-core 4.0.2)",
+                env!("CARGO_PKG_VERSION")
+            );
             Ok(())
         }
         Action::Eval(ref source, ref arguments) => {
@@ -201,15 +218,16 @@ fn execute(options: Options) -> Result<(), String> {
             run_source(&mut vm, source, "=-e")
         }
         Action::Script(ref path, ref arguments) => {
-            let source = std::fs::read_to_string(path)
-                .map_err(|err| format!("{path}: {err}"))?;
+            let source = std::fs::read_to_string(path).map_err(|err| format!("{path}: {err}"))?;
             let mut vm = vm_for(&options);
             set_args(&mut vm, path, arguments)?;
             run_source(&mut vm, &source, path)
         }
         Action::Stdin => {
             let mut source = String::new();
-            io::stdin().read_to_string(&mut source).map_err(|err| err.to_string())?;
+            io::stdin()
+                .read_to_string(&mut source)
+                .map_err(|err| err.to_string())?;
             let mut vm = vm_for(&options);
             set_args(&mut vm, "-", &[])?;
             run_source(&mut vm, &source, "=stdin")
@@ -234,12 +252,17 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn argv(s: &[&str]) -> Vec<String> { s.iter().map(|s| (*s).to_owned()).collect() }
+    fn argv(s: &[&str]) -> Vec<String> {
+        s.iter().map(|s| (*s).to_owned()).collect()
+    }
 
     #[test]
     fn parse_eval_and_args() {
         let opt = parse(&argv(&["--lua=5.4", "-e", "print(arg[1])", "hello"]), false).unwrap();
-        assert_eq!(opt.action, Action::Eval("print(arg[1])".into(), vec!["hello".into()]));
+        assert_eq!(
+            opt.action,
+            Action::Eval("print(arg[1])".into(), vec!["hello".into()])
+        );
         assert_eq!(opt.lua, LuaVersion::Lua54);
     }
     #[test]
@@ -252,7 +275,9 @@ mod tests {
     #[test]
     fn eval_lua_math_tables_closures_loops() {
         let mut vm = vm_for(&parse(&[], false).unwrap());
-        run_source(&mut vm, r#"
+        run_source(
+            &mut vm,
+            r#"
             local function square(x) return x * x end
             local numbers = {2, 3, 4}
             local total = 0
@@ -260,27 +285,40 @@ mod tests {
                 total = total + square(number)
             end
             assert(total == 29)
-        "#, "=test").unwrap();
+        "#,
+            "=test",
+        )
+        .unwrap();
     }
     #[test]
     fn script_arguments_are_one_indexed() {
         let mut vm = vm_for(&parse(&[], false).unwrap());
         set_args(&mut vm, "script.lua", &argv(&["alpha", "beta"])).unwrap();
-        run_source(&mut vm,
+        run_source(
+            &mut vm,
             "assert(arg[0] == 'script.lua'); assert(arg[1] == 'alpha'); assert(arg[2] == 'beta')",
-            "=test").unwrap();
+            "=test",
+        )
+        .unwrap();
     }
     #[test]
     fn sandbox_excludes_os_and_io() {
         let opts = parse(&argv(&["--sandbox"]), false).unwrap();
         let mut vm = vm_for(&opts);
-        run_source(&mut vm,
+        run_source(
+            &mut vm,
             "assert(io == nil and os == nil and package == nil); assert(math.abs(-2) == 2)",
-            "=test").unwrap();
+            "=test",
+        )
+        .unwrap();
     }
     #[test]
     fn runtime_errors_are_propagated() {
         let mut vm = vm_for(&parse(&[], false).unwrap());
-        assert!(run_source(&mut vm, "error('expected failure')", "=test").unwrap_err().contains("expected failure"));
+        assert!(
+            run_source(&mut vm, "error('expected failure')", "=test")
+                .unwrap_err()
+                .contains("expected failure")
+        );
     }
 }
