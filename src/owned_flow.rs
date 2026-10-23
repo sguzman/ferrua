@@ -1742,8 +1742,10 @@ impl Execution<'_> {
                     stack.push(Value::Integer(length as i64));
                 }
                 Op::BitNot => {
-                    let value =
-                        self.integer_operand(stack.pop().ok_or(FlowError::InvalidBytecode)?)?;
+                    let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)?
+                    else {
+                        return Err(FlowError::TypeError);
+                    };
                     stack.push(Value::Integer(!value));
                 }
                 Op::Binary(op) => {
@@ -1754,12 +1756,7 @@ impl Execution<'_> {
                         | Binary::Sub
                         | Binary::Mul
                         | Binary::FloorDiv
-                        | Binary::Mod
-                        | Binary::BitAnd
-                        | Binary::BitOr
-                        | Binary::BitXor
-                        | Binary::Shl
-                        | Binary::Shr => evaluate_binary(
+                        | Binary::Mod => evaluate_binary(
                             *op,
                             Value::Integer(self.integer_operand(lhs)?),
                             Value::Integer(self.integer_operand(rhs)?),
@@ -2559,7 +2556,11 @@ mod tests {
         assert_eq!(evaluate("return '7'//'2'"), 3);
         assert_eq!(evaluate("return '0x10'+1"), 17);
         assert_eq!(evaluate("return -'5'"), -5);
-        assert_eq!(evaluate("return '7'&3"), 3);
+        let invalid_bitwise = compile_flow_chunk("return '7'&3").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&invalid_bitwise, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
         assert_eq!(evaluate("return ('7'..'0')+2"), 72);
         let invalid = compile_flow_chunk("return 'hello'+1").unwrap();
         assert_eq!(

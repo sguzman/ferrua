@@ -125,7 +125,6 @@ const FIXTURES: &[&str] = &[
     "return '7'//'2'",
     "return '0x10'+1",
     "return -'5'",
-    "return '7'&3",
     "return ('7'..'0')+2",
     "return #('é'..'ñ')",
     "return #(12 .. 'x')",
