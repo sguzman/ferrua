@@ -1834,6 +1834,30 @@ impl Execution<'_> {
         Err(FlowError::TypeError)
     }
 
+    /// Lua concatenates byte strings and numbers directly; otherwise an
+    /// operand's first available __concat closure handles the original values.
+    fn concat_with_metamethod(
+        &mut self,
+        left: Value,
+        right: Value,
+    ) -> Result<Value, FlowError> {
+        let direct = self
+            .string_bytes(left)
+            .and_then(|mut bytes| {
+                let suffix = self.string_bytes(right)?;
+                if bytes.len().saturating_add(suffix.len()) > MAX_STRING_POOL_BYTES {
+                    return Err(FlowError::TooLarge);
+                }
+                bytes.extend_from_slice(&suffix);
+                Ok(bytes)
+            });
+        match direct {
+            Ok(bytes) => self.intern_string(bytes),
+            Err(FlowError::TypeError) => self.binary_metamethod(b"__concat", left, right),
+            Err(error) => Err(error),
+        }
+    }
+
     fn arithmetic_operand(&self, value: Value) -> Result<Value, FlowError> {
         match value {
             Value::Integer(_) | Value::Float(_) => Ok(value),
@@ -2601,15 +2625,7 @@ impl Execution<'_> {
                         | Binary::BitXor
                         | Binary::Shl
                         | Binary::Shr => self.bitwise_with_metamethod(*op, lhs, rhs)?,
-                        Binary::Concat => {
-                            let mut bytes = self.string_bytes(lhs)?;
-                            let right = self.string_bytes(rhs)?;
-                            if bytes.len().saturating_add(right.len()) > MAX_STRING_POOL_BYTES {
-                                return Err(FlowError::TooLarge);
-                            }
-                            bytes.extend_from_slice(&right);
-                            self.intern_string(bytes)?
-                        }
+                        Binary::Concat => self.concat_with_metamethod(lhs, rhs)?,
                         Binary::Less
                         | Binary::LessEqual
                         | Binary::Greater
