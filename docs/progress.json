@@ -2446,6 +2446,28 @@
                   "evidence": "GitHub Actions 40031937707: Linux tests/lint/formatter, Rust 1.96, upstream Lua 5.4, composite consumer and status reporter passed"
                 }
               ]
+            },
+            {
+              "id": "T376",
+              "emoji": "🧩",
+              "name": "Binary bitwise metamethod callbacks with integer operand precedence",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Fall back from integer bitwise operators to bounded __band/__bor/__bxor/__shl/__shr Lua callbacks",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::bitwise_with_metamethod and Binary bitwise VM op handling"
+                },
+                {
+                  "text": "Cover left/right precedence, mixed operands, recursion, multiple-result adjustment and Lua 5.4 differential fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: binary_bitwise_metamethods_preserve_integer_rules_and_bounded_callbacks; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux formatter, Clippy, Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -2950,6 +2972,13 @@
           "name": "Unary negative and bitwise complement metamethods",
           "task_ids": [
             "T375"
+          ]
+        },
+        {
+          "emoji": "🧩",
+          "name": "Bitwise binary metamethod callbacks with numeric precedence",
+          "task_ids": [
+            "T376"
           ]
         }
       ]
