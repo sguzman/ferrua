@@ -2926,11 +2926,19 @@ mod tests {
         assert_eq!(evaluate("return (type(nil)=='nil') and 1 or 0"), 1);
         assert_eq!(evaluate("return (type('hi')=='string') and 1 or 0"), 1);
         assert_eq!(evaluate("return (type({})=='table') and 1 or 0"), 1);
-        assert_eq!(evaluate("return (type(function() end)=='function') and 1 or 0"), 1);
-        assert_eq!(evaluate("return (type(type)=='function') and 1 or 0"), 1);
-        assert_eq!(evaluate("local kind=type; return (kind(4)=='number') and 1 or 0"), 1);
         assert_eq!(
-            evaluate("local type=function(x) return 'shadow' end; return (type(4)=='shadow') and 1 or 0"),
+            evaluate("return (type(function() end)=='function') and 1 or 0"),
+            1
+        );
+        assert_eq!(evaluate("return (type(type)=='function') and 1 or 0"), 1);
+        assert_eq!(
+            evaluate("local kind=type; return (kind(4)=='number') and 1 or 0"),
+            1
+        );
+        assert_eq!(
+            evaluate(
+                "local type=function(x) return 'shadow' end; return (type(4)=='shadow') and 1 or 0"
+            ),
             1
         );
         let invalid = compile_flow_chunk("return type()").unwrap();
