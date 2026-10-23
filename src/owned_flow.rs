@@ -1455,7 +1455,6 @@ impl Execution<'_> {
         Ok(())
     }
 
-
     fn tonumber_builtin(&self, args: &[Value]) -> Result<Value, FlowError> {
         let value = args.first().copied().unwrap_or(Value::Nil);
         if let Some(base_value) = args.get(1).copied().filter(|arg| *arg != Value::Nil) {
