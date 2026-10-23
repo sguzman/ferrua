@@ -381,6 +381,12 @@ const FIXTURES: &[&str] = &[
     "local n=1; local t=setmetatable({}, {__add=function(self,x) n=n+1; return n+x end}); return t+3+n",
     "local t=setmetatable({}, {__add=function(a,b) return b*10 end}); return (t+5)*2",
     "local t=setmetatable({}, {__add=function() return 7 end}); return type(t+2)=='number' and 1 or 0",
+    "local t=setmetatable({}, {__unm=function(a,b) return rawequal(a,b) and 8 or 0 end}); return -t",
+    "local t=setmetatable({}, {__bnot=function(a,b) return rawequal(a,b) and 9 or 0 end}); return ~t",
+    "local t=setmetatable({x=14}, {__unm=function(self) return self.x end}); return -t",
+    "local t=setmetatable({}, {__bnot=function() return 17,18 end}); return ~t",
+    "local t=setmetatable({}, {__unm=function() end}); return (-t)==nil and 1 or 0",
+    "local n=2; local t=setmetatable({}, {__unm=function() n=n+1; return n end}); return -t+n",
 ];
 
 fn render(values: &[Value]) -> String {
