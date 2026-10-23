@@ -108,9 +108,13 @@ pub fn run_serialized(request: String) -> String {
     if let Some(writer) = stdin {
         let _ = writer.join();
     }
-    let stdout = stdout.join().map_err(|_| "stdout reader panicked")
+    let stdout = stdout
+        .join()
+        .map_err(|_| "stdout reader panicked")
         .and_then(|result| result.map_err(|_| "stdout read failed"));
-    let stderr = stderr.join().map_err(|_| "stderr reader panicked")
+    let stderr = stderr
+        .join()
+        .map_err(|_| "stderr reader panicked")
         .and_then(|result| result.map_err(|_| "stderr read failed"));
     let (stdout, stdout_truncated) = match stdout {
         Ok(output) => output,

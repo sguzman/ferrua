@@ -137,7 +137,10 @@ fn runtime_traceback_includes_source_context() {
 
 #[test]
 fn process_module_launches_argv_safely() {
-    let out = fer(&["-e", r#"local r=process.check("printf", {"%s", "a; echo unsafe"}); assert(r.stdout == "a; echo unsafe"); print(r.code)"#]);
+    let out = fer(&[
+        "-e",
+        r#"local r=process.check("printf", {"%s", "a; echo unsafe"}); assert(r.stdout == "a; echo unsafe"); print(r.code)"#,
+    ]);
     assert!(
         out.status.success(),
         "{}",
@@ -153,5 +156,9 @@ fn restricted_mode_has_no_subprocess_bridge() {
         "-e",
         "assert(process == nil and __fer_process_run == nil)",
     ]);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
