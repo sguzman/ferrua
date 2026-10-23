@@ -3812,6 +3812,54 @@ mod tests {
     }
 
     #[test]
+    fn ipairs_respects_index_fallbacks_without_changing_raw_iteration() {
+        for (source, expected) in [
+            (
+                "local t=setmetatable({2},{__index=function(_,i) if i==2 then return 5 end end}); local sum=0; for i,v in ipairs(t) do sum=sum+v end; return sum",
+                7,
+            ),
+            (
+                "local t=setmetatable({},{__index={[1]=3,[2]=4}}); local sum=0; for i,v in ipairs(t) do sum=sum+i*10+v end; return sum",
+                37,
+            ),
+            (
+                "local t=setmetatable({}, {__index=function(_,i) if i<4 then return i*2 end end}); local sum=0; for i,v in ipairs(t) do sum=sum+v end; return sum",
+                12,
+            ),
+            (
+                "local t=setmetatable({1,nil,3}, {__index={[2]=9}}); local sum=0; for i,v in ipairs(t) do sum=sum+v end; return sum",
+                13,
+            ),
+            (
+                "local t=setmetatable({}, {__index={[1]=3}}); return rawget(t,1)==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({}, {__index={[1]=3}}); return next(t)==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({1,2}, {__pairs=function() return function() end,nil,nil end}); local sum=0; for _,v in ipairs(t) do sum=sum+v end; return sum",
+                3,
+            ),
+            (
+                "local t=setmetatable({5}, {__index=function() return nil end}); local sum=0; for i,v in ipairs(t) do sum=sum+v end; return sum",
+                5,
+            ),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        let program = compile_flow_chunk(
+            "local t={}; setmetatable(t,{__index=t}); local x=0; for i,v in ipairs(t) do x=x+v end; return x"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+    }
+
+    #[test]
     fn tostring_metatable_hook_requires_string_and_bounds_recursive_calls() {
         for (source, expected) in [
             (
