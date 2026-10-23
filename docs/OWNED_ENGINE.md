@@ -313,3 +313,7 @@ The experimental engine now exposes `tostring` as a first-class, lexically shado
 ### Bounded first-class Lua tonumber conversion
 
 The owned runtime now exposes `tonumber` as a pure, lexically shadowable callable. Numeric inputs remain numeric; decimal and hex integer strings and bounded decimal/hex floating forms parse to VM numbers, and nonnumeric input yields nil. The optional explicit base supports signed 64-bit strings in bases 2 through 36, with invalid digits producing nil. A missing argument yields nil. Full Lua overflow/wrap semantics for extremely large base-number strings, locale-sensitive parsing and every Lua 5.4 conversion corner case remain unsupported. Both production `fer` and Lua 5.4.6 differential fixtures cover the accepted subset.
+
+### First-class raw table functions
+
+The independent stack VM now exposes first-class, lexically shadowable `rawequal`, `rawget`, and `rawset` functions. Raw equality preserves numeric integer/float equivalence, string byte-content equality, and table/function identity. Raw reads and writes use the same bounded table storage and canonicalized numeric keys as regular table access, and `rawset` returns the input table. Nil values remove entries, with invalid assignment keys rejected. Full metamethod bypass semantics cannot be tested until metatables exist; these are narrowly verified builtins, not a complete Lua base library. The production `fer` interpreter remains unchanged.

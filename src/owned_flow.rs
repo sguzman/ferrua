@@ -44,6 +44,9 @@ pub enum Builtin {
     Type,
     ToString,
     ToNumber,
+    RawEqual,
+    RawGet,
+    RawSet,
 }
 
 impl Value {
@@ -438,6 +441,15 @@ impl<'a> Compiler<'a> {
                         }
                         Err(_) if *text == "tonumber" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::ToNumber)))?;
+                        }
+                        Err(_) if *text == "rawequal" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::RawEqual)))?;
+                        }
+                        Err(_) if *text == "rawget" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::RawGet)))?;
+                        }
+                        Err(_) if *text == "rawset" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::RawSet)))?;
                         }
                         Err(error) => return Err(error),
                     }
@@ -1760,6 +1772,40 @@ impl Execution<'_> {
                                 self.intern_string(name.to_vec())?
                             }
                             Builtin::ToNumber => self.tonumber_builtin(&args)?,
+                            Builtin::RawEqual => {
+                                let left = *args.first().ok_or(FlowError::TypeError)?;
+                                let right = *args.get(1).ok_or(FlowError::TypeError)?;
+                                let equal = if matches!(left, Value::Integer(_) | Value::Float(_))
+                                    && matches!(right, Value::Integer(_) | Value::Float(_))
+                                {
+                                    numeric_equal(left, right)?
+                                } else {
+                                    left == right
+                                };
+                                Value::Boolean(equal)
+                            }
+                            Builtin::RawGet => {
+                                let Value::Table(handle) =
+                                    *args.first().ok_or(FlowError::TypeError)?
+                                else {
+                                    return Err(FlowError::TypeError);
+                                };
+                                let key = *args.get(1).ok_or(FlowError::TypeError)?;
+                                let key = self.table_key(key)?;
+                                self.read_table(handle, key)?
+                            }
+                            Builtin::RawSet => {
+                                let Value::Table(handle) =
+                                    *args.first().ok_or(FlowError::TypeError)?
+                                else {
+                                    return Err(FlowError::TypeError);
+                                };
+                                let key = *args.get(1).ok_or(FlowError::TypeError)?;
+                                let value = *args.get(2).ok_or(FlowError::TypeError)?;
+                                let key = self.table_key(key)?;
+                                self.write_table(handle, key, value)?;
+                                Value::Table(handle)
+                            }
                             Builtin::ToString => match value {
                                 Value::String(_) => value,
                                 Value::Integer(number) => {
@@ -3027,6 +3073,50 @@ mod tests {
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
+    }
+
+    #[test]
+    fn first_class_raw_table_builtins_preserve_lua_key_and_identity_semantics() {
+        assert_eq!(evaluate("return rawequal(2,2.0) and 1 or 0"), 1);
+        assert_eq!(evaluate("return rawequal(0,-0.0) and 1 or 0"), 1);
+        assert_eq!(evaluate("return rawequal('abc',\"abc\") and 1 or 0"), 1);
+        assert_eq!(evaluate("return rawequal({}, {}) and 1 or 0"), 0);
+        assert_eq!(
+            evaluate("local t={}; local alias=t; return rawequal(t,alias) and 1 or 0"),
+            1
+        );
+        assert_eq!(
+            evaluate("local f=function() end; return rawequal(f,f) and 1 or 0"),
+            1
+        );
+        assert_eq!(evaluate("local t={name=7}; return rawget(t,'name')"), 7);
+        assert_eq!(evaluate("local t={4}; return rawget(t,2) or 9"), 9);
+        assert_eq!(evaluate("local t={}; rawset(t,'name',8); return t.name"), 8);
+        assert_eq!(evaluate("local t={}; rawset(t,0,8); return t[0]"), 8);
+        assert_eq!(
+            evaluate("local t={}; local x=rawset(t,1,5); return rawequal(t,x) and 1 or 0"),
+            1
+        );
+        assert_eq!(
+            evaluate("local t={x=3}; rawset(t,'x',nil); return rawget(t,'x') or 4"),
+            4
+        );
+        assert_eq!(
+            evaluate("local f=rawget; local t={v=4}; return f(t,'v')"),
+            4
+        );
+        assert_eq!(
+            evaluate("local rawget=function() return 13 end; return rawget({})"),
+            13
+        );
+        assert_eq!(evaluate("return (type(rawset)=='function') and 1 or 0"), 1);
+        for source in ["return rawequal(1)", "return rawget(3,1)", "return rawset({},nil,2)"] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError)
+            );
+        }
     }
 
     #[test]
