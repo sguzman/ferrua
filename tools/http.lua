@@ -40,15 +40,17 @@ function http.request(method, url, options)
 end
 
 function http.get(url, options) return http.request("GET", url, options) end
+local function with_body(options, body)
+    local copy = {}
+    for key, value in pairs(options or {}) do copy[key] = value end
+    copy.body = body
+    return copy
+end
 function http.post(url, body, options)
-    options = options or {}
-    options.body = body
-    return http.request("POST", url, options)
+    return http.request("POST", url, with_body(options, body))
 end
 function http.patch(url, body, options)
-    options = options or {}
-    options.body = body
-    return http.request("PATCH", url, options)
+    return http.request("PATCH", url, with_body(options, body))
 end
 
 --- Throw if transport fails or status is outside 200-299.

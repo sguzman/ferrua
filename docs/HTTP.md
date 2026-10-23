@@ -27,3 +27,5 @@ Options: `headers = {["Authorization"] = "Bearer ..."}`, `body = "text"`, `timeo
 For authenticated GitHub automation, read a token from environment variables at runtime (e.g. `os.getenv("GITHUB_TOKEN")`). Do not hard-code secrets, print tokens or include them in public fixtures.
 
 The CI integration test starts a temporary server on `127.0.0.1`, invokes the built `fer` interpreter, asserts HTTP headers/body/status, and shuts down. It needs no public network, credentials or Python. The API is intentionally unavailable under `fer --sandbox`.
+
+HTTP shortcut methods copy supplied options rather than mutating the caller's table. The local CI fixtures cover successful GET, non-2xx GET, POST with headers and request body, and sandbox exclusion.
