@@ -11,7 +11,7 @@ runs:
         FERRUA_SOURCE_DIR: ${{ github.action_path }}
       run: |
         set -euo pipefail
-        cargo install --path "$FERRUA_SOURCE_DIR" --root "$RUNNER_TEMP/ferrua" --force
+        cargo install --locked --path "$FERRUA_SOURCE_DIR" --root "$RUNNER_TEMP/ferrua" --force
         echo "$RUNNER_TEMP/ferrua/bin" >> "$GITHUB_PATH"
     - name: Verify interpreter
       shell: bash

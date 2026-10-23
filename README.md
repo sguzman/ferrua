@@ -11,18 +11,18 @@
 ## Try it
 
 ```sh
-cargo run -- -e 'print(6 * 7)'
-cargo run -- examples/hello.lua
-cargo run -- examples/count.lua
-printf 'print(6 * 7)\n' | cargo run -- -
-cargo run -- --sandbox -e 'assert(os == nil and io == nil)'
+cargo run --locked -- -e 'print(6 * 7)'
+cargo run --locked -- examples/hello.lua
+cargo run --locked -- examples/count.lua
+printf 'print(6 * 7)\n' | cargo run --locked -- -
+cargo run --locked -- --sandbox -e 'assert(os == nil and io == nil)'
 ```
 
-After building or installing, run `fer` in place of `cargo run --`. On each successful CI run for `main`, GitHub Actions also uploads a [Linux x86-64 preview binary artifact](https://github.com/sguzman/ferrua/actions/runs/39894224746); this is not yet a stable release. After extracting the artifact ZIP, make the binary executable with `chmod +x fer`. Without input, `fer` opens a simple REPL if standard input is a terminal; use `=expression` to display a value. Script parameters are available as `arg[1]`, `arg[2]`, etc., with the script path at `arg[0]`. `--lua=5.4` selects a Lua dialect and `--budget=N` limits executed VM instructions.
+After building or installing, run `fer` in place of `cargo run --`. On each successful CI run for `main`, GitHub Actions uploads a Linux x86-64 preview binary and its SHA-256 checksum; this is not yet a stable release. After extracting the artifact ZIP, verify `sha256sum -c fer.sha256` and make the binary executable with `chmod +x fer`. Without input, `fer` opens a simple REPL if standard input is a terminal; use `=expression` to display a value. Script parameters are available as `arg[1]`, `arg[2]`, etc., with the script path at `arg[0]`. `--lua=5.4` selects a Lua dialect and `--budget=N` limits executed VM instructions.
 
 Ferrua also installs a first-party Lua `json` global in every session, with `json.decode(text)` and `json.encode(value)`; no third-party Lua package is required. The JSON implementation preserves empty arrays versus objects after decoding, provides `json.null` for null values, and supports `json.array()` / `json.object()` to construct empty collections. It rejects cycles, invalid input and unsupported types. Its full compatibility matrix is still under development.
 
-Trusted mode exposes the standard Lua `io`, `os`, `math`, `string`, `table`, `utf8`, `coroutine` and `package` libraries. Its shell access carries the caller's OS permissions. `--sandbox` is an explicit restricted-library option, not a promise of audited containment. Native JSON, TOML/YAML conversion, filesystem helpers, direct HTTP requests and argv-based process execution are included in preview builds; portable releases and a reusable setup action remain upcoming.
+Trusted mode exposes the standard Lua `io`, `os`, `math`, `string`, `table`, `utf8`, `coroutine` and `package` libraries. Its shell access carries the caller's OS permissions. `--sandbox` is an explicit restricted-library option, not a promise of audited containment. Native JSON, TOML/YAML conversion, filesystem helpers, direct HTTP requests and argv-based process execution are included in preview builds; versioned distribution remains upcoming; the reusable source-build setup action already passes CI.
 
 ### Running other tools
 
@@ -32,12 +32,12 @@ In trusted mode, use `process.run("git", {"status", "--short"})` for structured 
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
-cargo test --all-targets
-cargo run -- tools/roadmap.lua --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked --all-targets
+cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [33 passing Rust tests, TOML/YAML/JSON automation and HTTP loopback fixtures, action consumer, and release preview](https://github.com/sguzman/ferrua/actions/runs/39897603798). Native EndeavourOS validation and the v1.0.0 inauguration remain pending.
+**Last verified pre-lock CI:** [33 passing Rust tests, TOML/YAML/JSON automation and HTTP loopback fixtures, action consumer, and release preview](https://github.com/sguzman/ferrua/actions/runs/39897905622). Rust builds now enforce a committed `Cargo.lock`, with an MSRV build gate and checksummed preview artifact. Native EndeavourOS validation and the v1.0.0 inauguration remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 

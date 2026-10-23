@@ -22,3 +22,5 @@ The CI workflow also includes an **action-consumer job** that uses `uses: ./` af
 To run a checked-in script, use `fer scripts/task.lua`. To run a short command, use `fer -e 'print(42)'`. GitHub Actions YAML still defines triggers, jobs and permissions. Scripts themselves are Lua.
 
 The action requires a runner with network access to the Rust toolchain and Cargo package index when building from source. It has not yet been validated on macOS, Windows, or ARM runners. The Linux x86-64 preview artifact is separate from this action and is not treated as a stable signed release.
+
+The composite installer runs `cargo install --locked`, using the checked-in `Cargo.lock`. Ferrua's Linux CI also uses `--locked` for its Rust builds, and publishes a SHA-256 file alongside the preview binary. A separate Rust 1.96 compatibility job checks the minimum toolchain version declared by `Cargo.toml`.
