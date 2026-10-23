@@ -1,0 +1,15 @@
+[package]
+name = "ferrua"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+description = "Ferrua: a Rust-powered Lua interpreter, invoked as fer"
+license = "MIT"
+repository = "https://github.com/sguzman/ferrua"
+
+[[bin]]
+name = "fer"
+path = "src/main.rs"
+
+[dependencies]
+luna-core = "=4.0.2"
