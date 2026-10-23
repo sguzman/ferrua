@@ -1513,12 +1513,9 @@ impl Execution<'_> {
         }
         self.steps += scan_cost;
         let mut entries = Vec::new();
-        for (index, value) in table.array.iter().enumerate() {
-            match value {
-                Some(value) if *value != Value::Nil => {
-                    entries.push((Value::Integer((index + 1) as i64), *value));
-                }
-                _ => {}
+        for (index, cell) in table.array.iter().enumerate() {
+            if let Some(value) = cell.filter(|value| *value != Value::Nil) {
+                entries.push((Value::Integer((index + 1) as i64), value));
             }
         }
         for (&key, &value) in &table.hashed {
