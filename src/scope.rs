@@ -535,12 +535,31 @@ mod tests {
 
     #[test]
     fn named_methods_have_implicit_self_and_read_the_base_table() {
-        let summary = analyze("local obj=1; function obj:run(arg) return self,arg,obj end; return obj").unwrap();
-        let obj_refs: Vec<_> = summary.references.iter().filter(|r| r.name == "obj").collect();
-        assert!(obj_refs.iter().any(|r| r.access == Access::Read && r.resolution == Resolution::Local(0)));
-        assert!(obj_refs.iter().any(|r| r.resolution == Resolution::Upvalue(0)));
+        let summary =
+            analyze("local obj=1; function obj:run(arg) return self,arg,obj end; return obj")
+                .unwrap();
+        let obj_refs: Vec<_> = summary
+            .references
+            .iter()
+            .filter(|r| r.name == "obj")
+            .collect();
+        assert!(
+            obj_refs
+                .iter()
+                .any(|r| r.access == Access::Read && r.resolution == Resolution::Local(0))
+        );
+        assert!(
+            obj_refs
+                .iter()
+                .any(|r| r.resolution == Resolution::Upvalue(0))
+        );
         let implicit = summary.bindings.iter().find(|b| b.name == "self").unwrap();
-        assert!(summary.references.iter().any(|r| r.name == "self" && r.resolution == Resolution::Local(implicit.slot)));
+        assert!(
+            summary
+                .references
+                .iter()
+                .any(|r| r.name == "self" && r.resolution == Resolution::Local(implicit.slot))
+        );
         assert!(!summary.references.iter().any(|r| r.name == "run"));
     }
 

@@ -172,7 +172,8 @@ fn owned_method_call_syntax_matches_lua_54_when_requested() {
 fn owned_function_syntax_matches_lua_54_when_requested() {
     if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
-        .as_deref() != Some("1")
+        .as_deref()
+        != Some("1")
     {
         return;
     }
@@ -183,7 +184,10 @@ fn owned_function_syntax_matches_lua_54_when_requested() {
         ("function t.ns.f(x) return x end", true),
         ("function t:m(x) return self,x end", true),
         ("return function(x) return x end", true),
-        ("local f=function(x) return function(y) return x+y end end", true),
+        (
+            "local f=function(x) return function(y) return x+y end end",
+            true,
+        ),
         ("function t:() end", false),
         ("function t.() end", false),
         ("local function t.f() end", false),

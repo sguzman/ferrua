@@ -787,7 +787,7 @@ mod tests {
             "local function fib(n) if n<=1 then return n end; return fib(n-1)+fib(n-2) end; return fib(5)"
         ).unwrap();
         assert!(
-            matches!(&tree[0], Statement::Function {name: "fib", local: true, parameters, vararg: false, body} if parameters == &["n"] && body.len() == 2)
+            matches!(&tree[0], Statement::Function {name: "fib", local: true, parameters, vararg: false, body, ..} if parameters == &["n"] && body.len() == 2)
         );
         let tree = parse_chunk("function f(a,...) return a,... end; return f(1,2)").unwrap();
         assert!(
@@ -814,7 +814,11 @@ mod tests {
             Statement::Function { name: "obj", fields, method: Some("run"), parameters, .. }
             if fields.is_empty() && parameters == &["a"]
         ));
-        for source in ["function a.() end", "function a:() end", "local function a.b() end"] {
+        for source in [
+            "function a.() end",
+            "function a:() end",
+            "local function a.b() end",
+        ] {
             assert!(parse_chunk(source).is_err(), "{source}");
         }
     }
