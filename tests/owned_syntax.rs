@@ -82,3 +82,45 @@ fn malformed_unicode_and_numeric_corners_do_not_panic() {
         let _ = tokenize(source);
     }
 }
+
+#[test]
+fn lua_short_string_escape_syntax_matches_upstream_when_requested() {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() != Some("1") {
+        return;
+    }
+    let cases = [
+        (r#"local s="\x41""#, true),
+        (r#"local s="\u{1F600}""#, true),
+        (r#"local s="\u{7FFFFFFF}""#, true),
+        (r#"local s="\255""#, true),
+        (r#"local s="\x4F""#, true),
+        (r#"local s="\0012""#, true),
+        (r#"local s="\a\b\f\n\r\t\v\\\"\'""#, true),
+        ("local s=\"continued\\\nnext\"", true),
+        ("local s=\"continued\\\r\nnext\"", true),
+        (r#"local s="\q""#, false),
+        (r#"local s="\x""#, false),
+        (r#"local s="\xG0""#, false),
+        (r#"local s="\x1""#, false),
+        (r#"local s="\u""#, false),
+        (r#"local s="\u{}""#, false),
+        (r#"local s="\u{GG}""#, false),
+        (r#"local s="\u{80000000}""#, false),
+        (r#"local s="\999""#, false),
+        (r#"local s="\256""#, false),
+    ];
+    for (source, expected_ok) in cases {
+        let accepted_by_owned_lexer = tokenize(source).is_ok();
+        assert_eq!(accepted_by_owned_lexer, expected_ok, "owned lexer case: {source:?}");
+        let upstream = std::process::Command::new("lua5.4")
+            .args(["-e", source])
+            .output()
+            .unwrap();
+        assert_eq!(
+            accepted_by_owned_lexer,
+            upstream.status.success(),
+            "Lua 5.4.6 differs from lexer on {source:?}: {}",
+            String::from_utf8_lossy(&upstream.stderr)
+        );
+    }
+}
