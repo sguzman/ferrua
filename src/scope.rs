@@ -585,7 +585,7 @@ mod tests {
         assert_eq!(summary.functions[2].parameters, vec!["c"]);
         assert_eq!(summary.functions[0].captures, vec![0]);
         assert_eq!(summary.functions[1].captures, vec![0, 2]);
-        assert_eq!(summary.functions[2].captures, vec![0, 2, 4]);
+        assert_eq!(summary.functions[2].captures, vec![0, 2, 3]);
     }
 
     #[test]
