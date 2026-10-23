@@ -132,7 +132,9 @@ fn perform(request: Request) -> Result<Value, String> {
 pub fn serialized(request: String) -> String {
     let request = match serde_json::from_str::<Request>(&request) {
         Ok(request) => request,
-        Err(err) => return json!({"ok":false,"error":format!("invalid fs request: {err}")}).to_string(),
+        Err(err) => {
+            return json!({"ok":false,"error":format!("invalid fs request: {err}")}).to_string();
+        }
     };
     match perform(request) {
         Ok(value) => json!({"ok":true,"value":value}).to_string(),
@@ -152,10 +154,8 @@ mod tests {
         .unwrap();
         assert_eq!(ok["ok"], true);
         assert_eq!(ok["value"], false);
-        let bad: Value = serde_json::from_str(&serialized(
-            r#"{"op":"read","path":""}"#.into(),
-        ))
-        .unwrap();
+        let bad: Value =
+            serde_json::from_str(&serialized(r#"{"op":"read","path":""}"#.into())).unwrap();
         assert_eq!(bad["ok"], false);
     }
 }

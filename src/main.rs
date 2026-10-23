@@ -3,8 +3,8 @@
 //! by the pure-Rust luna-core engine; this crate owns the fer CLI and host setup.
 use luna_core::{version::LuaVersion, vm::Vm};
 
-mod process;
 mod fs;
+mod process;
 use std::io::{self, BufRead, IsTerminal, Read, Write};
 
 const HELP: &str = "\

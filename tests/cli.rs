@@ -170,5 +170,9 @@ fn restricted_mode_excludes_filesystem_bridge() {
         "-e",
         "assert(fs == nil and __fer_fs_call == nil)",
     ]);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
