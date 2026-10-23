@@ -247,6 +247,9 @@ pub enum Statement<'a> {
         values: Vec<Expr<'a>>,
     },
     Call(Expr<'a>),
+    /// A lexical scope closed with `end`. Nested Lua blocks are supported
+    /// by this experimental subset, not arbitrary control-flow statements.
+    Block(Vec<Statement<'a>>),
 }
 
 impl<'a> Parser<'a> {
@@ -273,7 +276,16 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
-    fn statement(&mut self) -> Result<Statement<'a>, ParseError> {
+    fn statement(&mut self, depth: usize) -> Result<Statement<'a>, ParseError> {
+        if self.peek().is_some_and(|token| token.spelling == "do") {
+            self.pop();
+            let body = self.block(true, depth + 1)?;
+            if self.peek().map(|token| token.spelling) != Some("end") {
+                return Err(self.error("expected end to close do block"));
+            }
+            self.pop();
+            return Ok(Statement::Block(body));
+        }
         if self.peek().is_some_and(|token| token.spelling == "local") {
             self.pop();
             let mut names = vec![self.name()?];
@@ -342,35 +354,47 @@ impl<'a> Parser<'a> {
     }
 }
 
-/// Parse a limited Lua chunk consisting of semicolon-delimited local
-/// declarations, assignments, call statements and an optional final return.
-/// This API does not imply complete Lua statement grammar or scope support.
+impl<'a> Parser<'a> {
+    fn block(&mut self, stop_at_end: bool, depth: usize) -> Result<Vec<Statement<'a>>, ParseError> {
+        // A bounded parser also protects library users from deeply nested
+        // inputs that would otherwise exhaust the Rust stack.
+        if depth > 64 {
+            return Err(self.error("Lua block nesting limit exceeded"));
+        }
+        let mut result = Vec::new();
+        while let Some(token) = self.peek() {
+            if stop_at_end && token.spelling == "end" {
+                break;
+            }
+            if token.spelling == ";" {
+                self.pop();
+                continue;
+            }
+            let statement = self.statement(depth)?;
+            let terminal = matches!(statement, Statement::Return(_));
+            result.push(statement);
+            if self.peek().is_some_and(|token| token.spelling == ";") {
+                self.pop();
+            } else if stop_at_end && self.peek().is_some_and(|token| token.spelling == "end") {
+                // A block's closing 'end' is a natural terminator.
+            } else if self.peek().is_some() {
+                return Err(self.error("expected statement separator"));
+            }
+            if terminal && self.peek().is_some_and(|token| !(stop_at_end && token.spelling == "end")) {
+                return Err(self.error("return must be final statement in block"));
+            }
+        }
+        Ok(result)
+    }
+}
+
+/// Parse a deliberately limited Lua chunk: semicolon-separated locals,
+/// assignments, call statements and final returns, plus nested do/end
+/// lexical blocks. Other Lua control flow is not yet supported.
 pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
     let tokens = tokenize(source)?;
-    let mut parser = Parser {
-        tokens,
-        index: 0,
-        length: source.len(),
-    };
-    let mut result = Vec::new();
-    while parser.peek().is_some() {
-        if parser.peek().is_some_and(|token| token.spelling == ";") {
-            parser.pop();
-            continue;
-        }
-        let statement = parser.statement()?;
-        let terminal = matches!(statement, Statement::Return(_));
-        result.push(statement);
-        if parser.peek().is_some_and(|token| token.spelling == ";") {
-            parser.pop();
-        } else if parser.peek().is_some() {
-            return Err(parser.error("expected statement separator"));
-        }
-        if terminal && parser.peek().is_some() {
-            return Err(parser.error("return must be final statement"));
-        }
-    }
-    Ok(result)
+    let mut parser = Parser { tokens, index: 0, length: source.len() };
+    parser.block(false, 0)
 }
 
 #[cfg(test)]
@@ -506,6 +530,37 @@ mod tests {
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
         }
+    }
+
+    #[test]
+    fn parses_nested_do_blocks_and_post_block_statements() {
+        let parsed = parse_chunk(
+            "local x=1; do local x=2; do local y=x; print(y) end; print(x) end; return x"
+        ).unwrap();
+        assert_eq!(parsed.len(), 3);
+        match &parsed[1] {
+            Statement::Block(outer) => {
+                assert_eq!(outer.len(), 3);
+                assert!(matches!(&outer[1], Statement::Block(inner) if inner.len() == 2));
+            }
+            _ => panic!("middle statement should be a scoped do block"),
+        }
+        assert!(matches!(&parsed[2], Statement::Return(_)));
+    }
+
+    #[test]
+    fn rejects_malformed_do_blocks_and_excessive_nesting() {
+        for source in [
+            "do local x=1",
+            "end",
+            "do return 1; local x=2 end",
+            "do local x=1 end print(x)",
+            "do do local a=1 end",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
+        let deeply_nested = format!("{}{}", "do ".repeat(65), "end ".repeat(65));
+        assert!(parse_chunk(&deeply_nested).unwrap_err().message.contains("nesting"));
     }
 
     #[test]
