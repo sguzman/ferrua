@@ -2354,6 +2354,28 @@
                   "evidence": "GitHub Actions 40028891108: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter all succeeded"
                 }
               ]
+            },
+            {
+              "id": "T372",
+              "emoji": "📏",
+              "name": "Function-valued __len with raw Lua length separation",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Dispatch table __len closures via shared call executor while preserving raw string/table length",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::length_with_metatable; Op::Length"
+                },
+                {
+                  "text": "Test closure call arguments, result-list adjustment, nil returns, recursion limits, rawlen bypass and upstream Lua 5.4 parity fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: length_metamethod_uses_owned_closures_and_preserves_rawlen; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux fmt/clippy/tests, Rust 1.96, downstream consumer and upstream Lua 5.4 CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -2830,6 +2852,13 @@
           "name": "Callable __index/__newindex metamethods using owned Lua closures",
           "task_ids": [
             "T371"
+          ]
+        },
+        {
+          "emoji": "📏",
+          "name": "Callable Lua __len and rawlen separation",
+          "task_ids": [
+            "T372"
           ]
         }
       ]
