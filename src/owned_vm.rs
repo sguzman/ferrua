@@ -101,7 +101,7 @@ fn emit<'a>(
             ) =>
         {
             let lhs = emit(program, left, depth + 1, locals)?;
-            let rhs = emit(program, right, depth + 1)?;
+            let rhs = emit(program, right, depth + 1, locals)?;
             let dest = program.registers;
             match *op {
                 "+" => Instruction::Add { dest, lhs, rhs },
