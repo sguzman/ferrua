@@ -143,11 +143,11 @@
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 95%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 96%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 95%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 96%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -430,10 +430,10 @@
   - [x] Reuse existing bounded closure frames for Lua metamethod callback invocation — src/owned_flow.rs: Execution::call_owned_function, Execution::lookup_with_metatable, Execution::assign_with_metatable
   - [x] Cover lexical captures, raw separation, recursion limits, methods, multi-returns and Lua 5.4 differential fixtures — src/owned_flow.rs: callable_index_and_newindex_share_lexical_closure_frames; tests/owned_flow.rs
   - [x] Pass Linux rustfmt, clippy, Rust tests, Rust 1.96, composite consumer and Lua 5.4 differential CI — GitHub Actions 40028891108: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter all succeeded
-- 📏 **T372** Function-valued __len with raw Lua length separation — `███████░░░ 67%`
+- 📏 **T372** Function-valued __len with raw Lua length separation — `██████████ 100%`
   - [x] Dispatch table __len closures via shared call executor while preserving raw string/table length — src/owned_flow.rs: Execution::length_with_metatable; Op::Length
   - [x] Test closure call arguments, result-list adjustment, nil returns, recursion limits, rawlen bypass and upstream Lua 5.4 parity fixtures — src/owned_flow.rs: length_metamethod_uses_owned_closures_and_preserves_rawlen; tests/owned_flow.rs
-  - [ ] Pass Linux fmt/clippy/tests, Rust 1.96, downstream consumer and upstream Lua 5.4 CI
+  - [x] Pass Linux fmt/clippy/tests, Rust 1.96, downstream consumer and upstream Lua 5.4 CI — GitHub Actions 40029449968: Linux, Rust 1.96, Lua 5.4 differential, action consumer and reporter succeeded
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -504,5 +504,5 @@
 - 🪞 First-class Lua metatable storage and protection — `██████████ 100%`
 - 🔗 Bounded table-backed __index/__newindex fallback chains — `██████████ 100%`
 - 🎭 Callable __index/__newindex metamethods using owned Lua closures — `██████████ 100%`
-- 📏 Callable Lua __len and rawlen separation — `███████░░░ 67%`
+- 📏 Callable Lua __len and rawlen separation — `██████████ 100%`
 
