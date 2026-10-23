@@ -439,6 +439,14 @@ const FIXTURES: &[&str] = &[
     "local t=setmetatable({}, {__tostring=function() return 'safe' end}); return type(t)=='table' and tostring(t)=='safe' and 1 or 0",
     "return tostring(nil)=='nil' and tostring(false)=='false' and 1 or 0",
     "return tostring(7)=='7' and 1 or 0",
+    "local t=setmetatable({2},{__index=function(_,i) if i==2 then return 5 end end}); local sum=0; for i,v in ipairs(t) do sum=sum+v end; return sum",
+    "local t=setmetatable({},{__index={[1]=3,[2]=4}}); local sum=0; for i,v in ipairs(t) do sum=sum+i*10+v end; return sum",
+    "local t=setmetatable({}, {__index=function(_,i) if i<4 then return i*2 end end}); local sum=0; for i,v in ipairs(t) do sum=sum+v end; return sum",
+    "local t=setmetatable({1,nil,3}, {__index={[2]=9}}); local sum=0; for i,v in ipairs(t) do sum=sum+v end; return sum",
+    "local t=setmetatable({}, {__index={[1]=3}}); return rawget(t,1)==nil and 1 or 0",
+    "local t=setmetatable({}, {__index={[1]=3}}); return next(t)==nil and 1 or 0",
+    "local t=setmetatable({1,2}, {__pairs=function() return function() end,nil,nil end}); local sum=0; for _,v in ipairs(t) do sum=sum+v end; return sum",
+    "local t=setmetatable({5}, {__index=function() return nil end}); local sum=0; for i,v in ipairs(t) do sum=sum+v end; return sum",
 ];
 
 fn render(values: &[Value]) -> String {
