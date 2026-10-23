@@ -1502,8 +1502,10 @@ impl Execution<'_> {
         let table = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
         let mut entries = Vec::new();
         for (index, value) in table.array.iter().enumerate() {
-            if let Some(value) = value.filter(|value| **value != Value::Nil) {
-                entries.push((Value::Integer((index + 1) as i64), *value));
+            if let Some(value) = *value {
+                if value != Value::Nil {
+                    entries.push((Value::Integer((index + 1) as i64), value));
+                }
             }
         }
         for (&key, &value) in &table.hashed {
@@ -3353,6 +3355,60 @@ mod tests {
             assert_eq!(
                 execute_flow_value(&program, DEFAULT_STEP_BUDGET),
                 Err(FlowError::TypeError)
+            );
+        }
+    }
+
+    #[test]
+    fn first_class_next_pairs_and_ipairs_follow_bounded_lua_raw_iteration() {
+        assert_eq!(
+            evaluate("local t={[1]=12}; local k,v=next(t); return k*100+v"),
+            112
+        );
+        assert_eq!(evaluate("return next({})==nil and 1 or 0"), 1);
+        assert_eq!(evaluate("local t={7}; return next(t,1)==nil and 1 or 0"), 1);
+        assert_eq!(
+            evaluate("local t={[0]=4,[-2]=5,[true]=6,[1]=7,[2]=8,x=9}; local s=0; local n=0; for k,v in pairs(t) do s=s+v; n=n+1 end; return s*10+n"),
+            396
+        );
+        assert_eq!(
+            evaluate("local t={4,5,6}; local s=0; for i,v in ipairs(t) do s=s+i*10+v end; return s"),
+            75
+        );
+        assert_eq!(
+            evaluate("local t={[1]=2,[3]=8}; local n=0; for i,v in ipairs(t) do n=n+i+v end; return n"),
+            3
+        );
+        assert_eq!(
+            evaluate("local f=ipairs; local s=0; for i,v in f({2,3}) do s=s+v end; return s"),
+            5
+        );
+        assert_eq!(
+            evaluate("local f=pairs; local s=0; for k,v in f({name=4}) do s=s+v end; return s"),
+            4
+        );
+        assert_eq!(
+            evaluate("local iter,t,k=ipairs({4,5}); local i,v=iter(t,k); return i*10+v"),
+            14
+        );
+        assert_eq!(
+            evaluate("local ipairs=function() return function(_,n) if n==nil then return 2,3 end end,nil,nil end; local s=0; for i,v in ipairs({}) do s=s+i+v end; return s"),
+            5
+        );
+        assert_eq!(evaluate("return type(pairs)=='function' and 1 or 0"), 1);
+        for source in [
+            "return next()",
+            "return next(3)",
+            "return pairs(3)",
+            "return ipairs(nil)",
+            "local t={3}; return next(t,2)",
+            "local t={}; return next(t,0)",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError),
+                "{source}"
             );
         }
     }
