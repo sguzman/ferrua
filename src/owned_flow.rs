@@ -1790,15 +1790,17 @@ impl Execution<'_> {
         right: Value,
     ) -> Result<Value, FlowError> {
         for operand in [left, right] {
-            if let Value::Table(handle) = operand {
-                if let Some(method) = self.metatable_field(handle, name)? {
-                    let Value::Function(callback) = method else {
-                        return Err(FlowError::TypeError);
-                    };
-                    let returned = self.call_owned_function(callback, &[left, right])?;
-                    return Ok(returned.first().copied().unwrap_or(Value::Nil));
-                }
-            }
+            let Value::Table(handle) = operand else {
+                continue;
+            };
+            let Some(method) = self.metatable_field(handle, name)? else {
+                continue;
+            };
+            let Value::Function(callback) = method else {
+                return Err(FlowError::TypeError);
+            };
+            let returned = self.call_owned_function(callback, &[left, right])?;
+            return Ok(returned.first().copied().unwrap_or(Value::Nil));
         }
         Err(FlowError::TypeError)
     }
