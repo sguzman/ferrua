@@ -34,6 +34,8 @@ Before switching backends, CI must exercise and retain all of the following:
 5. Resource and safety tests for budget exhaustion, stack depth, pathological nesting, allocation limits, cycles, malformed source, huge literals, encoding and error recovery. A native stack abort or process termination is a failure even if a smoke suite remains green.
 6. Rust formatting, Clippy with warnings denied, full unit/integration suites, Rust minimum supported version, composite-action consumer and native EndeavourOS/Hyprland invocation. CI passing on Ubuntu does not prove native EndeavourOS acceptance.
 
+A separate release-binary smoke step uses the official date-pinned Arch Linux base container with networking disabled and a read-only filesystem. It detects basic Arch-userspace compatibility problems, **but does not count as native EndeavourOS/Hyprland, GPU, terminal, or workstation QA**. T107 remains open until direct distro acceptance is independently evidenced.
+
 A failure cannot be masked by deleting a difficult fixture, weakening assertions or automatically routing an unsupported case to the external engine. Reference disagreements require an independently documented resolution, with both fixtures and implementation reviewed. Do not interpret passing the **current** Lua differential smoke job as satisfaction of this broader gate.
 
 ## 4. Cutover and release discipline
