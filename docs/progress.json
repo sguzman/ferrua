@@ -788,6 +788,52 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T305",
+              "emoji": "🔡",
+              "name": "Standalone Ferrua-owned lexical scanner foundation",
+              "checks": [
+                {
+                  "text": "Tokenize Lua keyword, names, literals, operators and comments with source offsets",
+                  "passed": true,
+                  "evidence": "src/lex.rs and src/lib.rs"
+                },
+                {
+                  "text": "Run first-party Lua source corpus and malformed-lexeme regressions",
+                  "passed": true,
+                  "evidence": "tests/owned_syntax.rs: 27 Lua scripts; src/lex.rs numeric, Unicode and backslash-z fixtures"
+                },
+                {
+                  "text": "Accept library scanner on supported Rust and CI jobs",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39953838372: all four jobs pass, including Rust 1.96 compatibility"
+                }
+              ],
+              "progress": 100
+            },
+            {
+              "id": "T306",
+              "emoji": "🧮",
+              "name": "Pratt expression AST for documented Lua syntax subset",
+              "checks": [
+                {
+                  "text": "Parse arithmetic, bitwise, logical and right-associative operators",
+                  "passed": true,
+                  "evidence": "src/expr.rs precedence/associativity unit tests"
+                },
+                {
+                  "text": "Parse chained function calls, field selections and bracket indexes",
+                  "passed": true,
+                  "evidence": "src/expr.rs: Call, Field and Index AST variants, invalid-syntax regressions"
+                },
+                {
+                  "text": "Accept standalone expression parser without swapping VM backend",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39953838372: four jobs green; src/main.rs still uses luna-core"
+                }
+              ],
+              "progress": 100
             }
           ]
         }
@@ -807,6 +853,20 @@
           "task_ids": [
             "T303",
             "T304"
+          ]
+        },
+        {
+          "emoji": "🔡",
+          "name": "Ferrua-owned lexer scaffold",
+          "task_ids": [
+            "T305"
+          ]
+        },
+        {
+          "emoji": "🧮",
+          "name": "Experimental expression AST",
+          "task_ids": [
+            "T306"
           ]
         }
       ]

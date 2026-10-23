@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `████████░░ 84%` across 29 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 85%` across 31 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `███░░░░░░░ 25%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `█████░░░░░ 50%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `███░░░░░░░ 25%`
+### 🔣 P3 — Ferrua-owned language engine — `█████░░░░░ 50%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -158,9 +158,19 @@
   - [ ] Document engine switch criteria
   - [ ] Switch main fer runtime after parity tests
   - [ ] Tag major stable release after acceptance
+- 🔡 **T305** Standalone Ferrua-owned lexical scanner foundation — `██████████ 100%`
+  - [x] Tokenize Lua keyword, names, literals, operators and comments with source offsets — src/lex.rs and src/lib.rs
+  - [x] Run first-party Lua source corpus and malformed-lexeme regressions — tests/owned_syntax.rs: 27 Lua scripts; src/lex.rs numeric, Unicode and backslash-z fixtures
+  - [x] Accept library scanner on supported Rust and CI jobs — GitHub Actions 39953838372: all four jobs pass, including Rust 1.96 compatibility
+- 🧮 **T306** Pratt expression AST for documented Lua syntax subset — `██████████ 100%`
+  - [x] Parse arithmetic, bitwise, logical and right-associative operators — src/expr.rs precedence/associativity unit tests
+  - [x] Parse chained function calls, field selections and bracket indexes — src/expr.rs: Call, Field and Index AST variants, invalid-syntax regressions
+  - [x] Accept standalone expression parser without swapping VM backend — GitHub Actions 39953838372: four jobs green; src/main.rs still uses luna-core
 
 **Feature inventory** (computed from associated atomic task progress):
 
 - 🔩 Independent compiler and VM — `░░░░░░░░░░ 0%`
 - 🧪 Verified Lua compatibility — `█████░░░░░ 50%`
+- 🔡 Ferrua-owned lexer scaffold — `██████████ 100%`
+- 🧮 Experimental expression AST — `██████████ 100%`
 
