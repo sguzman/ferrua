@@ -3660,6 +3660,62 @@ mod tests {
     }
 
     #[test]
+    fn unary_metamethods_pass_duplicate_operand_and_keep_numeric_fallback() {
+        for (source, expected) in [
+            (
+                "local t=setmetatable({}, {__unm=function(a,b) return rawequal(a,b) and 8 or 0 end}); return -t",
+                8,
+            ),
+            (
+                "local t=setmetatable({}, {__bnot=function(a,b) return rawequal(a,b) and 9 or 0 end}); return ~t",
+                9,
+            ),
+            (
+                "local t=setmetatable({x=14}, {__unm=function(self) return self.x end}); return -t",
+                14,
+            ),
+            (
+                "local t=setmetatable({}, {__bnot=function() return 17,18 end}); return ~t",
+                17,
+            ),
+            (
+                "local t=setmetatable({}, {__unm=function() end}); return (-t)==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local n=2; local t=setmetatable({}, {__unm=function() n=n+1; return n end}); return -t+n",
+                6,
+            ),
+            (
+                "return -'5'",
+                -5,
+            ),
+            (
+                "return ~5",
+                -6,
+            ),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        for source in ["return -{}", "return ~{}"] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError),
+                "{source}"
+            );
+        }
+        let program = compile_flow_chunk(
+            "local t={}; setmetatable(t,{__unm=function(x) return -x end}); return -t"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+    }
+
+    #[test]
     fn arithmetic_metamethods_reuse_owned_lua_closure_frames() {
         for (source, expected) in [
             (
