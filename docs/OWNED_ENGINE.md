@@ -220,3 +220,7 @@ The owned string decoder now accepts valid Unicode scalar values in Lua \u{hex} 
 ### Bounded Lua named and string-keyed table fields
 
 The owned stack VM now provides a bounded string-keyed map alongside each table's positive-integer sequence. `t.name`, `t["name"]`, named constructor fields and computed string keys share byte-interned key identities; nil assignments remove string-keyed entries. Mixed named/integer fields are supported and the existing array length operator ignores string keys. Key entries count toward the same bounded table heap budget. Negative/zero/boolean/table keys, general hash semantics, metatables and method calls are not yet supported; neither garbage collection nor the production interpreter has changed.
+
+### Receiver-aware method calls
+
+The experimental bytecode compiler now supports Lua `object:method(arguments)` calls against function values stored in string-keyed table fields. The receiver expression is evaluated only once and passed as the first argument, including through nested and tail-expanding call contexts. An explicit stack swap preserves the callee/receiver order. Tests compare inherited call-frame, vararg, and multireturn behavior with production `fer` and upstream Lua 5.4.6. Method declaration syntax remains a separate compiler milestone.

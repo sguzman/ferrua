@@ -72,6 +72,7 @@ pub enum Op {
     AssignPrepared(usize),
     NewTable(usize),
     Duplicate,
+    Swap,
     SetTableTail(usize),
     NewFunction(usize),
     Call(usize),
@@ -312,6 +313,44 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    fn method_call(
+        &mut self,
+        object: &Expr<'a>,
+        method: &str,
+        arguments: &[Expr<'a>],
+        depth: usize,
+        many: bool,
+    ) -> Result<(), FlowError> {
+        if depth > 128 {
+            return Err(FlowError::TooLarge);
+        }
+        self.expression(object, depth + 1)?;
+        self.push(Op::Duplicate)?;
+        let name = self.intern_bytes(method.as_bytes().to_vec())?;
+        self.push(Op::Constant(Value::String(name)))?;
+        self.push(Op::GetTable)?;
+        // Stack is receiver, callable; the call expects callable, receiver.
+        self.push(Op::Swap)?;
+        if let Some((last, before)) = arguments.split_last() {
+            for argument in before {
+                self.expression(argument, depth + 1)?;
+            }
+            if self.multiple_expression(last, depth + 1)? {
+                self.push(Op::CallSpread {
+                    prefix: before.len() + 1,
+                    many,
+                })?;
+                return Ok(());
+            }
+        }
+        self.push(if many {
+            Op::CallMany(arguments.len() + 1)
+        } else {
+            Op::Call(arguments.len() + 1)
+        })?;
+        Ok(())
+    }
+
     fn intern_literal(&mut self, spelling: &str) -> Result<usize, FlowError> {
         self.intern_bytes(decode_lua_string(spelling)?)
     }
@@ -403,6 +442,13 @@ impl<'a> Compiler<'a> {
             }
             Expr::Call { callee, arguments } => {
                 self.call(callee, arguments, depth, false)?;
+            }
+            Expr::MethodCall {
+                object,
+                method,
+                arguments,
+            } => {
+                self.method_call(object, method, arguments, depth, false)?;
             }
             Expr::Index { object, key } => {
                 self.expression(object, depth + 1)?;
@@ -522,6 +568,14 @@ impl<'a> Compiler<'a> {
         match expr {
             Expr::Call { callee, arguments } => {
                 self.call(callee, arguments, depth + 1, true)?;
+                Ok(true)
+            }
+            Expr::MethodCall {
+                object,
+                method,
+                arguments,
+            } => {
+                self.method_call(object, method, arguments, depth + 1, true)?;
                 Ok(true)
             }
             Expr::Vararg if self.vararg => {
@@ -1462,6 +1516,13 @@ impl Execution<'_> {
                     let value = *stack.last().ok_or(FlowError::InvalidBytecode)?;
                     stack.push(value);
                 }
+                Op::Swap => {
+                    if stack.len() < 2 {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let last = stack.len() - 1;
+                    stack.swap(last - 1, last);
+                }
                 Op::SetTableTail(start) => {
                     let multiple = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
                     if stack.len() < multiple.saturating_add(1) {
@@ -2369,6 +2430,34 @@ mod tests {
         assert_eq!(evaluate(r#"return #"\u{E9}""#), 2);
         assert_eq!(evaluate(r#"return ("\u{E9}" == "é") and 1 or 0"#), 1);
         assert!(compile_flow_chunk(r#"return "\u{D800}""#).is_err());
+    }
+
+    #[test]
+    fn method_calls_pass_receiver_once_and_adjust_tail_results() {
+        assert_eq!(
+            evaluate("local t={v=4,add=function(self,x) return self.v+x end}; return t:add(3)"),
+            7
+        );
+        assert_eq!(
+            evaluate("local t={name='abc',size=function(self) return #self.name end}; return t:size()"),
+            3
+        );
+        assert_eq!(
+            evaluate("local t={v=5,f=function(self,x) return self.v+x end}; local n=0; local function get() n=n+1; return t end; return get():f(2)+n"),
+            8
+        );
+        assert_eq!(
+            evaluate("local function pair() return 3,4 end; local t={sum=function(self,a,b) return self.v+a+b end,v=2}; return t:sum(pair())"),
+            9
+        );
+        let multi = compile_flow_chunk(
+            "local t={v=7,two=function(self) return self.v,2 end}; return t:two()",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_values(&multi, DEFAULT_STEP_BUDGET),
+            Ok(vec![Value::Integer(7), Value::Integer(2)])
+        );
     }
 
     #[test]
