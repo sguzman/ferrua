@@ -148,7 +148,7 @@ impl Scanner<'_> {
         if count == 0 {
             return Err(self.error("number has no digits"));
         }
-        let exps = if hex { [b'p', b'P'] } else { [b'e', b'E'] };
+        let exps = if hex { *b"pP" } else { *b"eE" };
         if self.peek(0).is_some_and(|b| exps.contains(&b)) {
             self.bump();
             if matches!(self.peek(0), Some(b'+' | b'-')) {
