@@ -1,5 +1,5 @@
 //! Differential acceptance for experimental integer+boolean control-flow VM.
-use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, Value, compile_flow_chunk, execute_flow_value};
+use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, Value, compile_flow_chunk, execute_flow_values};
 use std::process::Command;
 
 const FIXTURES: &[&str] = &[
@@ -53,20 +53,30 @@ const FIXTURES: &[&str] = &[
     "return not 0",
     "return 5>3",
     "local x; return x",
+    "return",
+    "return 1,2,3",
+    "return nil,7,false",
+    "return true,0",
+    "if true then return 1,2 else return 3,4 end",
+    "local x,y=2,3; return y,x",
 ];
 
-fn render(value: Value) -> String {
-    match value {
-        Value::Integer(number) => number.to_string(),
-        Value::Boolean(boolean) => boolean.to_string(),
-        Value::Nil => "nil".to_owned(),
-    }
+fn render(values: &[Value]) -> String {
+    values
+        .iter()
+        .map(|value| match value {
+            Value::Integer(number) => number.to_string(),
+            Value::Boolean(boolean) => boolean.to_string(),
+            Value::Nil => "nil".to_owned(),
+        })
+        .collect::<Vec<_>>()
+        .join("\t")
 }
 
 fn check(reference: &str, prefix: &[&str]) {
     for source in FIXTURES {
         let compiled = compile_flow_chunk(source).unwrap();
-        let owned = render(execute_flow_value(&compiled, DEFAULT_STEP_BUDGET).unwrap());
+        let owned = render(&execute_flow_values(&compiled, DEFAULT_STEP_BUDGET).unwrap());
         let code = format!("print((function() {source} end)())");
         let output = Command::new(reference)
             .args(prefix)

@@ -71,6 +71,7 @@ pub enum Op {
         exit: usize,
     },
     Return,
+    ReturnMany(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,6 +96,7 @@ pub enum FlowError {
     InvalidBytecode,
     TypeError,
     DivisionByZero,
+    ReturnArity,
     StepBudgetExceeded,
     InvalidForStep,
     NoReturn,
@@ -108,6 +110,7 @@ impl fmt::Display for FlowError {
             Self::InvalidBytecode => write!(out, "invalid owned flow bytecode"),
             Self::TypeError => write!(out, "invalid operand type in owned flow bytecode"),
             Self::DivisionByZero => write!(out, "integer division by zero"),
+            Self::ReturnArity => write!(out, "expected exactly one return value"),
             Self::StepBudgetExceeded => write!(out, "owned flow execution budget exhausted"),
             Self::InvalidForStep => write!(out, "numeric for step must not be zero"),
             Self::NoReturn => write!(out, "owned flow program exited without a return"),
@@ -316,9 +319,15 @@ impl<'a> Compiler<'a> {
                     self.values(values, slots.len())?;
                     self.push(Op::AssignLocals(slots))?;
                 }
-                Statement::Return(values) if values.len() == 1 => {
-                    self.expression(&values[0], 0)?;
-                    self.push(Op::Return)?;
+                Statement::Return(values) => {
+                    for value in values {
+                        self.expression(value, 0)?;
+                    }
+                    if values.len() == 1 {
+                        self.push(Op::Return)?;
+                    } else {
+                        self.push(Op::ReturnMany(values.len()))?;
+                    }
                 }
                 Statement::Block(body) => self.scope(body)?,
                 Statement::If {
@@ -474,7 +483,11 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
         loop_breaks: Vec::new(),
     };
     compiler.statements(&statements)?;
-    if !compiler.code.iter().any(|op| matches!(op, Op::Return)) {
+    if !compiler
+        .code
+        .iter()
+        .any(|op| matches!(op, Op::Return | Op::ReturnMany(_)))
+    {
         return Err(FlowError::NoReturn);
     }
     Ok(FlowProgram {
@@ -511,9 +524,12 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
     }
 }
 
-/// Run owned control-flow bytecode and return an integer, Boolean or nil.
+/// Run owned control-flow bytecode and return fixed-count supported Lua values.
 /// No syscalls, global environment, host callbacks, or I/O.
-pub fn execute_flow_value(program: &FlowProgram, budget: usize) -> Result<Value, FlowError> {
+pub fn execute_flow_values(
+    program: &FlowProgram,
+    budget: usize,
+) -> Result<Vec<Value>, FlowError> {
     if program.instructions.len() > MAX_CODE || program.slots > MAX_SLOTS {
         return Err(FlowError::InvalidBytecode);
     }
@@ -661,7 +677,13 @@ pub fn execute_flow_value(program: &FlowProgram, budget: usize) -> Result<Value,
                 }
             }
             Op::Return => {
-                return stack.pop().ok_or(FlowError::InvalidBytecode);
+                return Ok(vec![stack.pop().ok_or(FlowError::InvalidBytecode)?]);
+            }
+            Op::ReturnMany(count) => {
+                if stack.len() < *count {
+                    return Err(FlowError::InvalidBytecode);
+                }
+                return Ok(stack.split_off(stack.len() - *count));
             }
         }
         if stack.len() > MAX_STACK {
@@ -670,6 +692,16 @@ pub fn execute_flow_value(program: &FlowProgram, budget: usize) -> Result<Value,
         pc = next;
     }
     Err(FlowError::NoReturn)
+}
+
+/// Preserve the single-value API for existing consumers. Zero or multiple
+/// result values are rejected instead of silently discarding their contents.
+pub fn execute_flow_value(program: &FlowProgram, budget: usize) -> Result<Value, FlowError> {
+    let mut values = execute_flow_values(program, budget)?;
+    if values.len() != 1 {
+        return Err(FlowError::ReturnArity);
+    }
+    Ok(values.pop().expect("exactly one result"))
 }
 
 /// Retain the original integer-only API for existing consumers. Non-integer
@@ -833,6 +865,44 @@ mod tests {
             1
         );
     }
+    #[test]
+    fn returns_fixed_count_lua_values_and_preserves_single_value_apis() {
+        for (source, values) in [
+            ("return", vec![]),
+            (
+                "return 1,2,3",
+                vec![Value::Integer(1), Value::Integer(2), Value::Integer(3)],
+            ),
+            (
+                "return nil,7,false",
+                vec![Value::Nil, Value::Integer(7), Value::Boolean(false)],
+            ),
+            (
+                "local x,y=2,3; return y,x",
+                vec![Value::Integer(3), Value::Integer(2)],
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+                Ok(values),
+                "{source}"
+            );
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::ReturnArity),
+                "{source}"
+            );
+        }
+        assert_eq!(
+            execute_flow_value(
+                &compile_flow_chunk("return true").unwrap(),
+                DEFAULT_STEP_BUDGET
+            ),
+            Ok(Value::Boolean(true))
+        );
+    }
+
     #[test]
     fn returns_lua_boolean_nil_and_lazy_operand_values() {
         for (source, expected) in [
