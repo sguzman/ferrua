@@ -163,3 +163,7 @@ The bounded owned-flow VM now resolves local and integer-indexed table destinati
 ### Bounded generic for iteration
 
 The Rust-owned stack VM can now execute function-based Lua generic `for` loops over the restricted iterator/state/control triple. Each iteration calls the iterator with state and current control, stops on a nil first result, updates the control and read-only loop variables, and executes the loop body with `break` support. The initial iterator expression list is evaluated once with final-call result adjustment, so an iterator-factory function may supply the triple. The shared step and call-depth budgets still apply. This is not full Lua 5.4 generic-for support: the optional fourth to-be-closed value, automatic closing semantics, arbitrary iterator objects, and fresh captured loop-variable cells on each iteration remain unsupported.
+
+### Per-iteration lexical cells for Lua loops
+
+The bounded numeric and generic `for` VM paths now give visible loop variables distinct mutable cells per successful iteration, while keeping the hidden iteration control separate. Closures created on different iterations therefore retain the correct iteration's value, including in descending numeric loops. Allocation remains bounded by the execution-local cell cap. This is tested against production `fer` and upstream Lua 5.4.6 and does not imply general garbage collection or closing-variable semantics.

@@ -95,6 +95,7 @@ pub enum Op {
         counter: usize,
         limit: usize,
         step: usize,
+        variable: usize,
         exit: usize,
     },
     ForStep {
@@ -648,7 +649,7 @@ impl<'a> Compiler<'a> {
                     step,
                     body,
                 } => {
-                    if self.depth >= 64 || self.slots > MAX_SLOTS.saturating_sub(3) {
+                    if self.depth >= 64 || self.slots > MAX_SLOTS.saturating_sub(4) {
                         return Err(FlowError::TooLarge);
                     }
                     // Lua numeric controls evaluate once, before introducing
@@ -663,14 +664,15 @@ impl<'a> Compiler<'a> {
                     let counter = self.slots;
                     let bound = counter + 1;
                     let stride = counter + 2;
-                    self.slots += 3;
+                    let visible = counter + 3;
+                    self.slots += 4;
                     self.push(Op::AssignLocals(vec![counter, bound, stride]))?;
                     self.frames.push(HashMap::new());
                     self.frames
                         .last_mut()
                         .expect("numeric for scope")
-                        .insert(*variable, counter);
-                    self.read_only.insert(counter);
+                        .insert(*variable, visible);
+                    self.read_only.insert(visible);
                     self.depth += 1;
                     self.loop_breaks.push(Vec::new());
                     let compiled = (|| {
@@ -679,6 +681,7 @@ impl<'a> Compiler<'a> {
                             counter,
                             limit: bound,
                             step: stride,
+                            variable: visible,
                             exit: usize::MAX,
                         })?;
                         self.scope(body)?;
@@ -694,7 +697,7 @@ impl<'a> Compiler<'a> {
                     })();
                     let breaks = self.loop_breaks.pop().expect("numeric for break scope");
                     self.depth -= 1;
-                    self.read_only.remove(&counter);
+                    self.read_only.remove(&visible);
                     self.frames.pop();
                     compiled?;
                     let end = self.code.len();
@@ -884,6 +887,22 @@ struct Execution<'a> {
 }
 
 impl Execution<'_> {
+    /// Fresh lexical cell on successive loop iterations; old closures retain
+    /// the prior cell rather than observing later iteration values.
+    fn iteration_cell(&mut self, slots: &mut [usize], slot: usize) -> Result<usize, FlowError> {
+        let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
+        if self.cells.get(cell).ok_or(FlowError::InvalidBytecode)?.is_none() {
+            return Ok(cell);
+        }
+        if self.cells.len() >= MAX_CELLS_TOTAL {
+            return Err(FlowError::TooLarge);
+        }
+        let fresh = self.cells.len();
+        self.cells.push(None);
+        *slots.get_mut(slot).ok_or(FlowError::InvalidBytecode)? = fresh;
+        Ok(fresh)
+    }
+
     fn run(
         &mut self,
         instructions: &[Op],
@@ -1245,6 +1264,7 @@ impl Execution<'_> {
                     counter,
                     limit,
                     step,
+                    variable,
                     exit,
                 } => {
                     if *exit > instructions.len() {
@@ -1273,6 +1293,9 @@ impl Execution<'_> {
                         pc = *exit;
                         continue;
                     }
+                    let cell = self.iteration_cell(&mut slots, *variable)?;
+                    *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? =
+                        Some(Value::Integer(current));
                 }
                 Op::ForStep {
                     counter,
@@ -1328,7 +1351,7 @@ impl Execution<'_> {
                         .get_mut(control_cell)
                         .ok_or(FlowError::InvalidBytecode)? = Some(first);
                     for (position, slot) in variables.iter().enumerate() {
-                        let cell = *slots.get(*slot).ok_or(FlowError::InvalidBytecode)?;
+                        let cell = self.iteration_cell(&mut slots, *slot)?;
                         let value = returned.get(position).copied().unwrap_or(Value::Nil);
                         *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
                     }
@@ -1531,6 +1554,22 @@ mod tests {
                 "local function next() return false end; local n=0; for x in next,nil,nil do n=n+1; break end; return n"
             ),
             1
+        );
+    }
+
+    #[test]
+    fn loop_closures_capture_distinct_iteration_cells() {
+        assert_eq!(
+            evaluate("local t={}; for i=1,3 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()"),
+            123
+        );
+        assert_eq!(
+            evaluate("local function next(s,i) i=i+1; if i<=s then return i end end; local t={}; for i in next,3,0 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()"),
+            123
+        );
+        assert_eq!(
+            evaluate("local t={}; for i=3,1,-1 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()"),
+            123
         );
     }
 
