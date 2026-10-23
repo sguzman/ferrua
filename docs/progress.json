@@ -1,0 +1,448 @@
+{
+  "schema": 1,
+  "policy": "Task percentages are passed atomic acceptance checks / all checks, rounded half up; every true requires evidence. Phase, milestone and feature progress are arithmetic means of underlying atomic tasks. No CI claim until the run passes.",
+  "milestones": [
+    {
+      "id": "M0",
+      "emoji": "🌙",
+      "name": "Working fer interpreter MVP",
+      "gate": "A usable fer CLI executes basic Lua scripts on Linux; CI passes compile, tests, CLI smoke and roadmap checks.",
+      "phases": [
+        {
+          "id": "P0",
+          "emoji": "🧭",
+          "name": "Foundation and identity",
+          "tasks": [
+            {
+              "id": "T001",
+              "emoji": "🎨",
+              "name": "Select OKLCH identity and README swatch",
+              "checks": [
+                {
+                  "text": "Document perceptual accent",
+                  "passed": true,
+                  "evidence": "docs/COLOR.md"
+                },
+                {
+                  "text": "Ship accessible SVG swatch",
+                  "passed": true,
+                  "evidence": "assets/ferrua-color.svg"
+                }
+              ],
+              "progress": 100
+            },
+            {
+              "id": "T002",
+              "emoji": "📋",
+              "name": "Roadmap, machine ledger and evidence policy",
+              "checks": [
+                {
+                  "text": "Structured ledger committed",
+                  "passed": true,
+                  "evidence": "docs/progress.json"
+                },
+                {
+                  "text": "Generator and README roadmap links committed",
+                  "passed": true,
+                  "evidence": "tools/roadmap.lua; docs/ROADMAP.md; README.md"
+                },
+                {
+                  "text": "Generator passes CI comparison",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T003",
+              "emoji": "🦀",
+              "name": "Rust binary scaffold and quality gates",
+              "checks": [
+                {
+                  "text": "Rust fer crate and GitHub workflow checked in",
+                  "passed": true,
+                  "evidence": "Cargo.toml; .github/workflows/ci.yml"
+                },
+                {
+                  "text": "Rust compile, lint and formatting verified in CI",
+                  "passed": false
+                }
+              ],
+              "progress": 50
+            }
+          ]
+        },
+        {
+          "id": "P1",
+          "emoji": "⚙️",
+          "name": "Lua interpreter and command interface",
+          "tasks": [
+            {
+              "id": "T101",
+              "emoji": "🧠",
+              "name": "Compile and execute Lua bytecode in pure Rust",
+              "checks": [
+                {
+                  "text": "Pinned pure-Rust Lua VM integrated",
+                  "passed": true,
+                  "evidence": "Cargo.toml; src/main.rs; docs/ARCHITECTURE.md"
+                },
+                {
+                  "text": "Lua execution verified by CI",
+                  "passed": false
+                }
+              ],
+              "progress": 50
+            },
+            {
+              "id": "T102",
+              "emoji": "⌨️",
+              "name": "Execute script paths, -e and stdin",
+              "checks": [
+                {
+                  "text": "CLI entry points implemented",
+                  "passed": true,
+                  "evidence": "src/main.rs"
+                },
+                {
+                  "text": "Integration tests authored",
+                  "passed": true,
+                  "evidence": "tests/cli.rs"
+                },
+                {
+                  "text": "CLI integration tests pass CI",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T103",
+              "emoji": "💬",
+              "name": "Interactive Lua REPL",
+              "checks": [
+                {
+                  "text": "Persistent-session REPL implemented",
+                  "passed": true,
+                  "evidence": "src/main.rs"
+                },
+                {
+                  "text": "Interactive pseudo-terminal acceptance verified",
+                  "passed": false
+                }
+              ],
+              "progress": 50
+            },
+            {
+              "id": "T104",
+              "emoji": "🧳",
+              "name": "Arguments and actionable errors",
+              "checks": [
+                {
+                  "text": "arg table and Lua error rendering implemented",
+                  "passed": true,
+                  "evidence": "src/main.rs"
+                },
+                {
+                  "text": "CLI argument and traceback assertions pass CI",
+                  "passed": false
+                }
+              ],
+              "progress": 50
+            },
+            {
+              "id": "T105",
+              "emoji": "🛡️",
+              "name": "Optional restricted execution",
+              "checks": [
+                {
+                  "text": "Safe-library opt-in and instruction budget implemented",
+                  "passed": true,
+                  "evidence": "src/main.rs"
+                },
+                {
+                  "text": "Sandbox tests authored",
+                  "passed": true,
+                  "evidence": "tests/cli.rs; src/main.rs"
+                },
+                {
+                  "text": "Sandbox and budget verified under CI",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T106",
+              "emoji": "🧪",
+              "name": "Linux build, tests and CI",
+              "checks": [
+                {
+                  "text": "Tests and CI workflow authored",
+                  "passed": true,
+                  "evidence": "tests/cli.rs; .github/workflows/ci.yml"
+                },
+                {
+                  "text": "CI all checks green",
+                  "passed": false
+                },
+                {
+                  "text": "Clean release build verified",
+                  "passed": false
+                }
+              ],
+              "progress": 33
+            }
+          ]
+        }
+      ],
+      "features": [
+        {
+          "emoji": "🌙",
+          "name": "Lua interpreter",
+          "task_ids": [
+            "T101",
+            "T102"
+          ]
+        },
+        {
+          "emoji": "⌨️",
+          "name": "CLI and REPL",
+          "task_ids": [
+            "T102",
+            "T103",
+            "T104"
+          ]
+        },
+        {
+          "emoji": "🛡️",
+          "name": "Opt-in sandbox",
+          "task_ids": [
+            "T105"
+          ]
+        },
+        {
+          "emoji": "📋",
+          "name": "Documented, auditable progress",
+          "task_ids": [
+            "T001",
+            "T002",
+            "T003",
+            "T106"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M1",
+      "emoji": "🧰",
+      "name": "Daily automation and Python replacement",
+      "gate": "Representative filesystem, JSON, process and release automation scripts run under fer without Python.",
+      "phases": [
+        {
+          "id": "P2",
+          "emoji": "🗂️",
+          "name": "Everyday host and data capabilities",
+          "tasks": [
+            {
+              "id": "T201",
+              "emoji": "📂",
+              "name": "Read, write and iterate local files",
+              "checks": [
+                {
+                  "text": "Lua io and os library available in trusted mode",
+                  "passed": true,
+                  "evidence": "src/main.rs"
+                },
+                {
+                  "text": "Filesystem smoke passes CI",
+                  "passed": false
+                }
+              ],
+              "progress": 50
+            },
+            {
+              "id": "T202",
+              "emoji": "🧾",
+              "name": "First-party JSON and structured data modules",
+              "checks": [
+                {
+                  "text": "Document supported JSON interface and cases",
+                  "passed": false
+                },
+                {
+                  "text": "JSON decoding and encoding implemented",
+                  "passed": false
+                },
+                {
+                  "text": "Round-trip integration cases accepted",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T203",
+              "emoji": "🔧",
+              "name": "Reliable subprocess and Git automation",
+              "checks": [
+                {
+                  "text": "Document process execution and exit status contract",
+                  "passed": false
+                },
+                {
+                  "text": "Safe argv-based child process module",
+                  "passed": false
+                },
+                {
+                  "text": "GitHub Actions CI exercise",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T204",
+              "emoji": "📦",
+              "name": "Modules, release binaries and GitHub setup action",
+              "checks": [
+                {
+                  "text": "Linux release artifact published",
+                  "passed": false
+                },
+                {
+                  "text": "Reusable setup-fer GitHub action published",
+                  "passed": false
+                },
+                {
+                  "text": "End-to-end consumer example passes",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        }
+      ],
+      "features": [
+        {
+          "emoji": "📂",
+          "name": "Filesystem and data workflows",
+          "task_ids": [
+            "T201",
+            "T202"
+          ]
+        },
+        {
+          "emoji": "🔧",
+          "name": "Processes and CI reuse",
+          "task_ids": [
+            "T203",
+            "T204"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "emoji": "🔩",
+      "name": "Independent Ferrua VM and compatibility",
+      "gate": "Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.",
+      "phases": [
+        {
+          "id": "P3",
+          "emoji": "🔣",
+          "name": "Ferrua-owned language engine",
+          "tasks": [
+            {
+              "id": "T301",
+              "emoji": "🧩",
+              "name": "Lexing, parsing and lexical scope",
+              "checks": [
+                {
+                  "text": "Implement owned lexer/parser",
+                  "passed": false
+                },
+                {
+                  "text": "Parse golden Lua fixtures",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T302",
+              "emoji": "📜",
+              "name": "Bytecode compiler and register VM",
+              "checks": [
+                {
+                  "text": "Implement compiler and register dispatcher",
+                  "passed": false
+                },
+                {
+                  "text": "Closures, frames and coroutines tested",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T303",
+              "emoji": "🔬",
+              "name": "Lua conformance and differential tests",
+              "checks": [
+                {
+                  "text": "Pin official Lua reference and fixtures",
+                  "passed": false
+                },
+                {
+                  "text": "Differential test runner integrated",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T304",
+              "emoji": "🚀",
+              "name": "Native runtime graduation",
+              "checks": [
+                {
+                  "text": "Document engine switch criteria",
+                  "passed": false
+                },
+                {
+                  "text": "Switch main fer runtime after parity tests",
+                  "passed": false
+                },
+                {
+                  "text": "Tag major stable release after acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        }
+      ],
+      "features": [
+        {
+          "emoji": "🔩",
+          "name": "Independent compiler and VM",
+          "task_ids": [
+            "T301",
+            "T302"
+          ]
+        },
+        {
+          "emoji": "🧪",
+          "name": "Verified Lua compatibility",
+          "task_ids": [
+            "T303",
+            "T304"
+          ]
+        }
+      ]
+    }
+  ]
+}
