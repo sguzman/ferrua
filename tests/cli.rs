@@ -122,3 +122,15 @@ fn json_empty_collections_round_trip() {
     );
     assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "ok");
 }
+
+#[test]
+fn runtime_traceback_includes_source_context() {
+    let out = fer(&[
+        "-e",
+        "local function fail() error('trace marker') end; fail()",
+    ]);
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("trace marker"), "{stderr}");
+    assert!(stderr.contains("-e:1"), "{stderr}");
+}
