@@ -884,6 +884,7 @@ struct Execution<'a> {
     table_cells: usize,
     closures: Vec<Closure>,
     cells: Vec<Option<Value>>,
+    captured_cells: HashSet<usize>,
 }
 
 impl Execution<'_> {
@@ -891,12 +892,8 @@ impl Execution<'_> {
     /// the prior cell rather than observing later iteration values.
     fn iteration_cell(&mut self, slots: &mut [usize], slot: usize) -> Result<usize, FlowError> {
         let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
-        if self
-            .cells
-            .get(cell)
-            .ok_or(FlowError::InvalidBytecode)?
-            .is_none()
-        {
+        self.cells.get(cell).ok_or(FlowError::InvalidBytecode)?;
+        if !self.captured_cells.contains(&cell) {
             return Ok(cell);
         }
         if self.cells.len() >= MAX_CELLS_TOTAL {
@@ -972,6 +969,7 @@ impl Execution<'_> {
                     let mut captures = Vec::new();
                     for &(parent_slot, child_slot) in &spec.captures {
                         let cell = *slots.get(parent_slot).ok_or(FlowError::InvalidBytecode)?;
+                        self.captured_cells.insert(cell);
                         captures.push((child_slot, cell));
                     }
                     let handle = self.closures.len();
@@ -1400,6 +1398,7 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
         table_cells: 0,
         closures: Vec::new(),
         cells: Vec::new(),
+        captured_cells: HashSet::new(),
     };
     execution.run(&program.instructions, program.slots, &[], &[], &[])
 }
@@ -1560,6 +1559,15 @@ mod tests {
             ),
             1
         );
+    }
+
+    #[test]
+    fn noncapturing_numeric_loops_do_not_exhaust_cell_heap() {
+        let program = compile_flow_chunk(
+            "local total=0; for i=1,70000 do total=total+1 end; return total",
+        )
+        .unwrap();
+        assert_eq!(execute_flow_chunk(&program, 1_000_000), Ok(70000));
     }
 
     #[test]
