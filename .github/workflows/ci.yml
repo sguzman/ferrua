@@ -36,6 +36,8 @@ jobs:
           cargo run --locked -- --lua=5.4 tests/json_spec.lua | grep -x "JSON conformance smoke passed"
           cargo run --locked -- --sandbox tests/json_spec.lua | grep -x "JSON conformance smoke passed"
           cargo run --locked -- --lua=5.1 --sandbox tests/json_spec.lua | grep -x "JSON conformance smoke passed"
+      - name: Lua 5.1-5.5 automated dialect matrix
+        run: cargo run --locked -- tools/check_compat.lua | grep -x "Ferrua Lua dialect matrix passed"
       - name: Interpreter smoke
         run: |
           cargo run --locked -- -e "print(6 * 7)" | grep -x 42

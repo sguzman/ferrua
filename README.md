@@ -54,3 +54,5 @@ MIT. The independently maintained `luna-core` runtime is MIT/Apache-2.0 licensed
 For a future tagged release, the Python-free packaging entrypoint is `target/release/fer tools/package_release.lua v0.1.0` after a locked release build. It creates a versioned Linux tarball with `fer`, README and LICENSE, plus a verified SHA-256 checksum. The separate release workflow publishes assets only when a matching version tag is explicitly pushed; merely committing to `main` does not inaugurate a stable release.
 
 The [most recent tested preview archive](https://github.com/sguzman/ferrua/actions/runs/39946114053) is named `fer-v0.1.0-linux-x86_64.tar.gz` and includes its `.sha256` checksum. CI verifies the archive after construction. This is an Actions artifact, **not** a published GitHub Release.
+
+The CI acceptance suite also runs `fer tools/check_compat.lua`, a Lua-authored test harness that invokes the local `fer` binary across Lua 5.1–5.5. It checks JSON, TOML/YAML, basic scripting, syntax-only validation, and sandbox API separation. Passing these smoke cases does not imply full dialect conformance.
