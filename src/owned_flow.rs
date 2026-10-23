@@ -2439,7 +2439,21 @@ impl Execution<'_> {
                                 }
                                 Value::Nil => self.intern_string(b"nil".to_vec())?,
                                 Value::Table(handle) => {
-                                    self.intern_string(format!("table: 0x{handle:x}").into_bytes())?
+                                    if let Some(method) =
+                                        self.metatable_field(handle, b"__tostring")?
+                                    {
+                                        let Value::Function(callback) = method else {
+                                            return Err(FlowError::TypeError);
+                                        };
+                                        let returned = self.call_owned_function(callback, &[value])?;
+                                        let text = returned.first().copied().unwrap_or(Value::Nil);
+                                        if !matches!(text, Value::String(_)) {
+                                            return Err(FlowError::TypeError);
+                                        }
+                                        text
+                                    } else {
+                                        self.intern_string(format!("table: 0x{handle:x}").into_bytes())?
+                                    }
                                 }
                                 Value::Function(handle) => self.intern_string(
                                     format!("function: 0x{handle:x}").into_bytes(),
