@@ -143,11 +143,11 @@
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 95%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 96%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 95%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 96%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -434,10 +434,10 @@
   - [x] Dispatch table __len closures via shared call executor while preserving raw string/table length — src/owned_flow.rs: Execution::length_with_metatable; Op::Length
   - [x] Test closure call arguments, result-list adjustment, nil returns, recursion limits, rawlen bypass and upstream Lua 5.4 parity fixtures — src/owned_flow.rs: length_metamethod_uses_owned_closures_and_preserves_rawlen; tests/owned_flow.rs
   - [x] Pass Linux fmt/clippy/tests, Rust 1.96, downstream consumer and upstream Lua 5.4 CI — GitHub Actions 40029449968: Linux, Rust 1.96, Lua 5.4 differential, action consumer and reporter succeeded
-- 📞 **T373** Callable Lua tables and bounded __call metamethod chains — `███████░░░ 67%`
+- 📞 **T373** Callable Lua tables and bounded __call metamethod chains — `██████████ 100%`
   - [x] Forward table call values and arguments through bounded __call chains, preserving normal Lua call result adjustment — src/owned_flow.rs: Op::Call, Op::CallMany, Op::CallSpread and Execution::metatable_field
   - [x] Add first-class table, nested callback, builtin, multireturn, cycle and Lua 5.4 differential fixtures — src/owned_flow.rs: callable_tables_forward_lua_args_and_obey_bounded_call_depth; tests/owned_flow.rs
-  - [ ] Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and upstream Lua 5.4 differential CI
+  - [x] Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and upstream Lua 5.4 differential CI — GitHub Actions 40030079883: four primary jobs and status reporter successful, including Lua 5.4.6 differential fixture
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -509,5 +509,5 @@
 - 🔗 Bounded table-backed __index/__newindex fallback chains — `██████████ 100%`
 - 🎭 Callable __index/__newindex metamethods using owned Lua closures — `██████████ 100%`
 - 📏 Callable Lua __len and rawlen separation — `██████████ 100%`
-- 📞 Callable Lua tables with bounded __call chains — `███████░░░ 67%`
+- 📞 Callable Lua tables with bounded __call chains — `██████████ 100%`
 
