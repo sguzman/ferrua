@@ -338,6 +338,18 @@ const FIXTURES: &[&str] = &[
     "local fallback={}; local t=setmetatable({}, {__newindex=fallback}); local i=1; t[i],i=8,2; return fallback[1]*10+i",
     "local dest={}; local t=setmetatable({}, {__newindex=dest}); rawset(t,'x',8); return rawget(t,'x')==8 and dest.x==nil and 1 or 0",
     "local t=setmetatable({}, {__index={add=function(self,x) return x+3 end}}); return t:add(4)",
+    "local n=0; local t=setmetatable({}, {__index=function(_,k) n=n+1; if k=='x' then return 10 end end}); return t.x+t.x+n",
+    "local t={x=9}; setmetatable(t,{__index=function() return 2 end}); return t.x",
+    "local t=setmetatable({}, {__index=function() return 4,5 end}); return t.x",
+    "local t=setmetatable({}, {__index=function() end}); return t.x==nil and 1 or 0",
+    "local t=setmetatable({}, {__index=function(_,k) return k*2 end}); return t[3]",
+    "local dest={}; local t=setmetatable({}, {__newindex=function(_,k,v) dest[k]=v*2 end}); t.x=5; return dest.x",
+    "local t=setmetatable({}, {__newindex=function(self,k,v) rawset(self,k,v+1) end}); t.x=6; return t.x",
+    "local t={x=2}; local n=0; setmetatable(t,{__newindex=function() n=n+1 end}); t.x=4; return t.x*10+n",
+    "local dest={}; local t=setmetatable({}, {__newindex=function(_,k,v) dest[k]=v end}); t.x,t.y=3,4; return dest.x*10+dest.y",
+    "local t=setmetatable({}, {__index=function(self,k) return function(_,x) return x+2 end end}); return t:add(5)",
+    "local target=setmetatable({}, {__index=function() return 8 end}); local t=setmetatable({}, {__index=target}); return t.m",
+    "local t=setmetatable({}, {__index=function(self,k) rawset(self,k,5); return 5 end}); return t.x+t.x",
 ];
 
 fn render(values: &[Value]) -> String {
