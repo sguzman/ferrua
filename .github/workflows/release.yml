@@ -26,6 +26,14 @@ jobs:
         run: |
           cargo build --locked
           target/debug/fer tools/check_compat.lua
+      - name: Enforce version-matched release and native graduation gates
+        shell: bash
+        env:
+          FERRUA_RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          target/debug/fer tools/roadmap.lua --check
+          target/debug/fer tools/roadmap.lua --release-gate "$FERRUA_RELEASE_TAG"
       - name: Build versioned binary and archive
         run: |
           cargo build --locked --release
