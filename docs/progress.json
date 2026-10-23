@@ -2474,7 +2474,7 @@
               "id": "T377",
               "emoji": "🔗",
               "name": "First-class Lua __concat fallback after byte concatenation",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Preserve numeric/string byte concatenation and dispatch function-valued __concat only for incompatible operands",
@@ -2488,7 +2488,8 @@
                 },
                 {
                   "text": "Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40033236408: Linux, Rust 1.96, Lua 5.4 differential, action consumer and status reporter all passed"
                 }
               ]
             }
