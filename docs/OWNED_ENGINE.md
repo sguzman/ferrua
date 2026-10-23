@@ -1,23 +1,21 @@
 # 🔩 Ferrua-owned language engine
 
-Ferrua's normal executable `fer` currently uses the independently maintained pure-Rust `luna-core` compiler and bytecode VM. The new `ferrua::lex` and `ferrua::expr` modules are **independent Ferrua-owned experimental Rust components**, but they are **not** used to run scripts yet.
+The working fer command currently runs on the pinned third-party pure-Rust luna-core compiler/VM. The experimental owned Rust library modules **do not execute Lua**.
 
-## Current independent components
+- ferrua::lex::tokenize records Lua keyword, name, number, literal and symbol tokens with original spelling, byte offset and line.
+- ferrua::expr::parse_expression uses a Pratt parser for standalone literal/name expressions, unary and binary operators, parentheses, Lua 5.4 precedence and right associativity.
+- Neither is a complete Lua grammar parser, a compiler, or a register VM. Expression parsing does not support statements, calls, indexing, tables or anonymous functions.
 
-- `ferrua::lex::tokenize(source)`: a lexical scanner producing token kinds, exact spelling slices, byte offsets, and line locations. Covers keywords, operators, short and long strings, comments, decimal/hexadecimal number forms, and Unix script shebangs.
-- `ferrua::expr::parse_expression(source)`: a Pratt-style AST builder for standalone expressions. It covers literals, variables, parentheses, unary operators, binary operators, operator precedence, and right-associative exponentiation and concatenation.
+## Evidence and limits
 
-## Explicit limitations
+The lexical integration suite scans 27 first-party Lua scripts (automation, examples, and reference conformance fixtures), checks source-token slicing, source offset monotonicity, and line number ordering. Rust unit tests verify numeric boundaries, comments, escapes, parser precedence, diagnostic offsets, and invalid input.
 
-The lexer still needs complete Lua escape validation, locale-sensitive identifiers, numeric corner cases, and more grammar fixtures. The expression parser deliberately does not yet support function calls, indexing, tables, function literals, statement grammar, or complete Lua parsing. **Neither component is a compiler or a register-based VM**. Do not use either as the default Lua runtime or claim compatibility without differential evidence.
+The production runtime is also compared separately against the upstream Lua 5.4.6 reference interpreter, but those tests **do not demonstrate that the experimental lexer/parser can execute Lua**.
 
-## Graduation requirements
+## Graduation
 
-1. Expand lexer/parser syntax coverage and error-location tests.
-2. Construct a complete AST for Lua statements, scopes, function definitions and calls.
-3. Build the independent compiler, bytecode format and execution engine.
-4. Verify tables, metamethods, closures, coroutines, garbage collection and standard libraries.
-5. Compare representative programs against the pinned Lua 5.4.6 reference, then add older dialect tests.
-6. Switch the default `fer` backend only after the ledger's independent-VM acceptance gates pass.
-
-The current differential corpus lives in `tests/conformance/` and is executed via `tools/diff_lua.lua`. It verifies the production third-party engine, not the new AST modules. All new Rust-owned components are unit tested separately in Linux CI.
+1. Finish all lexical corner cases and first-class parser diagnostics.
+2. Implement full statement grammar and scope analysis with golden ASTs.
+3. Implement bytecode compilation, VM, closures, coroutines, tables, GC and standard library semantics.
+4. Expand reference differential tests for the new engine.
+5. Only replace the production backend after language and regression acceptance; do not prematurely label MVP or v1.
