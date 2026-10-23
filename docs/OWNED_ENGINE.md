@@ -352,3 +352,10 @@ Neither milestone implies complete Lua standard-library support or graduation of
 The experimental stack VM now includes first-class, lexically shadowable `next`, `pairs` and `ipairs`. `next` returns raw key/value pairs from the bounded array and hash stores, or nil at exhaustion; invalid previous keys are rejected. `pairs` yields a `next` iterator, the table and initial nil control; `ipairs` yields a sequential raw integer iterator starting at zero and stopping at the first nil. They reuse the existing generic-for control flow, including distinct iteration-local captures. The hash portion has unspecified order, and tests deliberately avoid depending on its order. Repeated `next` scans consume the shared execution budget.
 
 [CI #40024909050](https://github.com/sguzman/ferrua/actions/runs/40024909050) passed all four primary jobs, including upstream Lua 5.4.6 differential fixtures, production `fer`, Rust 1.96, formatting and lint checks. It does not implement `__pairs`, `__index`, metatables, mutation-safe traversal, to-be-closed generic-for iterator values, or complete Lua resource semantics. The production `fer` backend is unchanged.
+
+
+### Bounded table metatable storage (pending CI acceptance)
+
+The experimental stack VM now carries an optional metatable handle on each bounded table. Its first-class, lexically shadowable `getmetatable` and `setmetatable` functions can attach a table metatable, remove it with nil, return the original table, and expose the existing metatable by identity. If the metatable has a non-nil raw `__metatable` key, `getmetatable` returns that protected value and `setmetatable` refuses replacement until the protection is removed. Unit and upstream Lua 5.4 differential fixtures cover the common table-only behavior.
+
+This work is **not yet CI-accepted**. It does **not** implement `__index`, `__newindex`, arithmetic metamethod dispatch, `__len`, `__pairs`, primitive string metatables, garbage collection, or general Lua metatable compatibility. It does not change production `fer`.
