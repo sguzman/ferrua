@@ -44,7 +44,7 @@ const FIXTURES: &[&str] = &[
     "local function next() return false end; local n=0; for x in next,nil,nil do n=n+1; break end; return n",
     "local t={}; for i=1,3 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()",
     "local function next(s,i) i=i+1; if i<=s then return i end end; local t={}; for i in next,3,0 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()",
-    "local t={}; for i=3,1,-1 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3()",
+    "local t={}; for i=3,1,-1 do t[i]=function() return i end end; return t[1]()*100+t[2]()*10+t[3]()",
     "local x; if x==nil then return 6 else return 0 end",
     "local x=1,2; return x",
     "local x,y=3; if y==nil then return x else return 0 end",
