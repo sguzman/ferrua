@@ -2093,7 +2093,7 @@ impl Execution<'_> {
                 values.append(&mut results);
                 Ok(values)
             }
-            Err(FlowError::StepBudgetExceeded | FlowError::TooLarge) => outcome,
+            Err(error @ (FlowError::StepBudgetExceeded | FlowError::TooLarge | FlowError::CallDepthExceeded)) => Err(error),
             Err(FlowError::Thrown(value)) => Ok(vec![Value::Boolean(false), value]),
             Err(other) => {
                 let message = self.intern_string(other.to_string().into_bytes())?;
