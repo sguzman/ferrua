@@ -273,3 +273,7 @@ The independently owned control-flow VM can now hold IEEE-754 double values (sto
 ### Lua floating-point table-key normalization
 
 The bounded table-key resolver now accepts floating keys and canonicalizes exactly integral, in-range floats to existing integer-key storage, including positive and negative zero. Nonintegral floating keys preserve their byte-level floating identity in the hashed map, while NaN is rejected as an invalid table index. Existing table and function identity keys remain unchanged. Tests verify cross-type integer/float lookups and deletions against upstream Lua 5.4.6 and production `fer`. Float arithmetic support still excludes full Lua numeric-for and hex-float parsing.
+
+### Bounded hexadecimal floating numerals
+
+Lua hexadecimal floating-point forms such as `0x1.8p1`, `0X.8P+2`, `0x1p-1`, and `0x10.0` now compile into IEEE-754 binary values. The Ferrua-owned parser accumulates hexadecimal whole/fractional digits and applies the optional power-of-two exponent without relying on Rust's decimal-only float parser. Exponent magnitudes are capped at 4096 to keep this prototype bounded. Integer-form hex literals continue using the existing integer path. Accepted cases have Lua 5.4.6 differential fixtures.

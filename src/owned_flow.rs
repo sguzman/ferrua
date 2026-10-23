@@ -409,6 +409,7 @@ impl<'a> Compiler<'a> {
                         number.ok().map(Value::Integer).or_else(|| {
                             text.parse::<f64>()
                                 .ok()
+                                .or_else(|| parse_lua_hex_float(text))
                                 .map(|value| Value::Float(value.to_bits()))
                         })
                     }
@@ -1164,6 +1165,47 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
         }
     }
     Ok(result)
+}
+
+
+/// Decode a bounded Lua hexadecimal floating literal independently of Rust's
+/// decimal-only f64 parser. The lexer already validates lexical digits.
+fn parse_lua_hex_float(source: &str) -> Option<f64> {
+    let body = source
+        .strip_prefix("0x")
+        .or_else(|| source.strip_prefix("0X"))?;
+    let exponent_at = body.find(['p', 'P']);
+    let (mantissa, exponent) = if let Some(index) = exponent_at {
+        let exponent = body.get(index + 1..)?.parse::<i32>().ok()?;
+        (body.get(..index)?, exponent)
+    } else {
+        if !body.contains('.') {
+            return None;
+        }
+        (body, 0)
+    };
+    if exponent.unsigned_abs() > 4096 {
+        return None;
+    }
+    let mut value = 0.0_f64;
+    let mut fractional = false;
+    let mut scale = 1.0_f64;
+    let mut digits = 0;
+    for character in mantissa.chars() {
+        if character == '.' && !fractional {
+            fractional = true;
+            continue;
+        }
+        let digit = character.to_digit(16)?;
+        digits += 1;
+        if fractional {
+            scale /= 16.0;
+            value += f64::from(digit) * scale;
+        } else {
+            value = value * 16.0 + f64::from(digit);
+        }
+    }
+    (digits > 0).then(|| value * 2.0_f64.powi(exponent))
 }
 
 fn number_to_f64(value: Value) -> Result<f64, FlowError> {
@@ -2697,6 +2739,26 @@ mod tests {
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
+    }
+
+    #[test]
+    fn hex_floating_literals_use_binary_exponents() {
+        let float = |source| {
+            let program = compile_flow_chunk(source).unwrap();
+            let values = execute_flow_values(&program, DEFAULT_STEP_BUDGET).unwrap();
+            let [Value::Float(bits)] = values.as_slice() else {
+                panic!("expected float from {source}");
+            };
+            f64::from_bits(*bits)
+        };
+        assert_eq!(float("return 0x1.8p1"), 3.0);
+        assert_eq!(float("return 0X.8P+2"), 2.0);
+        assert_eq!(float("return 0x1p-1"), 0.5);
+        assert_eq!(float("return 0x10.0"), 16.0);
+        assert_eq!(evaluate("return (0x1.8p1==3.0) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (0X.8P+2==2) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (0x1p-1<1) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (0x10.0+1)==17 and 1 or 0"), 1);
     }
 
     #[test]
