@@ -406,10 +406,11 @@ impl<'a> Compiler<'a> {
                         } else {
                             text.parse::<i64>()
                         };
-                        number
-                            .ok()
-                            .map(Value::Integer)
-                            .or_else(|| text.parse::<f64>().ok().map(|value| Value::Float(value.to_bits())))
+                        number.ok().map(Value::Integer).or_else(|| {
+                            text.parse::<f64>()
+                                .ok()
+                                .map(|value| Value::Float(value.to_bits()))
+                        })
                     }
                 };
                 if let Some(value) = constant {
@@ -1165,7 +1166,6 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
     Ok(result)
 }
 
-
 fn number_to_f64(value: Value) -> Result<f64, FlowError> {
     match value {
         Value::Integer(number) => Ok(number as f64),
@@ -1185,8 +1185,7 @@ fn numeric_equal(a: Value, b: Value) -> Result<bool, FlowError> {
             let float = f64::from_bits(bits);
             Ok(float.is_finite()
                 && float.fract() == 0.0
-                && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
-                    .contains(&float)
+                && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&float)
                 && float as i64 == integer)
         }
         _ => Err(FlowError::TypeError),
@@ -1793,7 +1792,8 @@ impl Execution<'_> {
                     self.write_table(handle, key, value)?;
                 }
                 Op::Negate => {
-                    let value = self.arithmetic_operand(stack.pop().ok_or(FlowError::InvalidBytecode)?)?;
+                    let value =
+                        self.arithmetic_operand(stack.pop().ok_or(FlowError::InvalidBytecode)?)?;
                     stack.push(match value {
                         Value::Integer(value) => Value::Integer(value.wrapping_neg()),
                         Value::Float(bits) => Value::Float((-f64::from_bits(bits)).to_bits()),
@@ -1849,7 +1849,7 @@ impl Execution<'_> {
                             let a = self.arithmetic_operand(lhs)?;
                             let b = self.arithmetic_operand(rhs)?;
                             evaluate_number_binary(*op, a, b)?
-                        },
+                        }
                         Binary::Concat => {
                             let mut bytes = self.string_bytes(lhs)?;
                             let right = self.string_bytes(rhs)?;
@@ -1886,7 +1886,10 @@ impl Execution<'_> {
                             let equal = numeric_equal(lhs, rhs)?;
                             Value::Boolean(if *op == Binary::Equal { equal } else { !equal })
                         }
-                        Binary::Less | Binary::LessEqual | Binary::Greater | Binary::GreaterEqual
+                        Binary::Less
+                        | Binary::LessEqual
+                        | Binary::Greater
+                        | Binary::GreaterEqual
                             if matches!(lhs, Value::Integer(_) | Value::Float(_))
                                 && matches!(rhs, Value::Integer(_) | Value::Float(_)) =>
                         {
