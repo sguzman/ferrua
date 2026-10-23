@@ -365,6 +365,22 @@ const FIXTURES: &[&str] = &[
     "local a={}; local b={}; setmetatable(b,{__call=function(x,y,z) return rawequal(x,b) and rawequal(y,a) and z+3 or 0 end}); setmetatable(a,{__call=b}); return a(5)",
     "local t=setmetatable({}, {__call=function(self,...) return select('#',...),... end}); return t(3,4)",
     "local t=setmetatable({}, {__call=function() return 3,4 end}); return t()",
+    "local t=setmetatable({}, {__add=function(a,b) return b+3 end}); return t+5",
+    "local t=setmetatable({}, {__sub=function(a,b) return a.x-b end}); t.x=12; return t-3",
+    "local t=setmetatable({}, {__mul=function(a,b) return a.factor*b end}); t.factor=4; return t*5",
+    "local t=setmetatable({}, {__div=function(a,b) return 33 end}); return t/5",
+    "local t=setmetatable({}, {__idiv=function(a,b) return 44 end}); return t//5",
+    "local t=setmetatable({}, {__mod=function(a,b) return 55 end}); return t%5",
+    "local t=setmetatable({}, {__pow=function(a,b) return 66 end}); return t^5",
+    "local t=setmetatable({}, {__add=function(a,b) return a+7 end}); return 3+t",
+    "local t=setmetatable({}, {__add=function(a,b) return b end}); return 12+t",
+    "local a=setmetatable({}, {__add=function() return 11 end}); local b=setmetatable({}, {__add=function() return 22 end}); return a+b",
+    "local b=setmetatable({}, {__add=function() return 22 end}); return {}+b",
+    "local t=setmetatable({}, {__add=function() return 4,5 end}); return t+1",
+    "local t=setmetatable({}, {__add=function() end}); return (t+1)==nil and 1 or 0",
+    "local n=1; local t=setmetatable({}, {__add=function(self,x) n=n+1; return n+x end}); return t+3+n",
+    "local t=setmetatable({}, {__add=function(a,b) return b*10 end}); return (t+5)*2",
+    "local t=setmetatable({}, {__add=function() return 7 end}); return type(t+2)=='number' and 1 or 0",
 ];
 
 fn render(values: &[Value]) -> String {
