@@ -141,7 +141,6 @@ const FIXTURES: &[&str] = &[
     "return (tonumber('0x1.8p1')==3.0) and 1 or 0",
     "return (tonumber('bad')==nil) and 1 or 0",
     "return (tonumber(true)==nil) and 1 or 0",
-    "return (tonumber()==nil) and 1 or 0",
     "return (tonumber('g',16)==nil) and 1 or 0",
     "local tonumber=function() return 8 end; return tonumber('no')",
     "return rawequal(2,2.0) and 1 or 0",

@@ -1755,7 +1755,7 @@ impl Execution<'_> {
                     let args = stack.split_off(stack.len() - arity);
                     let callable = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     if let Value::Builtin(builtin) = callable {
-                        if args.is_empty() && builtin != Builtin::ToNumber {
+                        if args.is_empty() {
                             return Err(FlowError::TypeError);
                         }
                         let value = args.first().copied().unwrap_or(Value::Nil);
@@ -3062,7 +3062,11 @@ mod tests {
         assert_eq!(evaluate("return (tonumber('0x1.8p1')==3.0) and 1 or 0"), 1);
         assert_eq!(evaluate("return (tonumber('bad')==nil) and 1 or 0"), 1);
         assert_eq!(evaluate("return (tonumber(true)==nil) and 1 or 0"), 1);
-        assert_eq!(evaluate("return (tonumber()==nil) and 1 or 0"), 1);
+        let no_argument = compile_flow_chunk("return tonumber()").unwrap();
+        assert_eq!(
+            execute_flow_value(&no_argument, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
         assert_eq!(evaluate("return (tonumber('g',16)==nil) and 1 or 0"), 1);
         assert_eq!(
             evaluate("local tonumber=function() return 8 end; return tonumber('no')"),
@@ -3110,7 +3114,11 @@ mod tests {
             13
         );
         assert_eq!(evaluate("return (type(rawset)=='function') and 1 or 0"), 1);
-        for source in ["return rawequal(1)", "return rawget(3,1)", "return rawset({},nil,2)"] {
+        for source in [
+            "return rawequal(1)",
+            "return rawget(3,1)",
+            "return rawset({},nil,2)",
+        ] {
             let program = compile_flow_chunk(source).unwrap();
             assert_eq!(
                 execute_flow_value(&program, DEFAULT_STEP_BUDGET),
