@@ -70,3 +70,5 @@ Experimental independent Rust lexer and expression parser components are availab
 The experimental Rust-owned expression AST has gained calls, field selectors, and bracket indexing. These are source-analysis components only; production `fer` continues using the pinned existing VM. [Owned-engine acceptance and limitations](docs/OWNED_ENGINE.md).
 
 The owned language library now also exposes a deliberately restricted `parse_chunk` AST for semicolon-delimited local declarations, assignment, calls, and returns. Full Lua statement grammar, lexical scope analysis, and independent VM execution are **not yet implemented**.
+
+The experimental owned-engine library now also provides single-scope local-variable shadowing and reference analysis. It is **not** a complete lexical scope implementation, and it does not affect normal Lua execution.

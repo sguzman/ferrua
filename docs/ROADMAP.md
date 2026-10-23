@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 85%` across 32 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 86%` across 33 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████░░░░ 57%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████░░░░ 63%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████░░░░ 57%`
+### 🔣 P3 — Ferrua-owned language engine — `██████░░░░ 63%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -170,6 +170,10 @@
   - [x] Parse local declarations, calls, assignments, and final returns — src/expr.rs: public Statement and parse_chunk APIs
   - [x] Reject unsupported grammar, invalid assignment targets and missing separators — src/expr.rs: chunk parser invalid syntax and assignment fixtures
   - [x] Validate parser subset without changing the production VM — GitHub Actions 39954592909: all four jobs green with unit/integration tests
+- 🌿 **T308** Single-scope local shadowing and name-resolution analysis — `██████████ 100%`
+  - [x] Record local slots and reads/writes in experimental Lua chunks — src/scope.rs: public analyze, Binding and Reference APIs
+  - [x] Resolve previous locals during same-name initializer before new declaration — src/scope.rs: local_shadowing_preserves_prior_initializer_binding and new_local_does_not_see_itself_in_initializer tests
+  - [x] Verify single-scope analyzer on supported Rust, CLI and reference CI — GitHub Actions 39955169495: all four jobs green
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -178,4 +182,5 @@
 - 🔡 Ferrua-owned lexer scaffold — `██████████ 100%`
 - 🧮 Experimental expression AST — `██████████ 100%`
 - 🧾 Early statement syntax trees — `██████████ 100%`
+- 🌿 Experimental single-scope binding analysis — `██████████ 100%`
 

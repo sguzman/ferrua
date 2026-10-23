@@ -23,3 +23,7 @@ The production runtime is also compared separately against the upstream Lua 5.4.
 **CI acceptance:** [run #39953838372](https://github.com/sguzman/ferrua/actions/runs/39953838372) passed four jobs including 27-script lexer acceptance and the expanded expression parser tests. The source scanner understands Lua's `\\z` whitespace-skipping string escape, but semantic string-escape validation is still future work. Parent T301 remains incomplete until the full language statement parser and lexical scopes exist.
 
 **Additional parser acceptance:** [run #39954592909](https://github.com/sguzman/ferrua/actions/runs/39954592909) verifies the experimental `parse_chunk` subset and malformed statement tests. The parent full-parser/scoping task remains incomplete.
+
+### First-party name binding subset
+
+`ferrua::scope::analyze(source)` assigns binding slots to locals in the supported semicolon-delimited chunk grammar. It reports identifier references as local or global and as reads/writes, including shadowing semantics where the initializer of a newly declared local sees the preceding binding, not the new binding. It deliberately models one flat scope only; nested blocks, function scopes, upvalues, closures and Lua's full declaration behavior remain unimplemented. [CI #39955169495](https://github.com/sguzman/ferrua/actions/runs/39955169495) validated the analyzer with all four jobs green.

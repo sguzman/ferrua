@@ -857,6 +857,29 @@
                   "evidence": "GitHub Actions 39954592909: all four jobs green with unit/integration tests"
                 }
               ]
+            },
+            {
+              "id": "T308",
+              "emoji": "🌿",
+              "name": "Single-scope local shadowing and name-resolution analysis",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Record local slots and reads/writes in experimental Lua chunks",
+                  "passed": true,
+                  "evidence": "src/scope.rs: public analyze, Binding and Reference APIs"
+                },
+                {
+                  "text": "Resolve previous locals during same-name initializer before new declaration",
+                  "passed": true,
+                  "evidence": "src/scope.rs: local_shadowing_preserves_prior_initializer_binding and new_local_does_not_see_itself_in_initializer tests"
+                },
+                {
+                  "text": "Verify single-scope analyzer on supported Rust, CLI and reference CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39955169495: all four jobs green"
+                }
+              ]
             }
           ]
         }
@@ -897,6 +920,13 @@
           "name": "Early statement syntax trees",
           "task_ids": [
             "T307"
+          ]
+        },
+        {
+          "emoji": "🌿",
+          "name": "Experimental single-scope binding analysis",
+          "task_ids": [
+            "T308"
           ]
         }
       ]
