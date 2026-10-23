@@ -2446,7 +2446,7 @@ mod tests {
             ),
             57
         );
-        assert!(compile_flow_chunk("local t={name=7}; return 1").is_err());
+        assert_eq!(evaluate("local t={name=7}; return t.name"), 7);
         let unsupported = compile_flow_chunk("local t={[0]=7,1}; return t[1]").unwrap();
         assert_eq!(
             execute_flow_chunk(&unsupported, DEFAULT_STEP_BUDGET),
@@ -2456,7 +2456,7 @@ mod tests {
 
     #[test]
     fn bounded_tables_reject_unsupported_keys_and_fields() {
-        assert!(compile_flow_chunk("local t={name=2}; return 1").is_err());
+        assert_eq!(evaluate("local t={name=2}; return t.name"), 2);
         for source in [
             "local t={1}; t[0]=7; return 1",
             "local t={1}; return t[true]",
