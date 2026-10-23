@@ -1708,18 +1708,16 @@ impl Execution<'_> {
                                 Value::Integer(number) => {
                                     self.intern_string(number.to_string().into_bytes())?
                                 }
-                                Value::Float(bits) => {
-                                    self.intern_string(
-                                        format!("{:?}", f64::from_bits(bits)).into_bytes(),
-                                    )?
-                                }
+                                Value::Float(bits) => self.intern_string(
+                                    format!("{:?}", f64::from_bits(bits)).into_bytes(),
+                                )?,
                                 Value::Boolean(boolean) => {
                                     self.intern_string(boolean.to_string().into_bytes())?
                                 }
                                 Value::Nil => self.intern_string(b"nil".to_vec())?,
-                                Value::Table(handle) => self.intern_string(
-                                    format!("table: 0x{handle:x}").into_bytes(),
-                                )?,
+                                Value::Table(handle) => {
+                                    self.intern_string(format!("table: 0x{handle:x}").into_bytes())?
+                                }
                                 Value::Function(handle) => self.intern_string(
                                     format!("function: 0x{handle:x}").into_bytes(),
                                 )?,
@@ -2959,10 +2957,18 @@ mod tests {
         assert_eq!(evaluate("return (tostring(nil)=='nil') and 1 or 0"), 1);
         assert_eq!(evaluate("return (tostring('abc')=='abc') and 1 or 0"), 1);
         assert_eq!(evaluate("return #tostring(12345)"), 5);
-        assert_eq!(evaluate("return (type(tostring({}))=='string') and 1 or 0"), 1);
-        assert_eq!(evaluate("local f=tostring; return (f(4)=='4') and 1 or 0"), 1);
         assert_eq!(
-            evaluate("local tostring=function() return 'shadow' end; return (tostring(3)=='shadow') and 1 or 0"),
+            evaluate("return (type(tostring({}))=='string') and 1 or 0"),
+            1
+        );
+        assert_eq!(
+            evaluate("local f=tostring; return (f(4)=='4') and 1 or 0"),
+            1
+        );
+        assert_eq!(
+            evaluate(
+                "local tostring=function() return 'shadow' end; return (tostring(3)=='shadow') and 1 or 0"
+            ),
             1
         );
         let invalid = compile_flow_chunk("return tostring()").unwrap();
