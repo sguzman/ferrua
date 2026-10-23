@@ -114,3 +114,7 @@ The experimental stack-based `owned_flow` VM can now create array-style position
 - [CI #39991929210](https://github.com/sguzman/ferrua/actions/runs/39991929210): bounded execution-local indexed tables, aliased mutations and missing-key semantics passed all four jobs, including upstream Lua 5.4 output comparisons.
 
 No general hash-table behavior, arbitrary keys, metatables, or stable user-facing table API is implied by these narrow checks.
+
+### Bounded executable functions and call frames
+
+The first-party stack bytecode VM now supports local named functions, anonymous functions and first-class function values with runtime identity, positional arguments, isolated call-frame locals, explicit and implicit returns, and direct local self-recursion. All calls share one instruction budget and one table heap; recursion is additionally bounded by a 64-frame ceiling. Surplus arguments are ignored, absent arguments become nil, and an expression-call context currently collapses every return to its first value (or nil). This is **not Lua-complete**: lexical free-variable captures, varargs, methods, globals, expanded multireturns, and arbitrary function/table semantics remain unsupported. The production `fer` VM remains unchanged. Tests compare the accepted numeric subset with production `fer` and upstream Lua 5.4.6.

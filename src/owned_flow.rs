@@ -4,8 +4,10 @@
 
 use crate::expr::{Expr, Statement, TableField, parse_chunk};
 use crate::owned_vm::{floor_div, lua_mod, shift};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::rc::Rc;
 
 const MAX_CODE: usize = 16_384;
 const MAX_SLOTS: usize = 16_384;
@@ -13,6 +15,8 @@ const MAX_STACK: usize = 16_384;
 const MAX_TABLES: usize = 16_384;
 const MAX_TABLE_FIELDS: usize = 16_384;
 const MAX_TABLE_CELLS_TOTAL: usize = 65_536;
+const MAX_CLOSURES: usize = 16_384;
+const MAX_CALL_DEPTH: usize = 64;
 pub const DEFAULT_STEP_BUDGET: usize = 100_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,6 +26,8 @@ pub enum Value {
     Nil,
     /// Opaque index into the per-execution bounded heap.
     Table(usize),
+    /// Opaque, execution-local function identity.
+    Function(usize),
 }
 
 impl Value {
@@ -56,6 +62,8 @@ pub enum Op {
     ReadLocal(usize),
     AssignLocals(Vec<usize>),
     NewTable(usize),
+    NewFunction(usize),
+    Call(usize),
     GetTable,
     SetTable,
     Negate,
@@ -86,6 +94,15 @@ pub enum Op {
 pub struct FlowProgram {
     instructions: Vec<Op>,
     slots: usize,
+    functions: Vec<FunctionProgram>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FunctionProgram {
+    instructions: Vec<Op>,
+    slots: usize,
+    parameters: Vec<usize>,
+    recursive_slot: Option<usize>,
 }
 
 impl FlowProgram {
@@ -105,6 +122,7 @@ pub enum FlowError {
     TypeError,
     DivisionByZero,
     ReturnArity,
+    CallDepthExceeded,
     StepBudgetExceeded,
     InvalidForStep,
     NoReturn,
@@ -119,6 +137,7 @@ impl fmt::Display for FlowError {
             Self::TypeError => write!(out, "invalid operand type in owned flow bytecode"),
             Self::DivisionByZero => write!(out, "integer division by zero"),
             Self::ReturnArity => write!(out, "expected exactly one return value"),
+            Self::CallDepthExceeded => write!(out, "owned flow call depth limit exceeded"),
             Self::StepBudgetExceeded => write!(out, "owned flow execution budget exhausted"),
             Self::InvalidForStep => write!(out, "numeric for step must not be zero"),
             Self::NoReturn => write!(out, "owned flow program exited without a return"),
@@ -134,6 +153,7 @@ struct Compiler<'a> {
     depth: usize,
     read_only: HashSet<usize>,
     loop_breaks: Vec<Vec<usize>>,
+    functions: Rc<RefCell<Vec<FunctionProgram>>>,
 }
 
 impl<'a> Compiler<'a> {
@@ -152,6 +172,70 @@ impl<'a> Compiler<'a> {
             .rev()
             .find_map(|frame| frame.get(name).copied())
             .ok_or_else(|| FlowError::Unsupported(format!("global or unbound variable: {name}")))
+    }
+
+    fn compile_function(
+        &mut self,
+        parameters: &[&'a str],
+        vararg: bool,
+        body: &[Statement<'a>],
+        recursive_name: Option<&'a str>,
+    ) -> Result<usize, FlowError> {
+        if vararg {
+            return Err(FlowError::Unsupported("vararg functions".into()));
+        }
+        let id = self.functions.borrow().len();
+        if id >= MAX_CLOSURES {
+            return Err(FlowError::TooLarge);
+        }
+        self.functions.borrow_mut().push(FunctionProgram {
+            instructions: Vec::new(),
+            slots: 0,
+            parameters: Vec::new(),
+            recursive_slot: None,
+        });
+        let mut child = Self {
+            code: Vec::new(),
+            frames: vec![HashMap::new()],
+            slots: 0,
+            depth: 0,
+            read_only: HashSet::new(),
+            loop_breaks: Vec::new(),
+            functions: Rc::clone(&self.functions),
+        };
+        let recursive_slot = if let Some(name) = recursive_name {
+            let slot = child.slots;
+            child.slots += 1;
+            child.frames[0].insert(name, slot);
+            Some(slot)
+        } else {
+            None
+        };
+        let mut formal_slots = Vec::new();
+        for name in parameters {
+            if child.slots >= MAX_SLOTS {
+                return Err(FlowError::TooLarge);
+            }
+            let slot = child.slots;
+            child.slots += 1;
+            child.frames[0].insert(name, slot);
+            formal_slots.push(slot);
+        }
+        child.statements(body)?;
+        if !child
+            .code
+            .iter()
+            .any(|op| matches!(op, Op::Return | Op::ReturnMany(_)))
+        {
+            child.push(Op::ReturnMany(0))?;
+        }
+        self.functions.borrow_mut()[id] = FunctionProgram {
+            instructions: child.code,
+            slots: child.slots,
+            parameters: formal_slots,
+            recursive_slot,
+        };
+        Ok(id)
     }
 
     fn expression(&mut self, expr: &Expr<'a>, depth: usize) -> Result<(), FlowError> {
@@ -202,6 +286,21 @@ impl<'a> Compiler<'a> {
                 self.push(Op::Discard)?;
                 self.expression(right, depth + 1)?;
                 self.patch(skip, self.code.len())?;
+            }
+            Expr::Function {
+                parameters,
+                vararg,
+                body,
+            } => {
+                let function = self.compile_function(parameters, *vararg, body, None)?;
+                self.push(Op::NewFunction(function))?;
+            }
+            Expr::Call { callee, arguments } => {
+                self.expression(callee, depth + 1)?;
+                for argument in arguments {
+                    self.expression(argument, depth + 1)?;
+                }
+                self.push(Op::Call(arguments.len()))?;
             }
             Expr::Index { object, key } => {
                 self.expression(object, depth + 1)?;
@@ -299,6 +398,44 @@ impl<'a> Compiler<'a> {
     fn statements(&mut self, nodes: &[Statement<'a>]) -> Result<(), FlowError> {
         for statement in nodes {
             match statement {
+                Statement::Function {
+                    name,
+                    fields,
+                    method,
+                    local,
+                    parameters,
+                    vararg,
+                    body,
+                } => {
+                    if !fields.is_empty() || method.is_some() {
+                        return Err(FlowError::Unsupported(
+                            "dotted and method function execution".into(),
+                        ));
+                    }
+                    let slot = if *local {
+                        if self.slots >= MAX_SLOTS {
+                            return Err(FlowError::TooLarge);
+                        }
+                        let slot = self.slots;
+                        self.slots += 1;
+                        self.frames.last_mut().expect("root scope").insert(*name, slot);
+                        slot
+                    } else {
+                        self.slot(name)?
+                    };
+                    let function = self.compile_function(
+                        parameters,
+                        *vararg,
+                        body,
+                        Some(name),
+                    )?;
+                    self.push(Op::NewFunction(function))?;
+                    self.push(Op::AssignLocals(vec![slot]))?;
+                }
+                Statement::Call(call) => {
+                    self.expression(call, 0)?;
+                    self.push(Op::Discard)?;
+                }
                 Statement::Local {
                     names,
                     initializers,
@@ -507,6 +644,7 @@ impl<'a> Compiler<'a> {
 /// Successful parsing does not imply full Lua grammar or runtime conformance.
 pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
     let statements = parse_chunk(source).map_err(|err| FlowError::Unsupported(err.to_string()))?;
+    let functions = Rc::new(RefCell::new(Vec::new()));
     let mut compiler = Compiler {
         code: Vec::new(),
         frames: vec![HashMap::new()],
@@ -514,6 +652,7 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
         depth: 0,
         read_only: HashSet::new(),
         loop_breaks: Vec::new(),
+        functions: Rc::clone(&functions),
     };
     compiler.statements(&statements)?;
     if !compiler
@@ -523,9 +662,11 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
     {
         return Err(FlowError::NoReturn);
     }
+    let compiled_functions = functions.borrow().clone();
     Ok(FlowProgram {
         instructions: compiler.code,
         slots: compiler.slots,
+        functions: compiled_functions,
     })
 }
 
@@ -557,26 +698,79 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
     }
 }
 
-/// Run owned control-flow bytecode and return fixed-count supported Lua values.
-/// No syscalls, global environment, host callbacks, or I/O.
-pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<Value>, FlowError> {
-    if program.instructions.len() > MAX_CODE || program.slots > MAX_SLOTS {
-        return Err(FlowError::InvalidBytecode);
-    }
-    let mut stack = Vec::new();
-    let mut slots: Vec<Option<Value>> = vec![None; program.slots];
-    let mut tables: Vec<Vec<Option<Value>>> = Vec::new();
-    let mut table_cells = 0usize;
-    let mut pc = 0;
-    let mut steps = 0;
-    while pc < program.instructions.len() {
-        if steps >= budget {
-            return Err(FlowError::StepBudgetExceeded);
+struct Execution<'a> {
+    program: &'a FlowProgram,
+    budget: usize,
+    steps: usize,
+    depth: usize,
+    tables: Vec<Vec<Option<Value>>>,
+    table_cells: usize,
+    closures: Vec<usize>,
+}
+
+impl Execution<'_> {
+    fn run(
+        &mut self,
+        instructions: &[Op],
+        slot_count: usize,
+        initial: &[(usize, Value)],
+    ) -> Result<Vec<Value>, FlowError> {
+        if instructions.len() > MAX_CODE || slot_count > MAX_SLOTS {
+            return Err(FlowError::InvalidBytecode);
         }
-        steps += 1;
+        let mut stack = Vec::new();
+        let mut slots: Vec<Option<Value>> = vec![None; slot_count];
+        for &(slot, value) in initial {
+            *slots.get_mut(slot).ok_or(FlowError::InvalidBytecode)? = Some(value);
+        }
+        let mut pc = 0;
+        while pc < instructions.len() {
+            if self.steps >= self.budget {
+                return Err(FlowError::StepBudgetExceeded);
+            }
+            self.steps += 1;
         let next = pc + 1;
-        match &program.instructions[pc] {
+        match &instructions[pc] {
             Op::Constant(value) => stack.push(*value),
+            Op::NewFunction(index) => {
+                if *index >= self.program.functions.len() || self.closures.len() >= MAX_CLOSURES {
+                    return Err(FlowError::InvalidBytecode);
+                }
+                let handle = self.closures.len();
+                self.closures.push(*index);
+                stack.push(Value::Function(handle));
+            }
+            Op::Call(argc) => {
+                if stack.len() < argc.saturating_add(1) {
+                    return Err(FlowError::InvalidBytecode);
+                }
+                let args = stack.split_off(stack.len() - argc);
+                let Value::Function(handle) = stack.pop().ok_or(FlowError::InvalidBytecode)? else {
+                    return Err(FlowError::TypeError);
+                };
+                let index = *self.closures.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                let function = self
+                    .program
+                    .functions
+                    .get(index)
+                    .ok_or(FlowError::InvalidBytecode)?
+                    .clone();
+                if self.depth >= MAX_CALL_DEPTH {
+                    return Err(FlowError::CallDepthExceeded);
+                }
+                let mut initial = Vec::new();
+                if let Some(slot) = function.recursive_slot {
+                    initial.push((slot, Value::Function(handle)));
+                }
+                for (position, slot) in function.parameters.iter().enumerate() {
+                    initial.push((*slot, args.get(position).copied().unwrap_or(Value::Nil)));
+                }
+                self.depth += 1;
+                let result = self.run(&function.instructions, function.slots, &initial);
+                self.depth -= 1;
+                let returned = result?;
+                stack.push(returned.into_iter().next().unwrap_or(Value::Nil));
+            }
             Op::ReadLocal(slot) => {
                 let value = slots
                     .get(*slot)
@@ -596,16 +790,16 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
             }
             Op::NewTable(count) => {
                 if *count > MAX_TABLE_FIELDS
-                    || tables.len() >= MAX_TABLES
-                    || table_cells.saturating_add(*count) > MAX_TABLE_CELLS_TOTAL
+                    || self.tables.len() >= MAX_TABLES
+                    || self.table_cells.saturating_add(*count) > MAX_TABLE_CELLS_TOTAL
                     || stack.len() < *count
                 {
                     return Err(FlowError::TooLarge);
                 }
                 let values = stack.split_off(stack.len() - *count);
-                let handle = tables.len();
-                tables.push(values.into_iter().map(Some).collect());
-                table_cells += *count;
+                let handle = self.tables.len();
+                self.tables.push(values.into_iter().map(Some).collect());
+                self.table_cells += *count;
                 stack.push(Value::Table(handle));
             }
             Op::GetTable => {
@@ -618,7 +812,7 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
                 if field == 0 || field > MAX_TABLE_FIELDS {
                     return Err(FlowError::TypeError);
                 }
-                let values = tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                let values = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
                 stack.push(
                     values
                         .get(field - 1)
@@ -638,13 +832,13 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
                 if field == 0 || field > MAX_TABLE_FIELDS {
                     return Err(FlowError::TypeError);
                 }
-                let values = tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
+                let values = self.tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
                 if field > values.len() {
                     let growth = field - values.len();
-                    if table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+                    if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
                         return Err(FlowError::TooLarge);
                     }
-                    table_cells += growth;
+                    self.table_cells += growth;
                     values.resize(field, None);
                 }
                 values[field - 1] = Some(value);
@@ -673,7 +867,7 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
             Op::JumpIfFalse(target) => {
                 let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                 if !value.truthy() {
-                    if *target > program.instructions.len() {
+                    if *target > instructions.len() {
                         return Err(FlowError::InvalidBytecode);
                     }
                     pc = *target;
@@ -682,13 +876,13 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
             }
             Op::JumpIfFalseKeep(target) | Op::JumpIfTrueKeep(target) => {
                 let value = *stack.last().ok_or(FlowError::InvalidBytecode)?;
-                let should_jump = match program.instructions[pc] {
+                let should_jump = match instructions[pc] {
                     Op::JumpIfFalseKeep(_) => !value.truthy(),
                     Op::JumpIfTrueKeep(_) => value.truthy(),
                     _ => unreachable!("guarded opcode"),
                 };
                 if should_jump {
-                    if *target > program.instructions.len() {
+                    if *target > instructions.len() {
                         return Err(FlowError::InvalidBytecode);
                     }
                     pc = *target;
@@ -699,7 +893,7 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
                 stack.pop().ok_or(FlowError::InvalidBytecode)?;
             }
             Op::Jump(target) => {
-                if *target > program.instructions.len() {
+                if *target > instructions.len() {
                     return Err(FlowError::InvalidBytecode);
                 }
                 pc = *target;
@@ -711,7 +905,7 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
                 step,
                 exit,
             } => {
-                if *exit > program.instructions.len() {
+                if *exit > instructions.len() {
                     return Err(FlowError::InvalidBytecode);
                 }
                 let read = |slot: usize| -> Result<i64, FlowError> {
@@ -742,7 +936,7 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
                 step,
                 exit,
             } => {
-                if *exit > program.instructions.len() {
+                if *exit > instructions.len() {
                     return Err(FlowError::InvalidBytecode);
                 }
                 let current = match slots.get(*counter).copied().flatten() {
@@ -778,7 +972,23 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
         }
         pc = next;
     }
-    Err(FlowError::NoReturn)
+        Err(FlowError::NoReturn)
+    }
+}
+
+/// Run owned control-flow bytecode with one shared instruction budget across calls.
+/// No host callbacks, global environment, or I/O.
+pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<Value>, FlowError> {
+    let mut execution = Execution {
+        program,
+        budget,
+        steps: 0,
+        depth: 0,
+        tables: Vec::new(),
+        table_cells: 0,
+        closures: Vec::new(),
+    };
+    execution.run(&program.instructions, program.slots, &[])
 }
 
 /// Preserve the single-value API for existing consumers. Zero or multiple
@@ -952,6 +1162,60 @@ mod tests {
             1
         );
     }
+    #[test]
+    fn local_function_call_frames_and_self_recursion() {
+        assert_eq!(
+            evaluate("local function add(a,b) return a+b end; return add(3,4)"),
+            7
+        );
+        assert_eq!(
+            evaluate("local function twice(x) return x*2 end; local f=twice; return f(6)"),
+            12
+        );
+        assert_eq!(
+            evaluate("local f=function(x) return x+1 end; return f(4)"),
+            5
+        );
+        assert_eq!(
+            evaluate("local function fact(n) if n<2 then return 1 end; return n*fact(n-1) end; return fact(5)"),
+            120
+        );
+        assert_eq!(
+            evaluate("local function set(t) t[1]=9 end; local t={2}; set(t); return t[1]"),
+            9
+        );
+        assert_eq!(
+            evaluate("local function f(a) return a end; return f(5,6)"),
+            5
+        );
+        let program = compile_flow_chunk("local function missing(x) return x end; return missing()").unwrap();
+        assert_eq!(
+            execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+            Ok(Value::Nil)
+        );
+    }
+
+    #[test]
+    fn bounded_calls_reject_captures_and_excessive_recursion() {
+        assert!(compile_flow_chunk("local x=3; local function f() return x end; return f()").is_err());
+        let recursion = compile_flow_chunk(
+            "local function forever() return forever() end; return forever()",
+        ).unwrap();
+        assert_eq!(
+            execute_flow_chunk(&recursion, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+        assert_eq!(
+            execute_flow_chunk(&recursion, 5),
+            Err(FlowError::StepBudgetExceeded)
+        );
+        let not_callable = compile_flow_chunk("local x=3; return x()").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&not_callable, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
+    }
+
     #[test]
     fn bounded_array_tables_preserve_reference_identity_and_missing_nil() {
         assert_eq!(evaluate("local t={4,5}; return t[2]"), 5);

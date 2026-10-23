@@ -66,6 +66,12 @@ const FIXTURES: &[&str] = &[
     "local t={{2}}; return t[1][1]",
     "local a={1}; local b=a; return (a==b) and 1 or 0",
     "local a={1}; local b={1}; return (a==b) and 1 or 0",
+    "local function add(a,b) return a+b end; return add(3,4)",
+    "local function twice(x) return x*2 end; local f=twice; return f(6)",
+    "local f=function(x) return x+1 end; return f(4)",
+    "local function fact(n) if n<2 then return 1 end; return n*fact(n-1) end; return fact(5)",
+    "local function set(t) t[1]=9 end; local t={2}; set(t); return t[1]",
+    "local function f(a) return a end; return f(5,6)",
 ];
 
 fn render(values: &[Value]) -> String {
@@ -76,6 +82,7 @@ fn render(values: &[Value]) -> String {
             Value::Boolean(boolean) => boolean.to_string(),
             Value::Nil => "nil".to_owned(),
             Value::Table(_) => "table".to_owned(),
+            Value::Function(_) => "function".to_owned(),
         })
         .collect::<Vec<_>>()
         .join("\t")
