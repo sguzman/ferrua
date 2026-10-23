@@ -216,3 +216,7 @@ The owned string decoder now accepts valid Unicode scalar values in Lua \u{hex} 
 ### Unicode scalar escape acceptance
 
 [CI #40004973760](https://github.com/sguzman/ferrua/actions/runs/40004973760): Unicode scalar byte encoding, invalid-scalar rejection, UTF-8 lengths and string equality passed all four jobs. The independent runtime remains a bounded Lua subset and does not implement Lua's extended non-scalar escape encodings or a full standard library.
+
+### Bounded Lua named and string-keyed table fields
+
+The owned stack VM now provides a bounded string-keyed map alongside each table's positive-integer sequence. `t.name`, `t["name"]`, named constructor fields and computed string keys share byte-interned key identities; nil assignments remove string-keyed entries. Mixed named/integer fields are supported and the existing array length operator ignores string keys. Key entries count toward the same bounded table heap budget. Negative/zero/boolean/table keys, general hash semantics, metatables and method calls are not yet supported; neither garbage collection nor the production interpreter has changed.

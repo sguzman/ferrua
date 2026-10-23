@@ -313,7 +313,10 @@ impl<'a> Compiler<'a> {
     }
 
     fn intern_literal(&mut self, spelling: &str) -> Result<usize, FlowError> {
-        let bytes = decode_lua_string(spelling)?;
+        self.intern_bytes(decode_lua_string(spelling)?)
+    }
+
+    fn intern_bytes(&mut self, bytes: Vec<u8>) -> Result<usize, FlowError> {
         let mut strings = self.strings.borrow_mut();
         if let Some(index) = strings.iter().position(|item| item == &bytes) {
             return Ok(index);
@@ -406,10 +409,16 @@ impl<'a> Compiler<'a> {
                 self.expression(key, depth + 1)?;
                 self.push(Op::GetTable)?;
             }
+            Expr::Field { object, name } => {
+                self.expression(object, depth + 1)?;
+                let handle = self.intern_bytes(name.as_bytes().to_vec())?;
+                self.push(Op::Constant(Value::String(handle)))?;
+                self.push(Op::GetTable)?;
+            }
             Expr::Table(fields)
                 if fields
                     .iter()
-                    .any(|field| matches!(field, TableField::Indexed { .. })) =>
+                    .any(|field| !matches!(field, TableField::Value(_))) =>
             {
                 // Construct mixed positional/integer-key tables in source order.
                 // Keep the table on the stack while individual writes consume a copy.
@@ -417,10 +426,12 @@ impl<'a> Compiler<'a> {
                 let mut positional = 0usize;
                 for (position, field) in fields.iter().enumerate() {
                     match field {
-                        TableField::Named { .. } => {
-                            return Err(FlowError::Unsupported(
-                                "named table fields require string-key support".into(),
-                            ));
+                        TableField::Named { name, value } => {
+                            self.push(Op::Duplicate)?;
+                            let handle = self.intern_bytes(name.as_bytes().to_vec())?;
+                            self.push(Op::Constant(Value::String(handle)))?;
+                            self.expression(value, depth + 1)?;
+                            self.push(Op::SetTable)?;
                         }
                         TableField::Indexed { key, value } => {
                             self.push(Op::Duplicate)?;
@@ -1078,9 +1089,20 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
 }
 
 #[derive(Clone, Copy)]
+enum TableKey {
+    Positive(usize),
+    String(usize),
+}
+
+#[derive(Clone, Copy)]
 enum PendingTarget {
     Local(usize),
-    Indexed { table: usize, field: usize },
+    Indexed { table: usize, key: TableKey },
+}
+
+struct TableStorage {
+    array: Vec<Option<Value>>,
+    named: HashMap<usize, Value>,
 }
 
 #[derive(Clone)]
@@ -1094,7 +1116,7 @@ struct Execution<'a> {
     budget: usize,
     steps: usize,
     depth: usize,
-    tables: Vec<Vec<Option<Value>>>,
+    tables: Vec<TableStorage>,
     table_cells: usize,
     closures: Vec<Closure>,
     cells: Vec<Option<Value>>,
@@ -1103,6 +1125,69 @@ struct Execution<'a> {
 }
 
 impl Execution<'_> {
+    fn table_key(&self, key: Value) -> Result<TableKey, FlowError> {
+        match key {
+            Value::Integer(index) => {
+                let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
+                if field == 0 || field > MAX_TABLE_FIELDS {
+                    return Err(FlowError::TypeError);
+                }
+                Ok(TableKey::Positive(field))
+            }
+            Value::String(handle) => {
+                self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                Ok(TableKey::String(handle))
+            }
+            _ => Err(FlowError::TypeError),
+        }
+    }
+
+    fn read_table(&self, handle: usize, key: TableKey) -> Result<Value, FlowError> {
+        let table = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+        Ok(match key {
+            TableKey::Positive(field) => table
+                .array
+                .get(field - 1)
+                .copied()
+                .flatten()
+                .unwrap_or(Value::Nil),
+            TableKey::String(field) => table.named.get(&field).copied().unwrap_or(Value::Nil),
+        })
+    }
+
+    fn write_table(&mut self, handle: usize, key: TableKey, value: Value) -> Result<(), FlowError> {
+        let table = self.tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
+        match key {
+            TableKey::Positive(field) => {
+                if field > table.array.len() {
+                    let growth = field - table.array.len();
+                    if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+                        return Err(FlowError::TooLarge);
+                    }
+                    self.table_cells += growth;
+                    table.array.resize(field, None);
+                }
+                table.array[field - 1] = Some(value);
+            }
+            TableKey::String(field) => {
+                if value == Value::Nil {
+                    if table.named.remove(&field).is_some() {
+                        self.table_cells -= 1;
+                    }
+                } else {
+                    if !table.named.contains_key(&field) {
+                        if self.table_cells >= MAX_TABLE_CELLS_TOTAL {
+                            return Err(FlowError::TooLarge);
+                        }
+                        self.table_cells += 1;
+                    }
+                    table.named.insert(field, value);
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn string_bytes(&self, value: Value) -> Result<Vec<u8>, FlowError> {
         match value {
             Value::String(handle) => self
@@ -1334,23 +1419,17 @@ impl Execution<'_> {
                 Op::PrepareIndexed => {
                     let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                    let (Value::Table(handle), Value::Integer(index)) = (table, key) else {
+                    let Value::Table(handle) = table else {
                         return Err(FlowError::TypeError);
                     };
-                    let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
-                    if field == 0 || field > MAX_TABLE_FIELDS {
-                        return Err(FlowError::TypeError);
-                    }
+                    let key = self.table_key(key)?;
                     if handle >= self.tables.len() {
                         return Err(FlowError::InvalidBytecode);
                     }
                     if prepared.len() >= MAX_SLOTS {
                         return Err(FlowError::TooLarge);
                     }
-                    prepared.push(PendingTarget::Indexed {
-                        table: handle,
-                        field,
-                    });
+                    prepared.push(PendingTarget::Indexed { table: handle, key });
                 }
                 Op::AssignPrepared(count) => {
                     if stack.len() < *count || prepared.len() < *count {
@@ -1364,22 +1443,8 @@ impl Execution<'_> {
                                 *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? =
                                     Some(value);
                             }
-                            PendingTarget::Indexed { table, field } => {
-                                let cells = self
-                                    .tables
-                                    .get_mut(table)
-                                    .ok_or(FlowError::InvalidBytecode)?;
-                                if field > cells.len() {
-                                    let growth = field - cells.len();
-                                    if self.table_cells.saturating_add(growth)
-                                        > MAX_TABLE_CELLS_TOTAL
-                                    {
-                                        return Err(FlowError::TooLarge);
-                                    }
-                                    self.table_cells += growth;
-                                    cells.resize(field, None);
-                                }
-                                cells[field - 1] = Some(value);
+                            PendingTarget::Indexed { table, key } => {
+                                self.write_table(table, key, value)?;
                             }
                         }
                     }
@@ -1403,10 +1468,11 @@ impl Execution<'_> {
                     else {
                         return Err(FlowError::TypeError);
                     };
-                    let cells = self
+                    let cells = &mut self
                         .tables
                         .get_mut(handle)
-                        .ok_or(FlowError::InvalidBytecode)?;
+                        .ok_or(FlowError::InvalidBytecode)?
+                        .array;
                     if end > cells.len() {
                         let growth = end - cells.len();
                         if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
@@ -1435,53 +1501,31 @@ impl Execution<'_> {
                     }
                     let values = stack.split_off(stack.len() - arity);
                     let handle = self.tables.len();
-                    self.tables.push(values.into_iter().map(Some).collect());
+                    self.tables.push(TableStorage {
+                        array: values.into_iter().map(Some).collect(),
+                        named: HashMap::new(),
+                    });
                     self.table_cells += arity;
                     stack.push(Value::Table(handle));
                 }
                 Op::GetTable => {
                     let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                    let (Value::Table(handle), Value::Integer(index)) = (table, key) else {
+                    let Value::Table(handle) = table else {
                         return Err(FlowError::TypeError);
                     };
-                    let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
-                    if field == 0 || field > MAX_TABLE_FIELDS {
-                        return Err(FlowError::TypeError);
-                    }
-                    let values = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
-                    stack.push(
-                        values
-                            .get(field - 1)
-                            .copied()
-                            .flatten()
-                            .unwrap_or(Value::Nil),
-                    );
+                    let key = self.table_key(key)?;
+                    stack.push(self.read_table(handle, key)?);
                 }
                 Op::SetTable => {
                     let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                    let (Value::Table(handle), Value::Integer(index)) = (table, key) else {
+                    let Value::Table(handle) = table else {
                         return Err(FlowError::TypeError);
                     };
-                    let field = usize::try_from(index).map_err(|_| FlowError::TypeError)?;
-                    if field == 0 || field > MAX_TABLE_FIELDS {
-                        return Err(FlowError::TypeError);
-                    }
-                    let values = self
-                        .tables
-                        .get_mut(handle)
-                        .ok_or(FlowError::InvalidBytecode)?;
-                    if field > values.len() {
-                        let growth = field - values.len();
-                        if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
-                            return Err(FlowError::TooLarge);
-                        }
-                        self.table_cells += growth;
-                        values.resize(field, None);
-                    }
-                    values[field - 1] = Some(value);
+                    let key = self.table_key(key)?;
+                    self.write_table(handle, key, value)?;
                 }
                 Op::Negate => {
                     let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)?
@@ -1502,8 +1546,11 @@ impl Execution<'_> {
                             .ok_or(FlowError::InvalidBytecode)?
                             .len(),
                         Value::Table(handle) => {
-                            let entries =
-                                self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                            let entries = &self
+                                .tables
+                                .get(handle)
+                                .ok_or(FlowError::InvalidBytecode)?
+                                .array;
                             // Dense tables have exact length; a first hole is
                             // one valid border under Lua's sparse-table rules.
                             entries
@@ -2313,6 +2360,21 @@ mod tests {
         assert_eq!(evaluate(r#"return #"\u{E9}""#), 2);
         assert_eq!(evaluate(r#"return ("\u{E9}" == "é") and 1 or 0"#), 1);
         assert!(compile_flow_chunk(r#"return "\u{D800}""#).is_err());
+    }
+
+    #[test]
+    fn string_keys_and_named_table_fields_share_one_lookup_path() {
+        assert_eq!(evaluate("local t={name=4}; return t.name"), 4);
+        assert_eq!(evaluate("local t={name=4}; return t['name']"), 4);
+        assert_eq!(evaluate("local t={}; t.name=7; return t['name']"), 7);
+        assert_eq!(evaluate("local t={}; t['n']=3; return t.n"), 3);
+        assert_eq!(evaluate("local t={name=3,[2]=5,7}; return t.name+t[2]+t[1]"), 15);
+        assert_eq!(evaluate("local t={}; t.name=3; t.name=nil; return t.name or 7"), 7);
+        assert_eq!(evaluate("local key='name'; local t={[key]=9}; return t.name"), 9);
+        assert_eq!(evaluate("local t={['a']=4,b=2}; return t.a+t.b"), 6);
+        assert_eq!(evaluate("local t={}; t.a,t.b=2,3; return t.a*10+t.b"), 23);
+        assert_eq!(evaluate("local t={}; local key='x'; t[key]=4; return t.x"), 4);
+        assert_eq!(evaluate("local t={}; t.x=4; return #t"), 0);
     }
 
     #[test]
