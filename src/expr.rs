@@ -872,6 +872,37 @@ mod tests {
     }
 
     #[test]
+    fn lua_label_and_goto_tokens_form_explicit_ast_nodes() {
+        let statements = parse_chunk(
+            "::start:: local n=1; goto done; ::done:: return n"
+        )
+        .unwrap();
+        assert!(matches!(statements[0], Statement::Label("start")));
+        assert!(matches!(statements[2], Statement::Goto("done")));
+        assert!(matches!(statements[3], Statement::Label("done")));
+        let compact = parse_chunk("goto done ::done:: return 9").unwrap();
+        assert!(matches!(compact[0], Statement::Goto("done")));
+        assert!(matches!(compact[1], Statement::Label("done")));
+        let nested = parse_chunk("do ::name:: local x=2 end; ::name:: return 3").unwrap();
+        assert!(matches!(&nested[0], Statement::Block(body) if matches!(&body[0], Statement::Label("name"))));
+        assert!(matches!(nested[1], Statement::Label("name")));
+        // Label name scope resolution and jump-over-local checks remain
+        // explicit compiler/conformance work, not silent parser guarantees.
+        assert!(matches!(parse_chunk("goto unresolved").unwrap()[0], Statement::Goto("unresolved")));
+    }
+
+    #[test]
+    fn lua_label_and_goto_syntax_rejects_malformed_or_duplicate_labels() {
+        for source in [
+            "::", "::123::", "::goto::", "::x:", "goto 123",
+            "goto", "::x:: ::x:: return 1",
+            "::x:: local x=1; ::x:: return x",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
+    }
+
+    #[test]
     fn owned_parser_recognizes_function_scopes_and_varargs() {
         let tree = parse_chunk(
             "local function fib(n) if n<=1 then return n end; return fib(n-1)+fib(n-2) end; return fib(5)"
