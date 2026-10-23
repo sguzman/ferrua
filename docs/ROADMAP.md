@@ -143,11 +143,11 @@
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 96%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 96%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -158,8 +158,8 @@
 - 🔬 **T303** Lua conformance and differential tests — `██████████ 100%`
   - [x] Pin official Lua reference and fixtures — tools/diff_lua.lua pins upstream Lua 5.4.6, 12 fixtures in tests/conformance/; CI 39950728455
   - [x] Differential test runner integrated — CI 39950728455: all 12 deterministic parity fixtures passed against Lua 5.4.6 reference
-- 🚀 **T304** Native runtime graduation — `░░░░░░░░░░ 0%`
-  - [ ] Document engine switch criteria
+- 🚀 **T304** Native runtime graduation — `███░░░░░░░ 33%`
+  - [x] Document engine switch criteria — docs/ENGINE_GRADUATION.md: explicit grammar, runtime, differential, cutover and distribution acceptance gates
   - [ ] Switch main fer runtime after parity tests
   - [ ] Tag major stable release after acceptance
 - 🔡 **T305** Standalone Ferrua-owned lexical scanner foundation — `██████████ 100%`
@@ -478,7 +478,7 @@
 **Feature inventory** (computed from associated atomic task progress):
 
 - 🔩 Independent compiler and VM — `░░░░░░░░░░ 0%`
-- 🧪 Verified Lua compatibility — `█████░░░░░ 50%`
+- 🧪 Verified Lua compatibility — `███████░░░ 67%`
 - 🔡 Ferrua-owned lexer scaffold — `██████████ 100%`
 - 🧮 Experimental expression AST — `██████████ 100%`
 - 🧾 Early statement syntax trees — `██████████ 100%`
