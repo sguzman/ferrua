@@ -2093,8 +2093,30 @@ impl Execution<'_> {
                     if stack.len() < arity.saturating_add(1) {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    let args = stack.split_off(stack.len() - arity);
-                    let callable = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let mut args = stack.split_off(stack.len() - arity);
+                    let mut callable = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    // A callable table supplies itself as the first argument
+                    // to its __call metamethod. Table-valued metamethods can
+                    // chain, but never escape the shared VM budget or depth.
+                    let mut redirects = 0;
+                    while let Value::Table(handle) = callable {
+                        if redirects >= MAX_CALL_DEPTH {
+                            return Err(FlowError::CallDepthExceeded);
+                        }
+                        if self.steps >= self.budget {
+                            return Err(FlowError::StepBudgetExceeded);
+                        }
+                        self.steps += 1;
+                        let metamethod = self
+                            .metatable_field(handle, b"__call")?
+                            .ok_or(FlowError::TypeError)?;
+                        if args.len() >= MAX_STACK {
+                            return Err(FlowError::TooLarge);
+                        }
+                        args.insert(0, callable);
+                        callable = metamethod;
+                        redirects += 1;
+                    }
                     if let Value::Builtin(builtin) = callable {
                         if args.is_empty() {
                             return Err(FlowError::TypeError);
