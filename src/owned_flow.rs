@@ -1810,14 +1810,14 @@ impl Execution<'_> {
         }
     }
 
-    /// Metamethod callbacks reuse closure frames, depth and step limits.
-    /// The right-hand table is checked only when the left lacks the field.
-    fn binary_metamethod(
-        &mut self,
+    /// Resolve a binary metamethod with Lua's left-then-right table lookup.
+    /// Missing fields are distinct from present but non-callable values.
+    fn binary_metamethod_callback(
+        &self,
         name: &[u8],
         left: Value,
         right: Value,
-    ) -> Result<Value, FlowError> {
+    ) -> Result<Option<usize>, FlowError> {
         for operand in [left, right] {
             let Value::Table(handle) = operand else {
                 continue;
@@ -1828,8 +1828,86 @@ impl Execution<'_> {
             let Value::Function(callback) = method else {
                 return Err(FlowError::TypeError);
             };
-            let returned = self.call_owned_function(callback, &[left, right])?;
-            return Ok(returned.first().copied().unwrap_or(Value::Nil));
+            return Ok(Some(callback));
+        }
+        Ok(None)
+    }
+
+    /// Callbacks reuse closure frames, recursion depth and shared step limits.
+    fn binary_metamethod(
+        &mut self,
+        name: &[u8],
+        left: Value,
+        right: Value,
+    ) -> Result<Value, FlowError> {
+        let callback = self
+            .binary_metamethod_callback(name, left, right)?
+            .ok_or(FlowError::TypeError)?;
+        let returned = self.call_owned_function(callback, &[left, right])?;
+        Ok(returned.first().copied().unwrap_or(Value::Nil))
+    }
+
+    /// Lua table identity is raw for identical objects; different tables may
+    /// dispatch __eq, with the resulting value interpreted by Lua truthiness.
+    fn equality_with_metamethod(
+        &mut self,
+        op: Binary,
+        left: Value,
+        right: Value,
+    ) -> Result<Value, FlowError> {
+        let equal = if left == right {
+            true
+        } else if let Some(callback) = self.binary_metamethod_callback(b"__eq", left, right)? {
+            self.call_owned_function(callback, &[left, right])?
+                .first()
+                .copied()
+                .unwrap_or(Value::Nil)
+                .truthy()
+        } else {
+            false
+        };
+        Ok(Value::Boolean(if op == Binary::Equal {
+            equal
+        } else {
+            !equal
+        }))
+    }
+
+    /// > and >= reverse operands. Lua <= falls back to not (right < left)
+    /// only when no __le metamethod is present.
+    fn ordering_with_metamethod(
+        &mut self,
+        op: Binary,
+        left: Value,
+        right: Value,
+    ) -> Result<Value, FlowError> {
+        let (left, right, name) = match op {
+            Binary::Less => (left, right, &b"__lt"[..]),
+            Binary::LessEqual => (left, right, &b"__le"[..]),
+            Binary::Greater => (right, left, &b"__lt"[..]),
+            Binary::GreaterEqual => (right, left, &b"__le"[..]),
+            _ => return Err(FlowError::InvalidBytecode),
+        };
+        if let Some(callback) = self.binary_metamethod_callback(name, left, right)? {
+            let truthy = self
+                .call_owned_function(callback, &[left, right])?
+                .first()
+                .copied()
+                .unwrap_or(Value::Nil)
+                .truthy();
+            return Ok(Value::Boolean(truthy));
+        }
+        if matches!(op, Binary::LessEqual | Binary::GreaterEqual) {
+            let callback = self
+                .binary_metamethod_callback(b"__lt", right, left)?
+                .ok_or(FlowError::TypeError)?;
+            let truthy = self
+                .call_owned_function(callback, &[right, left])?
+                .first()
+                .copied()
+                .unwrap_or(Value::Nil)
+                .truthy();
+            return Ok(Value::Boolean(!truthy));
         }
         Err(FlowError::TypeError)
     }
@@ -2668,6 +2746,15 @@ impl Execution<'_> {
                                 _ => unreachable!("guarded ordered numeric operator"),
                             })
                         }
+                        Binary::Equal | Binary::NotEqual
+                            if matches!((lhs, rhs), (Value::Table(_), Value::Table(_))) =>
+                        {
+                            self.equality_with_metamethod(*op, lhs, rhs)?
+                        }
+                        Binary::Less
+                        | Binary::LessEqual
+                        | Binary::Greater
+                        | Binary::GreaterEqual => self.ordering_with_metamethod(*op, lhs, rhs)?,
                         _ => evaluate_binary(*op, lhs, rhs)?,
                     };
                     stack.push(result);
