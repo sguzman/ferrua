@@ -2589,7 +2589,7 @@
               "id": "T382",
               "emoji": "🔎",
               "name": "Lua ipairs respects bounded __index fallbacks for missing sequence elements",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Use regular table indexing for ipairs iteration, retaining rawget/next and ipairs' independence from __pairs",
@@ -2603,7 +2603,8 @@
                 },
                 {
                   "text": "Pass Linux formatting, Clippy, Rust unit tests, Rust 1.96, consumer and upstream Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40037327110: Linux quality, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter passed"
                 }
               ]
             }
