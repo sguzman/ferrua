@@ -50,3 +50,5 @@ Ferrua includes a [reusable composite setup action](docs/ACTIONS.md). It install
 ## License
 
 MIT. The independently maintained `luna-core` runtime is MIT/Apache-2.0 licensed; attribution and its implementation boundary are documented in [architecture](docs/ARCHITECTURE.md).
+
+For a future tagged release, the Python-free packaging entrypoint is `target/release/fer tools/package_release.lua v0.1.0` after a locked release build. It creates a versioned Linux tarball with `fer`, README and LICENSE, plus a verified SHA-256 checksum. The separate release workflow publishes assets only when a matching version tag is explicitly pushed; merely committing to `main` does not inaugurate a stable release.

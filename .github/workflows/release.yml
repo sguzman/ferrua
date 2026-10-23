@@ -1,0 +1,40 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+permissions:
+  contents: read
+jobs:
+  linux-release:
+    name: Versioned Linux release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Verify compiler and compatibility tests
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked --all-targets
+      - name: Build versioned binary and archive
+        run: |
+          cargo build --locked --release
+          target/release/fer tools/package_release.lua "$GITHUB_REF_NAME"
+      - name: Publish versioned GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          name="fer-${GITHUB_REF_NAME}-linux-x86_64.tar.gz"
+          opts=()
+          if [[ "$GITHUB_REF_NAME" == v0.* ]]; then
+            opts+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" "$name" "$name.sha256" \
+            --title "Ferrua $GITHUB_REF_NAME" \
+            --generate-notes "${opts[@]}"

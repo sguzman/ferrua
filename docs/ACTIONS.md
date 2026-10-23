@@ -24,3 +24,7 @@ To run a checked-in script, use `fer scripts/task.lua`. To run a short command, 
 The action requires a runner with network access to the Rust toolchain and Cargo package index when building from source. It has not yet been validated on macOS, Windows, or ARM runners. The Linux x86-64 preview artifact is separate from this action and is not treated as a stable signed release.
 
 The composite installer runs `cargo install --locked`, using the checked-in `Cargo.lock`. Ferrua's Linux CI also uses `--locked` for its Rust builds, and publishes a SHA-256 file alongside the preview binary. A separate Rust 1.96 compatibility job checks the minimum toolchain version declared by `Cargo.toml`.
+
+## Tagged releases
+
+The [tag-triggered release workflow](../.github/workflows/release.yml) checks that the Git tag matches the package version and executes the Lua-based [release packager](../tools/package_release.lua). It builds and checks a Linux x86-64 archive with SHA-256, then creates a GitHub Release. Tags beginning with `v0.` are explicitly prereleases. This workflow is **not triggered by ordinary commits** and has no current claim of a published stable release. A `v1.0.0` tag remains gated on actual acceptance and crate versioning.
