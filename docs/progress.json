@@ -1915,6 +1915,144 @@
                   "evidence": "tests/owned_flow.rs; CI 40009615631: four jobs passed"
                 }
               ]
+            },
+            {
+              "id": "T354",
+              "emoji": "🧮",
+              "name": "Bounded decimal float values, division and exponentiation",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compile decimal Lua floats and implement /, ^, mixed arithmetic and unary negation",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Value::Float, Binary::Div, Binary::Pow, evaluate_number_binary"
+                },
+                {
+                  "text": "Coerce bounded decimal numeric strings and implement mixed numeric equality and ordering",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::arithmetic_operand, numeric_equal"
+                },
+                {
+                  "text": "Pass upstream Lua 5.4.6 differential, Linux, Rust 1.96 and action consumer CI",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI #40010815167: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T355",
+              "emoji": "🗝️",
+              "name": "Canonical integral float table keys with NaN rejection",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Normalize exactly integral floating-point keys to their integer-key representation",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::table_key, Value::Float branch"
+                },
+                {
+                  "text": "Preserve fractional and signed-zero key behavior; reject NaN indexes",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: floating_table_keys_normalize_integral_values_and_reject_nan"
+                },
+                {
+                  "text": "Pass Lua 5.4.6 differential fixtures, Linux and compatibility CI",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI #40011221972: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T356",
+              "emoji": "🔢",
+              "name": "Bounded Lua hexadecimal floating numerals",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Parse hexadecimal Lua fractional significands and binary p exponents",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: parse_lua_hex_float"
+                },
+                {
+                  "text": "Preserve integer hex literal path and reject unsupported exponent magnitudes",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Compiler::expression, hex_floating_literals_use_binary_exponents"
+                },
+                {
+                  "text": "Pass upstream Lua 5.4.6 and production fer differential CI",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI #40011712915: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T357",
+              "emoji": "⚖️",
+              "name": "Exact large-integer versus floating numeric ordering",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Compare 64-bit integer and float values without lossy conversion of the integer",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: compare_integer_float, numeric_order"
+                },
+                {
+                  "text": "Verify ordering beyond 2^53 and signed 64-bit boundaries, including NaN",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: mixed_large_integer_float_ordering_preserves_integer_precision"
+                },
+                {
+                  "text": "Pass Lua 5.4.6 differential and four-job CI checks",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI #40012287119: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T358",
+              "emoji": "🔁",
+              "name": "Fractional numeric for loops and float step controls",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Preserve integer numeric for mode and add float-mode visible/control variables",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::ForCheck, Op::ForStep"
+                },
+                {
+                  "text": "Handle fractional descending/ascending steps, coercible controls and zero-step errors",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: numeric_for_handles_fractional_bounds_and_steps"
+                },
+                {
+                  "text": "Pass four-job CI including Lua 5.4.6 differential checks",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI #40012977915: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T359",
+              "emoji": "🧩",
+              "name": "Integral floating operands in Lua bitwise operations",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Convert only exact, finite, in-range integral float operands to Lua integers",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::exact_integer_operand"
+                },
+                {
+                  "text": "Apply conversion to unary and binary bitwise operators without coercing strings",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::BitNot, Op::Binary; bitwise_ops_accept_exact_integral_floats_only"
+                },
+                {
+                  "text": "Pass upstream Lua parity, Rust 1.96 and downstream consumer CI",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; CI #40012977915: four jobs passed"
+                }
+              ]
             }
           ]
         }
@@ -2265,6 +2403,48 @@
           "name": "Integer-formatted Lua string arithmetic coercion",
           "task_ids": [
             "T353"
+          ]
+        },
+        {
+          "emoji": "🧮",
+          "name": "Bounded decimal float values, division and exponentiation",
+          "task_ids": [
+            "T354"
+          ]
+        },
+        {
+          "emoji": "🗝️",
+          "name": "Canonical integral float table keys with NaN rejection",
+          "task_ids": [
+            "T355"
+          ]
+        },
+        {
+          "emoji": "🔢",
+          "name": "Bounded Lua hexadecimal floating numerals",
+          "task_ids": [
+            "T356"
+          ]
+        },
+        {
+          "emoji": "⚖️",
+          "name": "Exact large-integer versus floating numeric ordering",
+          "task_ids": [
+            "T357"
+          ]
+        },
+        {
+          "emoji": "🔁",
+          "name": "Fractional numeric for loops and float step controls",
+          "task_ids": [
+            "T358"
+          ]
+        },
+        {
+          "emoji": "🧩",
+          "name": "Integral floating operands in Lua bitwise operations",
+          "task_ids": [
+            "T359"
           ]
         }
       ]

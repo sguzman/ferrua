@@ -289,3 +289,13 @@ Numeric `for` loops now choose integer mode when all three controls are integral
 ### Integral floating operands for bitwise operations
 
 The owned VM now accepts mathematically integral, representable IEEE-754 double operands in bitwise unary and binary operators, including shifts. It checks finiteness, zero fractional part and the signed 64-bit range before conversion; fractional doubles remain type errors. String operands remain rejected for bitwise operators, while decimal numeric-string coercion continues only for arithmetic. Upstream Lua 5.4.6 and production `fer` differential fixtures cover the accepted cases.
+
+### Verified bounded floating-point acceptance
+
+- [CI #40010815167](https://github.com/sguzman/ferrua/actions/runs/40010815167): decimal floating values, mixed arithmetic, numeric comparisons and Lua / and ^ operators accepted across four jobs.
+- [CI #40011221972](https://github.com/sguzman/ferrua/actions/runs/40011221972): integral floating table-key normalization and NaN rejection accepted across four jobs.
+- [CI #40011712915](https://github.com/sguzman/ferrua/actions/runs/40011712915): bounded hexadecimal float literals and binary exponents accepted across four jobs.
+- [CI #40012287119](https://github.com/sguzman/ferrua/actions/runs/40012287119): precision-safe comparisons between large signed integers and floats accepted across four jobs.
+- [CI #40012977915](https://github.com/sguzman/ferrua/actions/runs/40012977915): fractional Lua numeric for loops and exact integral-float bitwise operands accepted across four jobs.
+
+These statuses cover only the recorded bounded behavior. Full Lua metamethods, numeric edge cases, complete float/string coercion, general garbage collection, standard libraries and native production-engine graduation remain unfinished.

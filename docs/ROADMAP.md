@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 94%` across 78 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 94%` across 84 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 94%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 95%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `█████████░ 94%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 95%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -354,6 +354,30 @@
   - [x] Coerce bounded decimal/hex integer byte strings for arithmetic while preserving normal string identity — src/owned_flow.rs: Execution::integer_operand; Op::Binary arithmetic branch
   - [x] Keep bitwise operations strict and reject nonnumeric strings — src/owned_flow.rs: integer_formatted_lua_strings_coerce_for_arithmetic; Op::BitNot
   - [x] Pass production fer, upstream Lua 5.4.6 and all four GitHub Actions jobs — tests/owned_flow.rs; CI 40009615631: four jobs passed
+- 🧮 **T354** Bounded decimal float values, division and exponentiation — `██████████ 100%`
+  - [x] Compile decimal Lua floats and implement /, ^, mixed arithmetic and unary negation — src/owned_flow.rs: Value::Float, Binary::Div, Binary::Pow, evaluate_number_binary
+  - [x] Coerce bounded decimal numeric strings and implement mixed numeric equality and ordering — src/owned_flow.rs: Execution::arithmetic_operand, numeric_equal
+  - [x] Pass upstream Lua 5.4.6 differential, Linux, Rust 1.96 and action consumer CI — tests/owned_flow.rs; CI #40010815167: four jobs passed
+- 🗝️ **T355** Canonical integral float table keys with NaN rejection — `██████████ 100%`
+  - [x] Normalize exactly integral floating-point keys to their integer-key representation — src/owned_flow.rs: Execution::table_key, Value::Float branch
+  - [x] Preserve fractional and signed-zero key behavior; reject NaN indexes — src/owned_flow.rs: floating_table_keys_normalize_integral_values_and_reject_nan
+  - [x] Pass Lua 5.4.6 differential fixtures, Linux and compatibility CI — tests/owned_flow.rs; CI #40011221972: four jobs passed
+- 🔢 **T356** Bounded Lua hexadecimal floating numerals — `██████████ 100%`
+  - [x] Parse hexadecimal Lua fractional significands and binary p exponents — src/owned_flow.rs: parse_lua_hex_float
+  - [x] Preserve integer hex literal path and reject unsupported exponent magnitudes — src/owned_flow.rs: Compiler::expression, hex_floating_literals_use_binary_exponents
+  - [x] Pass upstream Lua 5.4.6 and production fer differential CI — tests/owned_flow.rs; CI #40011712915: four jobs passed
+- ⚖️ **T357** Exact large-integer versus floating numeric ordering — `██████████ 100%`
+  - [x] Compare 64-bit integer and float values without lossy conversion of the integer — src/owned_flow.rs: compare_integer_float, numeric_order
+  - [x] Verify ordering beyond 2^53 and signed 64-bit boundaries, including NaN — src/owned_flow.rs: mixed_large_integer_float_ordering_preserves_integer_precision
+  - [x] Pass Lua 5.4.6 differential and four-job CI checks — tests/owned_flow.rs; CI #40012287119: four jobs passed
+- 🔁 **T358** Fractional numeric for loops and float step controls — `██████████ 100%`
+  - [x] Preserve integer numeric for mode and add float-mode visible/control variables — src/owned_flow.rs: Op::ForCheck, Op::ForStep
+  - [x] Handle fractional descending/ascending steps, coercible controls and zero-step errors — src/owned_flow.rs: numeric_for_handles_fractional_bounds_and_steps
+  - [x] Pass four-job CI including Lua 5.4.6 differential checks — tests/owned_flow.rs; CI #40012977915: four jobs passed
+- 🧩 **T359** Integral floating operands in Lua bitwise operations — `██████████ 100%`
+  - [x] Convert only exact, finite, in-range integral float operands to Lua integers — src/owned_flow.rs: Execution::exact_integer_operand
+  - [x] Apply conversion to unary and binary bitwise operators without coercing strings — src/owned_flow.rs: Op::BitNot, Op::Binary; bitwise_ops_accept_exact_integral_floats_only
+  - [x] Pass upstream Lua parity, Rust 1.96 and downstream consumer CI — tests/owned_flow.rs; CI #40012977915: four jobs passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -406,4 +430,10 @@
 - 🧩 Method multireturn expansion in mixed table constructors — `██████████ 100%`
 - ♻️ Safe reuse of uncaptured Lua call-frame cells — `██████████ 100%`
 - 🔢 Integer-formatted Lua string arithmetic coercion — `██████████ 100%`
+- 🧮 Bounded decimal float values, division and exponentiation — `██████████ 100%`
+- 🗝️ Canonical integral float table keys with NaN rejection — `██████████ 100%`
+- 🔢 Bounded Lua hexadecimal floating numerals — `██████████ 100%`
+- ⚖️ Exact large-integer versus floating numeric ordering — `██████████ 100%`
+- 🔁 Fractional numeric for loops and float step controls — `██████████ 100%`
+- 🧩 Integral floating operands in Lua bitwise operations — `██████████ 100%`
 
