@@ -98,6 +98,13 @@ fn json_is_available_for_automation_scripts() {
         "-e",
         r#"local data=json.decode('{"number":42,"ok":true}'); assert(data.number == 42); print(json.encode(data))"#,
     ]);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), r#"{"number":42,"ok":true}"#);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).trim(),
+        r#"{"number":42,"ok":true}"#
+    );
 }
