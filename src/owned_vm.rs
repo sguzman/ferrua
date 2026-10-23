@@ -66,17 +66,25 @@ fn emit<'a>(
     }
     let instruction = match expression {
         Expr::Atom(text) => {
-            let integer = if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
-                i64::from_str_radix(hex, 16)
-            } else {
-                text.parse::<i64>()
-            };
+            let integer =
+                if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+                    i64::from_str_radix(hex, 16)
+                } else {
+                    text.parse::<i64>()
+                };
             match integer {
-                Ok(value) => Instruction::Load { dest: program.registers, value },
+                Ok(value) => Instruction::Load {
+                    dest: program.registers,
+                    value,
+                },
                 Err(_) => {
-                    return locals.iter().rev()
+                    return locals
+                        .iter()
+                        .rev()
                         .find_map(|scope| scope.get(*text).copied())
-                        .ok_or_else(|| Error::Unsupported(format!("unbound or noninteger name: {text}")));
+                        .ok_or_else(|| {
+                            Error::Unsupported(format!("unbound or noninteger name: {text}"))
+                        });
                 }
             }
         }
@@ -150,7 +158,11 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 /// loops, globals, nil and closures remain explicitly unsupported.
 pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
-    let mut program = Program { code: Vec::new(), registers: 0, result: 0 };
+    let mut program = Program {
+        code: Vec::new(),
+        registers: 0,
+        result: 0,
+    };
     let mut scopes = vec![HashMap::new()];
     let value = compile_statements(&statements, &mut program, &mut scopes, false, 0)?
         .ok_or_else(|| Error::Unsupported("chunk requires one final return value".into()))?;
@@ -165,21 +177,34 @@ fn compile_statements<'a>(
     nested: bool,
     depth: usize,
 ) -> Result<Option<usize>, Error> {
-    if depth > 64 { return Err(Error::TooLarge); }
+    if depth > 64 {
+        return Err(Error::TooLarge);
+    }
     let mut result = None;
     for node in statements {
-        if result.is_some() { return Err(Error::Unsupported("statement follows return".into())); }
+        if result.is_some() {
+            return Err(Error::Unsupported("statement follows return".into()));
+        }
         match node {
-            Statement::Local { names, initializers } => {
+            Statement::Local {
+                names,
+                initializers,
+            } => {
                 if names.is_empty() || names.len() != initializers.len() {
-                    return Err(Error::Unsupported("all locals need one integer initializer".into()));
+                    return Err(Error::Unsupported(
+                        "all locals need one integer initializer".into(),
+                    ));
                 }
                 // Evaluate RHS before adding newly declared bindings.
-                let rhs = initializers.iter()
+                let rhs = initializers
+                    .iter()
                     .map(|e| emit(program, e, 0, scopes))
                     .collect::<Result<Vec<_>, _>>()?;
                 for (name, register) in names.iter().zip(rhs) {
-                    scopes.last_mut().expect("root scope").insert(*name, register);
+                    scopes
+                        .last_mut()
+                        .expect("root scope")
+                        .insert(*name, register);
                 }
             }
             Statement::Assign { targets, values } => {
@@ -187,14 +212,17 @@ fn compile_statements<'a>(
                     return Err(Error::Unsupported("assignment RHS count mismatch".into()));
                 }
                 // All RHS expressions see the original bindings, as in Lua.
-                let rhs = values.iter()
+                let rhs = values
+                    .iter()
                     .map(|e| emit(program, e, 0, scopes))
                     .collect::<Result<Vec<_>, _>>()?;
                 for (target, register) in targets.iter().zip(rhs) {
                     let Expr::Atom(name) = target else {
                         return Err(Error::Unsupported("only local variable targets".into()));
                     };
-                    let slot = scopes.iter_mut().rev()
+                    let slot = scopes
+                        .iter_mut()
+                        .rev()
                         .find_map(|scope| scope.get_mut(*name))
                         .ok_or_else(|| Error::Unsupported(format!("global assignment: {name}")))?;
                     *slot = register;
@@ -211,9 +239,11 @@ fn compile_statements<'a>(
             Statement::Return(values) if !nested && values.len() == 1 => {
                 result = Some(emit(program, &values[0], 0, scopes)?);
             }
-            _ => return Err(Error::Unsupported(
-                "only integer locals, assignments, do/end blocks, and final return".into(),
-            )),
+            _ => {
+                return Err(Error::Unsupported(
+                    "only integer locals, assignments, do/end blocks, and final return".into(),
+                ));
+            }
         }
     }
     Ok(result)
@@ -412,17 +442,24 @@ mod tests {
         ];
         for (source, expected) in examples {
             let bytecode = compile_integer_chunk(source).unwrap();
-            assert_eq!(execute_integer_program(&bytecode).unwrap(), expected, "{source}");
+            assert_eq!(
+                execute_integer_program(&bytecode).unwrap(),
+                expected,
+                "{source}"
+            );
         }
     }
     #[test]
     fn rejects_unsupported_dynamic_chunk_features() {
         for source in [
-            "local x; return x", "return x", "x=1; return x",
+            "local x; return x",
+            "return x",
+            "x=1; return x",
             "local x=1; print(x); return x",
             "local x=1; if x>0 then x=2 end; return x",
             "local x=1; while x<3 do x=x+1 end; return x",
-            "local x=1; return 1.5", "local x=1; do return x end",
+            "local x=1; return 1.5",
+            "local x=1; do return x end",
             "local x=1; x.y=2; return x",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");

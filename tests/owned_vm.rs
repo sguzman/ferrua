@@ -1,6 +1,8 @@
 //! Differential smoke for the experimental owned integer register subset.
 //! Reference is the existing production fer CLI, not upstream Lua directly.
-use ferrua::owned_vm::{compile_integer_chunk, compile_integer_expression, execute_integer_program};
+use ferrua::owned_vm::{
+    compile_integer_chunk, compile_integer_expression, execute_integer_program,
+};
 use std::process::Command;
 
 #[test]
@@ -111,16 +113,29 @@ fn static_integer_chunk_matches_production_fer() {
         let actual = execute_integer_program(&bytecode).unwrap();
         let lua = format!("print((function() {source} end)())");
         let result = Command::new(env!("CARGO_BIN_EXE_fer"))
-            .args(["--lua=5.4", "-e", &lua]).output().unwrap();
-        assert!(result.status.success(), "{source}: {}", String::from_utf8_lossy(&result.stderr));
-        let expected: i64 = String::from_utf8_lossy(&result.stdout).trim().parse().unwrap();
+            .args(["--lua=5.4", "-e", &lua])
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let expected: i64 = String::from_utf8_lossy(&result.stdout)
+            .trim()
+            .parse()
+            .unwrap();
         assert_eq!(actual, expected, "chunk mismatch: {source}");
     }
 }
 
 #[test]
 fn static_integer_chunk_matches_upstream_lua_when_requested() {
-    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() != Some("1") {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
         return;
     }
     for source in [
@@ -135,8 +150,15 @@ fn static_integer_chunk_matches_upstream_lua_when_requested() {
         let actual = execute_integer_program(&bytecode).unwrap();
         let lua = format!("print((function() {source} end)())");
         let result = Command::new("lua5.4").args(["-e", &lua]).output().unwrap();
-        assert!(result.status.success(), "{source}: {}", String::from_utf8_lossy(&result.stderr));
-        let expected: i64 = String::from_utf8_lossy(&result.stdout).trim().parse().unwrap();
+        assert!(
+            result.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let expected: i64 = String::from_utf8_lossy(&result.stdout)
+            .trim()
+            .parse()
+            .unwrap();
         assert_eq!(actual, expected, "upstream chunk mismatch: {source}");
     }
 }
