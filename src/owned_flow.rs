@@ -3685,6 +3685,49 @@ mod tests {
     }
 
     #[test]
+    fn binary_bitwise_metamethods_preserve_integer_rules_and_bounded_callbacks() {
+        for (source, expected) in [
+            ("local t=setmetatable({}, {__band=function(a,b) return b+2 end}); return t&5", 7),
+            ("local t=setmetatable({}, {__bor=function(a,b) return a+3 end}); return 9|t", 12),
+            ("local t=setmetatable({}, {__bxor=function(a,b) return 8 end}); return t~3", 8),
+            ("local t=setmetatable({}, {__shl=function(a,b) return b*2 end}); return t<<5", 10),
+            ("local t=setmetatable({}, {__shr=function(a,b) return b+3 end}); return t>>5", 8),
+            ("local a=setmetatable({}, {__band=function() return 11 end}); local b=setmetatable({}, {__band=function() return 22 end}); return a&b", 11),
+            ("local b=setmetatable({}, {__band=function() return 22 end}); return {}&b", 22),
+            ("local t=setmetatable({}, {__band=function() return 4,5 end}); return t&1", 4),
+            ("local t=setmetatable({}, {__bor=function() end}); return (t|1)==nil and 1 or 0", 1),
+            ("local n=0; local t=setmetatable({}, {__shl=function(_,x) n=n+1; return n+x end}); return t<<4", 5),
+            ("return 7&3", 3),
+            ("return 7|8", 15),
+            ("return 7~3", 4),
+            ("return 7<<2", 28),
+            ("return 16>>2", 4),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        for source in [
+            "return {}&2",
+            "local t=setmetatable({}, {__band=7}); return t&2",
+            "return 1.5&2",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError),
+                "{source}"
+            );
+        }
+        let program = compile_flow_chunk(
+            "local t={}; setmetatable(t,{__band=function(a,b) return a&b end}); return t&2"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+    }
+
+    #[test]
     fn unary_metamethods_pass_duplicate_operand_and_keep_numeric_fallback() {
         for (source, expected) in [
             (
