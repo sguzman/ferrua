@@ -48,6 +48,7 @@ pub enum Builtin {
     RawGet,
     RawSet,
     RawLen,
+    Select,
 }
 
 impl Value {
@@ -454,6 +455,9 @@ impl<'a> Compiler<'a> {
                         }
                         Err(_) if *text == "rawlen" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::RawLen)))?;
+                        }
+                        Err(_) if *text == "select" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::Select)))?;
                         }
                         Err(error) => return Err(error),
                     }
@@ -1593,6 +1597,32 @@ impl Execution<'_> {
         }
     }
 
+    fn select_builtin(&self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let selector = *args.first().ok_or(FlowError::TypeError)?;
+        if let Value::String(handle) = selector {
+            let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
+            if bytes == b"#" {
+                return Ok(vec![Value::Integer((args.len() - 1) as i64)]);
+            }
+        }
+        let index = self
+            .exact_integer_operand(selector)
+            .or_else(|_| self.integer_operand(selector))?;
+        let count = (args.len() - 1) as i64;
+        let index = if index < 0 {
+            count
+                .checked_add(index)
+                .and_then(|value| value.checked_add(1))
+                .ok_or(FlowError::TypeError)?
+        } else {
+            index
+        };
+        if index <= 0 {
+            return Err(FlowError::TypeError);
+        }
+        Ok(args.iter().skip(index as usize).copied().collect())
+    }
+
     fn raw_len(&self, value: Value) -> Result<Value, FlowError> {
         let length = match value {
             Value::String(handle) => self
@@ -1786,6 +1816,23 @@ impl Execution<'_> {
                         if args.is_empty() {
                             return Err(FlowError::TypeError);
                         }
+                        if builtin == Builtin::Select {
+                            let returned = self.select_builtin(&args)?;
+                            if matches!(
+                                instructions[pc],
+                                Op::CallMany(_) | Op::CallSpread { many: true, .. }
+                            ) {
+                                last_multiple = Some(returned.len());
+                                stack.extend(returned);
+                            } else {
+                                stack.push(returned.into_iter().next().unwrap_or(Value::Nil));
+                            }
+                            if stack.len() > MAX_STACK {
+                                return Err(FlowError::TooLarge);
+                            }
+                            pc = next;
+                            continue;
+                        }
                         let value = args.first().copied().unwrap_or(Value::Nil);
                         let result = match builtin {
                             Builtin::Type => {
@@ -1835,6 +1882,7 @@ impl Execution<'_> {
                                 Value::Table(handle)
                             }
                             Builtin::RawLen => self.raw_len(value)?,
+                            Builtin::Select => unreachable!("select has multiple results"),
                             Builtin::ToString => match value {
                                 Value::String(_) => value,
                                 Value::Integer(number) => {
@@ -3086,6 +3134,50 @@ mod tests {
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
+    }
+
+    #[test]
+    fn first_class_select_adjusts_bounded_lua_result_lists() {
+        assert_eq!(evaluate("return select('#',4,5,6)"), 3);
+        assert_eq!(evaluate("return select('#')"), 0);
+        assert_eq!(evaluate("return select(-1,4,5,6)"), 6);
+        assert_eq!(evaluate("local a,b=select(2,10,20,30); return a+b"), 50);
+        assert_eq!(evaluate("local a,b=select(2,10,20,30); return a*10+b"), 230);
+        assert_eq!(evaluate("return select(4,1,2,3) or 9"), 9);
+        assert_eq!(evaluate("return select('2',10,20,30)"), 20);
+        assert_eq!(
+            evaluate("local function count(...) return select('#',...) end; return count(3,4,5)"),
+            3
+        );
+        assert_eq!(
+            evaluate("local t={select(2,1,2,3)}; return t[1]*10+t[2]"),
+            23
+        );
+        assert_eq!(
+            evaluate("local f=select; return f('#','a','b')"),
+            2
+        );
+        assert_eq!(
+            evaluate("local select=function() return 8 end; return select(1,2,3)"),
+            8
+        );
+        let program = compile_flow_chunk("return select(2,1,2,3)").unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Ok(vec![Value::Integer(2), Value::Integer(3)])
+        );
+        let program = compile_flow_chunk("return 8,select(2,1,2,3)").unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Ok(vec![Value::Integer(8), Value::Integer(2), Value::Integer(3)])
+        );
+        for source in ["return select()", "return select(0,1,2)", "return select(-4,1,2,3)"] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError)
+            );
+        }
     }
 
     #[test]

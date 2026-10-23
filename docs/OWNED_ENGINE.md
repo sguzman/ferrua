@@ -330,3 +330,7 @@ The owned stack VM now exposes a first-class, lexically shadowable `rawlen` buil
 - [CI #40016120064](https://github.com/sguzman/ferrua/actions/runs/40016120064): bounded `rawlen`, using the shared underlying Lua byte-string and table-border length handler, passed all four jobs.
 
 These checks cover only the recorded, bounded first-party runtime subsets. There is still no full Lua standard library, garbage-collected production VM, metatable implementation, or accepted engine migration.
+
+### Bounded first-class Lua select and multiple results
+
+The independent VM now supports first-class, lexically shadowable `select` for counting arguments with `select('#', ...)` and selecting tail argument lists with positive or negative integer offsets. The builtin reuses existing single-result versus multiple-result call contexts, so returned tails expand in final return, assignment, call argument and table constructor positions. It accepts the limited existing numeric-string to integer conversion path; zero and out-of-range negative offsets reject explicitly. All result allocations remain bounded. This is not a full Lua standard-library implementation, and production `fer` remains unchanged.
