@@ -1,17 +1,34 @@
 name: Setup Ferrua
-description: Install the fer Lua interpreter from this action's Rust source
+description: Install fer from pinned Rust sources or an explicit verified Linux release
+inputs:
+  version:
+    description: Versioned release to install (e.g. v0.1.0); leave empty to build the pinned action source
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
     - name: Install Rust toolchain
+      if: inputs.version == ''
       uses: dtolnay/rust-toolchain@stable
-    - name: Build and install fer
+    - name: Build and install fer from source
+      if: inputs.version == ''
       shell: bash
       env:
         FERRUA_SOURCE_DIR: ${{ github.action_path }}
       run: |
         set -euo pipefail
         cargo install --locked --path "$FERRUA_SOURCE_DIR" --root "$RUNNER_TEMP/ferrua" --force
+        echo "$RUNNER_TEMP/ferrua/bin" >> "$GITHUB_PATH"
+    - name: Install verified versioned Linux release
+      if: inputs.version != ''
+      shell: bash
+      env:
+        FERRUA_SOURCE_DIR: ${{ github.action_path }}
+        FERRUA_RELEASE_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        sh "$FERRUA_SOURCE_DIR/scripts/install.sh" "$FERRUA_RELEASE_VERSION" "$RUNNER_TEMP/ferrua"
         echo "$RUNNER_TEMP/ferrua/bin" >> "$GITHUB_PATH"
     - name: Verify interpreter
       shell: bash

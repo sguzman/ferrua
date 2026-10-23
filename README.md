@@ -45,7 +45,7 @@ The public repository contains only project source and generic fixtures; no user
 
 ## GitHub Actions
 
-Ferrua includes a [reusable composite setup action](docs/ACTIONS.md). It installs `fer` from this repository's source on an Ubuntu runner, and adds it to `PATH`. The independent CI consumer job verifies that it can execute Lua and subprocess automation without Python.
+Ferrua includes a [reusable composite setup action](docs/ACTIONS.md). It installs `fer` from this repository's source on an Ubuntu runner, and adds it to `PATH`. The independent CI consumer job verifies that it can execute Lua and subprocess automation without Python. Supply an explicit `version` input to install a checksum-verified tagged Linux release instead of compiling the runtime from source.
 
 ## License
 
@@ -56,3 +56,7 @@ For a future tagged release, the Python-free packaging entrypoint is `target/rel
 The [most recent tested preview archive](https://github.com/sguzman/ferrua/actions/runs/39946114053) is named `fer-v0.1.0-linux-x86_64.tar.gz` and includes its `.sha256` checksum. CI verifies the archive after construction. This is an Actions artifact, **not** a published GitHub Release.
 
 The CI acceptance suite also runs `fer tools/check_compat.lua`, a Lua-authored test harness that invokes the local `fer` binary across Lua 5.1–5.5. It checks JSON, TOML/YAML, basic scripting, syntax-only validation, and sandbox API separation. Passing these smoke cases does not imply full dialect conformance.
+
+### Install a tagged Linux binary
+
+On Linux x86-64, `sh scripts/install.sh v0.1.0` installs a SHA-256-verified `fer` into `~/.local/bin`, provided that the tagged release has been published. Optionally provide a custom installation prefix as the second argument. The installer uses standard Linux utilities and does not use Python or Cargo. A versioned GitHub Release is **not yet published**; use the source-build installation until one exists.
