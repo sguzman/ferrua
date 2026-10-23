@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 96%` across 109 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 96%` across 110 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -143,11 +143,11 @@
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 96%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 96%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -478,6 +478,10 @@
   - [x] Reject ledger claims of native engine cutover before parser, VM and conformance acceptance — tools/roadmap.lua: validate_graduation checks T301, T302, T303 and T304
   - [x] Add negative Lua self-tests and CI step for denied premature native switch and stable release assertions — tools/roadmap.lua: --self-test-gates; .github/workflows/ci.yml; docs/ENGINE_GRADUATION.md
   - [x] Pass Linux CI roadmap integrity and negative gate tests alongside Rust 1.96 and Lua 5.4 differential acceptance — GitHub Actions 40038040445: Linux roadmap --check and --self-test-gates, Rust tests and lint, MSRV, Lua 5.4 differential, composite consumer all successful
+- 🏷️ **T384** First-party Lua label and goto grammar with explicit compilation boundary — `███████░░░ 67%`
+  - [x] Parse label/goto statements, require identifiers and reject duplicate same-block labels — src/expr.rs: Statement::Label/Goto and owned_parser label/goto syntax tests
+  - [x] Prove compiler rejects unlowered jumps and differential-test valid/invalid source against Lua 5.4 — src/owned_flow.rs: parsed_goto_and_labels_never_silently_compile_as_noops; tests/owned_syntax.rs
+  - [ ] Pass formatting, strict Clippy, Rust unit tests, Lua 5.4 differential, MSRV and composite CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -560,4 +564,5 @@
 - 📝 Lua __tostring closures with validated string returns — `██████████ 100%`
 - 🔎 Metamethod-aware sequential ipairs with raw-access separation — `██████████ 100%`
 - 🔒 Machine-enforced owned-engine and stable-release graduation guards — `██████████ 100%`
+- 🏷️ Lua label/goto parsing (execution remains gated) — `███████░░░ 67%`
 
