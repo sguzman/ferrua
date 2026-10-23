@@ -68,7 +68,7 @@ fn emit<'a>(
         Expr::Atom(text) => {
             let integer =
                 if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
-                    i64::from_str_radix(hex, 16)
+                    u64::from_str_radix(hex, 16).map(|bits| bits as i64)
                 } else {
                     text.parse::<i64>()
                 };
@@ -376,6 +376,10 @@ mod tests {
         assert_eq!(eval("(4+6)*2"), 20);
         assert_eq!(eval("10- -3"), 13);
         assert_eq!(eval("0xF+1"), 16);
+        assert_eq!(eval("0xffffffffffffffff"), -1);
+        assert_eq!(eval("0x8000000000000000"), i64::MIN);
+        assert_eq!(eval("0xffffffffffffffff&0xff"), 255);
+        assert_eq!(eval("0x8000000000000000>>63"), 1);
         assert_eq!(eval("-(7-4)"), -3);
     }
     #[test]

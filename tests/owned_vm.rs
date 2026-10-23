@@ -12,6 +12,9 @@ fn integer_register_subset_matches_production_interpreter() {
         "(4+6)*2",
         "10- -3",
         "0xF+1",
+        "0xffffffffffffffff",
+        "0x8000000000000000",
+        "0x8000000000000000>>63",
         "-(7-4)",
         "9223372036854775807+1",
         "-7//3",
@@ -69,6 +72,9 @@ fn integer_register_subset_matches_official_lua_54_when_requested() {
         "(4+6)*2",
         "10- -3",
         "0xF+1",
+        "0xffffffffffffffff",
+        "0x8000000000000000",
+        "0x8000000000000000>>63",
         "-(7-4)",
         "9223372036854775807+1",
         "-7//3",
@@ -160,5 +166,63 @@ fn static_integer_chunk_matches_upstream_lua_when_requested() {
             .parse()
             .unwrap();
         assert_eq!(actual, expected, "upstream chunk mismatch: {source}");
+    }
+}
+
+#[test]
+fn deterministic_integer_operator_matrix_matches_lua_54_when_requested() {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() != Some("1") {
+        return;
+    }
+    // Stable generated corpus with both signs, negative shifts, zero, and
+    // out-of-range shift counts. All cases are integer-only; never floats.
+    let mut seed = 0x1234_5678_9abc_def0_u64;
+    let mut sources = Vec::new();
+    let mut expected = Vec::new();
+    let mut script = String::new();
+    for _ in 0..128 {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        let a = (seed % 2001) as i64 - 1000;
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        let b = (seed % 2001) as i64 - 1000;
+        for operator in ["+", "-", "*", "//", "%", "&", "|", "~", "<<", ">>"] {
+            if b == 0 && matches!(operator, "//" | "%") {
+                continue;
+            }
+            let source = format!("({a}){operator}({b})");
+            let bytecode = compile_integer_expression(&source).unwrap();
+            let actual = execute_integer_program(&bytecode).unwrap();
+            script.push_str(&format!("print({source})\n"));
+            sources.push(source);
+            expected.push(actual);
+        }
+    }
+    let output = Command::new("lua5.4").args(["-e", &script]).output().unwrap();
+    assert!(output.status.success(), "Lua reference failed: {}",
+        String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<_> = stdout.lines().collect();
+    assert_eq!(lines.len(), expected.len(), "reference result count mismatch");
+    for (index, line) in lines.iter().enumerate() {
+        let official: i64 = line.parse().unwrap();
+        assert_eq!(expected[index], official, "Lua 5.4 diverged: {}", sources[index]);
+    }
+}
+
+#[test]
+fn division_by_zero_matches_upstream_error_when_requested() {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() != Some("1") {
+        return;
+    }
+    for source in ["1//0", "1%0"] {
+        let bytecode = compile_integer_expression(source).unwrap();
+        assert!(execute_integer_program(&bytecode).is_err(), "{source}");
+        let code = format!("print({source})");
+        let reference = Command::new("lua5.4").args(["-e", &code]).output().unwrap();
+        assert!(!reference.status.success(), "upstream Lua accepted {source}");
     }
 }
