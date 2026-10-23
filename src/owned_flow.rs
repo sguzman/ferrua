@@ -3809,6 +3809,66 @@ mod tests {
     }
 
     #[test]
+    fn tostring_metatable_hook_requires_string_and_bounds_recursive_calls() {
+        for (source, expected) in [
+            (
+                "local t=setmetatable({}, {__tostring=function() return 'hello' end}); return tostring(t)=='hello' and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({x=7}, {__tostring=function(self) return 'n'..self.x end}); return tostring(t)=='n7' and 1 or 0",
+                1,
+            ),
+            (
+                "local count=0; local t=setmetatable({}, {__tostring=function() count=count+1; return 'yes','extra' end}); return tostring(t)=='yes' and count or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({}, {__tostring=function(self) return tostring(12) end}); return tostring(t)=='12' and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({}, {}); return type(tostring(t))=='string' and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({}, {__tostring=function() return 'safe' end}); return type(t)=='table' and tostring(t)=='safe' and 1 or 0",
+                1,
+            ),
+            (
+                "return tostring(nil)=='nil' and tostring(false)=='false' and 1 or 0",
+                1,
+            ),
+            (
+                "return tostring(7)=='7' and 1 or 0",
+                1,
+            ),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        for source in [
+            "local t=setmetatable({}, {__tostring=function() return 7 end}); return tostring(t)",
+            "local t=setmetatable({}, {__tostring=function() end}); return tostring(t)",
+            "local t=setmetatable({}, {__tostring=9}); return tostring(t)",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError),
+                "{source}"
+            );
+        }
+        let program = compile_flow_chunk(
+            "local t={}; setmetatable(t,{__tostring=function(self) return tostring(self) end}); return tostring(t)"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+    }
+
+    #[test]
     fn pairs_metatable_hook_preserves_generic_for_and_multiple_results() {
         for (source, expected) in [
             (
