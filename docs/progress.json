@@ -2331,6 +2331,28 @@
                   "evidence": "GitHub Actions 40026650737: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and reporter successful"
                 }
               ]
+            },
+            {
+              "id": "T371",
+              "emoji": "🎭",
+              "name": "Function-valued __index and __newindex Lua metamethod callbacks",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Reuse existing bounded closure frames for Lua metamethod callback invocation",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::call_owned_function, Execution::lookup_with_metatable, Execution::assign_with_metatable"
+                },
+                {
+                  "text": "Cover lexical captures, raw separation, recursion limits, methods, multi-returns and Lua 5.4 differential fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: callable_index_and_newindex_share_lexical_closure_frames; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux rustfmt, clippy, Rust tests, Rust 1.96, composite consumer and Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -2800,6 +2822,13 @@
           "name": "Bounded table-backed __index/__newindex fallback chains",
           "task_ids": [
             "T370"
+          ]
+        },
+        {
+          "emoji": "🎭",
+          "name": "Callable __index/__newindex metamethods using owned Lua closures",
+          "task_ids": [
+            "T371"
           ]
         }
       ]
