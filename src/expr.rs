@@ -335,7 +335,10 @@ impl<'a> Parser<'a> {
                 return Err(self.error("expected end to close if block"));
             }
             self.pop();
-            return Ok(Statement::If { branches, else_branch });
+            return Ok(Statement::If {
+                branches,
+                else_branch,
+            });
         }
         if self.peek().is_some_and(|token| token.spelling == "local") {
             self.pop();
@@ -406,7 +409,11 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn block(&mut self, terminators: &[&str], depth: usize) -> Result<Vec<Statement<'a>>, ParseError> {
+    fn block(
+        &mut self,
+        terminators: &[&str],
+        depth: usize,
+    ) -> Result<Vec<Statement<'a>>, ParseError> {
         // A bounded parser also protects library users from deeply nested
         // inputs that would otherwise exhaust the Rust stack.
         if depth > 64 {
@@ -426,7 +433,10 @@ impl<'a> Parser<'a> {
             result.push(statement);
             if self.peek().is_some_and(|token| token.spelling == ";") {
                 self.pop();
-            } else if self.peek().is_some_and(|token| terminators.contains(&token.spelling)) {
+            } else if self
+                .peek()
+                .is_some_and(|token| terminators.contains(&token.spelling))
+            {
                 // A block's closing token is a natural terminator.
             } else if self.peek().is_some() {
                 return Err(self.error("expected statement separator"));
@@ -635,8 +645,10 @@ mod tests {
         let statements = parse_chunk(source).unwrap();
         assert_eq!(statements.len(), 4);
         assert!(matches!(&statements[1], Statement::While { body, .. } if body.len() == 1));
-        assert!(matches!(&statements[2], Statement::If { branches, else_branch }
-            if branches.len() == 2 && branches[0].1.len() == 2 && else_branch.is_some()));
+        assert!(
+            matches!(&statements[2], Statement::If { branches, else_branch }
+            if branches.len() == 2 && branches[0].1.len() == 2 && else_branch.is_some())
+        );
     }
 
     #[test]

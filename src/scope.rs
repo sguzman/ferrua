@@ -165,7 +165,10 @@ impl<'src> Resolver<'src> {
                 self.read_expression(condition, number);
                 self.scoped_statements(body);
             }
-            Statement::If { branches, else_branch } => {
+            Statement::If {
+                branches,
+                else_branch,
+            } => {
                 for (condition, body) in branches {
                     self.read_expression(condition, number);
                     self.scoped_statements(body);
@@ -313,24 +316,39 @@ mod tests {
         let summary = analyze(
             "local x=1; while x<3 do local y=x; x=y end; if x==3 then local z=x; print(z) else local z=0; print(z) end; return x"
         ).unwrap();
-        let locals: Vec<_> = summary.bindings.iter().map(|b| (b.name, b.scope_depth, b.slot)).collect();
-        assert_eq!(locals, vec![("x", 0, 0), ("y", 1, 1), ("z", 1, 2), ("z", 1, 3)]);
-        assert!(summary.references.iter().any(|r|
-            r.name == "y" && r.access == Access::Read && r.resolution == Resolution::Local(1)));
-        assert!(summary.references.iter().any(|r|
-            r.name == "z" && r.access == Access::Read && r.resolution == Resolution::Local(2)));
-        assert!(summary.references.iter().any(|r|
-            r.name == "z" && r.access == Access::Read && r.resolution == Resolution::Local(3)));
-        assert!(summary.references.iter().any(|r|
-            r.name == "x" && r.scope_depth == 0 && r.resolution == Resolution::Local(0)));
+        let locals: Vec<_> = summary
+            .bindings
+            .iter()
+            .map(|b| (b.name, b.scope_depth, b.slot))
+            .collect();
+        assert_eq!(
+            locals,
+            vec![("x", 0, 0), ("y", 1, 1), ("z", 1, 2), ("z", 1, 3)]
+        );
+        assert!(summary.references.iter().any(|r| r.name == "y"
+            && r.access == Access::Read
+            && r.resolution == Resolution::Local(1)));
+        assert!(summary.references.iter().any(|r| r.name == "z"
+            && r.access == Access::Read
+            && r.resolution == Resolution::Local(2)));
+        assert!(summary.references.iter().any(|r| r.name == "z"
+            && r.access == Access::Read
+            && r.resolution == Resolution::Local(3)));
+        assert!(
+            summary.references.iter().any(|r| r.name == "x"
+                && r.scope_depth == 0
+                && r.resolution == Resolution::Local(0))
+        );
     }
 
     #[test]
     fn branch_local_names_do_not_escape_into_other_branches() {
-        let summary = analyze(
-            "if flag then local temp=1; print(temp) else print(temp) end; print(temp)"
-        ).unwrap();
-        let uses: Vec<_> = summary.references.iter()
+        let summary =
+            analyze("if flag then local temp=1; print(temp) else print(temp) end; print(temp)")
+                .unwrap();
+        let uses: Vec<_> = summary
+            .references
+            .iter()
             .filter(|r| r.name == "temp")
             .collect();
         assert_eq!(uses.len(), 3);
