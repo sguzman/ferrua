@@ -2497,7 +2497,7 @@
               "id": "T378",
               "emoji": "⚖️",
               "name": "Lua table equality and ordering metamethods with reversed fallbacks",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Preserve native number/string comparisons and add table __eq, __lt, __le callbacks with Lua truthiness and reverse-order fallbacks",
@@ -2511,7 +2511,8 @@
                 },
                 {
                   "text": "Pass Linux formatter, Clippy, Rust tests, Rust 1.96, composite consumer and Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40033892089: Linux, Rust 1.96, Lua 5.4 differential, composite consumer and reporter all succeeded"
                 }
               ]
             }
