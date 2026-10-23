@@ -195,7 +195,11 @@ impl<'src> Resolver<'src> {
                 }
                 self.scopes.pop();
             }
-            Statement::GenericFor { variables, iterators, body } => {
+            Statement::GenericFor {
+                variables,
+                iterators,
+                body,
+            } => {
                 // Iterator expressions evaluate before their loop locals exist.
                 for iterator in iterators {
                     self.read_expression(iterator, number);

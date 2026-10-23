@@ -833,8 +833,10 @@ mod tests {
         let source = "for k,v in pairs(t), auxiliary do\nprint(k,v)\nend";
         let parsed = parse_chunk(source).unwrap();
         assert_eq!(parsed.len(), 1);
-        assert!(matches!(&parsed[0], Statement::GenericFor { variables, iterators, body }
-            if variables == &["k", "v"] && iterators.len() == 2 && body.len() == 1));
+        assert!(
+            matches!(&parsed[0], Statement::GenericFor { variables, iterators, body }
+            if variables == &["k", "v"] && iterators.len() == 2 && body.len() == 1)
+        );
     }
 
     #[test]
