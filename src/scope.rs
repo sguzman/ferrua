@@ -109,7 +109,7 @@ impl<'src> Resolver<'src> {
             }
             Expr::Function {
                 parameters, body, ..
-            } => self.function_scope(parameters, body),
+            } => self.function_scope(parameters, body, false),
             Expr::Vararg => {}
         }
     }
@@ -140,10 +140,18 @@ impl<'src> Resolver<'src> {
         });
     }
 
-    fn function_scope(&mut self, parameters: &[&'src str], body: &[Statement<'src>]) {
+    fn function_scope(
+        &mut self,
+        parameters: &[&'src str],
+        body: &[Statement<'src>],
+        implicit_self: bool,
+    ) {
         self.function_bases.push(self.scopes.len());
         self.scopes.push(HashMap::new());
         let declaration = self.next_statement;
+        if implicit_self {
+            self.bind("self", declaration);
+        }
         for name in parameters {
             self.bind(name, declaration);
         }
@@ -190,6 +198,8 @@ impl<'src> Resolver<'src> {
             Statement::Call(call) => self.read_expression(call, number),
             Statement::Function {
                 name,
+                fields,
+                method,
                 local,
                 parameters,
                 body,
@@ -198,10 +208,13 @@ impl<'src> Resolver<'src> {
                 if *local {
                     // The local function name is in scope for its own body.
                     self.bind(name, number);
-                } else {
+                } else if fields.is_empty() && method.is_none() {
                     self.record(name, Access::Write, number);
+                } else {
+                    // Dotted methods read the base table, not a new binding.
+                    self.record(name, Access::Read, number);
                 }
-                self.function_scope(parameters, body);
+                self.function_scope(parameters, body, method.is_some());
             }
             Statement::Break => {}
             Statement::Return(values) => {
@@ -518,6 +531,17 @@ mod tests {
                 .iter()
                 .all(|reference| { reference.resolution == Resolution::Local(0) })
         );
+    }
+
+    #[test]
+    fn named_methods_have_implicit_self_and_read_the_base_table() {
+        let summary = analyze("local obj=1; function obj:run(arg) return self,arg,obj end; return obj").unwrap();
+        let obj_refs: Vec<_> = summary.references.iter().filter(|r| r.name == "obj").collect();
+        assert!(obj_refs.iter().any(|r| r.access == Access::Read && r.resolution == Resolution::Local(0)));
+        assert!(obj_refs.iter().any(|r| r.resolution == Resolution::Upvalue(0)));
+        let implicit = summary.bindings.iter().find(|b| b.name == "self").unwrap();
+        assert!(summary.references.iter().any(|r| r.name == "self" && r.resolution == Resolution::Local(implicit.slot)));
+        assert!(!summary.references.iter().any(|r| r.name == "run"));
     }
 
     #[test]

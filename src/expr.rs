@@ -302,6 +302,8 @@ pub enum Statement<'a> {
     Call(Expr<'a>),
     Function {
         name: &'a str,
+        fields: Vec<&'a str>,
+        method: Option<&'a str>,
         local: bool,
         parameters: Vec<&'a str>,
         vararg: bool,
@@ -417,9 +419,22 @@ impl<'a> Parser<'a> {
         {
             self.pop();
             let name = self.name()?;
+            let mut fields = Vec::new();
+            while self.peek().map(|token| token.spelling) == Some(".") {
+                self.pop();
+                fields.push(self.name()?);
+            }
+            let method = if self.peek().map(|token| token.spelling) == Some(":") {
+                self.pop();
+                Some(self.name()?)
+            } else {
+                None
+            };
             let (parameters, vararg, body) = self.function_body()?;
             return Ok(Statement::Function {
                 name,
+                fields,
+                method,
                 local: false,
                 parameters,
                 vararg,
@@ -573,6 +588,8 @@ impl<'a> Parser<'a> {
                 let (parameters, vararg, body) = self.function_body()?;
                 return Ok(Statement::Function {
                     name,
+                    fields: Vec::new(),
+                    method: None,
                     local: true,
                     parameters,
                     vararg,
@@ -781,6 +798,25 @@ mod tests {
             Expr::Function { .. }
         ));
         assert!(parse_chunk("local f=function(a) return a end; return f(4)").is_ok());
+    }
+
+    #[test]
+    fn named_fields_and_methods_parse_as_function_statements() {
+        let tree = parse_chunk("function obj.namespace.run(a) return a end").unwrap();
+        assert!(matches!(
+            &tree[0],
+            Statement::Function { name: "obj", fields, method: None, parameters, .. }
+            if fields == &["namespace", "run"] && parameters == &["a"]
+        ));
+        let tree = parse_chunk("function obj:run(a) return self,a end").unwrap();
+        assert!(matches!(
+            &tree[0],
+            Statement::Function { name: "obj", fields, method: Some("run"), parameters, .. }
+            if fields.is_empty() && parameters == &["a"]
+        ));
+        for source in ["function a.() end", "function a:() end", "local function a.b() end"] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
     }
 
     #[test]

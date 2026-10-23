@@ -167,3 +167,42 @@ fn owned_method_call_syntax_matches_lua_54_when_requested() {
         );
     }
 }
+
+#[test]
+fn owned_function_syntax_matches_lua_54_when_requested() {
+    if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref() != Some("1")
+    {
+        return;
+    }
+    for (source, expected_ok) in [
+        ("function f() return 1 end", true),
+        ("local function f(x,...) return x,... end", true),
+        ("function t.f(x) return x end", true),
+        ("function t.ns.f(x) return x end", true),
+        ("function t:m(x) return self,x end", true),
+        ("return function(x) return x end", true),
+        ("local f=function(x) return function(y) return x+y end end", true),
+        ("function t:() end", false),
+        ("function t.() end", false),
+        ("local function t.f() end", false),
+        ("function f(a,) end", false),
+        ("function f(a,...,b) end", false),
+        ("while true do local function f() break end end", false),
+    ] {
+        let ours = ferrua::expr::parse_chunk(source).is_ok();
+        assert_eq!(ours, expected_ok, "owned syntax: {source}");
+        let lua = format!("assert(load([==[{source}]==]))");
+        let upstream = std::process::Command::new("lua5.4")
+            .args(["-e", &lua])
+            .output()
+            .unwrap();
+        assert_eq!(
+            ours,
+            upstream.status.success(),
+            "Lua 5.4 differs on {source}: {}",
+            String::from_utf8_lossy(&upstream.stderr)
+        );
+    }
+}
