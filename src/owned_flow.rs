@@ -1570,9 +1570,8 @@ impl Execution<'_> {
         })
     }
 
-    /// Lua's __metatable field protects a metatable from ordinary base-library
-    /// reads or replacements. Read it raw; metamethod dispatch is not available.
-    fn protected_metatable(&self, handle: usize) -> Result<Option<Value>, FlowError> {
+    /// Raw metatable field lookup, without invoking a metamethod.
+    fn metatable_field(&self, handle: usize, name: &[u8]) -> Result<Option<Value>, FlowError> {
         let metatable = self
             .tables
             .get(handle)
@@ -1581,15 +1580,56 @@ impl Execution<'_> {
         let Some(metatable) = metatable else {
             return Ok(None);
         };
-        let Some(key) = self
-            .strings
-            .iter()
-            .position(|bytes| bytes == b"__metatable")
-        else {
+        let Some(key) = self.strings.iter().position(|bytes| bytes == name) else {
             return Ok(None);
         };
         let value = self.read_table(metatable, TableKey::Hashed(Value::String(key)))?;
         Ok((value != Value::Nil).then_some(value))
+    }
+
+    /// Lua's __metatable field protects metatables from ordinary base-library
+    /// reads and replacements. Its value is accessed without dispatch.
+    fn protected_metatable(&self, handle: usize) -> Result<Option<Value>, FlowError> {
+        self.metatable_field(handle, b"__metatable")
+    }
+
+    /// Table-valued __index fallbacks form a bounded chain.
+    fn lookup_with_metatable(&mut self, mut handle: usize, key: TableKey) -> Result<Value, FlowError> {
+        for _ in 0..MAX_CALL_DEPTH {
+            if self.steps >= self.budget {
+                return Err(FlowError::StepBudgetExceeded);
+            }
+            self.steps += 1;
+            let value = self.read_table(handle, key)?;
+            if value != Value::Nil {
+                return Ok(value);
+            }
+            match self.metatable_field(handle, b"__index")? {
+                Some(Value::Table(fallback)) => handle = fallback,
+                None => return Ok(Value::Nil),
+                Some(_) => return Err(FlowError::TypeError),
+            }
+        }
+        Err(FlowError::CallDepthExceeded)
+    }
+
+    /// Existing keys bypass __newindex; absent keys may redirect to a table.
+    fn assign_with_metatable(&mut self, mut handle: usize, key: TableKey, value: Value) -> Result<(), FlowError> {
+        for _ in 0..MAX_CALL_DEPTH {
+            if self.steps >= self.budget {
+                return Err(FlowError::StepBudgetExceeded);
+            }
+            self.steps += 1;
+            if self.read_table(handle, key)? != Value::Nil {
+                return self.write_table(handle, key, value);
+            }
+            match self.metatable_field(handle, b"__newindex")? {
+                Some(Value::Table(fallback)) => handle = fallback,
+                None => return self.write_table(handle, key, value),
+                Some(_) => return Err(FlowError::TypeError),
+            }
+        }
+        Err(FlowError::CallDepthExceeded)
     }
 
     fn getmetatable_builtin(&self, args: &[Value]) -> Result<Value, FlowError> {
@@ -2259,7 +2299,7 @@ impl Execution<'_> {
                                     Some(value);
                             }
                             PendingTarget::Indexed { table, key } => {
-                                self.write_table(table, key, value)?;
+                                self.assign_with_metatable(table, key, value)?;
                             }
                         }
                     }
@@ -2341,7 +2381,7 @@ impl Execution<'_> {
                         return Err(FlowError::TypeError);
                     };
                     let key = self.table_key(key)?;
-                    stack.push(self.read_table(handle, key)?);
+                    stack.push(self.lookup_with_metatable(handle, key)?);
                 }
                 Op::SetTable => {
                     let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
@@ -2351,7 +2391,7 @@ impl Execution<'_> {
                         return Err(FlowError::TypeError);
                     };
                     let key = self.table_key(key)?;
-                    self.write_table(handle, key, value)?;
+                    self.assign_with_metatable(handle, key, value)?;
                 }
                 Op::Negate => {
                     let value =
