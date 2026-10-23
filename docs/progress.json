@@ -273,7 +273,7 @@
               "id": "T110",
               "emoji": "📦",
               "name": "Checksum-verified release archive portability on Arch Linux",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Validate packaged tarball SHA-256 and execute extracted fer in an isolated pinned Arch Linux container",
@@ -287,7 +287,8 @@
                 },
                 {
                   "text": "Pass Linux CI with extracted release archive smoke, installer, compiler and differential acceptance",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40041099463: linux job checksum-verified and executed extracted archive in pinned Arch container; full five-job CI passed"
                 }
               ]
             }
