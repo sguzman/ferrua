@@ -2285,6 +2285,28 @@
                   "evidence": "GitHub Actions 40024909050: Linux, Rust 1.96, Lua 5.4 differential and composite consumer jobs successful"
                 }
               ]
+            },
+            {
+              "id": "T369",
+              "emoji": "🪞",
+              "name": "First-class Lua table metatable visibility and protection",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Represent bounded table metatables and compile shadowable getmetatable/setmetatable builtins",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: TableStorage::metatable, Builtin::GetMetatable, Builtin::SetMetatable"
+                },
+                {
+                  "text": "Implement protected __metatable reads/replacements with identity and regression coverage",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: protected_metatable, first_class_table_metatables_support_raw_storage_and_protection; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass formatter, clippy, Rust 1.96, production fer and Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -2740,6 +2762,13 @@
           "name": "Nil table holes without absent-entry heap allocation",
           "task_ids": [
             "T368"
+          ]
+        },
+        {
+          "emoji": "🪞",
+          "name": "First-class Lua metatable storage and protection",
+          "task_ids": [
+            "T369"
           ]
         }
       ]
