@@ -631,6 +631,24 @@
                   "evidence": "GitHub Actions 39946114053: cache saved linux; MSRV cache restored"
                 }
               ]
+            },
+            {
+              "id": "T215",
+              "emoji": "📡",
+              "name": "Machine-readable aggregate acceptance status on main",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Publish one status after four primary CI jobs with write scope restricted to reporter",
+                  "passed": true,
+                  "evidence": ".github/workflows/ci.yml: acceptance-status"
+                },
+                {
+                  "text": "Verify aggregate success maps to completed four-job run on main",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40024909050: four primary jobs and status reporter successful; ferrua/ci success"
+                }
+              ]
             }
           ]
         }
@@ -704,6 +722,13 @@
           "task_ids": [
             "T213",
             "T214"
+          ]
+        },
+        {
+          "emoji": "📡",
+          "name": "Aggregate acceptance through GitHub commit statuses",
+          "task_ids": [
+            "T215"
           ]
         }
       ]
@@ -2219,7 +2244,7 @@
               "id": "T367",
               "emoji": "🔁",
               "name": "First-class bounded raw and sequential Lua iteration",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Compile lexically shadowable next, pairs and ipairs over bounded table storage",
@@ -2233,7 +2258,8 @@
                 },
                 {
                   "text": "Pass Rust 1.96, formatter, clippy, production fer and upstream Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40024909050: Linux, Rust 1.96, Lua 5.4 differential and composite consumer jobs successful"
                 }
               ]
             },
@@ -2241,7 +2267,7 @@
               "id": "T368",
               "emoji": "🕳️",
               "name": "Nil-value table holes and allocation-free absent deletes",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Avoid allocating absent positive array fields when assigning nil",
@@ -2255,7 +2281,8 @@
                 },
                 {
                   "text": "Pass all four primary CI jobs with upstream Lua differential verification",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40024909050: Linux, Rust 1.96, Lua 5.4 differential and composite consumer jobs successful"
                 }
               ]
             }
