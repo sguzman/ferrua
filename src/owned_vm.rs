@@ -250,7 +250,7 @@ fn compile_statements<'a>(
 }
 
 // Lua integer floor division rounds toward minus infinity, unlike Rust /.
-fn floor_div(a: i64, b: i64) -> Result<i64, Error> {
+pub(crate) fn floor_div(a: i64, b: i64) -> Result<i64, Error> {
     if b == 0 {
         return Err(Error::DivisionByZero);
     }
@@ -266,7 +266,7 @@ fn floor_div(a: i64, b: i64) -> Result<i64, Error> {
     }
 }
 
-fn lua_mod(a: i64, b: i64) -> Result<i64, Error> {
+pub(crate) fn lua_mod(a: i64, b: i64) -> Result<i64, Error> {
     if b == 0 {
         return Err(Error::DivisionByZero);
     }
@@ -283,7 +283,7 @@ fn lua_mod(a: i64, b: i64) -> Result<i64, Error> {
 
 // Lua shifts operate on an unsigned bit pattern and negative shift counts
 // reverse direction. A count >= 64 clears all bits.
-fn shift(value: i64, distance: i64, left: bool) -> i64 {
+pub(crate) fn shift(value: i64, distance: i64, left: bool) -> i64 {
     let count = distance.unsigned_abs();
     if count >= i64::BITS as u64 {
         return 0;

@@ -3,6 +3,7 @@
 //! Boolean conditions. It is not a complete Lua runtime or the register backend.
 
 use crate::expr::{Expr, Statement, parse_chunk};
+use crate::owned_vm::{floor_div, lua_mod, shift};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -29,6 +30,13 @@ pub enum Binary {
     Add,
     Sub,
     Mul,
+    FloorDiv,
+    Mod,
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
     Less,
     LessEqual,
     Greater,
@@ -44,6 +52,7 @@ pub enum Op {
     AssignLocals(Vec<usize>),
     Negate,
     Not,
+    BitNot,
     Binary(Binary),
     JumpIfFalse(usize),
     JumpIfFalseKeep(usize),
@@ -85,6 +94,7 @@ pub enum FlowError {
     TooLarge,
     InvalidBytecode,
     TypeError,
+    DivisionByZero,
     StepBudgetExceeded,
     InvalidForStep,
     NoReturn,
@@ -97,6 +107,7 @@ impl fmt::Display for FlowError {
             Self::TooLarge => write!(out, "owned flow program exceeds size limit"),
             Self::InvalidBytecode => write!(out, "invalid owned flow bytecode"),
             Self::TypeError => write!(out, "invalid operand type in owned flow bytecode"),
+            Self::DivisionByZero => write!(out, "integer division by zero"),
             Self::StepBudgetExceeded => write!(out, "owned flow execution budget exhausted"),
             Self::InvalidForStep => write!(out, "numeric for step must not be zero"),
             Self::NoReturn => write!(out, "owned flow program exited without an integer return"),
@@ -159,9 +170,14 @@ impl<'a> Compiler<'a> {
                     self.push(Op::ReadLocal(slot))?;
                 }
             }
-            Expr::Unary { op, right } if matches!(*op, "-" | "not") => {
+            Expr::Unary { op, right } if matches!(*op, "-" | "not" | "~") => {
                 self.expression(right, depth + 1)?;
-                self.push(if *op == "-" { Op::Negate } else { Op::Not })?;
+                self.push(match *op {
+                    "-" => Op::Negate,
+                    "not" => Op::Not,
+                    "~" => Op::BitNot,
+                    _ => unreachable!("guarded unary operator"),
+                })?;
             }
             Expr::Binary { op, left, right } if matches!(*op, "and" | "or") => {
                 // Lua logical operators keep the chosen operand value.
@@ -180,6 +196,13 @@ impl<'a> Compiler<'a> {
                     "+" => Binary::Add,
                     "-" => Binary::Sub,
                     "*" => Binary::Mul,
+                    "//" => Binary::FloorDiv,
+                    "%" => Binary::Mod,
+                    "&" => Binary::BitAnd,
+                    "|" => Binary::BitOr,
+                    "~" => Binary::BitXor,
+                    "<<" => Binary::Shl,
+                    ">>" => Binary::Shr,
                     "<" => Binary::Less,
                     "<=" => Binary::LessEqual,
                     ">" => Binary::Greater,
@@ -433,6 +456,17 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
         (Add, Integer(a), Integer(b)) => Ok(Integer(a.wrapping_add(b))),
         (Sub, Integer(a), Integer(b)) => Ok(Integer(a.wrapping_sub(b))),
         (Mul, Integer(a), Integer(b)) => Ok(Integer(a.wrapping_mul(b))),
+        (FloorDiv, Integer(a), Integer(b)) => {
+            Ok(Integer(floor_div(a, b).map_err(|_| FlowError::DivisionByZero)?))
+        }
+        (Mod, Integer(a), Integer(b)) => {
+            Ok(Integer(lua_mod(a, b).map_err(|_| FlowError::DivisionByZero)?))
+        }
+        (BitAnd, Integer(a), Integer(b)) => Ok(Integer(a & b)),
+        (BitOr, Integer(a), Integer(b)) => Ok(Integer(a | b)),
+        (BitXor, Integer(a), Integer(b)) => Ok(Integer(a ^ b)),
+        (Shl, Integer(a), Integer(b)) => Ok(Integer(shift(a, b, true))),
+        (Shr, Integer(a), Integer(b)) => Ok(Integer(shift(a, b, false))),
         (Less, Integer(a), Integer(b)) => Ok(Boolean(a < b)),
         (LessEqual, Integer(a), Integer(b)) => Ok(Boolean(a <= b)),
         (Greater, Integer(a), Integer(b)) => Ok(Boolean(a > b)),
@@ -487,6 +521,12 @@ pub fn execute_flow_chunk(program: &FlowProgram, budget: usize) -> Result<i64, F
             Op::Not => {
                 let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                 stack.push(Value::Boolean(!value.truthy()));
+            }
+            Op::BitNot => {
+                let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)? else {
+                    return Err(FlowError::TypeError);
+                };
+                stack.push(Value::Integer(!value));
             }
             Op::Binary(op) => {
                 let rhs = stack.pop().ok_or(FlowError::InvalidBytecode)?;
@@ -677,6 +717,36 @@ mod tests {
     }
 
     #[test]
+    fn control_flow_reuses_register_vm_integer_semantics() {
+        assert_eq!(evaluate("return -7//3"), -3);
+        assert_eq!(evaluate("return -7%3"), 2);
+        assert_eq!(evaluate("return 7%-3"), -2);
+        assert_eq!(evaluate("return (5&3)|8"), 9);
+        assert_eq!(evaluate("return (7~3)<<2"), 16);
+        assert_eq!(evaluate("return 0x8000000000000000>>63"), 1);
+        assert_eq!(evaluate("return ~0"), -1);
+        assert_eq!(evaluate("return 8<<-1"), 4);
+        assert_eq!(
+            evaluate("local x=-7; if x//3==-3 and x%3==2 then return 1 else return 0 end"),
+            1
+        );
+        assert_eq!(evaluate("return false and (1//0) or 4"), 4);
+        assert_eq!(evaluate("if true then return 5 else return 1//0 end"), 5);
+        for source in ["return 1//0", "return 1%0"] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_chunk(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::DivisionByZero)
+            );
+        }
+        let program = compile_flow_chunk("return true & 1").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
+    }
+
+    #[test]
     fn numeric_for_supports_both_directions_and_precomputed_bounds() {
         assert_eq!(evaluate("local s=0; for i=1,5 do s=s+i end; return s"), 15);
         assert_eq!(
@@ -743,10 +813,8 @@ mod tests {
             "return print(3)",
             "return 1.2",
             "for k in pairs(t) do return 1 end; return 0",
-            "local x=1; return x//2",
             "return true",
             "local x=1; local y; return x",
-            "local x=1; return x//2",
         ] {
             match compile_flow_chunk(source) {
                 Err(_) => {}

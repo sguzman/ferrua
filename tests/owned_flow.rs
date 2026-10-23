@@ -22,6 +22,17 @@ const FIXTURES: &[&str] = &[
     "return nil or 12",
     "if false and (1+true) then return 99 else return 5 end",
     "if true or (1+true) then return 12 else return 9 end",
+    "return -7//3",
+    "return -7%3",
+    "return 7%-3",
+    "return (5&3)|8",
+    "return (7~3)<<2",
+    "return 0x8000000000000000>>63",
+    "return ~0",
+    "return 8<<-1",
+    "local x=-7; if x//3==-3 and x%3==2 then return 1 else return 0 end",
+    "return false and (1//0) or 4",
+    "if true then return 5 else return 1//0 end",
 ];
 
 fn check(reference: &str) {
