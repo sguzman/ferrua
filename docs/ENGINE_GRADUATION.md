@@ -44,6 +44,12 @@ A failure cannot be masked by deleting a difficult fixture, weakening assertions
 - Switch the default `fer` interpreter only after **all** T301/T302 implementation and required acceptance tests pass. Record the cutover in `progress.json`, provide a tested rollback path, and avoid stealth fallback to the old backend.
 - Stable `v1.0.0` or another major release additionally needs native EndeavourOS QA, checksum-verified tagged Linux artifacts, pinned downstream consumer validation, release notes and explicit completion of the separate distribution gates (T107/T204/T208). Do not publish stable tags just to improve milestone percentages.
 
+## Machine-enforced ledger safety
+
+The Lua roadmap generator (`tools/roadmap.lua`) checks the ledger's cross-milestone dependencies as well as each task's individual acceptance checks. A claimed default-engine switch requires accepted T301, T302, T303 and documented T304 criteria; a claimed owned-engine stable release requires accepted cutover and native QA; a claimed general stable `fer` release requires native QA, a verified tagged artifact, checksums and pinned downstream validation.
+
+Run `fer tools/roadmap.lua --check` for normal ledger consistency and `fer tools/roadmap.lua --self-test-gates` for negative tests that assert premature claims are rejected. Linux CI runs both modes. These checks enforce declaration consistency only: they do not prove the implementation exists, that a release was published, or that any manual/native QA was completed. The required external evidence remains mandatory.
+
 ## 5. Evidence and progress policy
 
 - The roadmap percentage averages **tracked acceptance checks**, not Lua syntax coverage, standard-library coverage, or runtime compatibility. Adding new tests may temporarily lower it.
