@@ -141,15 +141,21 @@ fn rejects_consistent_release_with_wrong_independent_digest() {
     let prefix = root.join("pinned");
     let digest = "0".repeat(64);
     let response = Command::new("sh")
-        .args(["scripts/install.sh", "v0.1.0", prefix.to_str().unwrap(), &digest])
+        .args([
+            "scripts/install.sh",
+            "v0.1.0",
+            prefix.to_str().unwrap(),
+            &digest,
+        ])
         .env("FERRUA_RELEASE_BASE", base)
         .output()
         .unwrap();
     server.join().unwrap();
     assert!(!response.status.success());
     assert!(!prefix.join("bin/fer").exists());
-    assert!(String::from_utf8_lossy(&response.stderr)
-        .contains("independently pinned SHA-256 mismatch"));
+    assert!(
+        String::from_utf8_lossy(&response.stderr).contains("independently pinned SHA-256 mismatch")
+    );
     fs::remove_dir_all(root).unwrap();
 }
 
