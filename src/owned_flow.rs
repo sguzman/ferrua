@@ -3644,7 +3644,7 @@ mod tests {
             ])
         );
         let program = compile_flow_chunk(
-            "local t=setmetatable({}, {__call=function() return 3,4 end}); return t()"
+            "local t=setmetatable({}, {__call=function() return 3,4 end}); return t()",
         )
         .unwrap();
         assert_eq!(
@@ -3662,10 +3662,8 @@ mod tests {
                 "{source}"
             );
         }
-        let program = compile_flow_chunk(
-            "local t={}; setmetatable(t,{__call=t}); return t()"
-        )
-        .unwrap();
+        let program =
+            compile_flow_chunk("local t={}; setmetatable(t,{__call=t}); return t()").unwrap();
         assert_eq!(
             execute_flow_value(&program, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
