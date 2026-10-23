@@ -334,7 +334,13 @@ impl<'a> Parser<'a> {
                 return Err(self.error("expected end to close numeric for"));
             }
             self.pop();
-            return Ok(Statement::NumericFor { variable, start, limit, step, body });
+            return Ok(Statement::NumericFor {
+                variable,
+                start,
+                limit,
+                step,
+                body,
+            });
         }
         if self.peek().is_some_and(|token| token.spelling == "repeat") {
             self.pop();
@@ -766,14 +772,19 @@ mod tests {
 
     #[test]
     fn parses_numeric_for_with_optional_step() {
-        let parsed = parse_chunk(
-            "local total=0\nfor i=1,10,2 do\ntotal=total+i\nend\nreturn total"
-        ).unwrap();
+        let parsed =
+            parse_chunk("local total=0\nfor i=1,10,2 do\ntotal=total+i\nend\nreturn total")
+                .unwrap();
         assert_eq!(parsed.len(), 3);
-        assert!(matches!(&parsed[1], Statement::NumericFor { variable, step: Some(_), body, .. }
-            if *variable == "i" && body.len() == 1));
+        assert!(
+            matches!(&parsed[1], Statement::NumericFor { variable, step: Some(_), body, .. }
+            if *variable == "i" && body.len() == 1)
+        );
         let omitted_step = parse_chunk("for i=1,3 do print(i) end").unwrap();
-        assert!(matches!(&omitted_step[0], Statement::NumericFor { step: None, .. }));
+        assert!(matches!(
+            &omitted_step[0],
+            Statement::NumericFor { step: None, .. }
+        ));
     }
 
     #[test]

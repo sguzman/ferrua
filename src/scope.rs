@@ -174,7 +174,13 @@ impl<'src> Resolver<'src> {
                 self.read_expression(condition, number);
                 self.scopes.pop();
             }
-            Statement::NumericFor { variable, start, limit, step, body } => {
+            Statement::NumericFor {
+                variable,
+                start,
+                limit,
+                step,
+                body,
+            } => {
                 // Lua numeric for control expressions evaluate before binding
                 // the loop variable; that name belongs only to the loop frame.
                 self.read_expression(start, number);
@@ -398,14 +404,15 @@ mod tests {
 
     #[test]
     fn numeric_for_initializer_uses_outer_variable_and_body_shadows_it() {
-        let summary = analyze(
-            "local i=3; for i=i,10 do print(i) end; return i"
-        ).unwrap();
+        let summary = analyze("local i=3; for i=i,10 do print(i) end; return i").unwrap();
         assert_eq!(summary.bindings.len(), 2);
         assert_eq!(summary.bindings[0].scope_depth, 0);
         assert_eq!(summary.bindings[1].scope_depth, 1);
-        let uses: Vec<_> = summary.references.iter()
-            .filter(|r| r.name == "i").collect();
+        let uses: Vec<_> = summary
+            .references
+            .iter()
+            .filter(|r| r.name == "i")
+            .collect();
         assert_eq!(uses.len(), 3);
         assert_eq!(uses[0].resolution, Resolution::Local(0));
         assert_eq!(uses[1].resolution, Resolution::Local(1));
