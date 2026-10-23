@@ -1,0 +1,16 @@
+#!/usr/bin/env fer
+-- Takes an explicitly provided throwaway directory; no hidden user-file mutations.
+local base = assert(arg[1], "usage: fer examples/fs.lua SCRATCH_DIRECTORY")
+assert(fs.mkdir(base .. "/sub"))
+assert(fs.write(base .. "/sub/notes.txt", "Ferrua filesystem works") == 23)
+assert(fs.read(base .. "/sub/notes.txt") == "Ferrua filesystem works")
+assert(fs.copy(base .. "/sub/notes.txt", base .. "/copy.txt") == 23)
+assert(fs.exists(base .. "/copy.txt"))
+local listed = assert(fs.list(base))
+assert(#listed == 2)
+local tree = assert(fs.walk(base))
+assert(#tree == 3)
+assert(tree[1].type == "file" or tree[1].type == "directory")
+local missing, err = fs.read(base .. "/missing.txt")
+assert(missing == nil and type(err) == "string")
+print("filesystem module smoke passed")

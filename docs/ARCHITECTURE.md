@@ -10,6 +10,8 @@ Because Lua sources are evaluated by the engine, Ferrua's current conformance, b
 
 Ferrua provides its own small JSON parser/serializer from `tools/json.lua` as a built-in global available in both trusted and restricted execution modes. No Python and no dynamic Rust library are required for the module. Parsed arrays and objects carry distinct Lua metatables so even `[]` and `{}` preserve their shape on re-encoding. The parser checks strict JSON number/whitespace rules and encodes Unicode escapes without depending on the Lua 5.3+ `utf8` library; version-spanning regression cases are in `tests/json_spec.lua`.
 
+The trusted `fs` module provides bounded UTF-8 file IO, direct file copy, safe directory creation and deterministic directory enumeration and traversal through a Rust-native bridge; see [filesystem API](FILESYSTEM.md).
+
 The trusted `process` module calls the Rust `std::process::Command` API directly using JSON-encoded arguments through a native VM callback. It is never installed in the restricted sandbox. Child processes use the caller's permissions, have a default 60-second timeout and capped captured output. Shells run only when deliberately requested as the executable. See [docs/PROCESS.md](PROCESS.md).
 
 For GitHub Actions use, the root [composite action](../action.yml) installs the Rust CLI with Cargo and exposes it on PATH. It currently builds from source, rather than downloading an unversioned arbitrary binary; see [Actions integration](ACTIONS.md).

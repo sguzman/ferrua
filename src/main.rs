@@ -4,6 +4,7 @@
 use luna_core::{version::LuaVersion, vm::Vm};
 
 mod process;
+mod fs;
 use std::io::{self, BufRead, IsTerminal, Read, Write};
 
 const HELP: &str = "\
@@ -150,6 +151,17 @@ fn vm_for(options: &Options) -> Vm {
             .expect("embedded process module must return a table");
         vm.set_global("process", module)
             .expect("process module must register");
+        let fs_bridge = vm.native_typed(fs::serialized as fn(String) -> String);
+        vm.set_global("__fer_fs_call", fs_bridge)
+            .expect("fs bridge must register");
+        let fs_module = vm
+            .eval_chunk(include_str!("../tools/fs.lua"), "@ferrua/fs.lua")
+            .expect("embedded fs module must compile")
+            .into_iter()
+            .next()
+            .expect("embedded fs module must return a table");
+        vm.set_global("fs", fs_module)
+            .expect("fs module must register");
     }
     // User-supplied budget applies to the user script, not runtime initialization.
     if let Some(budget) = options.budget {

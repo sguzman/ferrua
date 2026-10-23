@@ -162,3 +162,13 @@ fn restricted_mode_has_no_subprocess_bridge() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+#[test]
+fn restricted_mode_excludes_filesystem_bridge() {
+    let out = fer(&[
+        "--sandbox",
+        "-e",
+        "assert(fs == nil and __fer_fs_call == nil)",
+    ]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+}

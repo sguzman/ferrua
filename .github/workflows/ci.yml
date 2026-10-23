@@ -34,7 +34,10 @@ jobs:
           printf 'print(6 * 7)\n' | cargo run -- -
           cargo run -- examples/count.lua | grep -x 55
           cargo run -- examples/process.lua | grep -x "process module smoke passed"
-          cargo run -- --sandbox -e "assert(process == nil and __fer_process_run == nil)"
+          scratch_dir="$(mktemp -d)"
+          trap 'rm -rf "$scratch_dir"' EXIT
+          cargo run -- examples/fs.lua "$scratch_dir" | grep -x "filesystem module smoke passed"
+          cargo run -- --sandbox -e "assert(process == nil and __fer_process_run == nil and fs == nil and __fer_fs_call == nil)"
           cargo run -- --sandbox -e "assert(io == nil and os == nil)"
           cargo run -- --sandbox -e "assert(json.decode('{\"key\":42}').key == 42)"
           ! timeout 10s cargo run -- --budget=1000 -e "while true do end"
@@ -61,4 +64,7 @@ jobs:
           command -v fer
           fer examples/count.lua | grep -x 55
           fer examples/process.lua | grep -x "process module smoke passed"
+          scratch_dir="$(mktemp -d)"
+          trap 'rm -rf "$scratch_dir"' EXIT
+          fer examples/fs.lua "$scratch_dir" | grep -x "filesystem module smoke passed"
           fer --sandbox -e "assert(process == nil and __fer_process_run == nil)"
