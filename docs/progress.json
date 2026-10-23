@@ -2631,6 +2631,28 @@
                   "evidence": "GitHub Actions 40038040445: Linux roadmap --check and --self-test-gates, Rust tests and lint, MSRV, Lua 5.4 differential, composite consumer all successful"
                 }
               ]
+            },
+            {
+              "id": "T384",
+              "emoji": "🏷️",
+              "name": "First-party Lua label and goto grammar with explicit compilation boundary",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Parse label/goto statements, require identifiers and reject duplicate same-block labels",
+                  "passed": true,
+                  "evidence": "src/expr.rs: Statement::Label/Goto and owned_parser label/goto syntax tests"
+                },
+                {
+                  "text": "Prove compiler rejects unlowered jumps and differential-test valid/invalid source against Lua 5.4",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: parsed_goto_and_labels_never_silently_compile_as_noops; tests/owned_syntax.rs"
+                },
+                {
+                  "text": "Pass formatting, strict Clippy, Rust unit tests, Lua 5.4 differential, MSRV and composite CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3191,6 +3213,13 @@
           "name": "Machine-enforced owned-engine and stable-release graduation guards",
           "task_ids": [
             "T383"
+          ]
+        },
+        {
+          "emoji": "🏷️",
+          "name": "Lua label/goto parsing (execution remains gated)",
+          "task_ids": [
+            "T384"
           ]
         }
       ]
