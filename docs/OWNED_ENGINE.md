@@ -212,3 +212,7 @@ The independent VM still lacks general associative string-keyed tables, metatabl
 ### Unicode scalar string escapes
 
 The owned string decoder now accepts valid Unicode scalar values in Lua \u{hex} escapes and emits their UTF-8 byte sequences, including multibyte code points. Invalid scalars and unfinished or overflowing escapes reject explicitly rather than silently changing bytes. Lua also permits certain extended non-scalar escape encodings; those remain outside this narrowed compiler subset and are not claimed compatible. Upstream differential tests exercise accepted scalar escapes.
+
+### Unicode scalar escape acceptance
+
+[CI #40004973760](https://github.com/sguzman/ferrua/actions/runs/40004973760): Unicode scalar byte encoding, invalid-scalar rejection, UTF-8 lengths and string equality passed all four jobs. The independent runtime remains a bounded Lua subset and does not implement Lua's extended non-scalar escape encodings or a full standard library.

@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 93%` across 69 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 93%` across 70 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -318,6 +318,10 @@
   - [x] Compile right-associative string concatenation with supported integer coercion and runtime byte interning — src/owned_flow.rs: Binary::Concat, Execution::string_bytes, Execution::intern_string
   - [x] Support lexicographic string comparisons and bounded computed byte lengths — src/owned_flow.rs: lua_string_concat_and_lexical_order_use_bounded_byte_values
   - [x] Accept full CI against production fer and upstream Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 40004295352: four jobs passed
+- 🌐 **T345** Unicode scalar Lua string escape encoding — `██████████ 100%`
+  - [x] Parse valid Lua Unicode scalar escapes and encode into byte-preserving UTF-8 strings — src/owned_flow.rs: decode_lua_string Unicode scalar escape branch
+  - [x] Reject invalid Unicode scalars; verify multibyte length and equality — src/owned_flow.rs: unicode_scalar_escapes_encode_utf8_bytes
+  - [x] Pass production fer and upstream Lua 5.4.6 differential CI and Rust 1.96 — tests/owned_flow.rs; GitHub Actions 40004973760: four jobs passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -361,4 +365,5 @@
 - 📏 Lua bounded table length and sequence-border behavior — `██████████ 100%`
 - 🔤 Interned immutable Lua byte-string literals and byte length — `██████████ 100%`
 - 🔗 Bounded Lua string concatenation and lexical ordering — `██████████ 100%`
+- 🌐 Unicode scalar Lua string escape encoding — `██████████ 100%`
 

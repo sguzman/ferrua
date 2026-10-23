@@ -1708,6 +1708,29 @@
                   "evidence": "tests/owned_flow.rs; GitHub Actions 40004295352: four jobs passed"
                 }
               ]
+            },
+            {
+              "id": "T345",
+              "emoji": "🌐",
+              "name": "Unicode scalar Lua string escape encoding",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Parse valid Lua Unicode scalar escapes and encode into byte-preserving UTF-8 strings",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: decode_lua_string Unicode scalar escape branch"
+                },
+                {
+                  "text": "Reject invalid Unicode scalars; verify multibyte length and equality",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: unicode_scalar_escapes_encode_utf8_bytes"
+                },
+                {
+                  "text": "Pass production fer and upstream Lua 5.4.6 differential CI and Rust 1.96",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 40004973760: four jobs passed"
+                }
+              ]
             }
           ]
         }
@@ -1995,6 +2018,13 @@
           "name": "Bounded Lua string concatenation and lexical ordering",
           "task_ids": [
             "T344"
+          ]
+        },
+        {
+          "emoji": "🌐",
+          "name": "Unicode scalar Lua string escape encoding",
+          "task_ids": [
+            "T345"
           ]
         }
       ]
