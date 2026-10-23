@@ -34,6 +34,8 @@ jobs:
         run: cargo test --locked --all-targets
       - name: Lua roadmap integrity
         run: cargo run --locked -- tools/roadmap.lua --check
+      - name: Engine graduation and release safety guards
+        run: cargo run --locked -- tools/roadmap.lua --self-test-gates
       - name: JSON conformance matrix
         run: |
           cargo run --locked -- tests/json_spec.lua | grep -x "JSON conformance smoke passed"
