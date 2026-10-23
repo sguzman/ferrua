@@ -2813,6 +2813,28 @@
                   "evidence": "GitHub Actions 40042287118: Linux formatting/lint/full tests, Rust 1.96, Lua 5.4 differential including intentional error cases, and action consumer passed"
                 }
               ]
+            },
+            {
+              "id": "T388",
+              "emoji": "🧯",
+              "name": "Bounded Lua error values and protected closure calls",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Represent explicit Lua error values and expose lexically shadowable error/pcall builtins without production-engine changes",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: FlowError::Thrown, Builtin::Error, Builtin::Pcall and compiler fallback resolution"
+                },
+                {
+                  "text": "Implement bounded closure pcall success/failure result adjustment, preservation of thrown values and non-catchable resource limits; add Rust and upstream Lua regression fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::pcall_builtin, bounded_lua_error_and_protected_closure_calls_preserve_values; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/full tests, Rust 1.96 and Lua 5.4 differential CI including protected errors and reference outcomes",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3401,6 +3423,13 @@
           "name": "Intentional syntax and runtime failure parity",
           "task_ids": [
             "T387"
+          ]
+        },
+        {
+          "emoji": "🧯",
+          "name": "Explicit Lua error values and protected closure calls",
+          "task_ids": [
+            "T388"
           ]
         }
       ]
