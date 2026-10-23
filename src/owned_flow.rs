@@ -110,7 +110,7 @@ impl fmt::Display for FlowError {
             Self::DivisionByZero => write!(out, "integer division by zero"),
             Self::StepBudgetExceeded => write!(out, "owned flow execution budget exhausted"),
             Self::InvalidForStep => write!(out, "numeric for step must not be zero"),
-            Self::NoReturn => write!(out, "owned flow program exited without an integer return"),
+            Self::NoReturn => write!(out, "owned flow program exited without a return"),
         }
     }
 }
@@ -511,9 +511,9 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
     }
 }
 
-/// Run owned control-flow bytecode with a strict instruction budget.
+/// Run owned control-flow bytecode and return an integer, Boolean or nil.
 /// No syscalls, global environment, host callbacks, or I/O.
-pub fn execute_flow_chunk(program: &FlowProgram, budget: usize) -> Result<i64, FlowError> {
+pub fn execute_flow_value(program: &FlowProgram, budget: usize) -> Result<Value, FlowError> {
     if program.instructions.len() > MAX_CODE || program.slots > MAX_SLOTS {
         return Err(FlowError::InvalidBytecode);
     }
@@ -661,10 +661,7 @@ pub fn execute_flow_chunk(program: &FlowProgram, budget: usize) -> Result<i64, F
                 }
             }
             Op::Return => {
-                let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)? else {
-                    return Err(FlowError::TypeError);
-                };
-                return Ok(value);
+                return stack.pop().ok_or(FlowError::InvalidBytecode);
             }
         }
         if stack.len() > MAX_STACK {
@@ -673,6 +670,15 @@ pub fn execute_flow_chunk(program: &FlowProgram, budget: usize) -> Result<i64, F
         pc = next;
     }
     Err(FlowError::NoReturn)
+}
+
+/// Retain the original integer-only API for existing consumers. Non-integer
+/// returns remain a type error here; use execute_flow_value for typed values.
+pub fn execute_flow_chunk(program: &FlowProgram, budget: usize) -> Result<i64, FlowError> {
+    match execute_flow_value(program, budget)? {
+        Value::Integer(value) => Ok(value),
+        _ => Err(FlowError::TypeError),
+    }
 }
 
 #[cfg(test)]
@@ -827,6 +833,34 @@ mod tests {
             1
         );
     }
+    #[test]
+    fn returns_lua_boolean_nil_and_lazy_operand_values() {
+        for (source, expected) in [
+            ("return true", Value::Boolean(true)),
+            ("return false", Value::Boolean(false)),
+            ("return nil", Value::Nil),
+            ("return false and (1//0)", Value::Boolean(false)),
+            ("return true or (1//0)", Value::Boolean(true)),
+            ("return nil or false", Value::Boolean(false)),
+            ("return 0 and true", Value::Boolean(true)),
+            ("return not 0", Value::Boolean(false)),
+            ("return 5>3", Value::Boolean(true)),
+            ("local x; return x", Value::Nil),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Ok(expected),
+                "{source}"
+            );
+        }
+        let compiled = compile_flow_chunk("return true").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&compiled, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
+    }
+
     #[test]
     fn lua_assignment_arity_and_nil_padding() {
         assert_eq!(

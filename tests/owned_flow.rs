@@ -1,5 +1,5 @@
 //! Differential acceptance for experimental integer+boolean control-flow VM.
-use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, compile_flow_chunk, execute_flow_chunk};
+use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, Value, compile_flow_chunk, execute_flow_value};
 use std::process::Command;
 
 const FIXTURES: &[&str] = &[
@@ -43,14 +43,33 @@ const FIXTURES: &[&str] = &[
     "local x,y=3,4; x,y=7; if y==nil then return x else return 0 end",
     "local x,y=3,4; x=7,8; return x",
     "local x,y=1,2; x,y=3,4,5; return x+y",
+    "return true",
+    "return false",
+    "return nil",
+    "return false and (1//0)",
+    "return true or (1//0)",
+    "return nil or false",
+    "return 0 and true",
+    "return not 0",
+    "return 5>3",
+    "local x; return x",
 ];
 
-fn check(reference: &str) {
+fn render(value: Value) -> String {
+    match value {
+        Value::Integer(number) => number.to_string(),
+        Value::Boolean(boolean) => boolean.to_string(),
+        Value::Nil => "nil".to_owned(),
+    }
+}
+
+fn check(reference: &str, prefix: &[&str]) {
     for source in FIXTURES {
         let compiled = compile_flow_chunk(source).unwrap();
-        let owned = execute_flow_chunk(&compiled, DEFAULT_STEP_BUDGET).unwrap();
+        let owned = render(execute_flow_value(&compiled, DEFAULT_STEP_BUDGET).unwrap());
         let code = format!("print((function() {source} end)())");
         let output = Command::new(reference)
+            .args(prefix)
             .args(["-e", &code])
             .output()
             .unwrap();
@@ -59,35 +78,14 @@ fn check(reference: &str) {
             "{source}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-        let expected: i64 = String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .parse()
-            .unwrap();
+        let expected = String::from_utf8_lossy(&output.stdout).trim().to_owned();
         assert_eq!(owned, expected, "{reference} differs on {source}");
     }
 }
 
 #[test]
 fn production_fer_agrees_with_owned_control_flow_subset() {
-    for source in FIXTURES {
-        let compiled = compile_flow_chunk(source).unwrap();
-        let owned = execute_flow_chunk(&compiled, DEFAULT_STEP_BUDGET).unwrap();
-        let code = format!("print((function() {source} end)())");
-        let output = Command::new(env!("CARGO_BIN_EXE_fer"))
-            .args(["--lua=5.4", "-e", &code])
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{source}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let expected: i64 = String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .parse()
-            .unwrap();
-        assert_eq!(owned, expected, "production fer differs on {source}");
-    }
+    check(env!("CARGO_BIN_EXE_fer"), &["--lua=5.4"]);
 }
 
 #[test]
@@ -97,6 +95,6 @@ fn upstream_lua_agrees_when_requested() {
         .as_deref()
         == Some("1")
     {
-        check("lua5.4");
+        check("lua5.4", &[]);
     }
 }

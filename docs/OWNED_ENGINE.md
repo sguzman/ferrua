@@ -64,3 +64,7 @@ The experimental chunk parser now recognizes `break` only inside a loop and only
 ### Assignment arity, excess values and missing nils
 
 The owned control-flow bytecode now handles ordinary fixed-count Lua local declarations and local assignments with fewer or more RHS expressions than targets. Missing values become `nil`; surplus values are evaluated and discarded, and all RHS values are evaluated before rebinding local slots. This includes zero-initializer `local x` declarations and repeated target slots. Function calls, varargs, and Lua multi-result expansion are still unsupported, so this is not complete Lua assignment semantics. The parity suite checks the supported fixed-result cases directly against production `fer` and upstream Lua 5.4.6.
+
+### Typed values returned by bounded owned flow
+
+The experimental `execute_flow_value` API returns the VM's currently supported `Integer`, `Boolean` or `Nil` value without losing the original short-circuit operand type. The original `execute_flow_chunk` API remains integer-only for backwards compatibility, explicitly rejecting Boolean and nil return values. The differential suite checks the text representation of all three supported return types against production `fer` and upstream Lua 5.4.6. Strings, tables, floats, functions and all other general Lua runtime values remain unsupported.
