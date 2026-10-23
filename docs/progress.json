@@ -2290,7 +2290,7 @@
               "id": "T369",
               "emoji": "🪞",
               "name": "First-class Lua table metatable visibility and protection",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Represent bounded table metatables and compile shadowable getmetatable/setmetatable builtins",
@@ -2304,7 +2304,8 @@
                 },
                 {
                   "text": "Pass formatter, clippy, Rust 1.96, production fer and Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40025867923: four primary jobs and aggregate status passed"
                 }
               ]
             }
