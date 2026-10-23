@@ -2608,6 +2608,28 @@
                   "evidence": "GitHub Actions 40037327110: Linux quality, Rust 1.96, Lua 5.4 differential, composite consumer and status reporter passed"
                 }
               ]
+            },
+            {
+              "id": "T383",
+              "emoji": "🔒",
+              "name": "Machine-enforced engine graduation and release acceptance guards",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Reject ledger claims of native engine cutover before parser, VM and conformance acceptance",
+                  "passed": true,
+                  "evidence": "tools/roadmap.lua: validate_graduation checks T301, T302, T303 and T304"
+                },
+                {
+                  "text": "Add negative Lua self-tests and CI step for denied premature native switch and stable release assertions",
+                  "passed": true,
+                  "evidence": "tools/roadmap.lua: --self-test-gates; .github/workflows/ci.yml; docs/ENGINE_GRADUATION.md"
+                },
+                {
+                  "text": "Pass Linux CI roadmap integrity and negative gate tests alongside Rust 1.96 and Lua 5.4 differential acceptance",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3161,6 +3183,13 @@
           "name": "Metamethod-aware sequential ipairs with raw-access separation",
           "task_ids": [
             "T382"
+          ]
+        },
+        {
+          "emoji": "🔒",
+          "name": "Machine-enforced owned-engine and stable-release graduation guards",
+          "task_ids": [
+            "T383"
           ]
         }
       ]
