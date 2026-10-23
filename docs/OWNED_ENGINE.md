@@ -438,3 +438,10 @@ The bounded owned VM caps recursive Lua calls and table-metatable fallback chain
 The owned Lua runtime's first-class `tostring(table)` builtin can now invoke a first-party function-valued `__tostring` field on the table's raw metatable. The original table is passed as the callback's sole argument through the existing bounded closure executor. Only the first return value is used, and it must be a Lua byte string. Extra callback results are discarded; missing or non-string results raise the experimental VM's type error. Without `__tostring`, the existing bounded table identity string is retained. Primitive `tostring` behavior is unchanged.
 
 The pending unit and upstream Lua 5.4 differential fixtures cover lexical captures, string return validation, multiple returns, fallback stringification and recursive callback limits. [CI #40036891366](https://github.com/sguzman/ferrua/actions/runs/40036891366) passed all four primary jobs and the status reporter, including Lua 5.4 differential fixtures. Primitive metatable overrides, callable-table metamethods, Lua-compatible error strings and full runtime conformance are still outside the accepted subset. Production `fer` remains pinned to the existing external engine.
+
+
+### Lua ipairs metatable-aware iteration (pending CI)
+
+Lua 5.4's `ipairs` iterator looks up successive positive integer fields using ordinary table indexing, which may invoke a table's `__index` fallback for a missing array element. The owned VM previously used raw reads and could terminate prematurely when the metatable supplied the next value. The experimental iterator now invokes the same bounded `lookup_with_metatable` path as normal indexed expressions. Iteration still stops at the first nil value, and `ipairs` ignores the separate `__pairs` hook. Raw table operations such as `rawget` and `next` continue to bypass indexing metamethods.
+
+This increment is **pending full CI acceptance**, with unit and upstream Lua 5.4 differential cases for metatable table/closure fallbacks, array holes, termination, raw bypass and cyclic `__index` protection. No change is made to the production `fer` runtime.
