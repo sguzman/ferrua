@@ -682,7 +682,7 @@ mod tests {
             "x=1; return x",
             "return print(3)",
             "return 1.2",
-            "local x=1; for i=1,5 do x=x+i end; return x",
+            "for k in pairs(t) do return 1 end; return 0",
             "local x=1; return x//2",
             "return true",
             "local x=1; local y; return x",
