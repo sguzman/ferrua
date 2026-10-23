@@ -1903,8 +1903,12 @@ impl Execution<'_> {
                         }
                         if matches!(
                             builtin,
-                            Builtin::Select | Builtin::Assert | Builtin::Next
-                                | Builtin::Pairs | Builtin::Ipairs | Builtin::IpairsIterator
+                            Builtin::Select
+                                | Builtin::Assert
+                                | Builtin::Next
+                                | Builtin::Pairs
+                                | Builtin::Ipairs
+                                | Builtin::IpairsIterator
                         ) {
                             let returned = match builtin {
                                 Builtin::Select => self.select_builtin(&args)?,
@@ -2002,7 +2006,9 @@ impl Execution<'_> {
                             | Builtin::Pairs
                             | Builtin::Ipairs
                             | Builtin::IpairsIterator => {
-                                unreachable!("iteration/selection builtins handled as multiple results")
+                                unreachable!(
+                                    "iteration/selection builtins handled as multiple results"
+                                )
                             }
                             Builtin::ToString => match value {
                                 Value::String(_) => value,
@@ -3377,7 +3383,9 @@ mod tests {
         // Eight empty high-index deletions previously consumed the entire
         // bounded table cell budget despite not inserting any Lua keys.
         assert_eq!(
-            evaluate("local total=0; for i=1,8 do local t={}; t[16384]=nil; t[1]=i; total=total+t[1] end; return total"),
+            evaluate(
+                "local total=0; for i=1,8 do local t={}; t[16384]=nil; t[1]=i; total=total+t[1] end; return total"
+            ),
             36
         );
         assert_eq!(
@@ -3407,15 +3415,21 @@ mod tests {
         assert_eq!(evaluate("return next({})==nil and 1 or 0"), 1);
         assert_eq!(evaluate("local t={7}; return next(t,1)==nil and 1 or 0"), 1);
         assert_eq!(
-            evaluate("local t={[0]=4,[-2]=5,[true]=6,[1]=7,[2]=8,x=9}; local s=0; local n=0; for k,v in pairs(t) do s=s+v; n=n+1 end; return s*10+n"),
+            evaluate(
+                "local t={[0]=4,[-2]=5,[true]=6,[1]=7,[2]=8,x=9}; local s=0; local n=0; for k,v in pairs(t) do s=s+v; n=n+1 end; return s*10+n"
+            ),
             396
         );
         assert_eq!(
-            evaluate("local t={4,5,6}; local s=0; for i,v in ipairs(t) do s=s+i*10+v end; return s"),
+            evaluate(
+                "local t={4,5,6}; local s=0; for i,v in ipairs(t) do s=s+i*10+v end; return s"
+            ),
             75
         );
         assert_eq!(
-            evaluate("local t={[1]=2,[3]=8}; local n=0; for i,v in ipairs(t) do n=n+i+v end; return n"),
+            evaluate(
+                "local t={[1]=2,[3]=8}; local n=0; for i,v in ipairs(t) do n=n+i+v end; return n"
+            ),
             3
         );
         assert_eq!(
@@ -3431,7 +3445,9 @@ mod tests {
             14
         );
         assert_eq!(
-            evaluate("local ipairs=function() return function(_,n) if n==nil then return 2,3 end end,nil,nil end; local s=0; for i,v in ipairs({}) do s=s+i+v end; return s"),
+            evaluate(
+                "local ipairs=function() return function(_,n) if n==nil then return 2,3 end end,nil,nil end; local s=0; for i,v in ipairs({}) do s=s+i+v end; return s"
+            ),
             5
         );
         assert_eq!(evaluate("return type(pairs)=='function' and 1 or 0"), 1);
@@ -3440,22 +3456,29 @@ mod tests {
             6
         );
         assert_eq!(
-            evaluate("local key={}; local t={[key]=4}; local k,v=next(t); return rawequal(k,key) and v or 0"),
+            evaluate(
+                "local key={}; local t={[key]=4}; local k,v=next(t); return rawequal(k,key) and v or 0"
+            ),
             4
         );
         assert_eq!(
-            evaluate("local t={10,20}; local f={}; for i,v in ipairs(t) do f[i]=function() return v end end; return f[1]()+f[2]()"),
+            evaluate(
+                "local t={10,20}; local f={}; for i,v in ipairs(t) do f[i]=function() return v end end; return f[1]()+f[2]()"
+            ),
             30
         );
         assert_eq!(
-            evaluate("local t={3,4}; local iter,state,k=pairs(t); return type(iter)=='function' and rawequal(state,t) and k==nil and 1 or 0"),
+            evaluate(
+                "local t={3,4}; local iter,state,k=pairs(t); return type(iter)=='function' and rawequal(state,t) and k==nil and 1 or 0"
+            ),
             1
         );
         let entries = (1..=50)
             .map(|number| number.to_string())
             .collect::<Vec<_>>()
             .join(",");
-        let program = compile_flow_chunk(&format!("local t={{{entries}}}; return next(t)")).unwrap();
+        let program =
+            compile_flow_chunk(&format!("local t={{{entries}}}; return next(t)")).unwrap();
         assert_eq!(
             execute_flow_values(&program, 80),
             Err(FlowError::StepBudgetExceeded)
