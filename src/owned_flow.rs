@@ -5423,18 +5423,35 @@ mod tests {
     }
 
     #[test]
-    fn parsed_goto_and_labels_never_silently_compile_as_noops() {
+    fn same_block_goto_executes_but_cross_scope_jumps_are_rejected() {
+        for (source, expected) in [
+            ("::start:: goto done; ::done:: return 4", 4),
+            ("goto done ::done:: return 4", 4),
+            ("do ::inside:: end; return 4", 4),
+            ("local x=1; goto done; x=20; ::done:: return x", 1),
+            ("local x=3; ::name:: goto done; ::done:: return x", 3),
+            ("do local x=2; goto done; x=9; ::done:: end; return 4", 4),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
         for source in [
-            "::start:: goto done; ::done:: return 4",
-            "goto done ::done:: return 4",
-            "do ::inside:: end; return 4",
+            "goto missing; return 1",
+            "goto done; local x=1; ::done:: return x",
+            "local x=1; ::again:: local y=2; goto again; return x",
+            "if true then goto done end; ::done:: return 4",
+            "do ::inside:: end; goto inside; return 4",
         ] {
             let result = compile_flow_chunk(source);
             assert!(
                 matches!(result, Err(FlowError::Unsupported(_))),
-                "goto and label execution must be explicit: {source}"
+                "unsupported jump must be explicitly rejected: {source}"
             );
         }
+        let program = compile_flow_chunk("::loop:: goto loop; return 1").unwrap();
+        assert_eq!(
+            execute_flow_value(&program, 80),
+            Err(FlowError::StepBudgetExceeded)
+        );
     }
 
     #[test]
