@@ -447,6 +447,11 @@ const FIXTURES: &[&str] = &[
     "local t=setmetatable({}, {__index={[1]=3}}); return next(t)==nil and 1 or 0",
     "local t=setmetatable({1,2}, {__pairs=function() return function() end,nil,nil end}); local sum=0; for _,v in ipairs(t) do sum=sum+v end; return sum",
     "local t=setmetatable({5}, {__index=function() return nil end}); local sum=0; for i,v in ipairs(t) do sum=sum+v end; return sum",
+    "::start:: goto done; ::done:: return 4",
+    "goto done ::done:: return 4",
+    "local x=1; goto done; x=20; ::done:: return x",
+    "local x=3; ::name:: goto done; ::done:: return x",
+    "do local x=2; goto done; x=9; ::done:: end; return 4",
 ];
 
 fn render(values: &[Value]) -> String {
