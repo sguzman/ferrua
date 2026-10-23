@@ -54,7 +54,7 @@ local lines = {
     "# 🗺️ Ferrua roadmap", "",
     "**Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.",
     "",
-    string.format("**Overall:** \`%s %d%%\` across %d atomic tasks. This describes recorded work, not full Lua compatibility.",
+    string.format("**Overall:** `%s %d%%` across %d atomic tasks. This describes recorded work, not full Lua compatibility.",
         bar(mean(tasks)), mean(tasks), #tasks), ""
 }
 for _, milestone in ipairs(ledger.milestones) do
@@ -62,17 +62,17 @@ for _, milestone in ipairs(ledger.milestones) do
     for _, phase in ipairs(milestone.phases) do
         for _, task in ipairs(phase.tasks) do m_tasks[#m_tasks + 1] = task end
     end
-    lines[#lines + 1] = string.format("## %s %s — %s — \`%s %d%%\`",
+    lines[#lines + 1] = string.format("## %s %s — %s — `%s %d%%`",
         milestone.emoji, milestone.id, milestone.name, bar(mean(m_tasks)), mean(m_tasks))
     lines[#lines + 1] = ""
     lines[#lines + 1] = "**Acceptance gate:** " .. milestone.gate
     lines[#lines + 1] = ""
     for _, phase in ipairs(milestone.phases) do
-        lines[#lines + 1] = string.format("### %s %s — %s — \`%s %d%%\`",
+        lines[#lines + 1] = string.format("### %s %s — %s — `%s %d%%`",
             phase.emoji, phase.id, phase.name, bar(mean(phase.tasks)), mean(phase.tasks))
         lines[#lines + 1] = ""
         for _, task in ipairs(phase.tasks) do
-            lines[#lines + 1] = string.format("- %s **%s** %s — \`%s %d%%\`",
+            lines[#lines + 1] = string.format("- %s **%s** %s — `%s %d%%`",
                 task.emoji, task.id, task.name, bar(task.progress), task.progress)
             for _, check in ipairs(task.checks) do
                 lines[#lines + 1] = string.format("  - [%s] %s%s", check.passed and "x" or " ",
@@ -89,7 +89,7 @@ for _, milestone in ipairs(ledger.milestones) do
             assert(lookup[id], "unknown feature task: " .. id)
             f_tasks[#f_tasks + 1] = lookup[id]
         end
-        lines[#lines + 1] = string.format("- %s %s — \`%s %d%%\`",
+        lines[#lines + 1] = string.format("- %s %s — `%s %d%%`",
             feature.emoji, feature.name, bar(mean(f_tasks)), mean(f_tasks))
     end
     lines[#lines + 1] = ""
