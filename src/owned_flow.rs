@@ -49,6 +49,7 @@ pub enum Builtin {
     RawSet,
     RawLen,
     Select,
+    Assert,
 }
 
 impl Value {
@@ -458,6 +459,9 @@ impl<'a> Compiler<'a> {
                         }
                         Err(_) if *text == "select" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::Select)))?;
+                        }
+                        Err(_) if *text == "assert" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::Assert)))?;
                         }
                         Err(error) => return Err(error),
                     }
@@ -1816,8 +1820,14 @@ impl Execution<'_> {
                         if args.is_empty() {
                             return Err(FlowError::TypeError);
                         }
-                        if builtin == Builtin::Select {
-                            let returned = self.select_builtin(&args)?;
+                        if matches!(builtin, Builtin::Select | Builtin::Assert) {
+                            let returned = if builtin == Builtin::Select {
+                                self.select_builtin(&args)?
+                            } else if args.first().is_some_and(|value| value.truthy()) {
+                                args
+                            } else {
+                                return Err(FlowError::TypeError);
+                            };
                             if matches!(
                                 instructions[pc],
                                 Op::CallMany(_) | Op::CallSpread { many: true, .. }
@@ -1882,7 +1892,9 @@ impl Execution<'_> {
                                 Value::Table(handle)
                             }
                             Builtin::RawLen => self.raw_len(value)?,
-                            Builtin::Select => unreachable!("select has multiple results"),
+                            Builtin::Select | Builtin::Assert => {
+                                unreachable!("select/assert handled as multiple results")
+                            }
                             Builtin::ToString => match value {
                                 Value::String(_) => value,
                                 Value::Integer(number) => {
@@ -3134,6 +3146,45 @@ mod tests {
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
+    }
+
+    #[test]
+    fn first_class_assert_preserves_successful_lua_multi_values() {
+        assert_eq!(evaluate("return assert(7)"), 7);
+        assert_eq!(evaluate("return assert(false or 9)"), 9);
+        assert_eq!(
+            evaluate("local a,b,c=assert(true,2,3); return b+c"),
+            5
+        );
+        assert_eq!(
+            evaluate("local t={assert(true,4,5)}; return t[2]*10+t[3]"),
+            45
+        );
+        assert_eq!(
+            evaluate("local function f(x) return assert(x,2) end; local a,b=f(4); return a+b"),
+            6
+        );
+        assert_eq!(evaluate("return (type(assert)=='function') and 1 or 0"), 1);
+        assert_eq!(
+            evaluate("local f=assert; return f(11)"),
+            11
+        );
+        assert_eq!(
+            evaluate("local assert=function() return 8 end; return assert(false)"),
+            8
+        );
+        let program = compile_flow_chunk("return assert(true,8,9)").unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Ok(vec![Value::Boolean(true), Value::Integer(8), Value::Integer(9)])
+        );
+        for source in ["return assert()", "return assert(false)", "return assert(nil,'bad')"] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError)
+            );
+        }
     }
 
     #[test]

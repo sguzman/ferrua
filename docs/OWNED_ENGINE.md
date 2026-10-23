@@ -334,3 +334,7 @@ These checks cover only the recorded, bounded first-party runtime subsets. There
 ### Bounded first-class Lua select and multiple results
 
 The independent VM now supports first-class, lexically shadowable `select` for counting arguments with `select('#', ...)` and selecting tail argument lists with positive or negative integer offsets. The builtin reuses existing single-result versus multiple-result call contexts, so returned tails expand in final return, assignment, call argument and table constructor positions. It accepts the limited existing numeric-string to integer conversion path; zero and out-of-range negative offsets reject explicitly. All result allocations remain bounded. This is not a full Lua standard-library implementation, and production `fer` remains unchanged.
+
+### First-class bounded assert and Lua result preservation
+
+The owned VM now exposes first-class, lexically shadowable `assert`. When the first value is truthy, it returns every passed argument without collapsing the list; the existing Lua multiple-result adjustment rules apply in return, assignment, call argument and table constructor positions. On false, nil or missing conditions the prototype emits `FlowError::TypeError` rather than constructing Lua's full message-bearing exception; failure-string fidelity and traceback semantics remain outside this bounded subset. Production `fer` is unchanged.
