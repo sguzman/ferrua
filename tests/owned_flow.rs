@@ -431,6 +431,14 @@ const FIXTURES: &[&str] = &[
     "local t=setmetatable({4,5}, {__pairs=function() return function() end,nil,nil end}); local s=0; for i,v in ipairs(t) do s=s+v end; return s",
     "local t=setmetatable({a=3}, {__pairs=function() return next,{x=7},nil end}); local s=0; for k,v in pairs(t) do s=s+v end; return s",
     "local t=setmetatable({a=3}, {__pairs=function() return next,{x=7},nil end}); return next(t)~=nil and 1 or 0",
+    "local t=setmetatable({}, {__tostring=function() return 'hello' end}); return tostring(t)=='hello' and 1 or 0",
+    "local t=setmetatable({x=7}, {__tostring=function(self) return 'n'..self.x end}); return tostring(t)=='n7' and 1 or 0",
+    "local count=0; local t=setmetatable({}, {__tostring=function() count=count+1; return 'yes','extra' end}); return tostring(t)=='yes' and count or 0",
+    "local t=setmetatable({}, {__tostring=function(self) return tostring(12) end}); return tostring(t)=='12' and 1 or 0",
+    "local t=setmetatable({}, {}); return type(tostring(t))=='string' and 1 or 0",
+    "local t=setmetatable({}, {__tostring=function() return 'safe' end}); return type(t)=='table' and tostring(t)=='safe' and 1 or 0",
+    "return tostring(nil)=='nil' and tostring(false)=='false' and 1 or 0",
+    "return tostring(7)=='7' and 1 or 0",
 ];
 
 fn render(values: &[Value]) -> String {
