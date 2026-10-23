@@ -58,6 +58,8 @@ pub enum Builtin {
     IpairsIterator,
     GetMetatable,
     SetMetatable,
+    Error,
+    Pcall,
 }
 
 impl Value {
@@ -189,6 +191,8 @@ pub enum FlowError {
     StepBudgetExceeded,
     InvalidForStep,
     NoReturn,
+    /// A Lua script explicitly threw an error value rather than a VM fault.
+    Thrown(Value),
 }
 
 impl fmt::Display for FlowError {
@@ -204,6 +208,7 @@ impl fmt::Display for FlowError {
             Self::StepBudgetExceeded => write!(out, "owned flow execution budget exhausted"),
             Self::InvalidForStep => write!(out, "numeric for step must not be zero"),
             Self::NoReturn => write!(out, "owned flow program exited without a return"),
+            Self::Thrown(_) => write!(out, "explicit Lua error"),
         }
     }
 }
@@ -470,6 +475,12 @@ impl<'a> Compiler<'a> {
                         }
                         Err(_) if *text == "assert" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::Assert)))?;
+                        }
+                        Err(_) if *text == "error" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::Error)))?;
+                        }
+                        Err(_) if *text == "pcall" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::Pcall)))?;
                         }
                         Err(_) if *text == "next" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::Next)))?;
@@ -2056,6 +2067,41 @@ impl Execution<'_> {
         }
     }
 
+    /// Bounded protected Lua closure calls preserve explicit error values.
+    /// Resource exhaustion remains fatal to prevent protected calls from
+    /// defeating the VM's global instruction and allocation budgets.
+    fn pcall_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let callable = args.first().copied().unwrap_or(Value::Nil);
+        let parameters = args.get(1..).unwrap_or_default();
+        let outcome = match callable {
+            Value::Function(handle) => self.call_owned_function(handle, parameters),
+            Value::Builtin(Builtin::Error) => Err(FlowError::Thrown(
+                parameters.first().copied().unwrap_or(Value::Nil),
+            )),
+            Value::Builtin(Builtin::Assert) => {
+                if parameters.first().copied().unwrap_or(Value::Nil).truthy() {
+                    Ok(parameters.to_vec())
+                } else {
+                    Err(FlowError::TypeError)
+                }
+            }
+            _ => Err(FlowError::TypeError),
+        };
+        match outcome {
+            Ok(mut results) => {
+                let mut values = vec![Value::Boolean(true)];
+                values.append(&mut results);
+                Ok(values)
+            }
+            Err(FlowError::StepBudgetExceeded | FlowError::TooLarge) => outcome,
+            Err(FlowError::Thrown(value)) => Ok(vec![Value::Boolean(false), value]),
+            Err(other) => {
+                let message = self.intern_string(other.to_string().into_bytes())?;
+                Ok(vec![Value::Boolean(false), message])
+            }
+        }
+    }
+
     fn select_builtin(&self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
         let selector = *args.first().ok_or(FlowError::TypeError)?;
         if let Value::String(handle) = selector {
@@ -2352,8 +2398,15 @@ impl Execution<'_> {
                         redirects += 1;
                     }
                     if let Value::Builtin(builtin) = callable {
-                        if args.is_empty() {
+                        if args.is_empty()
+                            && !matches!(builtin, Builtin::Error | Builtin::Pcall)
+                        {
                             return Err(FlowError::TypeError);
+                        }
+                        if builtin == Builtin::Error {
+                            return Err(FlowError::Thrown(
+                                args.first().copied().unwrap_or(Value::Nil),
+                            ));
                         }
                         if matches!(
                             builtin,
@@ -2363,9 +2416,11 @@ impl Execution<'_> {
                                 | Builtin::Pairs
                                 | Builtin::Ipairs
                                 | Builtin::IpairsIterator
+                                | Builtin::Pcall
                         ) {
                             let returned = match builtin {
                                 Builtin::Select => self.select_builtin(&args)?,
+                                Builtin::Pcall => self.pcall_builtin(&args)?,
                                 Builtin::Assert if args[0].truthy() => args,
                                 Builtin::Assert => return Err(FlowError::TypeError),
                                 Builtin::Next => self.next_builtin(&args)?,
@@ -2467,7 +2522,9 @@ impl Execution<'_> {
                             Builtin::RawLen => self.raw_len(value)?,
                             Builtin::GetMetatable => self.getmetatable_builtin(&args)?,
                             Builtin::SetMetatable => self.setmetatable_builtin(&args)?,
-                            Builtin::Select
+                            Builtin::Error
+                            | Builtin::Pcall
+                            | Builtin::Select
                             | Builtin::Assert
                             | Builtin::Next
                             | Builtin::Pairs
