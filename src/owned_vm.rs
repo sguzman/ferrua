@@ -1,7 +1,8 @@
 //! Experimental Ferrua-owned register bytecode for integer expressions.
 //! Not used by production fer; not a full Lua VM.
 
-use crate::expr::{Expr, parse_expression};
+use crate::expr::{Expr, Statement, parse_chunk, parse_expression};
+use std::collections::HashMap;
 use std::fmt;
 const MAX_REGISTERS: usize = 16384;
 
@@ -54,26 +55,33 @@ impl fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
-fn emit(program: &mut Program, expression: &Expr<'_>, depth: usize) -> Result<usize, Error> {
+fn emit<'a>(
+    program: &mut Program,
+    expression: &Expr<'a>,
+    depth: usize,
+    locals: &[HashMap<&'a str, usize>],
+) -> Result<usize, Error> {
     if depth > 128 || program.registers >= MAX_REGISTERS {
         return Err(Error::TooLarge);
     }
     let instruction = match expression {
         Expr::Atom(text) => {
-            let integer =
-                if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
-                    i64::from_str_radix(hex, 16)
-                } else {
-                    text.parse::<i64>()
+            let integer = if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+                i64::from_str_radix(hex, 16)
+            } else {
+                text.parse::<i64>()
+            };
+            match integer {
+                Ok(value) => Instruction::Load { dest: program.registers, value },
+                Err(_) => {
+                    return locals.iter().rev()
+                        .find_map(|scope| scope.get(*text).copied())
+                        .ok_or_else(|| Error::Unsupported(format!("unbound or noninteger name: {text}")));
                 }
-                .map_err(|_| Error::Unsupported(format!("not an integer literal: {text}")))?;
-            Instruction::Load {
-                dest: program.registers,
-                value: integer,
             }
         }
         Expr::Unary { op, right } if matches!(*op, "-" | "~") => {
-            let input = emit(program, right, depth + 1)?;
+            let input = emit(program, right, depth + 1, locals)?;
             if *op == "-" {
                 Instruction::Neg {
                     dest: program.registers,
@@ -92,7 +100,7 @@ fn emit(program: &mut Program, expression: &Expr<'_>, depth: usize) -> Result<us
                 "+" | "-" | "*" | "//" | "%" | "&" | "|" | "~" | "<<" | ">>"
             ) =>
         {
-            let lhs = emit(program, left, depth + 1)?;
+            let lhs = emit(program, left, depth + 1, locals)?;
             let rhs = emit(program, right, depth + 1)?;
             let dest = program.registers;
             match *op {
@@ -130,9 +138,85 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
         registers: 0,
         result: 0,
     };
-    let result = emit(&mut program, &ast, 0)?;
+    let result = emit(&mut program, &ast, 0, &[])?;
     program.result = result;
     Ok(program)
+}
+
+/// Compile a static subset of Lua chunks to Ferrua-owned register bytecode.
+///
+/// Supports integer locals with initializers, parallel assignments to locals,
+/// nested do/end blocks and a single final integer return. Calls, conditionals,
+/// loops, globals, nil and closures remain explicitly unsupported.
+pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
+    let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
+    let mut program = Program { code: Vec::new(), registers: 0, result: 0 };
+    let mut scopes = vec![HashMap::new()];
+    let value = compile_statements(&statements, &mut program, &mut scopes, false, 0)?
+        .ok_or_else(|| Error::Unsupported("chunk requires one final return value".into()))?;
+    program.result = value;
+    Ok(program)
+}
+
+fn compile_statements<'a>(
+    statements: &[Statement<'a>],
+    program: &mut Program,
+    scopes: &mut Vec<HashMap<&'a str, usize>>,
+    nested: bool,
+    depth: usize,
+) -> Result<Option<usize>, Error> {
+    if depth > 64 { return Err(Error::TooLarge); }
+    let mut result = None;
+    for node in statements {
+        if result.is_some() { return Err(Error::Unsupported("statement follows return".into())); }
+        match node {
+            Statement::Local { names, initializers } => {
+                if names.is_empty() || names.len() != initializers.len() {
+                    return Err(Error::Unsupported("all locals need one integer initializer".into()));
+                }
+                // Evaluate RHS before adding newly declared bindings.
+                let rhs = initializers.iter()
+                    .map(|e| emit(program, e, 0, scopes))
+                    .collect::<Result<Vec<_>, _>>()?;
+                for (name, register) in names.iter().zip(rhs) {
+                    scopes.last_mut().expect("root scope").insert(*name, register);
+                }
+            }
+            Statement::Assign { targets, values } => {
+                if targets.is_empty() || targets.len() != values.len() {
+                    return Err(Error::Unsupported("assignment RHS count mismatch".into()));
+                }
+                // All RHS expressions see the original bindings, as in Lua.
+                let rhs = values.iter()
+                    .map(|e| emit(program, e, 0, scopes))
+                    .collect::<Result<Vec<_>, _>>()?;
+                for (target, register) in targets.iter().zip(rhs) {
+                    let Expr::Atom(name) = target else {
+                        return Err(Error::Unsupported("only local variable targets".into()));
+                    };
+                    let slot = scopes.iter_mut().rev()
+                        .find_map(|scope| scope.get_mut(*name))
+                        .ok_or_else(|| Error::Unsupported(format!("global assignment: {name}")))?;
+                    *slot = register;
+                }
+            }
+            Statement::Block(body) => {
+                scopes.push(HashMap::new());
+                let child = compile_statements(body, program, scopes, true, depth + 1)?;
+                scopes.pop();
+                if child.is_some() {
+                    return Err(Error::Unsupported("nested return is not supported".into()));
+                }
+            }
+            Statement::Return(values) if !nested && values.len() == 1 => {
+                result = Some(emit(program, &values[0], 0, scopes)?);
+            }
+            _ => return Err(Error::Unsupported(
+                "only integer locals, assignments, do/end blocks, and final return".into(),
+            )),
+        }
+    }
+    Ok(result)
 }
 
 // Lua integer floor division rounds toward minus infinity, unlike Rust /.
@@ -313,6 +397,35 @@ mod tests {
                 ),
                 "{source}"
             );
+        }
+    }
+    #[test]
+    fn compiles_integer_chunks_with_local_scopes_and_parallel_assignment() {
+        let examples = [
+            ("local a,b=3,4; return a*b", 12),
+            ("local x=4; local y=x*2; x=y-3; return x", 5),
+            ("local a=1; local b=2; a,b=b,a; return a*10+b", 21),
+            ("local x=10; do local x=x+5; x=x*2 end; return x", 10),
+            ("local x=10; do x=x+5 end; return x", 15),
+            ("local x=1; local x=x+1; return x", 2),
+            ("local a,b=2,3; a,b=b,a; return (a<<4)|b", 50),
+        ];
+        for (source, expected) in examples {
+            let bytecode = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_integer_program(&bytecode).unwrap(), expected, "{source}");
+        }
+    }
+    #[test]
+    fn rejects_unsupported_dynamic_chunk_features() {
+        for source in [
+            "local x; return x", "return x", "x=1; return x",
+            "local x=1; print(x); return x",
+            "local x=1; if x>0 then x=2 end; return x",
+            "local x=1; while x<3 do x=x+1 end; return x",
+            "local x=1; return 1.5", "local x=1; do return x end",
+            "local x=1; x.y=2; return x",
+        ] {
+            assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
     }
     #[test]
