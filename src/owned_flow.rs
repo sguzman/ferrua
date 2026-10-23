@@ -725,12 +725,45 @@ impl<'a> Compiler<'a> {
     }
 
     fn statements(&mut self, nodes: &[Statement<'a>]) -> Result<(), FlowError> {
+        // Only jumps between positions with identical active local bindings
+        // inside the *same* lexical block can be lowered safely. Cross-block
+        // goto, jumps into local scope and reentering local lifetimes remain
+        // unsupported until the full Lua scope model is implemented.
+        let mut target_locals = HashMap::new();
+        let mut declared = 0usize;
+        for node in nodes {
+            match node {
+                Statement::Label(name) => {
+                    if target_locals.insert(*name, declared).is_some() {
+                        return Err(FlowError::Unsupported("duplicate goto label".into()));
+                    }
+                }
+                Statement::Local { names, .. } => declared = declared.saturating_add(names.len()),
+                Statement::Function { local: true, .. } => declared = declared.saturating_add(1),
+                _ => {}
+            }
+        }
+        let mut visible_locals = 0usize;
+        let mut label_offsets = HashMap::new();
+        let mut pending_jumps = Vec::new();
         for statement in nodes {
             match statement {
-                Statement::Label(_) | Statement::Goto(_) => {
-                    return Err(FlowError::Unsupported(
-                        "goto and label execution requires scope-aware jump lowering".into(),
-                    ));
+                Statement::Label(name) => {
+                    label_offsets.insert(*name, self.code.len());
+                }
+                Statement::Goto(name) => {
+                    let Some(target_count) = target_locals.get(name) else {
+                        return Err(FlowError::Unsupported(
+                            "goto target must be in the same lexical block".into(),
+                        ));
+                    };
+                    if *target_count != visible_locals {
+                        return Err(FlowError::Unsupported(
+                            "goto crosses a local variable lifetime".into(),
+                        ));
+                    }
+                    let address = self.push(Op::Jump(usize::MAX))?;
+                    pending_jumps.push((address, *name));
                 }
                 Statement::Function {
                     name,
@@ -1068,6 +1101,19 @@ impl<'a> Compiler<'a> {
                         .push(address);
                 }
             }
+            match statement {
+                Statement::Local { names, .. } => {
+                    visible_locals = visible_locals.saturating_add(names.len());
+                }
+                Statement::Function { local: true, .. } => {
+                    visible_locals = visible_locals.saturating_add(1);
+                }
+                _ => {}
+            }
+        }
+        for (address, name) in pending_jumps {
+            let target = *label_offsets.get(name).ok_or(FlowError::InvalidBytecode)?;
+            self.patch(address, target)?;
         }
         Ok(())
     }
