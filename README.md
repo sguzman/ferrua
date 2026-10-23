@@ -37,7 +37,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [four green jobs, 12 Lua 5.4.6 reference fixtures, verified offline binary installation, and SHA-256 pinning](https://github.com/sguzman/ferrua/actions/runs/39950728455). Native EndeavourOS acceptance, tagged release publication, and a Ferrua-owned VM remain pending.
+**Latest verified CI:** [four green jobs including Rust 1.96, Lua 5.4.6 differential tests and verified Linux binary installation](https://github.com/sguzman/ferrua/actions/runs/39957918722). Native EndeavourOS acceptance, a published release, and Ferrua-owned execution remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
@@ -72,3 +72,5 @@ The experimental Rust-owned expression AST has gained calls, field selectors, an
 The owned language library now also exposes a deliberately restricted `parse_chunk` AST for semicolon-delimited local declarations, assignment, calls, and returns. Full Lua statement grammar, lexical scope analysis, and independent VM execution are **not yet implemented**.
 
 The experimental owned-engine library now also provides single-scope local-variable shadowing and reference analysis. It is **not** a complete lexical scope implementation, and it does not affect normal Lua execution.
+
+Experimental source analysis now includes nested lexical blocks, conditional branches, `while`/`repeat`, and numeric/generic `for` syntax with correctly scoped loop variables. See [owned-engine limitations](docs/OWNED_ENGINE.md). None of these features replaces the working third-party Lua VM.

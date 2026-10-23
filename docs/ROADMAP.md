@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 86%` across 33 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 87%` across 36 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████░░░░ 63%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `███████░░░ 73%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████░░░░ 63%`
+### 🔣 P3 — Ferrua-owned language engine — `███████░░░ 73%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -166,14 +166,26 @@
   - [x] Parse arithmetic, bitwise, logical and right-associative operators — src/expr.rs precedence/associativity unit tests
   - [x] Parse chained function calls, field selections and bracket indexes — src/expr.rs: Call, Field and Index AST variants, invalid-syntax regressions
   - [x] Accept standalone expression parser without swapping VM backend — GitHub Actions 39953838372: four jobs green; src/main.rs still uses luna-core
-- 🧾 **T307** Semicolon-delimited Lua statement AST subset — `██████████ 100%`
+- 🧾 **T307** Limited Lua statement AST foundation — `██████████ 100%`
   - [x] Parse local declarations, calls, assignments, and final returns — src/expr.rs: public Statement and parse_chunk APIs
   - [x] Reject unsupported grammar, invalid assignment targets and missing separators — src/expr.rs: chunk parser invalid syntax and assignment fixtures
   - [x] Validate parser subset without changing the production VM — GitHub Actions 39954592909: all four jobs green with unit/integration tests
-- 🌿 **T308** Single-scope local shadowing and name-resolution analysis — `██████████ 100%`
+- 🌿 **T308** Local binding and shadowing analyzer foundation — `██████████ 100%`
   - [x] Record local slots and reads/writes in experimental Lua chunks — src/scope.rs: public analyze, Binding and Reference APIs
   - [x] Resolve previous locals during same-name initializer before new declaration — src/scope.rs: local_shadowing_preserves_prior_initializer_binding and new_local_does_not_see_itself_in_initializer tests
   - [x] Verify single-scope analyzer on supported Rust, CLI and reference CI — GitHub Actions 39955169495: all four jobs green
+- 🌳 **T309** Nested block, conditional and while-loop syntax/scoping — `██████████ 100%`
+  - [x] Parse bounded nested do/end blocks and restore scope visibility — src/expr.rs and src/scope.rs; CI 39956080746
+  - [x] Parse if/elseif/else and while with independent branch/loop scopes — src/expr.rs and src/scope.rs; CI 39956479889
+  - [x] Verify old CLI, Rust MSRV and Lua 5.4.6 references unchanged — CI 39956479889: four jobs passed
+- 🔁 **T310** Repeat-until body scope and newline statement parsing — `██████████ 100%`
+  - [x] Parse repeat/until and newline-separated supported Lua statements — src/expr.rs: repeat and statement separator tests
+  - [x] Resolve repeat condition against body locals, then discard frame — src/scope.rs: repeat_condition_sees_body_local_but_later_code_does_not
+  - [x] Accept syntax and resolver regression suite in full CI — CI 39956981511: four jobs passed
+- 🧮 **T311** Numeric and generic for-loop syntax and variable scopes — `██████████ 100%`
+  - [x] Implement numeric for (optional step), iteration locals and outside bounds — src/expr.rs, src/scope.rs; CI 39957386939
+  - [x] Implement generic for-in name lists, iterator expressions and scoped locals — src/expr.rs, src/scope.rs; CI 39957918722
+  - [x] Verify malformed headers and all four CI acceptance jobs — CI 39957918722: four jobs passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -182,5 +194,6 @@
 - 🔡 Ferrua-owned lexer scaffold — `██████████ 100%`
 - 🧮 Experimental expression AST — `██████████ 100%`
 - 🧾 Early statement syntax trees — `██████████ 100%`
-- 🌿 Experimental single-scope binding analysis — `██████████ 100%`
+- 🌿 Experimental local binding analysis — `██████████ 100%`
+- 🌳 Nested lexical control-flow and loop parsing — `██████████ 100%`
 

@@ -838,7 +838,7 @@
             {
               "id": "T307",
               "emoji": "🧾",
-              "name": "Semicolon-delimited Lua statement AST subset",
+              "name": "Limited Lua statement AST foundation",
               "progress": 100,
               "checks": [
                 {
@@ -861,7 +861,7 @@
             {
               "id": "T308",
               "emoji": "🌿",
-              "name": "Single-scope local shadowing and name-resolution analysis",
+              "name": "Local binding and shadowing analyzer foundation",
               "progress": 100,
               "checks": [
                 {
@@ -878,6 +878,75 @@
                   "text": "Verify single-scope analyzer on supported Rust, CLI and reference CI",
                   "passed": true,
                   "evidence": "GitHub Actions 39955169495: all four jobs green"
+                }
+              ]
+            },
+            {
+              "id": "T309",
+              "emoji": "🌳",
+              "name": "Nested block, conditional and while-loop syntax/scoping",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Parse bounded nested do/end blocks and restore scope visibility",
+                  "passed": true,
+                  "evidence": "src/expr.rs and src/scope.rs; CI 39956080746"
+                },
+                {
+                  "text": "Parse if/elseif/else and while with independent branch/loop scopes",
+                  "passed": true,
+                  "evidence": "src/expr.rs and src/scope.rs; CI 39956479889"
+                },
+                {
+                  "text": "Verify old CLI, Rust MSRV and Lua 5.4.6 references unchanged",
+                  "passed": true,
+                  "evidence": "CI 39956479889: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T310",
+              "emoji": "🔁",
+              "name": "Repeat-until body scope and newline statement parsing",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Parse repeat/until and newline-separated supported Lua statements",
+                  "passed": true,
+                  "evidence": "src/expr.rs: repeat and statement separator tests"
+                },
+                {
+                  "text": "Resolve repeat condition against body locals, then discard frame",
+                  "passed": true,
+                  "evidence": "src/scope.rs: repeat_condition_sees_body_local_but_later_code_does_not"
+                },
+                {
+                  "text": "Accept syntax and resolver regression suite in full CI",
+                  "passed": true,
+                  "evidence": "CI 39956981511: four jobs passed"
+                }
+              ]
+            },
+            {
+              "id": "T311",
+              "emoji": "🧮",
+              "name": "Numeric and generic for-loop syntax and variable scopes",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Implement numeric for (optional step), iteration locals and outside bounds",
+                  "passed": true,
+                  "evidence": "src/expr.rs, src/scope.rs; CI 39957386939"
+                },
+                {
+                  "text": "Implement generic for-in name lists, iterator expressions and scoped locals",
+                  "passed": true,
+                  "evidence": "src/expr.rs, src/scope.rs; CI 39957918722"
+                },
+                {
+                  "text": "Verify malformed headers and all four CI acceptance jobs",
+                  "passed": true,
+                  "evidence": "CI 39957918722: four jobs passed"
                 }
               ]
             }
@@ -924,9 +993,18 @@
         },
         {
           "emoji": "🌿",
-          "name": "Experimental single-scope binding analysis",
+          "name": "Experimental local binding analysis",
           "task_ids": [
             "T308"
+          ]
+        },
+        {
+          "emoji": "🌳",
+          "name": "Nested lexical control-flow and loop parsing",
+          "task_ids": [
+            "T309",
+            "T310",
+            "T311"
           ]
         }
       ]
