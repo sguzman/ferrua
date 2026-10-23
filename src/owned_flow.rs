@@ -3706,8 +3706,8 @@ mod tests {
             );
         }
         for source in [
-            "local t=setmetatable({}, {__index=function() return 3 end}); return t.x",
-            "local t=setmetatable({}, {__newindex=function() end}); t.x=3; return 1",
+            "local t=setmetatable({}, {__index=42}); return t.x",
+            "local t=setmetatable({}, {__newindex=true}); t.x=3; return 1",
         ] {
             let program = compile_flow_chunk(source).unwrap();
             assert_eq!(
