@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `████████░░ 79%` across 29 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `████████░░ 84%` across 29 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -62,7 +62,7 @@
 - 📦 Distribution readiness — `███░░░░░░░ 33%`
 - 📝 Side-effect-free source validation — `██████████ 100%`
 
-## 🧰 M1 — Daily automation and Python replacement — `█████████░ 91%`
+## 🧰 M1 — Daily automation and Python replacement — `█████████░ 93%`
 
 **Acceptance gate:** Representative filesystem, JSON, process, HTTP, structured-data and versioned downstream CI scripts run without Python. Stable distribution and adoption acceptance required.
 
@@ -100,7 +100,7 @@
   - [x] Exercise JSON, TOML/YAML, ordinary Lua, syntax and sandbox checks across five dialects — tools/check_compat.lua; .github/workflows/ci.yml
   - [x] Verify all five dialect runs and three CI jobs — GitHub Actions 39947311765: five dialect matrix passed
 
-### 🌐 P4 — Portable data and CI graduation — `████████░░ 83%`
+### 🌐 P4 — Portable data and CI graduation — `█████████░ 89%`
 
 - 🌐 **T206** First-party HTTP API and GitHub REST client — `██████████ 100%`
   - [x] Provide documented HTTP GET, POST and response contracts with timeouts — docs/HTTP.md and tools/http.lua specify methods, output, limits and errors
@@ -110,9 +110,9 @@
   - [x] Document round-trip formats, supported types and limits — docs/DATA.md documents JSON-compatible TOML/YAML conversions and format limitations
   - [x] Implement native TOML and YAML modules — src/data.rs, tools/data.lua, deps toml/yaml_serde
   - [x] Schema and round-trip fixtures pass CI — GitHub Actions 39897603798: tests/data.lua round trips and sandbox tests pass in Linux and composite consumer
-- 📦 **T208** Stable binary distribution and cross-repository adoption — `░░░░░░░░░░ 0%`
+- 📦 **T208** Stable binary distribution and cross-repository adoption — `███░░░░░░░ 33%`
   - [ ] Publish semver-tagged Linux artifacts with reproducible SHA-256 checksums
-  - [ ] Offer installer that consumes versioned release binaries
+  - [x] Offer installer that consumes versioned release binaries — scripts/install.sh and action.yml version-pinned optional SHA binary installation; CI 39950728455 installs real archive outside checkout
   - [ ] Validate pinned downstream GitHub workflow with representative scripts
 - 🌙 **T209** Dogfood Lua for release archive packaging — `██████████ 100%`
   - [x] Write version-and-checksum-aware packaging script in Lua — tools/package_release.lua, docs/ACTIONS.md
@@ -133,17 +133,17 @@
 - 🔧 Processes and CI reuse — `████████░░ 84%`
 - 🗂️ Directory traversal and file automation — `██████████ 100%`
 - 🌐 HTTP and structured external data — `██████████ 100%`
-- 📦 Versioned CI reuse — `███░░░░░░░ 34%`
+- 📦 Versioned CI reuse — `█████░░░░░ 50%`
 - 🧵 Reliable bounded subprocess capture — `██████████ 100%`
 - 🐙 Native GitHub REST automation — `██████████ 100%`
-- 🌙 Release packaging and dependency reproducibility — `███████░░░ 67%`
+- 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `░░░░░░░░░░ 0%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `███░░░░░░░ 25%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `░░░░░░░░░░ 0%`
+### 🔣 P3 — Ferrua-owned language engine — `███░░░░░░░ 25%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -151,9 +151,9 @@
 - 📜 **T302** Bytecode compiler and register VM — `░░░░░░░░░░ 0%`
   - [ ] Implement compiler and register dispatcher
   - [ ] Closures, frames and coroutines tested
-- 🔬 **T303** Lua conformance and differential tests — `░░░░░░░░░░ 0%`
-  - [ ] Pin official Lua reference and fixtures
-  - [ ] Differential test runner integrated
+- 🔬 **T303** Lua conformance and differential tests — `██████████ 100%`
+  - [x] Pin official Lua reference and fixtures — tools/diff_lua.lua pins upstream Lua 5.4.6, 12 fixtures in tests/conformance/; CI 39950728455
+  - [x] Differential test runner integrated — CI 39950728455: all 12 deterministic parity fixtures passed against Lua 5.4.6 reference
 - 🚀 **T304** Native runtime graduation — `░░░░░░░░░░ 0%`
   - [ ] Document engine switch criteria
   - [ ] Switch main fer runtime after parity tests
@@ -162,5 +162,5 @@
 **Feature inventory** (computed from associated atomic task progress):
 
 - 🔩 Independent compiler and VM — `░░░░░░░░░░ 0%`
-- 🧪 Verified Lua compatibility — `░░░░░░░░░░ 0%`
+- 🧪 Verified Lua compatibility — `█████░░░░░ 50%`
 

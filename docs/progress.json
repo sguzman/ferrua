@@ -553,14 +553,15 @@
                 },
                 {
                   "text": "Offer installer that consumes versioned release binaries",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "scripts/install.sh and action.yml version-pinned optional SHA binary installation; CI 39950728455 installs real archive outside checkout"
                 },
                 {
                   "text": "Validate pinned downstream GitHub workflow with representative scripts",
                   "passed": false
                 }
               ],
-              "progress": 0
+              "progress": 33
             },
             {
               "id": "T209",
@@ -757,14 +758,16 @@
               "checks": [
                 {
                   "text": "Pin official Lua reference and fixtures",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "tools/diff_lua.lua pins upstream Lua 5.4.6, 12 fixtures in tests/conformance/; CI 39950728455"
                 },
                 {
                   "text": "Differential test runner integrated",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "CI 39950728455: all 12 deterministic parity fixtures passed against Lua 5.4.6 reference"
                 }
               ],
-              "progress": 0
+              "progress": 100
             },
             {
               "id": "T304",
