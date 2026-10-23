@@ -658,10 +658,22 @@ mod tests {
         assert_eq!(evaluate("return 3 and 7"), 7);
         assert_eq!(evaluate("return nil or 12"), 12);
         assert_eq!(evaluate("return false or 0 or 8"), 0);
-        assert_eq!(evaluate("if false and (1+true) then return 99 else return 5 end"), 5);
-        assert_eq!(evaluate("if true or (1+true) then return 12 else return 9 end"), 12);
-        assert_eq!(evaluate("if 0 and not nil then return 6 else return 8 end"), 6);
-        assert_eq!(evaluate("if nil or false then return 1 else return 3 end"), 3);
+        assert_eq!(
+            evaluate("if false and (1+true) then return 99 else return 5 end"),
+            5
+        );
+        assert_eq!(
+            evaluate("if true or (1+true) then return 12 else return 9 end"),
+            12
+        );
+        assert_eq!(
+            evaluate("if 0 and not nil then return 6 else return 8 end"),
+            6
+        );
+        assert_eq!(
+            evaluate("if nil or false then return 1 else return 3 end"),
+            3
+        );
     }
 
     #[test]
