@@ -338,3 +338,10 @@ The independent VM now supports first-class, lexically shadowable `select` for c
 ### First-class bounded assert and Lua result preservation
 
 The owned VM now exposes first-class, lexically shadowable `assert`. When the first value is truthy, it returns every passed argument without collapsing the list; the existing Lua multiple-result adjustment rules apply in return, assignment, call argument and table constructor positions. On false, nil or missing conditions the prototype emits `FlowError::TypeError` rather than constructing Lua's full message-bearing exception; failure-string fidelity and traceback semantics remain outside this bounded subset. Production `fer` is unchanged.
+
+### Verified Lua argument selection and assertions
+
+- [CI #40017051129](https://github.com/sguzman/ferrua/actions/runs/40017051129): first-class `select` argument counting, positive/negative offsets, and bounded multiple-result expansion passed all four CI jobs, including upstream Lua 5.4.6 and production `fer` comparisons.
+- [CI #40017471285](https://github.com/sguzman/ferrua/actions/runs/40017471285): first-class `assert`, truthy argument preservation and false/nil rejection passed all four CI jobs. The experimental engine still uses a generic error type rather than reproducing Lua's message and traceback semantics.
+
+Neither milestone implies complete Lua standard-library support or graduation of the first-party interpreter into production.

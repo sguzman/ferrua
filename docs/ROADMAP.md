@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 95%` across 89 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 95%` across 91 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -398,6 +398,14 @@
   - [x] Compile lexically shadowable rawlen and share the VM's bounded byte/string-table length implementation — src/owned_flow.rs: Builtin::RawLen, Execution::raw_len, Op::Length
   - [x] Test string byte length, table sequence borders, first-class values and invalid operands — src/owned_flow.rs: rawlen_reports_bounded_string_bytes_and_table_borders
   - [x] Pass all four CI jobs and upstream Lua 5.4 differential checks — tests/owned_flow.rs; GitHub Actions 40016120064 all four jobs successful
+- 🎛️ **T365** First-class select with bounded multiple-result lists — `██████████ 100%`
+  - [x] Compile lexically shadowable select builtin and Lua argument count/position selectors — src/owned_flow.rs: Builtin::Select, Execution::select_builtin
+  - [x] Preserve tail multi-result propagation in calls, assignments, returns and table constructors — src/owned_flow.rs: first_class_select_adjusts_bounded_lua_result_lists
+  - [x] Pass all four CI jobs, production fer and upstream Lua 5.4.6 differentials — tests/owned_flow.rs; GitHub Actions 40017051129: all four jobs successful
+- ✅ **T366** First-class assert with truthy multi-result preservation — `██████████ 100%`
+  - [x] Compile lexically shadowable assert builtin with truthiness and bounded error behavior — src/owned_flow.rs: Builtin::Assert
+  - [x] Return all provided arguments in multi-result positions and reject nil/false conditions — src/owned_flow.rs: first_class_assert_preserves_successful_lua_multi_values
+  - [x] Pass all four CI jobs and production/upstream Lua differential fixtures — tests/owned_flow.rs; GitHub Actions 40017471285: all four jobs successful
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -461,4 +469,6 @@
 - 🔢 First-class Lua tonumber with bounded numeric conversions — `██████████ 100%`
 - 🗝️ First-class raw equality and raw table access — `██████████ 100%`
 - 📏 First-class rawlen and shared Lua length implementation — `██████████ 100%`
+- 🎛️ First-class select with bounded multiple-result lists — `██████████ 100%`
+- ✅ First-class assert with truthy multi-result preservation — `██████████ 100%`
 
