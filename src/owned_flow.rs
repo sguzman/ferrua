@@ -102,6 +102,11 @@ pub enum Op {
         step: usize,
         exit: usize,
     },
+    GenericForCheck {
+        control: usize,
+        variables: Vec<usize>,
+        exit: usize,
+    },
     Return,
     ReturnMany(usize),
     ReturnTail(usize),
@@ -487,7 +492,8 @@ impl<'a> Compiler<'a> {
             | Some(Op::JumpIfTrueKeep(place))
             | Some(Op::Jump(place))
             | Some(Op::ForCheck { exit: place, .. })
-            | Some(Op::ForStep { exit: place, .. }) => *place = target,
+            | Some(Op::ForStep { exit: place, .. })
+            | Some(Op::GenericForCheck { exit: place, .. }) => *place = target,
             _ => return Err(FlowError::InvalidBytecode),
         }
         Ok(())
@@ -689,6 +695,66 @@ impl<'a> Compiler<'a> {
                     let breaks = self.loop_breaks.pop().expect("numeric for break scope");
                     self.depth -= 1;
                     self.read_only.remove(&counter);
+                    self.frames.pop();
+                    compiled?;
+                    let end = self.code.len();
+                    for address in breaks {
+                        self.patch(address, end)?;
+                    }
+                }
+                Statement::GenericFor {
+                    variables,
+                    iterators,
+                    body,
+                } => {
+                    if self.depth >= 64
+                        || variables.is_empty()
+                        || self.slots > MAX_SLOTS.saturating_sub(3 + variables.len())
+                    {
+                        return Err(FlowError::TooLarge);
+                    }
+                    // Evaluate and adjust the iterator expression list once.
+                    // Lua's optional fourth closing value is outside this subset.
+                    self.values(iterators, 3)?;
+                    let iterator = self.slots;
+                    let state = iterator + 1;
+                    let control = iterator + 2;
+                    self.slots += 3;
+                    self.push(Op::AssignLocals(vec![iterator, state, control]))?;
+                    self.frames.push(HashMap::new());
+                    self.depth += 1;
+                    let mut value_slots = Vec::new();
+                    for variable in variables {
+                        let slot = self.slots;
+                        self.slots += 1;
+                        self.frames
+                            .last_mut()
+                            .expect("generic for scope")
+                            .insert(*variable, slot);
+                        self.read_only.insert(slot);
+                        value_slots.push(slot);
+                    }
+                    self.loop_breaks.push(Vec::new());
+                    let compiled = (|| {
+                        let begin = self.code.len();
+                        self.push(Op::ReadLocal(iterator))?;
+                        self.push(Op::ReadLocal(state))?;
+                        self.push(Op::ReadLocal(control))?;
+                        self.push(Op::CallMany(2))?;
+                        let check = self.push(Op::GenericForCheck {
+                            control,
+                            variables: value_slots.clone(),
+                            exit: usize::MAX,
+                        })?;
+                        self.scope(body)?;
+                        self.push(Op::Jump(begin))?;
+                        self.patch(check, self.code.len())
+                    })();
+                    let breaks = self.loop_breaks.pop().expect("generic for break scope");
+                    for slot in value_slots {
+                        self.read_only.remove(&slot);
+                    }
+                    self.depth -= 1;
                     self.frames.pop();
                     compiled?;
                     let end = self.code.len();
@@ -1243,6 +1309,34 @@ impl Execution<'_> {
                         continue;
                     }
                 }
+                Op::GenericForCheck {
+                    control,
+                    variables,
+                    exit,
+                } => {
+                    if *exit > instructions.len() {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let count = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
+                    if stack.len() < count {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let returned = stack.split_off(stack.len() - count);
+                    let first = returned.first().copied().unwrap_or(Value::Nil);
+                    if first == Value::Nil {
+                        pc = *exit;
+                        continue;
+                    }
+                    let control_cell = *slots.get(*control).ok_or(FlowError::InvalidBytecode)?;
+                    *self.cells.get_mut(control_cell).ok_or(FlowError::InvalidBytecode)? =
+                        Some(first);
+                    for (position, slot) in variables.iter().enumerate() {
+                        let cell = *slots.get(*slot).ok_or(FlowError::InvalidBytecode)?;
+                        let value = returned.get(position).copied().unwrap_or(Value::Nil);
+                        *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? =
+                            Some(value);
+                    }
+                }
                 Op::Return => {
                     return Ok(vec![stack.pop().ok_or(FlowError::InvalidBytecode)?]);
                 }
@@ -1407,6 +1501,47 @@ mod tests {
         assert_eq!(
             execute_flow_chunk(&program, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
+        );
+    }
+
+    #[test]
+    fn generic_iterator_calls_and_early_exit() {
+        assert_eq!(
+            evaluate("local function next(s,i) i=i+1; if i<=s then return i,i*2 end end; local sum=0; for i,v in next,3,0 do sum=sum+i+v end; return sum"),
+            18
+        );
+        assert_eq!(
+            evaluate("local function next(s,i) i=i+1; if i<=s then return i,i*2 end end; local sum=0; for i,v in next,6,0 do sum=sum+i; if i==3 then break end end; return sum"),
+            6
+        );
+        assert_eq!(
+            evaluate("local function next(s,i) i=i+1; if i<=s then return i end end; local sum=0; for i,v in next,2,0 do if v==nil then sum=sum+i end end; return sum"),
+            3
+        );
+        assert_eq!(
+            evaluate("local function next(s,i) i=i+1; if i<=s then return i end end; local function pack() return next,3,0 end; local sum=0; for i in pack() do sum=sum+i end; return sum"),
+            6
+        );
+        assert_eq!(
+            evaluate("local function next() return false end; local n=0; for x in next,nil,nil do n=n+1; break end; return n"),
+            1
+        );
+    }
+
+    #[test]
+    fn generic_iterator_rejects_readonly_variable_and_noncallable() {
+        assert!(compile_flow_chunk("for i in f,nil,nil do i=2 end; return 1").is_err());
+        let program = compile_flow_chunk("for i in 3,0,0 do end; return 1").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
+        let program = compile_flow_chunk(
+            "local function next(_,i) return i end; for i in next,1,1 do end; return 0",
+        ).unwrap();
+        assert_eq!(
+            execute_flow_chunk(&program, 25),
+            Err(FlowError::StepBudgetExceeded)
         );
     }
 
