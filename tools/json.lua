@@ -2,6 +2,9 @@
 -- Supports RFC 8259 objects, arrays, numbers, strings and booleans.
 -- Null is represented by json.null to retain array/object slots.
 local json = {null = {}}
+local array_mt, object_mt = {}, {}
+function json.array(value) return setmetatable(value or {}, array_mt) end
+function json.object(value) return setmetatable(value or {}, object_mt) end
 
 function json.decode(source)
     local position, length = 1, #source
@@ -62,7 +65,7 @@ function json.decode(source)
     end
     local function array_value()
         position = position + 1
-        local result = {}
+        local result = json.array()
         whitespace()
         if source:sub(position, position) == "]" then
             position = position + 1
@@ -82,7 +85,7 @@ function json.decode(source)
     end
     local function object_value()
         position = position + 1
-        local result = {}
+        local result = json.object()
         whitespace()
         if source:sub(position, position) == "}" then
             position = position + 1
@@ -159,7 +162,7 @@ function json.encode(value)
         assert(kind == "table", "JSON cannot encode " .. kind)
         assert(not visited[item], "JSON cannot encode cycles")
         visited[item] = true
-        local keys, count, max_index, array = {}, 0, 0, true
+        local keys, count, max_index, array = {}, 0, 0, getmetatable(item) ~= object_mt
         for key in pairs(item) do
             count = count + 1
             keys[#keys + 1] = key
@@ -170,7 +173,7 @@ function json.encode(value)
             end
         end
         local elements = {}
-        if array and count == max_index then
+        if (array and count == max_index) or (count == 0 and getmetatable(item) == array_mt) then
             for index = 1, max_index do elements[#elements + 1] = encode(item[index]) end
             visited[item] = nil
             return "[" .. table.concat(elements, ",") .. "]"

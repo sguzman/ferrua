@@ -344,7 +344,12 @@ mod tests {
             r#"local x = json.decode('{"alpha": [1, 2], "ok": true}')
                assert(x.ok and x.alpha[2] == 2)
                assert(json.encode(x) == '{"alpha":[1,2],"ok":true}')
-               assert(json.decode('"\\uD83C\\uDF19"') == "🌙")"#,
+               assert(json.decode('"\\uD83C\\uDF19"') == "🌙")
+               assert(json.encode(json.decode('{}')) == '{}')
+               assert(json.encode(json.decode('[]')) == '[]')
+               assert(json.encode(json.object()) == '{}')
+               assert(json.encode(json.array()) == '[]')
+               assert(json.decode('null') == json.null)"#
             "=json-test",
         )
         .unwrap();

@@ -8,7 +8,7 @@ The default trusted execution mode supplies conventional Lua host functionality,
 
 Because Lua sources are evaluated by the engine, Ferrua's current conformance, bytecode semantics, closures, garbage collection, coroutine behavior, and standard libraries come from that engine. Do not claim that Ferrua has independently implemented them. An **owned compiler and VM** are queued under M2 and will require real differential and acceptance evidence before substituting this engine.
 
-Ferrua provides its own small JSON parser/serializer from `tools/json.lua` as a built-in global available in both trusted and restricted execution modes. No Python and no dynamic Rust library are required for the module.
+Ferrua provides its own small JSON parser/serializer from `tools/json.lua` as a built-in global available in both trusted and restricted execution modes. No Python and no dynamic Rust library are required for the module. Parsed arrays and objects carry distinct Lua metatables so even `[]` and `{}` preserve their shape on re-encoding.
 
 The first priority is working shell scripting, reliable scripts, diagnostics and automated acceptance. CI's Linux build, tests and smoke scripts are the acceptance source; checked-in test code alone is not acceptance.
 

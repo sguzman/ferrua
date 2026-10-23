@@ -30,4 +30,13 @@ jobs:
           cargo run -- --sandbox -e "assert(io == nil and os == nil)"
           cargo run -- --sandbox -e "assert(json.decode('{\"key\":42}').key == 42)"
           ! timeout 10s cargo run -- --budget=1000 -e "while true do end"
-          printf '=6*7\n' | script -q -c "target/debug/fer" /dev/null | grep -Fq 42
+          printf 'answer=6*7\n=answer\n' | script -q -c "target/debug/fer" /dev/null | grep -Fq 42
+      - name: Build release preview
+        run: cargo build --release
+      - name: Upload Linux preview binary
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fer-linux-x86_64-preview
+          path: target/release/fer
+          if-no-files-found: error

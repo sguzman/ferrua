@@ -108,3 +108,17 @@ fn json_is_available_for_automation_scripts() {
         r#"{"number":42,"ok":true}"#
     );
 }
+
+#[test]
+fn json_empty_collections_round_trip() {
+    let out = fer(&[
+        "-e",
+        r#"assert(json.encode(json.decode('{}')) == '{}'); assert(json.encode(json.decode('[]')) == '[]'); print('ok')"#,
+    ]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "ok");
+}
