@@ -1563,10 +1563,9 @@ mod tests {
 
     #[test]
     fn noncapturing_numeric_loops_do_not_exhaust_cell_heap() {
-        let program = compile_flow_chunk(
-            "local total=0; for i=1,70000 do total=total+1 end; return total",
-        )
-        .unwrap();
+        let program =
+            compile_flow_chunk("local total=0; for i=1,70000 do total=total+1 end; return total")
+                .unwrap();
         assert_eq!(execute_flow_chunk(&program, 1_000_000), Ok(70000));
     }
 
