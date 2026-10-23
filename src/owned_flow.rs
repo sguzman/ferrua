@@ -1749,6 +1749,60 @@ impl Execution<'_> {
         }
     }
 
+    /// Arithmetic first attempts Lua numeric coercion; only an operand type
+    /// failure can trigger a table's first available metamethod (left first).
+    /// Runtime arithmetic errors such as integer division by zero propagate.
+    fn arithmetic_with_metamethod(
+        &mut self,
+        op: Binary,
+        left: Value,
+        right: Value,
+    ) -> Result<Value, FlowError> {
+        let direct = self
+            .arithmetic_operand(left)
+            .and_then(|a| self.arithmetic_operand(right).map(|b| (a, b)))
+            .and_then(|(a, b)| evaluate_number_binary(op, a, b));
+        match direct {
+            Ok(value) => Ok(value),
+            Err(FlowError::TypeError) => {
+                let name: &[u8] = match op {
+                    Binary::Add => b"__add",
+                    Binary::Sub => b"__sub",
+                    Binary::Mul => b"__mul",
+                    Binary::Div => b"__div",
+                    Binary::FloorDiv => b"__idiv",
+                    Binary::Mod => b"__mod",
+                    Binary::Pow => b"__pow",
+                    _ => return Err(FlowError::InvalidBytecode),
+                };
+                self.binary_metamethod(name, left, right)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Metamethod callbacks reuse closure frames, depth and step limits.
+    /// The right-hand table is checked only when the left lacks the field.
+    fn binary_metamethod(
+        &mut self,
+        name: &[u8],
+        left: Value,
+        right: Value,
+    ) -> Result<Value, FlowError> {
+        for operand in [left, right] {
+            if let Value::Table(handle) = operand {
+                if let Some(method) = self.metatable_field(handle, name)? {
+                    let Value::Function(callback) = method else {
+                        return Err(FlowError::TypeError);
+                    };
+                    let returned = self.call_owned_function(callback, &[left, right])?;
+                    return Ok(returned.first().copied().unwrap_or(Value::Nil));
+                }
+            }
+        }
+        Err(FlowError::TypeError)
+    }
+
     fn arithmetic_operand(&self, value: Value) -> Result<Value, FlowError> {
         match value {
             Value::Integer(_) | Value::Float(_) => Ok(value),
@@ -2500,11 +2554,7 @@ impl Execution<'_> {
                         | Binary::Div
                         | Binary::Pow
                         | Binary::FloorDiv
-                        | Binary::Mod => {
-                            let a = self.arithmetic_operand(lhs)?;
-                            let b = self.arithmetic_operand(rhs)?;
-                            evaluate_number_binary(*op, a, b)?
-                        }
+                        | Binary::Mod => self.arithmetic_with_metamethod(*op, lhs, rhs)?,
                         Binary::BitAnd
                         | Binary::BitOr
                         | Binary::BitXor
