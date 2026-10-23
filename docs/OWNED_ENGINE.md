@@ -447,3 +447,10 @@ The pending unit and upstream Lua 5.4 differential fixtures cover lexical captur
 Lua 5.4's `ipairs` iterator looks up successive positive integer fields using ordinary table indexing, which may invoke a table's `__index` fallback for a missing array element. The owned VM previously used raw reads and could terminate prematurely when the metatable supplied the next value. The experimental iterator now invokes the same bounded `lookup_with_metatable` path as normal indexed expressions. Iteration still stops at the first nil value, and `ipairs` ignores the separate `__pairs` hook. Raw table operations such as `rawget` and `next` continue to bypass indexing metamethods.
 
 This increment is **pending full CI acceptance**, with unit and upstream Lua 5.4 differential cases for metatable table/closure fallbacks, array holes, termination, raw bypass and cyclic `__index` protection. No change is made to the production `fer` runtime.
+
+
+### Lua label and goto grammar (pending CI)
+
+The first-party lexer already recognized the `::` token and `goto` keyword. The bounded Lua parser now preserves `::name::` and `goto name` as explicit AST statement variants, requires an identifier in both positions, and rejects duplicate labels in the same lexical block. Labels are self-delimiting, so a compact `goto end_label ::end_label:: return 1` source can be parsed. Valid and invalid Lua 5.4 examples provide initial differential syntax coverage.
+
+**This is grammar-only progress, pending CI.** Label visibility across blocks, forward-jump restrictions over local declarations, undefined labels, upvalue closure boundaries and actual bytecode jump lowering are not yet implemented. The experimental stack compiler rejects either new AST statement as an explicit `Unsupported` error; it never silently ignores a goto. Passing these fixtures does **not** satisfy the complete T301/T302 graduation gates. Production `fer` continues using the external VM.
