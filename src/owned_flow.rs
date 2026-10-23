@@ -1848,6 +1848,22 @@ impl Execution<'_> {
         Ok(args.iter().skip(index as usize).copied().collect())
     }
 
+    /// Lua table length may be replaced by a first-party closure. The rawlen
+    /// builtin continues to bypass __len and returns the bounded raw border.
+    fn length_with_metatable(&mut self, value: Value) -> Result<Value, FlowError> {
+        if let Value::Table(handle) = value {
+            match self.metatable_field(handle, b"__len")? {
+                Some(Value::Function(callback)) => {
+                    let returned = self.call_owned_function(callback, &[value, value])?;
+                    return Ok(returned.first().copied().unwrap_or(Value::Nil));
+                }
+                Some(_) => return Err(FlowError::TypeError),
+                None => {}
+            }
+        }
+        self.raw_len(value)
+    }
+
     fn raw_len(&self, value: Value) -> Result<Value, FlowError> {
         let length = match value {
             Value::String(handle) => self
@@ -2445,7 +2461,7 @@ impl Execution<'_> {
                 }
                 Op::Length => {
                     let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                    stack.push(self.raw_len(value)?);
+                    stack.push(self.length_with_metatable(value)?);
                 }
                 Op::BitNot => {
                     let value =
