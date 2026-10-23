@@ -3144,7 +3144,7 @@ mod tests {
         assert_eq!(evaluate("local a,b=select(2,10,20,30); return a+b"), 50);
         assert_eq!(evaluate("local a,b=select(2,10,20,30); return a*10+b"), 230);
         assert_eq!(evaluate("return select(4,1,2,3) or 9"), 9);
-        assert_eq!(evaluate("return select('2',10,20,30)"), 20);
+        assert_eq!(evaluate("return (select('2',10,20,30))"), 20);
         assert_eq!(
             evaluate("local function count(...) return select('#',...) end; return count(3,4,5)"),
             3
