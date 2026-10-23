@@ -116,6 +116,15 @@ impl Scanner<'_> {
                 if self.peek(0).is_none() {
                     return Err(self.error("unfinished escape"));
                 }
+                if self.peek(0) == Some(b'z') {
+                    // Lua's \z skips all following ASCII whitespace,
+                    // including newlines inside otherwise short strings.
+                    self.bump();
+                    while self.peek(0).is_some_and(|c| c.is_ascii_whitespace()) {
+                        self.bump();
+                    }
+                    continue;
+                }
             }
             self.bump();
         }
@@ -324,6 +333,15 @@ mod tests {
             assert!(tokenize(source).is_err(), "{source}");
         }
     }
+    #[test]
+    fn lua_z_escape_skips_whitespace_and_tracks_line() {
+        let source = "local s=\"a\\\\z   \\n b\"\\nlocal t=1";
+        let tokens = tokenize(source).unwrap();
+        assert_eq!(tokens[3].kind, Kind::ShortString);
+        assert_eq!(tokens[4].spelling, "local");
+        assert_eq!(tokens[4].line, 3);
+    }
+
     #[test]
     fn escaped_and_multibyte_identifiers_keep_spelling() {
         assert_eq!(
