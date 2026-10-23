@@ -1555,8 +1555,8 @@ impl Execution<'_> {
         })
     }
 
-    /// The ipairs iterator uses raw positive-integer lookups and terminates at
-    /// the first nil; metatable and resource-closing semantics are not modeled.
+    /// Lua 5.4 ipairs uses ordinary positive-integer table indexing, including
+    /// table __index fallbacks, and terminates at the first nil.
     fn ipairs_iterator(&self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
         let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
             return Err(FlowError::TypeError);
@@ -1564,7 +1564,7 @@ impl Execution<'_> {
         let index = self.exact_integer_operand(*args.get(1).ok_or(FlowError::TypeError)?)?;
         let index = index.checked_add(1).ok_or(FlowError::TypeError)?;
         let key = self.table_key(Value::Integer(index))?;
-        let value = self.read_table(handle, key)?;
+        let value = self.lookup_with_metatable(handle, key)?;
         Ok(if value == Value::Nil {
             vec![Value::Nil]
         } else {
