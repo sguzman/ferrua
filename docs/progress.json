@@ -2795,7 +2795,7 @@
               "id": "T387",
               "emoji": "🚫",
               "name": "Differential syntax and runtime rejection corpus",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Add deterministic invalid-source fixtures partitioned into parser rejection and owned-VM runtime failures",
@@ -2809,7 +2809,8 @@
                 },
                 {
                   "text": "Pass full Linux quality/test suite and upstream Lua 5.4 rejection parity in CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40042287118: Linux formatting/lint/full tests, Rust 1.96, Lua 5.4 differential including intentional error cases, and action consumer passed"
                 }
               ]
             }
