@@ -1021,7 +1021,10 @@ impl Execution<'_> {
                     if prepared.len() >= MAX_SLOTS {
                         return Err(FlowError::TooLarge);
                     }
-                    prepared.push(PendingTarget::Indexed { table: handle, field });
+                    prepared.push(PendingTarget::Indexed {
+                        table: handle,
+                        field,
+                    });
                 }
                 Op::AssignPrepared(count) => {
                     if stack.len() < *count || prepared.len() < *count {
@@ -1036,10 +1039,15 @@ impl Execution<'_> {
                                     Some(value);
                             }
                             PendingTarget::Indexed { table, field } => {
-                                let cells = self.tables.get_mut(table).ok_or(FlowError::InvalidBytecode)?;
+                                let cells = self
+                                    .tables
+                                    .get_mut(table)
+                                    .ok_or(FlowError::InvalidBytecode)?;
                                 if field > cells.len() {
                                     let growth = field - cells.len();
-                                    if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+                                    if self.table_cells.saturating_add(growth)
+                                        > MAX_TABLE_CELLS_TOTAL
+                                    {
                                         return Err(FlowError::TooLarge);
                                     }
                                     self.table_cells += growth;
@@ -1710,11 +1718,15 @@ mod tests {
             10
         );
         assert_eq!(
-            evaluate("local t={1,2}; local i=0; local function at() i=i+1; return i end; t[at()],t[at()]=8,9; return t[1]*10+t[2]"),
+            evaluate(
+                "local t={1,2}; local i=0; local function at() i=i+1; return i end; t[at()],t[at()]=8,9; return t[1]*10+t[2]"
+            ),
             89
         );
         assert_eq!(
-            evaluate("local t={1}; local x; local function f() return 4,5 end; t[1],x=f(); return t[1]*10+x"),
+            evaluate(
+                "local t={1}; local x; local function f() return 4,5 end; t[1],x=f(); return t[1]*10+x"
+            ),
             45
         );
         assert_eq!(
