@@ -265,3 +265,7 @@ Integer-formatted Lua byte strings now participate in integer arithmetic, intege
 ### Verified integer-string arithmetic and strict bitwise semantics
 
 [CI #40009615631](https://github.com/sguzman/ferrua/actions/runs/40009615631): signed decimal and bounded hexadecimal integer strings now coerce for integer arithmetic, floor division and modulo, including concatenated numeric strings. Bitwise operators retain strict integer types; production `fer` and upstream Lua 5.4.6 differential fixtures passed. Full floating-point string conversion remains unsupported in this owned engine.
+
+### Bounded decimal floating-point values and arithmetic
+
+The independently owned control-flow VM can now hold IEEE-754 double values (stored as raw bits in the compact value enum), compile decimal floating literals, and evaluate Lua's `/` and `^` operators. Mixed integer/float arithmetic, floor division, modulo, unary negation, decimal-formatted string conversion, string concatenation, and numeric comparisons are supported in the tested subset. Integer-only `+`, `-`, `*`, `//`, and `%` retain their existing wrapping-integer behavior. Decimal float table keys, hexadecimal float literals, precise comparison of very large integers against non-integral floats, floating numeric `for`, NaN key semantics and the rest of Lua 5.4 number coercions remain separate acceptance gates; production `fer` is unchanged.

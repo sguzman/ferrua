@@ -119,6 +119,13 @@ const FIXTURES: &[&str] = &[
     r#"return ("\u{E9}" == "é") and 1 or 0"#,
     "return #\"abc\"",
     "return #('ab'..'cd')",
+    "return (3==3.0) and 1 or 0",
+    "return (3~=3.5) and 1 or 0",
+    "return (2<2.5) and 1 or 0",
+    "return (2.5>2) and 1 or 0",
+    "return (2^3^2)==512 and 1 or 0",
+    "return #('x'..2.5)",
+    "return (2^3)==8 and 1 or 0",
     "return '7'+5",
     "return '10'-'3'",
     "return '6'*'7'",
@@ -198,6 +205,7 @@ fn render(values: &[Value]) -> String {
         .iter()
         .map(|value| match value {
             Value::Integer(number) => number.to_string(),
+            Value::Float(bits) => format!("{:?}", f64::from_bits(*bits)),
             Value::Boolean(boolean) => boolean.to_string(),
             Value::Nil => "nil".to_owned(),
             Value::String(_) => "string".to_owned(),

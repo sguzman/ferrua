@@ -25,6 +25,8 @@ pub const DEFAULT_STEP_BUDGET: usize = 100_000;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Value {
     Integer(i64),
+    /// Raw IEEE-754 bits preserve Copy/Eq/Hash for the bounded VM value type.
+    Float(u64),
     Boolean(bool),
     Nil,
     /// Index into the immutable compiler-generated Lua byte-string pool.
@@ -44,6 +46,8 @@ impl Value {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Binary {
     Concat,
+    Div,
+    Pow,
     Add,
     Sub,
     Mul,
@@ -402,7 +406,10 @@ impl<'a> Compiler<'a> {
                         } else {
                             text.parse::<i64>()
                         };
-                        number.ok().map(Value::Integer)
+                        number
+                            .ok()
+                            .map(Value::Integer)
+                            .or_else(|| text.parse::<f64>().ok().map(|value| Value::Float(value.to_bits())))
                     }
                 };
                 if let Some(value) = constant {
@@ -535,6 +542,8 @@ impl<'a> Compiler<'a> {
                     "+" => Binary::Add,
                     "-" => Binary::Sub,
                     "*" => Binary::Mul,
+                    "/" => Binary::Div,
+                    "^" => Binary::Pow,
                     "//" => Binary::FloorDiv,
                     "%" => Binary::Mod,
                     "&" => Binary::BitAnd,
@@ -1156,6 +1165,55 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
     Ok(result)
 }
 
+
+fn number_to_f64(value: Value) -> Result<f64, FlowError> {
+    match value {
+        Value::Integer(number) => Ok(number as f64),
+        Value::Float(bits) => Ok(f64::from_bits(bits)),
+        _ => Err(FlowError::TypeError),
+    }
+}
+
+fn numeric_equal(a: Value, b: Value) -> Result<bool, FlowError> {
+    match (a, b) {
+        (Value::Integer(left), Value::Integer(right)) => Ok(left == right),
+        (Value::Float(left), Value::Float(right)) => {
+            Ok(f64::from_bits(left) == f64::from_bits(right))
+        }
+        (Value::Integer(integer), Value::Float(bits))
+        | (Value::Float(bits), Value::Integer(integer)) => {
+            let float = f64::from_bits(bits);
+            Ok(float.is_finite()
+                && float.fract() == 0.0
+                && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
+                    .contains(&float)
+                && float as i64 == integer)
+        }
+        _ => Err(FlowError::TypeError),
+    }
+}
+
+fn evaluate_number_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowError> {
+    if !matches!(left, Value::Float(_))
+        && !matches!(right, Value::Float(_))
+        && !matches!(op, Binary::Div | Binary::Pow)
+    {
+        return evaluate_binary(op, left, right);
+    }
+    let (a, b) = (number_to_f64(left)?, number_to_f64(right)?);
+    let result = match op {
+        Binary::Add => a + b,
+        Binary::Sub => a - b,
+        Binary::Mul => a * b,
+        Binary::Div => a / b,
+        Binary::Pow => a.powf(b),
+        Binary::FloorDiv => (a / b).floor(),
+        Binary::Mod => a - (a / b).floor() * b,
+        _ => return Err(FlowError::TypeError),
+    };
+    Ok(Value::Float(result.to_bits()))
+}
+
 fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowError> {
     use Binary::*;
     use Value::*;
@@ -1286,6 +1344,31 @@ impl Execution<'_> {
         Ok(())
     }
 
+    fn arithmetic_operand(&self, value: Value) -> Result<Value, FlowError> {
+        match value {
+            Value::Integer(_) | Value::Float(_) => Ok(value),
+            Value::String(_) => match self.integer_operand(value) {
+                Ok(number) => Ok(Value::Integer(number)),
+                Err(_) => {
+                    let Value::String(handle) = value else {
+                        unreachable!("string guard")
+                    };
+                    let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                    let source = std::str::from_utf8(bytes).map_err(|_| FlowError::TypeError)?;
+                    let source = source.trim();
+                    if source.is_empty() || !source.bytes().any(|byte| byte.is_ascii_digit()) {
+                        return Err(FlowError::TypeError);
+                    }
+                    source
+                        .parse::<f64>()
+                        .map(|value| Value::Float(value.to_bits()))
+                        .map_err(|_| FlowError::TypeError)
+                }
+            },
+            _ => Err(FlowError::TypeError),
+        }
+    }
+
     fn integer_operand(&self, value: Value) -> Result<i64, FlowError> {
         let Value::String(handle) = value else {
             return match value {
@@ -1324,6 +1407,7 @@ impl Execution<'_> {
                 .cloned()
                 .ok_or(FlowError::InvalidBytecode),
             Value::Integer(number) => Ok(number.to_string().into_bytes()),
+            Value::Float(bits) => Ok(format!("{:?}", f64::from_bits(bits)).into_bytes()),
             _ => Err(FlowError::TypeError),
         }
     }
@@ -1709,9 +1793,12 @@ impl Execution<'_> {
                     self.write_table(handle, key, value)?;
                 }
                 Op::Negate => {
-                    let value =
-                        self.integer_operand(stack.pop().ok_or(FlowError::InvalidBytecode)?)?;
-                    stack.push(Value::Integer(value.wrapping_neg()));
+                    let value = self.arithmetic_operand(stack.pop().ok_or(FlowError::InvalidBytecode)?)?;
+                    stack.push(match value {
+                        Value::Integer(value) => Value::Integer(value.wrapping_neg()),
+                        Value::Float(bits) => Value::Float((-f64::from_bits(bits)).to_bits()),
+                        _ => return Err(FlowError::TypeError),
+                    });
                 }
                 Op::Not => {
                     let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
@@ -1755,12 +1842,14 @@ impl Execution<'_> {
                         Binary::Add
                         | Binary::Sub
                         | Binary::Mul
+                        | Binary::Div
+                        | Binary::Pow
                         | Binary::FloorDiv
-                        | Binary::Mod => evaluate_binary(
-                            *op,
-                            Value::Integer(self.integer_operand(lhs)?),
-                            Value::Integer(self.integer_operand(rhs)?),
-                        )?,
+                        | Binary::Mod => {
+                            let a = self.arithmetic_operand(lhs)?;
+                            let b = self.arithmetic_operand(rhs)?;
+                            evaluate_number_binary(*op, a, b)?
+                        },
                         Binary::Concat => {
                             let mut bytes = self.string_bytes(lhs)?;
                             let right = self.string_bytes(rhs)?;
@@ -1789,6 +1878,26 @@ impl Execution<'_> {
                                 _ => unreachable!("guarded comparison operator"),
                             };
                             Value::Boolean(matches)
+                        }
+                        Binary::Equal | Binary::NotEqual
+                            if matches!(lhs, Value::Integer(_) | Value::Float(_))
+                                && matches!(rhs, Value::Integer(_) | Value::Float(_)) =>
+                        {
+                            let equal = numeric_equal(lhs, rhs)?;
+                            Value::Boolean(if *op == Binary::Equal { equal } else { !equal })
+                        }
+                        Binary::Less | Binary::LessEqual | Binary::Greater | Binary::GreaterEqual
+                            if matches!(lhs, Value::Integer(_) | Value::Float(_))
+                                && matches!(rhs, Value::Integer(_) | Value::Float(_)) =>
+                        {
+                            let (left, right) = (number_to_f64(lhs)?, number_to_f64(rhs)?);
+                            Value::Boolean(match *op {
+                                Binary::Less => left < right,
+                                Binary::LessEqual => left <= right,
+                                Binary::Greater => left > right,
+                                Binary::GreaterEqual => left >= right,
+                                _ => unreachable!("guarded ordered numeric operator"),
+                            })
                         }
                         _ => evaluate_binary(*op, lhs, rhs)?,
                     };
@@ -2567,6 +2676,33 @@ mod tests {
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
         );
+    }
+
+    #[test]
+    fn bounded_decimal_floats_support_division_power_and_mixed_arithmetic() {
+        let eval_float = |source| {
+            let program = compile_flow_chunk(source).unwrap();
+            let values = execute_flow_values(&program, DEFAULT_STEP_BUDGET).unwrap();
+            let [Value::Float(bits)] = values.as_slice() else {
+                panic!("expected a floating-point result from {source}");
+            };
+            f64::from_bits(*bits)
+        };
+        assert_eq!(eval_float("return 5/2"), 2.5);
+        assert_eq!(eval_float("return 2^3"), 8.0);
+        assert_eq!(eval_float("return 2.5+1"), 3.5);
+        assert_eq!(eval_float("return 2*1.5"), 3.0);
+        assert_eq!(eval_float("return -1.5"), -1.5);
+        assert_eq!(eval_float("return 7.0//2"), 3.0);
+        assert_eq!(eval_float("return 7.0%2"), 1.0);
+        assert_eq!(eval_float("return '1.5'+2"), 3.5);
+        assert_eq!(evaluate("return (3==3.0) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (3~=3.5) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (2<2.5) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (2.5>2) and 1 or 0"), 1);
+        assert_eq!(evaluate("return (2^3^2)==512 and 1 or 0"), 1);
+        assert_eq!(evaluate("return #('x'..2.5)"), 4);
+        assert_eq!(evaluate("return (2^3)==8 and 1 or 0"), 1);
     }
 
     #[test]
