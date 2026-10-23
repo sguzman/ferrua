@@ -397,6 +397,16 @@ const FIXTURES: &[&str] = &[
     "local t=setmetatable({}, {__band=function() return 4,5 end}); return t&1",
     "local t=setmetatable({}, {__bor=function() end}); return (t|1)==nil and 1 or 0",
     "local n=0; local t=setmetatable({}, {__shl=function(_,x) n=n+1; return n+x end}); return t<<4",
+    "return ('ab'..'cd')=='abcd' and 1 or 0",
+    "return ('a'..12)=='a12' and 1 or 0",
+    "local t=setmetatable({name='X'},{__concat=function(a,b) return a.name..b end}); return (t..'Y')=='XY' and 1 or 0",
+    "local t=setmetatable({name='X'},{__concat=function(a,b) return a..b.name end}); return ('Y'..t)=='YX' and 1 or 0",
+    "local a=setmetatable({}, {__concat=function() return 11 end}); local b=setmetatable({}, {__concat=function() return 22 end}); return a..b",
+    "local b=setmetatable({}, {__concat=function() return 22 end}); return {}..b",
+    "local t=setmetatable({}, {__concat=function() return 9,10 end}); return t..'x'",
+    "local t=setmetatable({}, {__concat=function() end}); return (t..'x')==nil and 1 or 0",
+    "local t=setmetatable({}, {__concat=function() return 'ok' end}); return (t..3)=='ok' and 1 or 0",
+    "local n=0; local t=setmetatable({}, {__concat=function() n=n+1; return 'ok' end}); return (t..3)=='ok' and n or 0",
 ];
 
 fn render(values: &[Value]) -> String {
