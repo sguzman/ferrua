@@ -250,6 +250,14 @@ pub enum Statement<'a> {
     /// A lexical scope closed with `end`. Nested Lua blocks are supported
     /// by this experimental subset, not arbitrary control-flow statements.
     Block(Vec<Statement<'a>>),
+    While {
+        condition: Expr<'a>,
+        body: Vec<Statement<'a>>,
+    },
+    If {
+        branches: Vec<(Expr<'a>, Vec<Statement<'a>>)>,
+        else_branch: Option<Vec<Statement<'a>>>,
+    },
 }
 
 impl<'a> Parser<'a> {
@@ -279,12 +287,55 @@ impl<'a> Parser<'a> {
     fn statement(&mut self, depth: usize) -> Result<Statement<'a>, ParseError> {
         if self.peek().is_some_and(|token| token.spelling == "do") {
             self.pop();
-            let body = self.block(true, depth + 1)?;
+            let body = self.block(&["end"], depth + 1)?;
             if self.peek().map(|token| token.spelling) != Some("end") {
                 return Err(self.error("expected end to close do block"));
             }
             self.pop();
             return Ok(Statement::Block(body));
+        }
+        if self.peek().is_some_and(|token| token.spelling == "while") {
+            self.pop();
+            let condition = self.expression(0)?;
+            if self.peek().map(|token| token.spelling) != Some("do") {
+                return Err(self.error("expected do after while condition"));
+            }
+            self.pop();
+            let body = self.block(&["end"], depth + 1)?;
+            if self.peek().map(|token| token.spelling) != Some("end") {
+                return Err(self.error("expected end to close while block"));
+            }
+            self.pop();
+            return Ok(Statement::While { condition, body });
+        }
+        if self.peek().is_some_and(|token| token.spelling == "if") {
+            self.pop();
+            let mut branches = Vec::new();
+            loop {
+                let condition = self.expression(0)?;
+                if self.peek().map(|token| token.spelling) != Some("then") {
+                    return Err(self.error("expected then after if condition"));
+                }
+                self.pop();
+                let body = self.block(&["elseif", "else", "end"], depth + 1)?;
+                branches.push((condition, body));
+                if self.peek().map(|token| token.spelling) == Some("elseif") {
+                    self.pop();
+                    continue;
+                }
+                break;
+            }
+            let else_branch = if self.peek().map(|token| token.spelling) == Some("else") {
+                self.pop();
+                Some(self.block(&["end"], depth + 1)?)
+            } else {
+                None
+            };
+            if self.peek().map(|token| token.spelling) != Some("end") {
+                return Err(self.error("expected end to close if block"));
+            }
+            self.pop();
+            return Ok(Statement::If { branches, else_branch });
         }
         if self.peek().is_some_and(|token| token.spelling == "local") {
             self.pop();
@@ -355,7 +406,7 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn block(&mut self, stop_at_end: bool, depth: usize) -> Result<Vec<Statement<'a>>, ParseError> {
+    fn block(&mut self, terminators: &[&str], depth: usize) -> Result<Vec<Statement<'a>>, ParseError> {
         // A bounded parser also protects library users from deeply nested
         // inputs that would otherwise exhaust the Rust stack.
         if depth > 64 {
@@ -363,7 +414,7 @@ impl<'a> Parser<'a> {
         }
         let mut result = Vec::new();
         while let Some(token) = self.peek() {
-            if stop_at_end && token.spelling == "end" {
+            if terminators.contains(&token.spelling) {
                 break;
             }
             if token.spelling == ";" {
@@ -375,15 +426,15 @@ impl<'a> Parser<'a> {
             result.push(statement);
             if self.peek().is_some_and(|token| token.spelling == ";") {
                 self.pop();
-            } else if stop_at_end && self.peek().is_some_and(|token| token.spelling == "end") {
-                // A block's closing 'end' is a natural terminator.
+            } else if self.peek().is_some_and(|token| terminators.contains(&token.spelling)) {
+                // A block's closing token is a natural terminator.
             } else if self.peek().is_some() {
                 return Err(self.error("expected statement separator"));
             }
             if terminal
                 && self
                     .peek()
-                    .is_some_and(|token| !(stop_at_end && token.spelling == "end"))
+                    .is_some_and(|token| !terminators.contains(&token.spelling))
             {
                 return Err(self.error("return must be final statement in block"));
             }
@@ -394,7 +445,8 @@ impl<'a> Parser<'a> {
 
 /// Parse a deliberately limited Lua chunk: semicolon-separated locals,
 /// assignments, call statements and final returns, plus nested do/end
-/// lexical blocks. Other Lua control flow is not yet supported.
+/// lexical blocks, conditional branches, and while loops. Other Lua
+/// control-flow constructs are not yet supported.
 pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
     let tokens = tokenize(source)?;
     let mut parser = Parser {
@@ -402,7 +454,7 @@ pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
         index: 0,
         length: source.len(),
     };
-    parser.block(false, 0)
+    parser.block(&[], 0)
 }
 
 #[cfg(test)]
@@ -533,7 +585,7 @@ mod tests {
             "1+2",
             "return 1; print(2)",
             "local a=1 print(a)",
-            "if true then return 1 end",
+            "if true return 1 end",
             "local x=1; local y=",
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
@@ -575,6 +627,31 @@ mod tests {
                 .message
                 .contains("nesting")
         );
+    }
+
+    #[test]
+    fn parses_while_and_if_elseif_else_scopes() {
+        let source = "local x=0; while x<3 do x=x+1 end; if x==3 then local good=x; print(good) elseif x>3 then print(x) else print(0) end; return x";
+        let statements = parse_chunk(source).unwrap();
+        assert_eq!(statements.len(), 4);
+        assert!(matches!(&statements[1], Statement::While { body, .. } if body.len() == 1));
+        assert!(matches!(&statements[2], Statement::If { branches, else_branch }
+            if branches.len() == 2 && branches[0].1.len() == 2 && else_branch.is_some()));
+    }
+
+    #[test]
+    fn rejects_unclosed_or_malformed_control_flow() {
+        for source in [
+            "while true return 1 end",
+            "while true do print(1)",
+            "if true return 1 end",
+            "if true then print(1)",
+            "if true then else elseif false then end",
+            "if true then return 1; print(2) end",
+            "elseif true then print(1)",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
     }
 
     #[test]
