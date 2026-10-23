@@ -243,3 +243,15 @@ print('standalone Ferrua archive accepted')
     );
     fs::remove_dir_all(&root).unwrap();
 }
+
+#[test]
+fn rejects_untrusted_http_origin_before_network_access() {
+    let out = Command::new("sh")
+        .args(["scripts/install.sh", "v0.1.0"])
+        .env("FERRUA_RELEASE_BASE", "http://example.com")
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr)
+        .contains("download server must be official GitHub releases or loopback fixture"));
+}

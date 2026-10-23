@@ -24,9 +24,11 @@ fi
 base=$(printenv FERRUA_RELEASE_BASE || true)
 if [ -z "$base" ]; then
     base=https://github.com/sguzman/ferrua/releases/download
+    allowed_protocol=https
 else
     printf '%s\n' "$base" | grep -Eq '^http://127\.0\.0\.1:[0-9]+$' ||
         fail "download server must be official GitHub releases or loopback fixture"
+    allowed_protocol=http
 fi
 
 archive="fer-$version-linux-x86_64.tar.gz"
@@ -37,11 +39,11 @@ url="$base/$version"
     cd "$tmp"
     curl --fail --silent --show-error --location --max-redirs 5 \
         --connect-timeout 5 --max-time 30 \
-        --proto '=https,http' --proto-redir '=https,http' \
+        --proto "=$allowed_protocol" --proto-redir "=$allowed_protocol" \
         -o "$archive" "$url/$archive" || fail "unable to fetch release archive"
     curl --fail --silent --show-error --location --max-redirs 5 \
         --connect-timeout 5 --max-time 30 \
-        --proto '=https,http' --proto-redir '=https,http' \
+        --proto "=$allowed_protocol" --proto-redir "=$allowed_protocol" \
         -o "$archive.sha256" "$url/$archive.sha256" ||
         fail "unable to fetch release checksum"
     record=$(cat "$archive.sha256")
