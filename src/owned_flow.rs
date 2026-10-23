@@ -795,11 +795,6 @@ impl<'a> Compiler<'a> {
                         .expect("loop break scope")
                         .push(address);
                 }
-                _ => {
-                    return Err(FlowError::Unsupported(
-                        "loop type, call, or return arity".into(),
-                    ));
-                }
             }
         }
         Ok(())
