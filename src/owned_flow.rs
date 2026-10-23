@@ -956,11 +956,20 @@ mod tests {
     fn bounded_array_tables_preserve_reference_identity_and_missing_nil() {
         assert_eq!(evaluate("local t={4,5}; return t[2]"), 5);
         assert_eq!(evaluate("local t={4}; t[1]=7; return t[1]"), 7);
-        assert_eq!(evaluate("local t={2}; local alias=t; alias[1]=8; return t[1]"), 8);
+        assert_eq!(
+            evaluate("local t={2}; local alias=t; alias[1]=8; return t[1]"),
+            8
+        );
         assert_eq!(evaluate("local t={1}; return t[9] or 3"), 3);
         assert_eq!(evaluate("local t={{2}}; return t[1][1]"), 2);
-        assert_eq!(evaluate("local a={1}; local b=a; return (a==b) and 1 or 0"), 1);
-        assert_eq!(evaluate("local a={1}; local b={1}; return (a==b) and 1 or 0"), 0);
+        assert_eq!(
+            evaluate("local a={1}; local b=a; return (a==b) and 1 or 0"),
+            1
+        );
+        assert_eq!(
+            evaluate("local a={1}; local b={1}; return (a==b) and 1 or 0"),
+            0
+        );
     }
 
     #[test]
