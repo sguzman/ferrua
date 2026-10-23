@@ -81,6 +81,34 @@ local function validate_graduation()
     end
 end
 
+-- Release workflow must check a requested tag *before* building/publishing.
+-- A v0.x tag is always a GitHub prerelease; a v1+ tag is blocked until all
+-- native, downstream and owned-engine preconditions have been accepted.
+local function validate_release_tag(tag)
+    assert(type(tag) == "string", "release tag is required")
+    local major, minor, patch, suffix = tag:match("^v(%d+)%.(%d+)%.(%d+)(.*)$")
+    assert(major and minor and patch and
+        (suffix == "" or suffix:match("^%-[%w%.%-]+$")),
+        "release tag must be explicit semver (vMAJOR.MINOR.PATCH[-PRERELEASE])")
+    local source_version = assert(read("Cargo.toml"):match('\nversion%s*=%s*"([^"]+)"'),
+        "missing Cargo package version")
+    assert(tag == "v" .. source_version,
+        "release tag must match the Cargo package version")
+    if tonumber(major) >= 1 then
+        validate_graduation()
+        assert(lookup.T107.checks[2].passed,
+            "stable release blocked: native EndeavourOS acceptance missing")
+        assert(lookup.T204.checks[1].passed,
+            "stable release blocked: verified tagged preview release missing")
+        assert(lookup.T208.checks[1].passed and lookup.T208.checks[3].passed,
+            "stable release blocked: versioned checksums or pinned downstream QA missing")
+        assert(lookup.T301.progress == 100 and lookup.T302.progress == 100 and
+            lookup.T303.progress == 100 and lookup.T304.checks[2].passed,
+            "stable release blocked: native owned-engine parity and cutover unaccepted")
+    end
+    return tag
+end
+
 if arg[1] == "--self-test-gates" then
     validate_graduation()
     local function must_reject(id, check_index)
@@ -94,11 +122,30 @@ if arg[1] == "--self-test-gates" then
     must_reject("T304", 2)
     must_reject("T304", 3)
     must_reject("T107", 3)
+    -- Current pre-1.0 development tag can be verified without falsely
+    -- granting stable-release or native EndeavourOS acceptance.
+    local source_version = assert(read("Cargo.toml"):match('\nversion%s*=%s*"([^"]+)"'))
+    local current_tag = "v" .. source_version
+    local current_major = tonumber(source_version:match("^(%d+)"))
+    assert(not pcall(validate_release_tag, "invalid"))
+    assert(not pcall(validate_release_tag, "v999.999.999"))
+    if current_major == 0 then
+        assert(pcall(validate_release_tag, current_tag),
+            "pre-1.0 prerelease must remain eligible")
+    elseif not lookup.T107.checks[2].passed then
+        assert(not pcall(validate_release_tag, current_tag),
+            "stable release must not bypass native EndeavourOS QA")
+    end
     print("Ferrua graduation guards passed")
     return
 end
 
 validate_graduation()
+if arg[1] == "--release-gate" then
+    local tag = validate_release_tag(arg[2])
+    print("Ferrua release gate accepted: " .. tag)
+    return
+end
 
 local lines = {
     "# 🗺️ Ferrua roadmap", "",
