@@ -52,7 +52,6 @@ fn sandbox_excludes_http_bridge() {
     );
 }
 
-
 #[test]
 fn non_success_http_status_remains_a_response() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -77,7 +76,10 @@ fn non_success_http_status_remains_a_response() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "404 response passed");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "404 response passed"
+    );
 }
 
 #[test]
@@ -90,8 +92,13 @@ fn post_body_and_options_are_supported() {
         let size = stream.read(&mut incoming).unwrap();
         let request = String::from_utf8_lossy(&incoming[..size]);
         assert!(request.starts_with("POST /submit "), "{request}");
-        assert!(request.contains("x-ferrua-qa: yes") || request.contains("X-Ferrua-QA: yes"), "{request}");
-        stream.write_all(b"HTTP/1.1 201 Created\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK").unwrap();
+        assert!(
+            request.contains("x-ferrua-qa: yes") || request.contains("X-Ferrua-QA: yes"),
+            "{request}"
+        );
+        stream
+            .write_all(b"HTTP/1.1 201 Created\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK")
+            .unwrap();
     });
     let lua = format!(
         "local options={{headers={{['X-Ferrua-QA']='yes'}}}}; local r=http.post('http://{address}/submit','data',options); assert(options.body == nil); assert(r.ok and r.status==201 and r.body == 'OK'); print('POST fixture passed')"
@@ -106,5 +113,8 @@ fn post_body_and_options_are_supported() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "POST fixture passed");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "POST fixture passed"
+    );
 }
