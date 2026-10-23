@@ -8,7 +8,7 @@ The default trusted execution mode supplies conventional Lua host functionality,
 
 Because Lua sources are evaluated by the engine, Ferrua's current conformance, bytecode semantics, closures, garbage collection, coroutine behavior, and standard libraries come from that engine. Do not claim that Ferrua has independently implemented them. An **owned compiler and VM** are queued under M2 and will require real differential and acceptance evidence before substituting this engine.
 
-Ferrua provides its own small JSON parser/serializer from `tools/json.lua` as a built-in global available in both trusted and restricted execution modes. No Python and no dynamic Rust library are required for the module. Parsed arrays and objects carry distinct Lua metatables so even `[]` and `{}` preserve their shape on re-encoding.
+Ferrua provides its own small JSON parser/serializer from `tools/json.lua` as a built-in global available in both trusted and restricted execution modes. No Python and no dynamic Rust library are required for the module. Parsed arrays and objects carry distinct Lua metatables so even `[]` and `{}` preserve their shape on re-encoding. The parser checks strict JSON number/whitespace rules and encodes Unicode escapes without depending on the Lua 5.3+ `utf8` library; version-spanning regression cases are in `tests/json_spec.lua`.
 
 The trusted `process` module calls the Rust `std::process::Command` API directly using JSON-encoded arguments through a native VM callback. It is never installed in the restricted sandbox. Child processes use the caller's permissions, have a default 60-second timeout and capped captured output. Shells run only when deliberately requested as the executable. See [docs/PROCESS.md](PROCESS.md).
 

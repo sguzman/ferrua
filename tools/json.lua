@@ -14,9 +14,29 @@ function json.decode(source)
         error("JSON at byte " .. position .. ": " .. message, 0)
     end
     local function whitespace()
-        while position <= length and source:sub(position, position):match("%s") do
+        while position <= length do
+            local char = source:sub(position, position)
+            if char ~= " " and char ~= "\t" and char ~= "\r" and char ~= "\n" then
+                return
+            end
             position = position + 1
         end
+    end
+    local function codepoint_utf8(point)
+        if point < 0x80 then return string.char(point) end
+        if point < 0x800 then
+            return string.char(0xC0 + math.floor(point / 0x40),
+                0x80 + point % 0x40)
+        end
+        if point < 0x10000 then
+            return string.char(0xE0 + math.floor(point / 0x1000),
+                0x80 + math.floor(point / 0x40) % 0x40,
+                0x80 + point % 0x40)
+        end
+        return string.char(0xF0 + math.floor(point / 0x40000),
+            0x80 + math.floor(point / 0x1000) % 0x40,
+            0x80 + math.floor(point / 0x40) % 0x40,
+            0x80 + point % 0x40)
     end
     local function string_value()
         if source:sub(position, position) ~= '"' then fail("expected string") end
@@ -55,7 +75,7 @@ function json.decode(source)
                     elseif point >= 0xDC00 and point <= 0xDFFF then
                         fail("unexpected low surrogate")
                     end
-                    chunks[#chunks + 1] = utf8.char(point)
+                    chunks[#chunks + 1] = codepoint_utf8(point)
                 else
                     fail("invalid string escape")
                 end
@@ -108,6 +128,46 @@ function json.decode(source)
             position = position + 1
         end
     end
+        local function number_value()
+        local first = position
+        if source:sub(position, position) == "-" then position = position + 1 end
+        local digit = source:sub(position, position)
+        if digit == "0" then
+            position = position + 1
+        elseif digit:match("^[1-9]$") then
+            repeat
+                position = position + 1
+            until not source:sub(position, position):match("^%d$")
+        else
+            fail("invalid number")
+        end
+        if source:sub(position, position) == "." then
+            position = position + 1
+            if not source:sub(position, position):match("^%d$") then
+                fail("fraction needs a digit")
+            end
+            repeat
+                position = position + 1
+            until not source:sub(position, position):match("^%d$")
+        end
+        local exponent = source:sub(position, position)
+        if exponent == "e" or exponent == "E" then
+            position = position + 1
+            local sign = source:sub(position, position)
+            if sign == "+" or sign == "-" then position = position + 1 end
+            if not source:sub(position, position):match("^%d$") then
+                fail("exponent needs a digit")
+            end
+            repeat
+                position = position + 1
+            until not source:sub(position, position):match("^%d$")
+        end
+        local result = tonumber(source:sub(first, position - 1))
+        if not result or result ~= result or result == math.huge or result == -math.huge then
+            fail("number out of range")
+        end
+        return result
+    end
     function parse_value()
         whitespace()
         local char = source:sub(position, position)
@@ -122,12 +182,8 @@ function json.decode(source)
                 return json.null
             end
         end
-        local part = source:sub(position):match("^%-?%d+%.?%d*[eE]?[+%-]?%d*")
-        if part and #part > 0 then
-            local result = tonumber(part)
-            if not result then fail("invalid number") end
-            position = position + #part
-            return result
+        if char == "-" or (char and char:match("^%d$")) then
+            return number_value()
         end
         fail("unexpected token")
     end

@@ -22,6 +22,12 @@ jobs:
         run: cargo test --all-targets
       - name: Lua roadmap integrity
         run: cargo run -- tools/roadmap.lua --check
+      - name: JSON conformance matrix
+        run: |
+          cargo run -- tests/json_spec.lua | grep -x "JSON conformance smoke passed"
+          cargo run -- --lua=5.4 tests/json_spec.lua | grep -x "JSON conformance smoke passed"
+          cargo run -- --sandbox tests/json_spec.lua | grep -x "JSON conformance smoke passed"
+          cargo run -- --lua=5.1 --sandbox tests/json_spec.lua | grep -x "JSON conformance smoke passed"
       - name: Interpreter smoke
         run: |
           cargo run -- -e "print(6 * 7)" | grep -x 42
