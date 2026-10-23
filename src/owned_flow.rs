@@ -5220,6 +5220,23 @@ mod tests {
     }
 
     #[test]
+    fn recursively_dispatched_metamethods_stop_before_native_stack_exhaustion() {
+        for source in [
+            "local t={}; setmetatable(t,{__index=function(self,k) return self[k] end}); return t.x",
+            "local t={}; setmetatable(t,{__add=function(a,b) return a+b end}); return t+1",
+            "local t={}; setmetatable(t,{__pairs=function(self) return pairs(self) end}); return pairs(t)",
+            "local t={}; setmetatable(t,{__len=function(self) return #self end}); return #t",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::CallDepthExceeded),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
     fn budget_prevents_infinite_loops() {
         let compiled = compile_flow_chunk("while true do end; return 3").unwrap();
         assert_eq!(
