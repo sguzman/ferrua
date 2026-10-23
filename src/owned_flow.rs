@@ -86,6 +86,7 @@ pub enum Op {
     SetTable,
     Negate,
     Not,
+    Length,
     BitNot,
     Binary(Binary),
     JumpIfFalse(usize),
@@ -335,11 +336,12 @@ impl<'a> Compiler<'a> {
                     self.push(Op::ReadLocal(slot))?;
                 }
             }
-            Expr::Unary { op, right } if matches!(*op, "-" | "not" | "~") => {
+            Expr::Unary { op, right } if matches!(*op, "-" | "not" | "~" | "#") => {
                 self.expression(right, depth + 1)?;
                 self.push(match *op {
                     "-" => Op::Negate,
                     "not" => Op::Not,
+                    "#" => Op::Length,
                     "~" => Op::BitNot,
                     _ => unreachable!("guarded unary operator"),
                 })?;
@@ -1293,6 +1295,20 @@ impl Execution<'_> {
                     let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     stack.push(Value::Boolean(!value.truthy()));
                 }
+                Op::Length => {
+                    let Value::Table(handle) = stack.pop().ok_or(FlowError::InvalidBytecode)?
+                    else {
+                        return Err(FlowError::TypeError);
+                    };
+                    let entries = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                    // A first missing positive entry is a valid Lua border.
+                    // Dense tables have a uniquely determined length.
+                    let length = entries
+                        .iter()
+                        .take_while(|cell| !matches!(cell, None | Some(Value::Nil)))
+                        .count();
+                    stack.push(Value::Integer(length as i64));
+                }
                 Op::BitNot => {
                     let Value::Integer(value) = stack.pop().ok_or(FlowError::InvalidBytecode)?
                     else {
@@ -2010,6 +2026,24 @@ mod tests {
             21
         );
         let invalid = compile_flow_chunk("local t={1}; t[0],t[1]=8,9; return t[1]").unwrap();
+        assert_eq!(
+            execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
+    }
+
+    #[test]
+    fn table_length_uses_positive_index_border() {
+        assert_eq!(evaluate("local t={}; return #t"), 0);
+        assert_eq!(evaluate("local t={4,5,6}; return #t"), 3);
+        assert_eq!(evaluate("local t={[1]=7,[2]=8}; return #t"), 2);
+        assert_eq!(evaluate("local t={1,2}; t[3]=4; return #t"), 3);
+        assert_eq!(
+            evaluate("local t={1,2}; local function size(x) return #x end; return size(t)"),
+            2
+        );
+        assert_eq!(evaluate("local t={1,2}; t[2]=nil; return #t"), 1);
+        let invalid = compile_flow_chunk("return #true").unwrap();
         assert_eq!(
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)

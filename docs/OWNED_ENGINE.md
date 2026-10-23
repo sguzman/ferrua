@@ -187,3 +187,7 @@ Fresh per-iteration cells are allocated only when a live loop-variable cell has 
 ### Mixed positional and computed integer table constructors
 
 The experimental flow VM now executes table constructors combining ordered positional fields and explicit computed positive integer keys. Indexed field keys and values evaluate once in the owned VM's chosen source order. Overlapping explicit and positional assignments are deliberately excluded from cross-interpreter parity fixtures because Lua does not guarantee a single cross-implementation assignment order in that case. An unparenthesized final positional call or `...` still expands into successive positional indices with bounded heap accounting. This subset does **not** implement named fields, string keys, sparse associative maps beyond the bounded positive-integer region, full Lua length behavior, or metatables. Differential fixtures compare supported outcomes against `fer` and Lua 5.4.6.
+
+### Bounded table length operator
+
+The owned-flow VM now supports Lua's unary `#` operator on its bounded positive-integer table representation. For dense sequences, length is exact. For tables with holes, the runtime selects the first missing positive index as a valid border; the Lua specification does not require a unique border for sparse tables, so differential assertions use unambiguous shapes. Non-table operands remain rejected until the owned value model supports Lua strings and any relevant metamethods. Production `fer` remains unchanged.
