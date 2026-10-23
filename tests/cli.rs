@@ -198,5 +198,9 @@ fn structured_data_modules_are_not_in_sandbox() {
         "-e",
         "assert(toml == nil and yaml == nil and __fer_data_call == nil)",
     ]);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }

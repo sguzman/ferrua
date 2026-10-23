@@ -182,10 +182,16 @@ fn vm_for(options: &Options) -> Vm {
             .eval_chunk(include_str!("../tools/data.lua"), "@ferrua/data.lua")
             .expect("embedded data module must compile");
         let mut data_modules = data_modules.into_iter();
-        vm.set_global("toml", data_modules.next().expect("TOML module must be returned"))
-            .expect("TOML module must register");
-        vm.set_global("yaml", data_modules.next().expect("YAML module must be returned"))
-            .expect("YAML module must register");
+        vm.set_global(
+            "toml",
+            data_modules.next().expect("TOML module must be returned"),
+        )
+        .expect("TOML module must register");
+        vm.set_global(
+            "yaml",
+            data_modules.next().expect("YAML module must be returned"),
+        )
+        .expect("YAML module must register");
     }
     // User-supplied budget applies to the user script, not runtime initialization.
     if let Some(budget) = options.budget {
