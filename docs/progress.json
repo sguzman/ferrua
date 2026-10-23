@@ -2423,6 +2423,28 @@
                   "evidence": "GitHub Actions 40031328390: Linux, Rust 1.96, Lua 5.4 differential, action consumer and status reporter passed"
                 }
               ]
+            },
+            {
+              "id": "T375",
+              "emoji": "➖",
+              "name": "Bounded unary __unm and __bnot metamethod callbacks",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Preserve numeric unary operators and fall back to first-party __unm and __bnot closures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::Negate and Op::BitNot via Execution::binary_metamethod"
+                },
+                {
+                  "text": "Verify Lua duplicate-operand callback convention, recursion limits, return adjustment and differential fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: unary_metamethods_pass_duplicate_operand_and_keep_numeric_fallback; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Rust formatter, Clippy, Rust 1.96, full tests, action consumer and Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -2920,6 +2942,13 @@
           "name": "Function-valued arithmetic metamethods with numeric precedence",
           "task_ids": [
             "T374"
+          ]
+        },
+        {
+          "emoji": "➖",
+          "name": "Unary negative and bitwise complement metamethods",
+          "task_ids": [
+            "T375"
           ]
         }
       ]
