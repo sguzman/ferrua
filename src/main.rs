@@ -156,7 +156,9 @@ fn error_message(vm: &mut Vm, err: &luna_core::vm::LuaError) -> String {
 
 fn run_source(vm: &mut Vm, source: &str, name: &str) -> Result<(), String> {
     // Lua CLI convention: ignore a Unix shebang, preserving original line numbers.
-    let normalized = source.starts_with("#!").then(|| format!("--{}", &source[2..]));
+    let normalized = source
+        .starts_with("#!")
+        .then(|| format!("--{}", &source[2..]));
     vm.eval_chunk(normalized.as_deref().unwrap_or(source), name)
         .map(|_| ())
         .map_err(|err| error_message(vm, &err))
@@ -317,7 +319,12 @@ mod tests {
     #[test]
     fn unix_shebang_is_accepted() {
         let mut vm = vm_for(&parse(&[], false).unwrap());
-        run_source(&mut vm, "#!/usr/bin/env fer\nassert(6 * 7 == 42)", "=shebang").unwrap();
+        run_source(
+            &mut vm,
+            "#!/usr/bin/env fer\nassert(6 * 7 == 42)",
+            "=shebang",
+        )
+        .unwrap();
     }
     #[test]
     fn runtime_errors_are_propagated() {
