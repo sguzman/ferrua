@@ -2308,6 +2308,28 @@
                   "evidence": "GitHub Actions 40025867923: four primary jobs and aggregate status passed"
                 }
               ]
+            },
+            {
+              "id": "T370",
+              "emoji": "🔗",
+              "name": "Bounded table-backed Lua __index and __newindex metamethod chains",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Dispatch missing table reads/writes through bounded table-valued metamethod chains",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::lookup_with_metatable, Execution::assign_with_metatable"
+                },
+                {
+                  "text": "Preserve rawget/rawset bypass, existing keys, protected metatables, cycle budgets and Lua parity fixtures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: table_backed_index_and_newindex_fallbacks_remain_bounded; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass Linux fmt/clippy/tests, Rust 1.96, action consumer and upstream Lua 5.4 differential CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -2770,6 +2792,13 @@
           "name": "First-class Lua metatable storage and protection",
           "task_ids": [
             "T369"
+          ]
+        },
+        {
+          "emoji": "🔗",
+          "name": "Bounded table-backed __index/__newindex fallback chains",
+          "task_ids": [
+            "T370"
           ]
         }
       ]
