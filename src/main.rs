@@ -2,6 +2,8 @@
 //! Lua compilation, bytecode execution and garbage collection are provided
 //! by the pure-Rust luna-core engine; this crate owns the fer CLI and host setup.
 use luna_core::{version::LuaVersion, vm::Vm};
+
+mod process;
 use std::io::{self, BufRead, IsTerminal, Read, Write};
 
 const HELP: &str = "\
@@ -136,6 +138,19 @@ fn vm_for(options: &Options) -> Vm {
         .expect("embedded JSON module must return a table");
     vm.set_global("json", json)
         .expect("embedded JSON module must register");
+    if !options.sandbox {
+        let run = vm.native_typed(process::run_serialized as fn(String) -> String);
+        vm.set_global("__fer_process_run", run)
+            .expect("process bridge must register");
+        let module = vm
+            .eval_chunk(include_str!("../tools/process.lua"), "@ferrua/process.lua")
+            .expect("embedded process module must compile")
+            .into_iter()
+            .next()
+            .expect("embedded process module must return a table");
+        vm.set_global("process", module)
+            .expect("process module must register");
+    }
     // User-supplied budget applies to the user script, not runtime initialization.
     if let Some(budget) = options.budget {
         vm.set_instr_budget(Some(budget));
