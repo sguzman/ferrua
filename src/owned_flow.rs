@@ -1414,7 +1414,9 @@ mod tests {
     #[test]
     fn conditional_function_fallthrough_returns_zero_values() {
         assert_eq!(
-            evaluate("local function maybe(x) if x then return 4 end end; return maybe(false) or 9"),
+            evaluate(
+                "local function maybe(x) if x then return 4 end end; return maybe(false) or 9"
+            ),
             9
         );
         assert_eq!(
@@ -1427,7 +1429,8 @@ mod tests {
         );
         let result = compile_flow_chunk(
             "local function maybe(x) if x then return 4,5 end end; return maybe(false)",
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(
             execute_flow_values(&result, DEFAULT_STEP_BUDGET),
             Ok(Vec::new())
