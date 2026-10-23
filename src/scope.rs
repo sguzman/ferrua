@@ -39,9 +39,7 @@ pub struct ScopeSummary<'src> {
 }
 
 fn identifier(text: &str) -> bool {
-    tokenize(text).is_ok_and(|tokens| {
-        tokens.len() == 1 && tokens[0].kind == Kind::Identifier
-    })
+    tokenize(text).is_ok_and(|tokens| tokens.len() == 1 && tokens[0].kind == Kind::Identifier)
 }
 
 struct Resolver<'src> {
@@ -51,10 +49,11 @@ struct Resolver<'src> {
 
 impl<'src> Resolver<'src> {
     fn record(&mut self, name: &'src str, access: Access, statement: usize) {
-        let resolution = self.locals.get(name).copied().map_or(
-            Resolution::Global,
-            Resolution::Local,
-        );
+        let resolution = self
+            .locals
+            .get(name)
+            .copied()
+            .map_or(Resolution::Global, Resolution::Local);
         self.result.references.push(Reference {
             name,
             resolution,
@@ -178,12 +177,13 @@ mod tests {
             r.name == "x" && r.statement == 2 && r.resolution == Resolution::Local(1)
         }));
         assert!(result.references.iter().any(|r| {
-            r.name == "y" && r.statement == 3 && r.access == Access::Write
+            r.name == "y"
+                && r.statement == 3
+                && r.access == Access::Write
                 && r.resolution == Resolution::Global
         }));
         assert!(result.references.iter().any(|r| {
-            r.name == "print" && r.statement == 2
-                && r.resolution == Resolution::Global
+            r.name == "print" && r.statement == 2 && r.resolution == Resolution::Global
         }));
     }
 
