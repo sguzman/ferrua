@@ -1581,7 +1581,11 @@ impl Execution<'_> {
         let Some(metatable) = metatable else {
             return Ok(None);
         };
-        let Some(key) = self.strings.iter().position(|bytes| bytes == b"__metatable") else {
+        let Some(key) = self
+            .strings
+            .iter()
+            .position(|bytes| bytes == b"__metatable")
+        else {
             return Ok(None);
         };
         let value = self.read_table(metatable, TableKey::Hashed(Value::String(key)))?;
@@ -3483,15 +3487,42 @@ mod tests {
         for (source, expected) in [
             ("local t={}; return getmetatable(t)==nil and 1 or 0", 1),
             ("return getmetatable(nil)==nil and 1 or 0", 1),
-            ("local m={}; local t={}; setmetatable(t,m); return rawequal(getmetatable(t),m) and 1 or 0", 1),
-            ("local m={}; local t={}; local same=setmetatable(t,m); return rawequal(t,same) and 1 or 0", 1),
-            ("local m={__metatable='shield'}; local t=setmetatable({},m); return getmetatable(t)=='shield' and 1 or 0", 1),
-            ("local m={__metatable=false}; local t=setmetatable({},m); return getmetatable(t)==false and 1 or 0", 1),
-            ("local t=setmetatable({},{}); setmetatable(t,nil); return getmetatable(t)==nil and 1 or 0", 1),
-            ("local m={__metatable='locked'}; local t=setmetatable({},m); rawset(m,'__metatable',nil); setmetatable(t,nil); return getmetatable(t)==nil and 1 or 0", 1),
-            ("local get=getmetatable; local set=setmetatable; local t={}; local m={}; set(t,m); return rawequal(get(t),m) and 1 or 0", 1),
-            ("local getmetatable=function() return 7 end; return getmetatable({})", 7),
-            ("return type(getmetatable)=='function' and type(setmetatable)=='function' and 1 or 0", 1),
+            (
+                "local m={}; local t={}; setmetatable(t,m); return rawequal(getmetatable(t),m) and 1 or 0",
+                1,
+            ),
+            (
+                "local m={}; local t={}; local same=setmetatable(t,m); return rawequal(t,same) and 1 or 0",
+                1,
+            ),
+            (
+                "local m={__metatable='shield'}; local t=setmetatable({},m); return getmetatable(t)=='shield' and 1 or 0",
+                1,
+            ),
+            (
+                "local m={__metatable=false}; local t=setmetatable({},m); return getmetatable(t)==false and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({},{}); setmetatable(t,nil); return getmetatable(t)==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local m={__metatable='locked'}; local t=setmetatable({},m); rawset(m,'__metatable',nil); setmetatable(t,nil); return getmetatable(t)==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local get=getmetatable; local set=setmetatable; local t={}; local m={}; set(t,m); return rawequal(get(t),m) and 1 or 0",
+                1,
+            ),
+            (
+                "local getmetatable=function() return 7 end; return getmetatable({})",
+                7,
+            ),
+            (
+                "return type(getmetatable)=='function' and type(setmetatable)=='function' and 1 or 0",
+                1,
+            ),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
