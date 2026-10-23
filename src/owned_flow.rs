@@ -1506,7 +1506,10 @@ impl Execution<'_> {
                             bytes.extend_from_slice(&right);
                             self.intern_string(bytes)?
                         }
-                        Binary::Less | Binary::LessEqual | Binary::Greater | Binary::GreaterEqual
+                        Binary::Less
+                        | Binary::LessEqual
+                        | Binary::Greater
+                        | Binary::GreaterEqual
                             if matches!((lhs, rhs), (Value::String(_), Value::String(_))) =>
                         {
                             let (Value::String(a), Value::String(b)) = (lhs, rhs) else {
@@ -2248,9 +2251,15 @@ mod tests {
         assert_eq!(evaluate("return (('a'..'b')~='abc') and 1 or 0"), 1);
         assert_eq!(evaluate("return ('abc'<'abd') and 1 or 0"), 1);
         assert_eq!(evaluate("return ('abc'>='abc') and 1 or 0"), 1);
-        assert_eq!(evaluate("local a='ab'; local function join(x) return a..x end; return #join('cd')"), 4);
+        assert_eq!(
+            evaluate("local a='ab'; local function join(x) return a..x end; return #join('cd')"),
+            4
+        );
         let invalid = compile_flow_chunk("return true .. 7").unwrap();
-        assert_eq!(execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET), Err(FlowError::TypeError));
+        assert_eq!(
+            execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
     }
 
     #[test]
