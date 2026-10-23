@@ -40,11 +40,24 @@ fn error(reason: impl Into<String>) -> String {
     .to_string()
 }
 
-fn limited_read<R: Read>(reader: R) -> io::Result<(String, bool)> {
+fn limited_read<R: Read>(mut reader: R) -> io::Result<(String, bool)> {
     let mut bytes = Vec::new();
-    reader.take(MAX_OUTPUT + 1).read_to_end(&mut bytes)?;
-    let truncated = bytes.len() as u64 > MAX_OUTPUT;
-    bytes.truncate(MAX_OUTPUT as usize);
+    let mut truncated = false;
+    let mut buffer = [0_u8; 8192];
+    loop {
+        let count = reader.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        let remaining = (MAX_OUTPUT as usize).saturating_sub(bytes.len());
+        let saved = count.min(remaining);
+        bytes.extend_from_slice(&buffer[..saved]);
+        if saved != count {
+            truncated = true;
+        }
+        // Keep draining past the capture limit: closing the reader early
+        // would block a verbose child on a full stdout/stderr pipe.
+    }
     Ok((String::from_utf8_lossy(&bytes).into_owned(), truncated))
 }
 
@@ -164,6 +177,27 @@ mod tests {
     fn rejects_out_of_range_timeout() {
         let result = run_serialized(r#"{"program":"echo","timeout_ms":0}"#.into());
         assert!(result.contains("timeout_ms"));
+    }
+
+    #[test]
+    fn output_over_limit_is_truncated_without_stopping_the_reader() {
+        let bytes = vec![b'x'; MAX_OUTPUT as usize + 1];
+        let (capture, truncated) = limited_read(std::io::Cursor::new(bytes)).unwrap();
+        assert!(truncated);
+        assert_eq!(capture.len(), MAX_OUTPUT as usize);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn verbose_child_is_drained_without_spurious_timeout() {
+        let response = run_serialized(
+            r#"{"program":"head","args":["-c","2097153","/dev/zero"],"timeout_ms":10000}"#.into(),
+        );
+        let decoded: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(decoded["ok"], true, "{response}");
+        assert_eq!(decoded["timed_out"], false);
+        assert_eq!(decoded["stdout_truncated"], true);
+        assert_eq!(decoded["stdout"].as_str().unwrap().len(), MAX_OUTPUT as usize);
     }
 
     #[test]
