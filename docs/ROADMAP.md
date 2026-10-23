@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 94%` across 93 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 95%` across 94 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -100,7 +100,7 @@
   - [x] Exercise JSON, TOML/YAML, ordinary Lua, syntax and sandbox checks across five dialects — tools/check_compat.lua; .github/workflows/ci.yml
   - [x] Verify all five dialect runs and three CI jobs — GitHub Actions 39947311765: five dialect matrix passed
 
-### 🌐 P4 — Portable data and CI graduation — `█████████░ 89%`
+### 🌐 P4 — Portable data and CI graduation — `█████████░ 90%`
 
 - 🌐 **T206** First-party HTTP API and GitHub REST client — `██████████ 100%`
   - [x] Provide documented HTTP GET, POST and response contracts with timeouts — docs/HTTP.md and tools/http.lua specify methods, output, limits and errors
@@ -126,6 +126,9 @@
   - [x] Commit CI-generated Cargo.lock and enforce --locked everywhere — Cargo.lock, .github/workflows/ci.yml, action.yml
   - [x] Verify pinned minimum Rust 1.96 and composite consumer — GitHub Actions 39946114053: msrv and action-consumer green
   - [x] Populate restoreable dependency/build cache with successful CI — GitHub Actions 39946114053: cache saved linux; MSRV cache restored
+- 📡 **T215** Machine-readable aggregate acceptance status on main — `██████████ 100%`
+  - [x] Publish one status after four primary CI jobs with write scope restricted to reporter — .github/workflows/ci.yml: acceptance-status
+  - [x] Verify aggregate success maps to completed four-job run on main — GitHub Actions 40024909050: four primary jobs and status reporter successful; ferrua/ci success
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -138,12 +141,13 @@
 - 🐙 Native GitHub REST automation — `██████████ 100%`
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
+- 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 95%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 96%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 95%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 96%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -406,14 +410,14 @@
   - [x] Compile lexically shadowable assert builtin with truthiness and bounded error behavior — src/owned_flow.rs: Builtin::Assert
   - [x] Return all provided arguments in multi-result positions and reject nil/false conditions — src/owned_flow.rs: first_class_assert_preserves_successful_lua_multi_values
   - [x] Pass all four CI jobs and production/upstream Lua differential fixtures — tests/owned_flow.rs; GitHub Actions 40017471285: all four jobs successful
-- 🔁 **T367** First-class bounded raw and sequential Lua iteration — `███████░░░ 67%`
+- 🔁 **T367** First-class bounded raw and sequential Lua iteration — `██████████ 100%`
   - [x] Compile lexically shadowable next, pairs and ipairs over bounded table storage — src/owned_flow.rs: Builtin::Next, Builtin::Pairs, Builtin::Ipairs, Execution::next_builtin
   - [x] Add raw key traversal, sequential-stop, closure, type/error and execution-budget regression fixtures — src/owned_flow.rs: first_class_next_pairs_and_ipairs_follow_bounded_lua_raw_iteration; tests/owned_flow.rs
-  - [ ] Pass Rust 1.96, formatter, clippy, production fer and upstream Lua 5.4 differential CI
-- 🕳️ **T368** Nil-value table holes and allocation-free absent deletes — `███████░░░ 67%`
+  - [x] Pass Rust 1.96, formatter, clippy, production fer and upstream Lua 5.4 differential CI — GitHub Actions 40024909050: Linux, Rust 1.96, Lua 5.4 differential and composite consumer jobs successful
+- 🕳️ **T368** Nil-value table holes and allocation-free absent deletes — `██████████ 100%`
   - [x] Avoid allocating absent positive array fields when assigning nil — src/owned_flow.rs: Execution::write_table
   - [x] Normalize nil constructor/tail cells and add heap-budget plus Lua parity regression fixtures — src/owned_flow.rs: nil_table_fields_do_not_allocate_nonexistent_array_storage; tests/owned_flow.rs
-  - [ ] Pass all four primary CI jobs with upstream Lua differential verification
+  - [x] Pass all four primary CI jobs with upstream Lua differential verification — GitHub Actions 40024909050: Linux, Rust 1.96, Lua 5.4 differential and composite consumer jobs successful
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -479,6 +483,6 @@
 - 📏 First-class rawlen and shared Lua length implementation — `██████████ 100%`
 - 🎛️ First-class select with bounded multiple-result lists — `██████████ 100%`
 - ✅ First-class assert with truthy multi-result preservation — `██████████ 100%`
-- 🔁 First-class bounded next, pairs and ipairs table iteration — `███████░░░ 67%`
-- 🕳️ Nil table holes without absent-entry heap allocation — `███████░░░ 67%`
+- 🔁 First-class bounded next, pairs and ipairs table iteration — `██████████ 100%`
+- 🕳️ Nil table holes without absent-entry heap allocation — `██████████ 100%`
 
