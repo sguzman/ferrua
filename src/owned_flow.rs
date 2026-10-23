@@ -1356,7 +1356,10 @@ impl Execution<'_> {
     ) -> Result<Vec<Value>, FlowError> {
         self.frame_allocations.push(Vec::new());
         let result = self.run_inner(instructions, slot_count, initial, captures, varargs);
-        let allocated = self.frame_allocations.pop().ok_or(FlowError::InvalidBytecode)?;
+        let allocated = self
+            .frame_allocations
+            .pop()
+            .ok_or(FlowError::InvalidBytecode)?;
         for cell in allocated {
             if !self.captured_cells.contains(&cell) {
                 *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = None;
@@ -2098,7 +2101,9 @@ mod tests {
         .unwrap();
         assert_eq!(execute_flow_chunk(&program, 1_500_000), Ok(70000));
         assert_eq!(
-            evaluate("local function make(x) return function() return x end end; local a=make(2); local b=make(3); return a()*10+b()"),
+            evaluate(
+                "local function make(x) return function() return x end end; local a=make(2); local b=make(3); return a()*10+b()"
+            ),
             23
         );
     }
