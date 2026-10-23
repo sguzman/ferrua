@@ -33,6 +33,7 @@ jobs:
           cargo run -- -e "print(6 * 7)" | grep -x 42
           printf 'print(6 * 7)\n' | cargo run -- -
           cargo run -- examples/count.lua | grep -x 55
+          cargo run -- tests/data.lua | grep -x "TOML and YAML smoke passed"
           cargo run -- examples/process.lua | grep -x "process module smoke passed"
           scratch_dir="$(mktemp -d)"
           trap 'rm -rf "$scratch_dir"' EXIT
@@ -63,6 +64,7 @@ jobs:
         run: |
           command -v fer
           fer examples/count.lua | grep -x 55
+          fer tests/data.lua | grep -x "TOML and YAML smoke passed"
           fer examples/process.lua | grep -x "process module smoke passed"
           scratch_dir="$(mktemp -d)"
           trap 'rm -rf "$scratch_dir"' EXIT

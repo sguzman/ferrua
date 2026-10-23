@@ -190,3 +190,13 @@ fn restricted_mode_excludes_http_bridge() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+#[test]
+fn structured_data_modules_are_not_in_sandbox() {
+    let out = fer(&[
+        "--sandbox",
+        "-e",
+        "assert(toml == nil and yaml == nil and __fer_data_call == nil)",
+    ]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+}

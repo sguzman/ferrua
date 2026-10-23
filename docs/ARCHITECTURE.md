@@ -12,6 +12,8 @@ Ferrua provides its own small JSON parser/serializer from `tools/json.lua` as a 
 
 The trusted `fs` module provides bounded UTF-8 file IO, direct file copy, safe directory creation and deterministic directory enumeration and traversal through a Rust-native bridge; see [filesystem API](FILESYSTEM.md).
 
+The trusted `toml` and `yaml` modules parse and serialize JSON-compatible configuration data through Rust's Serde ecosystem. See [structured-data semantics](DATA.md), including comment/order loss and TOML datetime limitations.
+
 The trusted `http` module uses the pure-Rust blocking `ureq` client with bounded UTF-8 response bodies, configurable request deadlines and TLS. Network access is explicit and confined to trusted mode; see [HTTP API](HTTP.md).
 
 The trusted `process` module calls the Rust `std::process::Command` API directly using JSON-encoded arguments through a native VM callback. It is never installed in the restricted sandbox. Child processes use the caller's permissions, have a default 60-second timeout and capped captured output. Shells run only when deliberately requested as the executable. See [docs/PROCESS.md](PROCESS.md).

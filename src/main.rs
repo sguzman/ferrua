@@ -3,6 +3,7 @@
 //! by the pure-Rust luna-core engine; this crate owns the fer CLI and host setup.
 use luna_core::{version::LuaVersion, vm::Vm};
 
+mod data;
 mod fs;
 mod http;
 mod process;
@@ -174,6 +175,17 @@ fn vm_for(options: &Options) -> Vm {
             .expect("embedded HTTP module must return a table");
         vm.set_global("http", http_module)
             .expect("HTTP module must register");
+        let data_bridge = vm.native_typed(data::serialized as fn(String) -> String);
+        vm.set_global("__fer_data_call", data_bridge)
+            .expect("structured data bridge must register");
+        let data_modules = vm
+            .eval_chunk(include_str!("../tools/data.lua"), "@ferrua/data.lua")
+            .expect("embedded data module must compile");
+        let mut data_modules = data_modules.into_iter();
+        vm.set_global("toml", data_modules.next().expect("TOML module must be returned"))
+            .expect("TOML module must register");
+        vm.set_global("yaml", data_modules.next().expect("YAML module must be returned"))
+            .expect("YAML module must register");
     }
     // User-supplied budget applies to the user script, not runtime initialization.
     if let Some(budget) = options.budget {
