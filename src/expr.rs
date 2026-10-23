@@ -266,6 +266,11 @@ pub enum Statement<'a> {
         step: Option<Expr<'a>>,
         body: Vec<Statement<'a>>,
     },
+    GenericFor {
+        variables: Vec<&'a str>,
+        iterators: Vec<Expr<'a>>,
+        body: Vec<Statement<'a>>,
+    },
     If {
         branches: Vec<(Expr<'a>, Vec<Statement<'a>>)>,
         else_branch: Option<Vec<Statement<'a>>>,
@@ -309,36 +314,59 @@ impl<'a> Parser<'a> {
         if self.peek().is_some_and(|token| token.spelling == "for") {
             self.pop();
             let variable = self.name()?;
-            if self.peek().map(|token| token.spelling) != Some("=") {
-                return Err(self.error("only numeric for loops are supported"));
-            }
-            self.pop();
-            let start = self.expression(0)?;
-            if self.peek().map(|token| token.spelling) != Some(",") {
-                return Err(self.error("expected comma after numeric for start"));
-            }
-            self.pop();
-            let limit = self.expression(0)?;
-            let step = if self.peek().map(|token| token.spelling) == Some(",") {
+            if self.peek().map(|token| token.spelling) == Some("=") {
                 self.pop();
-                Some(self.expression(0)?)
-            } else {
-                None
-            };
+                let start = self.expression(0)?;
+                if self.peek().map(|token| token.spelling) != Some(",") {
+                    return Err(self.error("expected comma after numeric for start"));
+                }
+                self.pop();
+                let limit = self.expression(0)?;
+                let step = if self.peek().map(|token| token.spelling) == Some(",") {
+                    self.pop();
+                    Some(self.expression(0)?)
+                } else {
+                    None
+                };
+                if self.peek().map(|token| token.spelling) != Some("do") {
+                    return Err(self.error("expected do in numeric for"));
+                }
+                self.pop();
+                let body = self.block(&["end"], depth + 1)?;
+                if self.peek().map(|token| token.spelling) != Some("end") {
+                    return Err(self.error("expected end to close numeric for"));
+                }
+                self.pop();
+                return Ok(Statement::NumericFor {
+                    variable,
+                    start,
+                    limit,
+                    step,
+                    body,
+                });
+            }
+            let mut variables = vec![variable];
+            while self.peek().map(|token| token.spelling) == Some(",") {
+                self.pop();
+                variables.push(self.name()?);
+            }
+            if self.peek().map(|token| token.spelling) != Some("in") {
+                return Err(self.error("expected in after generic for names"));
+            }
+            self.pop();
+            let iterators = self.expressions()?;
             if self.peek().map(|token| token.spelling) != Some("do") {
-                return Err(self.error("expected do in numeric for"));
+                return Err(self.error("expected do in generic for"));
             }
             self.pop();
             let body = self.block(&["end"], depth + 1)?;
             if self.peek().map(|token| token.spelling) != Some("end") {
-                return Err(self.error("expected end to close numeric for"));
+                return Err(self.error("expected end to close generic for"));
             }
             self.pop();
-            return Ok(Statement::NumericFor {
-                variable,
-                start,
-                limit,
-                step,
+            return Ok(Statement::GenericFor {
+                variables,
+                iterators,
                 body,
             });
         }
@@ -530,9 +558,9 @@ impl<'a> Parser<'a> {
 
 /// Parse a deliberately limited Lua chunk: semicolon-separated locals,
 /// assignments, call statements and final returns, plus nested do/end
-/// lexical blocks, conditionals, while/repeat loops and numeric for loops.
-/// Newline boundaries can separate supported statements. Generic for loops
-/// and remaining Lua control-flow constructs are not yet supported.
+/// lexical blocks, conditionals, while/repeat loops and numeric/generic for loops.
+/// Newline boundaries can separate supported statements. Other Lua constructs
+/// remain unsupported.
 pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
     let tokens = tokenize(source)?;
     let mut parser = Parser {
@@ -790,11 +818,33 @@ mod tests {
     #[test]
     fn rejects_unsupported_generic_or_malformed_numeric_for() {
         for source in [
-            "for i in list do print(i) end",
+            "for i list do print(i) end",
             "for i=1 do print(i) end",
             "for i=1,10 print(i) end",
             "for i=1,10, do print(i) end",
             "for i=1,10 do print(i)",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
+    }
+
+    #[test]
+    fn parses_generic_for_with_multiple_names_and_iterators() {
+        let source = "for k,v in pairs(t), auxiliary do\nprint(k,v)\nend";
+        let parsed = parse_chunk(source).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(&parsed[0], Statement::GenericFor { variables, iterators, body }
+            if variables == &["k", "v"] && iterators.len() == 2 && body.len() == 1));
+    }
+
+    #[test]
+    fn rejects_incomplete_generic_for_headers() {
+        for source in [
+            "for k in do print(k) end",
+            "for k,v pairs(t) do print(k) end",
+            "for k, in pairs(t) do print(k) end",
+            "for k in pairs(t) print(k) end",
+            "for k in pairs(t) do print(k)",
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
         }

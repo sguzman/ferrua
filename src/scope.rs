@@ -195,6 +195,20 @@ impl<'src> Resolver<'src> {
                 }
                 self.scopes.pop();
             }
+            Statement::GenericFor { variables, iterators, body } => {
+                // Iterator expressions evaluate before their loop locals exist.
+                for iterator in iterators {
+                    self.read_expression(iterator, number);
+                }
+                self.scopes.push(HashMap::new());
+                for name in variables {
+                    self.bind(name, number);
+                }
+                for child in body {
+                    self.statement(child);
+                }
+                self.scopes.pop();
+            }
             Statement::If {
                 branches,
                 else_branch,
@@ -420,7 +434,21 @@ mod tests {
     }
 
     #[test]
+    fn generic_for_iterators_do_not_see_new_bindings() {
+        let result = analyze("local k=7; for k,v in pairs(k) do print(k,v) end; return k").unwrap();
+        assert_eq!(result.bindings.len(), 3);
+        assert_eq!(result.bindings[0].scope_depth, 0);
+        assert_eq!(result.bindings[1].scope_depth, 1);
+        assert_eq!(result.bindings[2].scope_depth, 1);
+        let references: Vec<_> = result.references.iter().filter(|r| r.name == "k").collect();
+        assert_eq!(references.len(), 3);
+        assert_eq!(references[0].resolution, Resolution::Local(0));
+        assert_eq!(references[1].resolution, Resolution::Local(1));
+        assert_eq!(references[2].resolution, Resolution::Local(0));
+    }
+
+    #[test]
     fn unsupported_grammar_is_rejected_instead_of_analyzed() {
-        assert!(analyze("for i in pairs(values) do local a=1 end").is_err());
+        assert!(analyze("function f() return 1 end").is_err());
     }
 }
