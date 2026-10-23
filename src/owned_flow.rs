@@ -3790,6 +3790,39 @@ mod tests {
     }
 
     #[test]
+    fn pairs_metatable_hook_preserves_generic_for_and_multiple_results() {
+        for (source, expected) in [
+            ("local t=setmetatable({a=3}, {__pairs=function(self) return next,self,nil end}); local total=0; for k,v in pairs(t) do total=total+v end; return total", 3),
+            ("local t=setmetatable({}, {__pairs=function() return function(_,k) if k==nil then return 5,6 end end,nil,nil end}); local total=0; for k,v in pairs(t) do total=total+k+v end; return total", 11),
+            ("local t=setmetatable({}, {__pairs=function() return next,{x=7},nil,99 end}); return select('#',pairs(t))", 3),
+            ("local t=setmetatable({}, {__pairs=function() return nil end}); return select('#',pairs(t))", 3),
+            ("local t=setmetatable({}, {__pairs=function() end}); return pairs(t)==nil and 1 or 0", 1),
+            ("local n=0; local t=setmetatable({}, {__pairs=function(self) n=n+1; return next,{x=4},nil end}); local s=0; for k,v in pairs(t) do s=s+v end; return s+n", 5),
+            ("local t=setmetatable({4,5}, {__pairs=function() return function() end,nil,nil end}); local s=0; for i,v in ipairs(t) do s=s+v end; return s", 9),
+            ("local t=setmetatable({a=3}, {__pairs=function() return next,{x=7},nil end}); local s=0; for k,v in pairs(t) do s=s+v end; return s", 7),
+            ("local t=setmetatable({a=3}, {__pairs=function() return next,{x=7},nil end}); return next(t)~=nil and 1 or 0", 1),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        let program = compile_flow_chunk(
+            "local t=setmetatable({}, {__pairs=7}); return pairs(t)"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
+        let program = compile_flow_chunk(
+            "local t={}; setmetatable(t,{__pairs=function(self) return pairs(self) end}); return pairs(t)"
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+    }
+
+    #[test]
     fn comparison_metamethods_preserve_identity_truthiness_and_ordering() {
         for (source, expected) in [
             ("return (3<5 and 'a'<'b' and 5>=5) and 1 or 0", 1),
