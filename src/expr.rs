@@ -159,7 +159,9 @@ impl<'a> Parser<'a> {
                 }
                 Some(".") => {
                     self.pop();
-                    let token = self.pop().ok_or_else(|| self.error("expected field name"))?;
+                    let token = self
+                        .pop()
+                        .ok_or_else(|| self.error("expected field name"))?;
                     if token.kind != Kind::Identifier {
                         return Err(ParseError {
                             line: token.line,
@@ -293,7 +295,10 @@ mod tests {
 
     #[test]
     fn empty_call_and_operator_precedence() {
-        assert_eq!(show(&parse_expression("f()^2").unwrap()), "(^ (call f []) 2)");
+        assert_eq!(
+            show(&parse_expression("f()^2").unwrap()),
+            "(^ (call f []) 2)"
+        );
         assert_eq!(
             show(&parse_expression("-obj.x^2").unwrap()),
             "(- (^ (field obj x) 2))"
