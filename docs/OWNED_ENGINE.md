@@ -248,3 +248,7 @@ These are accepted bounded-subset steps. Full Lua globals, metatables, arbitrary
 ### Method tail-result expansion inside mixed tables
 
 The mixed named/computed/positional table constructor compiler now treats an unparenthesized final colon method call like any other Lua multireturn call. It expands the returned values into successive positional fields, while `(receiver:method())` remains one value. Regression fixtures verify these cases against the production interpreter and upstream Lua 5.4.6.
+
+### Bounded reuse of uncaptured function-frame cells
+
+Execution now tracks cells allocated by each call frame and recycles only those that have **not** been captured by a closure. Each `run` invocation owns cleanup even across early returns or execution errors, with a free-cell pool shared across recursive frames. Captured upvalue cells remain pinned, protecting escaped closure state. A 70,000-invocation function-loop regression verifies that repeated ordinary calls no longer consume the lifetime cell budget, without weakening call-depth or instruction budgets. A fully collectable/garbage-collected heap and reclaiming unreachable closures remain future work.

@@ -1217,6 +1217,8 @@ struct Execution<'a> {
     closures: Vec<Closure>,
     cells: Vec<Option<Value>>,
     captured_cells: HashSet<usize>,
+    free_cells: Vec<usize>,
+    frame_allocations: Vec<Vec<usize>>,
     strings: Vec<Vec<u8>>,
 }
 
@@ -1312,6 +1314,25 @@ impl Execution<'_> {
         Ok(Value::String(handle))
     }
 
+    fn allocate_cell(&mut self) -> Result<usize, FlowError> {
+        let cell = if let Some(cell) = self.free_cells.pop() {
+            *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = None;
+            cell
+        } else {
+            if self.cells.len() >= MAX_CELLS_TOTAL {
+                return Err(FlowError::TooLarge);
+            }
+            let cell = self.cells.len();
+            self.cells.push(None);
+            cell
+        };
+        self.frame_allocations
+            .last_mut()
+            .ok_or(FlowError::InvalidBytecode)?
+            .push(cell);
+        Ok(cell)
+    }
+
     /// Fresh lexical cell on successive loop iterations; old closures retain
     /// the prior cell rather than observing later iteration values.
     fn iteration_cell(&mut self, slots: &mut [usize], slot: usize) -> Result<usize, FlowError> {
@@ -1320,16 +1341,32 @@ impl Execution<'_> {
         if !self.captured_cells.contains(&cell) {
             return Ok(cell);
         }
-        if self.cells.len() >= MAX_CELLS_TOTAL {
-            return Err(FlowError::TooLarge);
-        }
-        let fresh = self.cells.len();
-        self.cells.push(None);
+        let fresh = self.allocate_cell()?;
         *slots.get_mut(slot).ok_or(FlowError::InvalidBytecode)? = fresh;
         Ok(fresh)
     }
 
     fn run(
+        &mut self,
+        instructions: &[Op],
+        slot_count: usize,
+        initial: &[(usize, Value)],
+        captures: &[(usize, usize)],
+        varargs: &[Value],
+    ) -> Result<Vec<Value>, FlowError> {
+        self.frame_allocations.push(Vec::new());
+        let result = self.run_inner(instructions, slot_count, initial, captures, varargs);
+        let allocated = self.frame_allocations.pop().ok_or(FlowError::InvalidBytecode)?;
+        for cell in allocated {
+            if !self.captured_cells.contains(&cell) {
+                *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = None;
+                self.free_cells.push(cell);
+            }
+        }
+        result
+    }
+
+    fn run_inner(
         &mut self,
         instructions: &[Op],
         slot_count: usize,
@@ -1360,12 +1397,7 @@ impl Execution<'_> {
             if let Some(cell) = cell {
                 slots.push(cell);
             } else {
-                if self.cells.len() >= MAX_CELLS_TOTAL {
-                    return Err(FlowError::TooLarge);
-                }
-                let cell = self.cells.len();
-                self.cells.push(None);
-                slots.push(cell);
+                slots.push(self.allocate_cell()?);
             }
         }
         for &(slot, value) in initial {
@@ -1893,6 +1925,8 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
         closures: Vec::new(),
         cells: Vec::new(),
         captured_cells: HashSet::new(),
+        free_cells: Vec::new(),
+        frame_allocations: Vec::new(),
         strings: program.strings.clone(),
     };
     execution.run(&program.instructions, program.slots, &[], &[], &[])
@@ -2053,6 +2087,19 @@ mod tests {
                 "local function next() return false end; local n=0; for x in next,nil,nil do n=n+1; break end; return n"
             ),
             1
+        );
+    }
+
+    #[test]
+    fn uncaptured_call_frames_reuse_cells_across_many_invocations() {
+        let program = compile_flow_chunk(
+            "local function add(x) return x+1 end; local n=0; while n<70000 do n=add(n) end; return n",
+        )
+        .unwrap();
+        assert_eq!(execute_flow_chunk(&program, 1_500_000), Ok(70000));
+        assert_eq!(
+            evaluate("local function make(x) return function() return x end end; local a=make(2); local b=make(3); return a()*10+b()"),
+            23
         );
     }
 
