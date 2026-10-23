@@ -372,6 +372,10 @@ pub enum Statement<'a> {
         body: Vec<Statement<'a>>,
     },
     Break,
+    /// Lua label/goto syntax is recognized, but execution needs scope-aware
+    /// jump lowering and is intentionally rejected by the owned VM for now.
+    Label(&'a str),
+    Goto(&'a str),
     /// A lexical scope closed with `end`. Nested Lua blocks are supported
     /// by this experimental subset, not arbitrary control-flow statements.
     Block(Vec<Statement<'a>>),
@@ -475,6 +479,19 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self, depth: usize) -> Result<Statement<'a>, ParseError> {
+        if self.peek().is_some_and(|token| token.spelling == "::") {
+            self.pop();
+            let label = self.name()?;
+            if self.peek().map(|token| token.spelling) != Some("::") {
+                return Err(self.error("expected closing :: after label"));
+            }
+            self.pop();
+            return Ok(Statement::Label(label));
+        }
+        if self.peek().is_some_and(|token| token.spelling == "goto") {
+            self.pop();
+            return Ok(Statement::Goto(self.name()?));
+        }
         if self
             .peek()
             .is_some_and(|token| token.spelling == "function")
@@ -747,6 +764,12 @@ impl<'a> Parser<'a> {
             }
             let statement = self.statement(depth)?;
             let terminal = matches!(statement, Statement::Return(_) | Statement::Break);
+            let label = matches!(statement, Statement::Label(_));
+            if let Statement::Label(name) = &statement {
+                if result.iter().any(|other| matches!(other, Statement::Label(previous) if previous == name)) {
+                    return Err(self.error("duplicate label in lexical block"));
+                }
+            }
             result.push(statement);
             let ending_line = self
                 .tokens
@@ -769,6 +792,8 @@ impl<'a> Parser<'a> {
                 .is_some_and(|token| terminators.contains(&token.spelling))
             {
                 // A block's closing token is a natural terminator.
+            } else if self.peek().is_some_and(|token| token.spelling == "::") || label {
+                // Lua labels are self-delimiting statements.
             } else if self.peek().is_some_and(|token| token.line > ending_line) {
                 // A newline may separate statements in this grammar subset.
             } else if self.peek().is_some() {
@@ -789,6 +814,7 @@ impl<'a> Parser<'a> {
 /// Parse a deliberately limited Lua chunk: semicolon-separated locals,
 /// assignments, call statements and final returns, plus nested do/end
 /// lexical blocks, conditionals, while/repeat loops and numeric/generic for loops.
+/// The AST also represents label/goto syntax without claiming bytecode support.
 /// Newline boundaries can separate supported statements. Other Lua constructs
 /// remain unsupported.
 pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
