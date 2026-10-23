@@ -408,7 +408,10 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self, depth: usize) -> Result<Statement<'a>, ParseError> {
-        if self.peek().is_some_and(|token| token.spelling == "function") {
+        if self
+            .peek()
+            .is_some_and(|token| token.spelling == "function")
+        {
             self.pop();
             let name = self.name()?;
             let (parameters, vararg, body) = self.function_body()?;
@@ -748,7 +751,12 @@ mod tests {
                 parameters,
                 vararg,
                 body,
-            } => format!("(function [{}] {} {})", parameters.join(" "), vararg, body.len()),
+            } => format!(
+                "(function [{}] {} {})",
+                parameters.join(" "),
+                vararg,
+                body.len()
+            ),
             Expr::Vararg => "...".to_owned(),
         }
     }
@@ -758,10 +766,17 @@ mod tests {
         let tree = parse_chunk(
             "local function fib(n) if n<=1 then return n end; return fib(n-1)+fib(n-2) end; return fib(5)"
         ).unwrap();
-        assert!(matches!(&tree[0], Statement::Function {name: "fib", local: true, parameters, vararg: false, body} if parameters == &["n"] && body.len() == 2));
+        assert!(
+            matches!(&tree[0], Statement::Function {name: "fib", local: true, parameters, vararg: false, body} if parameters == &["n"] && body.len() == 2)
+        );
         let tree = parse_chunk("function f(a,...) return a,... end; return f(1,2)").unwrap();
-        assert!(matches!(&tree[0], Statement::Function {name: "f", local: false, vararg: true, body, ..} if matches!(&body[0], Statement::Return(xs) if xs.len()==2 && matches!(&xs[1], Expr::Vararg))));
-        assert!(matches!(parse_expression("function(x) return x end").unwrap(), Expr::Function { .. }));
+        assert!(
+            matches!(&tree[0], Statement::Function {name: "f", local: false, vararg: true, body, ..} if matches!(&body[0], Statement::Return(xs) if xs.len()==2 && matches!(&xs[1], Expr::Vararg)))
+        );
+        assert!(matches!(
+            parse_expression("function(x) return x end").unwrap(),
+            Expr::Function { .. }
+        ));
         assert!(parse_chunk("local f=function(a) return a end; return f(4)").is_ok());
     }
 

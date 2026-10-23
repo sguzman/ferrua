@@ -523,20 +523,44 @@ mod tests {
     #[test]
     fn function_parameters_and_closure_captures_have_distinct_resolution() {
         let summary = analyze("local outer=2; local function f(n) if n==0 then return outer end; return f(n-1) end; return f(2)").unwrap();
-        let binding = summary.bindings.iter().find(|b| b.name=="f").unwrap();
-        let parameter = summary.bindings.iter().find(|b| b.name=="n").unwrap();
-        assert!(summary.references.iter().any(|r| r.name=="f" && r.resolution==Resolution::Upvalue(binding.slot)));
-        assert!(summary.references.iter().any(|r| r.name=="outer" && r.resolution==Resolution::Upvalue(0)));
-        assert!(summary.references.iter().any(|r| r.name=="n" && r.resolution==Resolution::Local(parameter.slot)));
-        assert!(summary.references.iter().any(|r| r.name=="f" && r.scope_depth==0 && r.resolution==Resolution::Local(binding.slot)));
+        let binding = summary.bindings.iter().find(|b| b.name == "f").unwrap();
+        let parameter = summary.bindings.iter().find(|b| b.name == "n").unwrap();
+        assert!(
+            summary
+                .references
+                .iter()
+                .any(|r| r.name == "f" && r.resolution == Resolution::Upvalue(binding.slot))
+        );
+        assert!(
+            summary
+                .references
+                .iter()
+                .any(|r| r.name == "outer" && r.resolution == Resolution::Upvalue(0))
+        );
+        assert!(
+            summary
+                .references
+                .iter()
+                .any(|r| r.name == "n" && r.resolution == Resolution::Local(parameter.slot))
+        );
+        assert!(summary.references.iter().any(|r| r.name == "f"
+            && r.scope_depth == 0
+            && r.resolution == Resolution::Local(binding.slot)));
     }
 
     #[test]
     fn anonymous_function_captures_and_shadowed_parameters() {
-        let summary = analyze("local x=10; local f=function(x) return function(y) return x+y end end; return x").unwrap();
-        let xs: Vec<_> = summary.references.iter().filter(|r| r.name=="x").collect();
-        assert!(xs.iter().any(|r| r.resolution==Resolution::Upvalue(1)));
-        assert!(xs.iter().any(|r| r.resolution==Resolution::Local(0)));
-        assert!(!xs.iter().any(|r| r.resolution==Resolution::Upvalue(0)));
+        let summary = analyze(
+            "local x=10; local f=function(x) return function(y) return x+y end end; return x",
+        )
+        .unwrap();
+        let xs: Vec<_> = summary
+            .references
+            .iter()
+            .filter(|r| r.name == "x")
+            .collect();
+        assert!(xs.iter().any(|r| r.resolution == Resolution::Upvalue(2)));
+        assert!(xs.iter().any(|r| r.resolution == Resolution::Local(0)));
+        assert!(!xs.iter().any(|r| r.resolution == Resolution::Upvalue(0)));
     }
 }
