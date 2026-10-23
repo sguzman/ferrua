@@ -250,7 +250,7 @@
               "id": "T109",
               "emoji": "🐧",
               "name": "Isolated Arch Linux userspace validation for release-mode fer",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Run actual release-built fer in the official Arch Linux userspace image, independent of the Ubuntu build host",
@@ -264,7 +264,8 @@
                 },
                 {
                   "text": "Pass full CI, including isolated Arch smoke, after integration",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40039930789: linux job includes isolated Arch release-binary smoke; Rust 1.96, Lua 5.4 differential and composite consumer also succeeded"
                 }
               ]
             }
