@@ -655,27 +655,58 @@ impl<'a> Compiler<'a> {
                     body,
                 } => {
                     if !fields.is_empty() || method.is_some() {
-                        return Err(FlowError::Unsupported(
-                            "dotted and method function execution".into(),
-                        ));
-                    }
-                    let slot = if *local {
-                        if self.slots >= MAX_SLOTS {
-                            return Err(FlowError::TooLarge);
+                        if *local {
+                            return Err(FlowError::Unsupported(
+                                "local dotted function declaration".into(),
+                            ));
                         }
-                        let slot = self.slots;
-                        self.slots += 1;
-                        self.frames
-                            .last_mut()
-                            .expect("root scope")
-                            .insert(*name, slot);
-                        slot
+                        let slot = self.slot(name)?;
+                        self.push(Op::ReadLocal(slot))?;
+                        let mut path = fields.clone();
+                        if let Some(method) = method {
+                            path.push(method);
+                        }
+                        if path.is_empty() {
+                            return Err(FlowError::InvalidBytecode);
+                        }
+                        for segment in &path[..path.len() - 1] {
+                            let handle = self.intern_bytes(segment.as_bytes().to_vec())?;
+                            self.push(Op::Constant(Value::String(handle)))?;
+                            self.push(Op::GetTable)?;
+                        }
+                        let last = self.intern_bytes(
+                            path[path.len() - 1].as_bytes().to_vec(),
+                        )?;
+                        self.push(Op::Constant(Value::String(last)))?;
+                        let function = if method.is_some() {
+                            let mut formals = Vec::with_capacity(parameters.len() + 1);
+                            formals.push("self");
+                            formals.extend_from_slice(parameters);
+                            self.compile_function(&formals, *vararg, body)?
+                        } else {
+                            self.compile_function(parameters, *vararg, body)?
+                        };
+                        self.push(Op::NewFunction(function))?;
+                        self.push(Op::SetTable)?;
                     } else {
-                        self.slot(name)?
-                    };
-                    let function = self.compile_function(parameters, *vararg, body)?;
-                    self.push(Op::NewFunction(function))?;
-                    self.push(Op::AssignLocals(vec![slot]))?;
+                        let slot = if *local {
+                            if self.slots >= MAX_SLOTS {
+                                return Err(FlowError::TooLarge);
+                            }
+                            let slot = self.slots;
+                            self.slots += 1;
+                            self.frames
+                                .last_mut()
+                                .expect("root scope")
+                                .insert(*name, slot);
+                            slot
+                        } else {
+                            self.slot(name)?
+                        };
+                        let function = self.compile_function(parameters, *vararg, body)?;
+                        self.push(Op::NewFunction(function))?;
+                        self.push(Op::AssignLocals(vec![slot]))?;
+                    }
                 }
                 Statement::Call(call) => {
                     self.expression(call, 0)?;
@@ -2430,6 +2461,30 @@ mod tests {
         assert_eq!(evaluate(r#"return #"\u{E9}""#), 2);
         assert_eq!(evaluate(r#"return ("\u{E9}" == "é") and 1 or 0"#), 1);
         assert!(compile_flow_chunk(r#"return "\u{D800}""#).is_err());
+    }
+
+    #[test]
+    fn dotted_and_colon_function_declarations_store_closures_on_tables() {
+        assert_eq!(
+            evaluate("local t={v=4}; function t:add(x) return self.v+x end; return t:add(3)"),
+            7
+        );
+        assert_eq!(
+            evaluate("local t={}; function t.add(a,b) return a+b end; return t.add(3,4)"),
+            7
+        );
+        assert_eq!(
+            evaluate("local t={inner={v=5}}; function t.inner:add(x) return self.v+x end; return t.inner:add(3)"),
+            8
+        );
+        assert_eq!(
+            evaluate("local v=5; local t={base=2}; function t:add(x) return v+x+self.base end; return t:add(3)"),
+            10
+        );
+        assert_eq!(
+            evaluate("local t={v=7}; function t:two() return self.v,2 end; local a,b=t:two(); return a*10+b"),
+            72
+        );
     }
 
     #[test]
