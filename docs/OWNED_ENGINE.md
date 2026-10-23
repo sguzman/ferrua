@@ -354,8 +354,8 @@ The experimental stack VM now includes first-class, lexically shadowable `next`,
 [CI #40024909050](https://github.com/sguzman/ferrua/actions/runs/40024909050) passed all four primary jobs, including upstream Lua 5.4.6 differential fixtures, production `fer`, Rust 1.96, formatting and lint checks. It does not implement `__pairs`, `__index`, metatables, mutation-safe traversal, to-be-closed generic-for iterator values, or complete Lua resource semantics. The production `fer` backend is unchanged.
 
 
-### Bounded table metatable storage (pending CI acceptance)
+### Verified bounded table metatable storage
 
 The experimental stack VM now carries an optional metatable handle on each bounded table. Its first-class, lexically shadowable `getmetatable` and `setmetatable` functions can attach a table metatable, remove it with nil, return the original table, and expose the existing metatable by identity. If the metatable has a non-nil raw `__metatable` key, `getmetatable` returns that protected value and `setmetatable` refuses replacement until the protection is removed. Unit and upstream Lua 5.4 differential fixtures cover the common table-only behavior.
 
-This work is **not yet CI-accepted**. It does **not** implement `__index`, `__newindex`, arithmetic metamethod dispatch, `__len`, `__pairs`, primitive string metatables, garbage collection, or general Lua metatable compatibility. It does not change production `fer`.
+[CI #40025867923](https://github.com/sguzman/ferrua/actions/runs/40025867923) passed all four primary jobs, including Lua 5.4 differential checks, after precise Rust formatter corrections. It does **not** implement `__index`, `__newindex`, arithmetic metamethod dispatch, `__len`, `__pairs`, primitive string metatables, garbage collection, or general Lua metatable compatibility. It does not change production `fer`.
