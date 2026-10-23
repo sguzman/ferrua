@@ -3153,10 +3153,7 @@ mod tests {
             evaluate("local t={select(2,1,2,3)}; return t[1]*10+t[2]"),
             23
         );
-        assert_eq!(
-            evaluate("local f=select; return f('#','a','b')"),
-            2
-        );
+        assert_eq!(evaluate("local f=select; return f('#','a','b')"), 2);
         assert_eq!(
             evaluate("local select=function() return 8 end; return select(1,2,3)"),
             8
@@ -3169,9 +3166,17 @@ mod tests {
         let program = compile_flow_chunk("return 8,select(2,1,2,3)").unwrap();
         assert_eq!(
             execute_flow_values(&program, DEFAULT_STEP_BUDGET),
-            Ok(vec![Value::Integer(8), Value::Integer(2), Value::Integer(3)])
+            Ok(vec![
+                Value::Integer(8),
+                Value::Integer(2),
+                Value::Integer(3)
+            ])
         );
-        for source in ["return select()", "return select(0,1,2)", "return select(-4,1,2,3)"] {
+        for source in [
+            "return select()",
+            "return select(0,1,2)",
+            "return select(-4,1,2,3)",
+        ] {
             let program = compile_flow_chunk(source).unwrap();
             assert_eq!(
                 execute_flow_value(&program, DEFAULT_STEP_BUDGET),
