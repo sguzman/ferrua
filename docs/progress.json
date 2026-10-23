@@ -2772,7 +2772,7 @@
               "id": "T386",
               "emoji": "🔬",
               "name": "Deterministic generated owned-VM arithmetic and comparison parity corpus",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Generate reproducible bounded integer, bitwise, floor-div/mod and comparison cases without external generators",
@@ -2786,7 +2786,8 @@
                 },
                 {
                   "text": "Pass full CI, including reference interpreter parity for all generated inputs and strict Rust quality",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40041470699: Linux formatter/lint/tests, Rust 1.96, Lua 5.4 differential fixtures and composite consumer passed"
                 }
               ]
             }
