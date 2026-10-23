@@ -1317,6 +1317,52 @@
                   "evidence": "GitHub Actions 39990585046: all four jobs successful"
                 }
               ]
+            },
+            {
+              "id": "T328",
+              "emoji": "🧺",
+              "name": "Lua table constructor AST and field name resolution",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Parse empty, nested, positional, named and computed table fields with correct separators",
+                  "passed": true,
+                  "evidence": "src/expr.rs: TableField, Parser::table, table_constructor_fields_and_nested_expressions, invalid_table_constructor_fields_are_rejected"
+                },
+                {
+                  "text": "Resolve expression references in computed keys/values while ignoring literal field names",
+                  "passed": true,
+                  "evidence": "src/scope.rs: read_expression Table branch, table_field_names_are_not_variable_references"
+                },
+                {
+                  "text": "Compare valid and invalid Lua table constructor syntax to reference Lua 5.4",
+                  "passed": true,
+                  "evidence": "tests/owned_syntax.rs: owned_table_constructor_syntax_matches_lua_54_when_requested; GitHub Actions 39991282612 all four jobs successful"
+                }
+              ]
+            },
+            {
+              "id": "T329",
+              "emoji": "🗃️",
+              "name": "Bounded indexed table values on owned flow VM",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Allocate positional tables in a bounded execution-local heap; read/write positive integer indices",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::NewTable, Op::GetTable, Op::SetTable, MAX_TABLE_CELLS_TOTAL"
+                },
+                {
+                  "text": "Preserve alias identity and nil on missing positive indices; reject unsupported key shapes",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: bounded_array_tables_preserve_reference_identity_and_missing_nil, bounded_tables_reject_unsupported_keys_and_fields"
+                },
+                {
+                  "text": "Match supported numeric table fixtures against production fer and upstream Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs; GitHub Actions 39991929210 all four jobs successful"
+                }
+              ]
             }
           ]
         }
@@ -1485,6 +1531,20 @@
           "name": "Nested closure capture descriptors",
           "task_ids": [
             "T327"
+          ]
+        },
+        {
+          "emoji": "🧺",
+          "name": "Table constructor syntax and field resolution",
+          "task_ids": [
+            "T328"
+          ]
+        },
+        {
+          "emoji": "🗃️",
+          "name": "Bounded indexed table execution",
+          "task_ids": [
+            "T329"
           ]
         }
       ]

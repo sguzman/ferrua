@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `█████████░ 91%` across 52 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `█████████░ 91%` across 54 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `█████████░ 94%`
 
@@ -139,11 +139,11 @@
 - 🌙 Release packaging and dependency reproducibility — `████████░░ 78%`
 - 🔬 Dialect matrix and JSON resilience — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 89%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `█████████░ 90%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `█████████░ 89%`
+### 🔣 P3 — Ferrua-owned language engine — `█████████░ 90%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -250,6 +250,14 @@
   - [x] Record lexical parent, parameter list, implicit self and distinct captured binding slots — src/scope.rs: FunctionInfo, function_scope
   - [x] Propagate captures through intermediate nested closures in deterministic slot order — src/scope.rs: record, nested_closure_captures_are_transitive_and_stable
   - [x] Pass four CI jobs with upvalue descriptor regression tests — GitHub Actions 39990585046: all four jobs successful
+- 🧺 **T328** Lua table constructor AST and field name resolution — `██████████ 100%`
+  - [x] Parse empty, nested, positional, named and computed table fields with correct separators — src/expr.rs: TableField, Parser::table, table_constructor_fields_and_nested_expressions, invalid_table_constructor_fields_are_rejected
+  - [x] Resolve expression references in computed keys/values while ignoring literal field names — src/scope.rs: read_expression Table branch, table_field_names_are_not_variable_references
+  - [x] Compare valid and invalid Lua table constructor syntax to reference Lua 5.4 — tests/owned_syntax.rs: owned_table_constructor_syntax_matches_lua_54_when_requested; GitHub Actions 39991282612 all four jobs successful
+- 🗃️ **T329** Bounded indexed table values on owned flow VM — `██████████ 100%`
+  - [x] Allocate positional tables in a bounded execution-local heap; read/write positive integer indices — src/owned_flow.rs: Op::NewTable, Op::GetTable, Op::SetTable, MAX_TABLE_CELLS_TOTAL
+  - [x] Preserve alias identity and nil on missing positive indices; reject unsupported key shapes — src/owned_flow.rs: bounded_array_tables_preserve_reference_identity_and_missing_nil, bounded_tables_reject_unsupported_keys_and_fields
+  - [x] Match supported numeric table fixtures against production fer and upstream Lua 5.4.6 — tests/owned_flow.rs; GitHub Actions 39991929210 all four jobs successful
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -276,4 +284,6 @@
 - 🌿 Owned function syntax and lexical upvalues — `██████████ 100%`
 - 🧭 Lua dotted/method function syntax — `██████████ 100%`
 - 🪢 Nested closure capture descriptors — `██████████ 100%`
+- 🧺 Table constructor syntax and field resolution — `██████████ 100%`
+- 🗃️ Bounded indexed table execution — `██████████ 100%`
 

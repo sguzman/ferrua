@@ -107,3 +107,10 @@ The Rust-owned parser now builds explicit field ASTs for empty and nested table 
 ### Bounded indexed-table execution
 
 The experimental stack-based `owned_flow` VM can now create array-style positional tables using a per-execution bounded heap, read positive integer keys and assign one computed integer-key target at a time. Aliases share the same internal table handle, and missing positive indices yield `nil`. Table identity uses a handle comparison. The allocated heap is limited in total cells and count to avoid unbounded allocation. The supported numeric results are compared against production `fer` and upstream Lua 5.4.6. General Lua keys, named fields, nil deletion, hash semantics, metatables, iteration, simultaneous indexed LHS assignment, and complete table value compatibility remain unsupported. Opaque table handles returned from the experimental API cannot be dereferenced outside a particular VM execution.
+
+### Verified table parsing and bounded execution
+
+- [CI #39991282612](https://github.com/sguzman/ferrua/actions/runs/39991282612): Lua table syntax AST and computed-key/name reference analysis passed all four jobs, including upstream Lua 5.4 syntax comparisons.
+- [CI #39991929210](https://github.com/sguzman/ferrua/actions/runs/39991929210): bounded execution-local indexed tables, aliased mutations and missing-key semantics passed all four jobs, including upstream Lua 5.4 output comparisons.
+
+No general hash-table behavior, arbitrary keys, metatables, or stable user-facing table API is implied by these narrow checks.
