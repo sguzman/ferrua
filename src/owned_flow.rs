@@ -3152,10 +3152,7 @@ mod tests {
     fn first_class_assert_preserves_successful_lua_multi_values() {
         assert_eq!(evaluate("return assert(7)"), 7);
         assert_eq!(evaluate("return assert(false or 9)"), 9);
-        assert_eq!(
-            evaluate("local a,b,c=assert(true,2,3); return b+c"),
-            5
-        );
+        assert_eq!(evaluate("local a,b,c=assert(true,2,3); return b+c"), 5);
         assert_eq!(
             evaluate("local t={assert(true,4,5)}; return t[2]*10+t[3]"),
             45
@@ -3165,10 +3162,7 @@ mod tests {
             6
         );
         assert_eq!(evaluate("return (type(assert)=='function') and 1 or 0"), 1);
-        assert_eq!(
-            evaluate("local f=assert; return f(11)"),
-            11
-        );
+        assert_eq!(evaluate("local f=assert; return f(11)"), 11);
         assert_eq!(
             evaluate("local assert=function() return 8 end; return assert(false)"),
             8
@@ -3176,9 +3170,17 @@ mod tests {
         let program = compile_flow_chunk("return assert(true,8,9)").unwrap();
         assert_eq!(
             execute_flow_values(&program, DEFAULT_STEP_BUDGET),
-            Ok(vec![Value::Boolean(true), Value::Integer(8), Value::Integer(9)])
+            Ok(vec![
+                Value::Boolean(true),
+                Value::Integer(8),
+                Value::Integer(9)
+            ])
         );
-        for source in ["return assert()", "return assert(false)", "return assert(nil,'bad')"] {
+        for source in [
+            "return assert()",
+            "return assert(false)",
+            "return assert(nil,'bad')",
+        ] {
             let program = compile_flow_chunk(source).unwrap();
             assert_eq!(
                 execute_flow_value(&program, DEFAULT_STEP_BUDGET),
