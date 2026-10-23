@@ -3523,6 +3523,46 @@ mod tests {
     }
 
     #[test]
+    fn table_backed_index_and_newindex_fallbacks_remain_bounded() {
+        for (source, expected) in [
+            ("local t=setmetatable({}, {__index={x=7}}); return t.x", 7),
+            ("local t=setmetatable({}, {__index={x=7}}); return rawget(t,'x')==nil and 1 or 0", 1),
+            ("local t={x=2}; setmetatable(t,{__index={x=7}}); return t.x", 2),
+            ("local t=setmetatable({}, {__index=setmetatable({}, {__index={x=7}})}); return t.x", 7),
+            ("local dest={}; local t=setmetatable({}, {__newindex=dest}); t.x=9; return dest.x", 9),
+            ("local dest={}; local t={x=2}; setmetatable(t,{__newindex=dest}); t.x=7; return t.x*10+(dest.x or 0)", 70),
+            ("local dest={}; local t=setmetatable({}, {__newindex=dest}); t['x']=9; return (rawget(t,'x')==nil and dest.x==9) and 1 or 0", 1),
+            ("local fallback={}; local t=setmetatable({}, {__newindex=fallback}); local i=1; t[i],i=8,2; return fallback[1]*10+i", 82),
+            ("local dest={}; local t=setmetatable({}, {__newindex=dest}); rawset(t,'x',8); return rawget(t,'x')==8 and dest.x==nil and 1 or 0", 1),
+            ("local t=setmetatable({}, {__index={add=function(self,x) return x+3 end}}); return t:add(4)", 7),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        for source in [
+            "local t={}; setmetatable(t,{__index=t}); return t.missing",
+            "local t={}; setmetatable(t,{__newindex=t}); t.missing=7; return 0",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::CallDepthExceeded),
+                "{source}"
+            );
+        }
+        for source in [
+            "local t=setmetatable({}, {__index=function() return 3 end}); return t.x",
+            "local t=setmetatable({}, {__newindex=function() end}); t.x=3; return 1",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
     fn first_class_table_metatables_support_raw_storage_and_protection() {
         for (source, expected) in [
             ("local t={}; return getmetatable(t)==nil and 1 or 0", 1),
