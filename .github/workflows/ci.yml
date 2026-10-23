@@ -14,6 +14,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Restore Rust dependency and build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ferrua-linux-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
       - name: Formatting
         run: cargo fmt --all -- --check
       - name: Rust lint
@@ -85,5 +93,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.96.0
+      - name: Restore Rust MSRV cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ferrua-msrv-1.96-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
       - name: Build pinned dependencies on MSRV
         run: cargo build --locked
