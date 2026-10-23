@@ -49,9 +49,12 @@ impl Scanner<'_> {
     }
     fn bump(&mut self) {
         let byte = self.peek(0).expect("within source");
-        let previous = self.at.checked_sub(1).and_then(|at| self.src.as_bytes().get(at)).copied();
-        if (byte == b'\r' && previous != Some(b'\n'))
-            || (byte == b'\n' && previous != Some(b'\r'))
+        let previous = self
+            .at
+            .checked_sub(1)
+            .and_then(|at| self.src.as_bytes().get(at))
+            .copied();
+        if (byte == b'\r' && previous != Some(b'\n')) || (byte == b'\n' && previous != Some(b'\r'))
         {
             self.line += 1;
         }
@@ -117,10 +120,11 @@ impl Scanner<'_> {
                 continue;
             }
             self.bump();
-            let escape = self.peek(0).ok_or_else(|| self.error("unfinished escape"))?;
+            let escape = self
+                .peek(0)
+                .ok_or_else(|| self.error("unfinished escape"))?;
             match escape {
-                b'a' | b'b' | b'f' | b'n' | b'r' | b't' | b'v' |
-                b'\\' | b'\'' | b'"' => {
+                b'a' | b'b' | b'f' | b'n' | b'r' | b't' | b'v' | b'\\' | b'\'' | b'"' => {
                     self.bump();
                 }
                 b'\r' | b'\n' => {
@@ -159,7 +163,8 @@ impl Scanner<'_> {
                             break;
                         }
                         let digit = (next as char).to_digit(16).expect("hex digit");
-                        value = value.checked_mul(16)
+                        value = value
+                            .checked_mul(16)
                             .and_then(|v| v.checked_add(digit))
                             .ok_or_else(|| self.error("Unicode escape value too large"))?;
                         if value > 0x7fff_ffff {
@@ -176,8 +181,12 @@ impl Scanner<'_> {
                 b'0'..=b'9' => {
                     let mut value = 0u32;
                     for _ in 0..3 {
-                        let Some(next) = self.peek(0) else { break; };
-                        if !next.is_ascii_digit() { break; }
+                        let Some(next) = self.peek(0) else {
+                            break;
+                        };
+                        if !next.is_ascii_digit() {
+                            break;
+                        }
                         value = value * 10 + u32::from(next - b'0');
                         self.bump();
                     }
