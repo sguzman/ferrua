@@ -245,6 +245,28 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T109",
+              "emoji": "🐧",
+              "name": "Isolated Arch Linux userspace validation for release-mode fer",
+              "progress": 67,
+              "checks": [
+                {
+                  "text": "Run actual release-built fer in the official Arch Linux userspace image, independent of the Ubuntu build host",
+                  "passed": true,
+                  "evidence": ".github/workflows/ci.yml: Validate Linux release binary on isolated Arch userspace"
+                },
+                {
+                  "text": "Pin the Arch base image and exercise CLI, Lua dialect, syntax-check and restricted-mode smoke with read-only filesystem and disabled network",
+                  "passed": true,
+                  "evidence": ".github/workflows/ci.yml: archlinux:base-20261011.0.609700; docker --network none --read-only"
+                },
+                {
+                  "text": "Pass full CI, including isolated Arch smoke, after integration",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -296,6 +318,13 @@
           "name": "Side-effect-free source validation",
           "task_ids": [
             "T108"
+          ]
+        },
+        {
+          "emoji": "🐧",
+          "name": "Arch Linux release-binary portability smoke (not native EndeavourOS)",
+          "task_ids": [
+            "T109"
           ]
         }
       ]
