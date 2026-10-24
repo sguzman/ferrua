@@ -6456,6 +6456,33 @@ mod tests {
     }
 
     #[test]
+    fn break_statements_can_precede_unreachable_lua_statements() {
+        for (script, expected) in [
+            ("local x=1 while true do break x=2 end return x", 1),
+            ("local x=1 for i=1,3 do break x=x+1 end return x", 1),
+            ("local x=1 repeat break x=x+1 until true return x", 1),
+            (
+                "local x=0 while true do if true then break end x=x+1 end return x",
+                0,
+            ),
+            (
+                "local x=0 for i=1,3 do if i==1 then break end x=x+1 end return x",
+                0,
+            ),
+            ("local x=0 while true do break; local y=2 end return x", 0),
+            ("local x=0 while true do break; ::mark:: x=2 end return x", 0),
+            ("local x=0 while true do break break end return x", 0),
+            (
+                "local x=0 repeat if true then break end x=2 until false return x",
+                0,
+            ),
+            ("local x=0 for i=1,2 do x=x+1 break; x=x+5 end return x", 1),
+        ] {
+            assert_eq!(evaluate(script), expected, "{script}");
+        }
+    }
+
+    #[test]
     fn adjacent_statement_parsing_matches_lua_without_semicolons() {
         for (script, expected) in [
             ("local x=1 local y=2 return x+y", 3),

@@ -763,7 +763,7 @@ impl<'a> Parser<'a> {
                 continue;
             }
             let statement = self.statement(depth)?;
-            let terminal = matches!(statement, Statement::Return(_) | Statement::Break);
+            let terminal = matches!(statement, Statement::Return(_));
             let duplicate = match &statement {
                 Statement::Label(name) => result
                     .iter()
@@ -1149,13 +1149,15 @@ mod tests {
     }
 
     #[test]
-    fn break_is_scoped_to_loops_and_must_terminate_its_block() {
+    fn break_is_scoped_to_loops_but_need_not_end_a_block() {
         for source in [
             "while true do break end; return 1",
             "repeat if true then break end until false; return 2",
             "for i=1,10 do if i==3 then break end end; return 3",
             "for k in pairs(t) do break end; return 4",
             "while true do while true do break end; break end; return 5",
+            "while true do break; print(1) end",
+            "repeat break; local x=2 until true",
         ] {
             assert!(parse_chunk(source).is_ok(), "{source}");
         }
@@ -1163,8 +1165,6 @@ mod tests {
             "break",
             "do break end",
             "if true then break end",
-            "while true do break; print(1) end",
-            "repeat break; local x=2 until true",
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
         }
