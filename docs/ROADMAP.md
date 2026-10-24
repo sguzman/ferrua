@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 151 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 152 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -681,6 +681,11 @@
   - [x] Preserve evaluation errors, nested negated comparisons and lexical integer conditions; reject unsupported nonnumeric values — src/owned_vm.rs: integer_guard_truthiness_and_boolean_not_match_lua; explicit division by zero and unsupported guard regression
   - [x] Pass 12 production fer/upstream Lua 5.4 differential cases plus Rust 1.96, Linux tests/Clippy and consumer acceptance — GitHub Actions 40122551608: five jobs passed for 01f76bedf4bfdc14550f9727e8bb7b3a3efb4721
   - [x] Synchronize README, owned-engine docs, machine progress ledger and generated roadmap under passing CI — GitHub Actions 40122748958: all five CI jobs succeeded for synchronized README, owned-engine documentation and generated roadmap
+- ↪️ **T423** Register-VM conditional and/or guards with Lua short-circuit evaluation — `████████░░ 75%`
+  - [x] Lower and/or to bounded conditional register jumps so only the selected operand is evaluated — src/owned_vm.rs: emit_condition, BooleanCopy, Jump and BranchIfFalse opcode lowering
+  - [x] Preserve Lua precedence, zero numeric truthiness, nested negation, and skipped/propagated runtime errors — src/owned_vm.rs: integer_conditional_short_circuit_guards_preserve_lua_control_flow; fourteen positive and two error paths
+  - [x] Pass Rust tests/Clippy, Rust 1.96, production fer and pinned Lua 5.4 differential fixtures and composite consumer — GitHub Actions 40123272148: all five CI jobs passed on commit b6b4a8d0e0f5a02db4da7d6b219694c738327517
+  - [ ] Synchronize README, owned-engine documentation, machine ledger and generated roadmap in CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -802,4 +807,5 @@
 - 📜 Register-VM nested integer return propagation — `██████████ 100%`
 - 🌿 Register-VM exhaustive integer conditional returns — `██████████ 100%`
 - 🔎 Register-VM Lua numeric truthiness and negated guards — `██████████ 100%`
+- ↪️ Bounded Lua short-circuit conditional register guards — `████████░░ 75%`
 

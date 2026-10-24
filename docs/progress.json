@@ -3778,6 +3778,33 @@
                   "evidence": "GitHub Actions 40122748958: all five CI jobs succeeded for synchronized README, owned-engine documentation and generated roadmap"
                 }
               ]
+            },
+            {
+              "id": "T423",
+              "emoji": "↪️",
+              "name": "Register-VM conditional and/or guards with Lua short-circuit evaluation",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Lower and/or to bounded conditional register jumps so only the selected operand is evaluated",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: emit_condition, BooleanCopy, Jump and BranchIfFalse opcode lowering"
+                },
+                {
+                  "text": "Preserve Lua precedence, zero numeric truthiness, nested negation, and skipped/propagated runtime errors",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: integer_conditional_short_circuit_guards_preserve_lua_control_flow; fourteen positive and two error paths"
+                },
+                {
+                  "text": "Pass Rust tests/Clippy, Rust 1.96, production fer and pinned Lua 5.4 differential fixtures and composite consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40123272148: all five CI jobs passed on commit b6b4a8d0e0f5a02db4da7d6b219694c738327517"
+                },
+                {
+                  "text": "Synchronize README, owned-engine documentation, machine ledger and generated roadmap in CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4611,6 +4638,13 @@
           "name": "Register-VM Lua numeric truthiness and negated guards",
           "task_ids": [
             "T422"
+          ]
+        },
+        {
+          "emoji": "↪️",
+          "name": "Bounded Lua short-circuit conditional register guards",
+          "task_ids": [
+            "T423"
           ]
         }
       ]
