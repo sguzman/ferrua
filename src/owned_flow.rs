@@ -2086,23 +2086,44 @@ impl Execution<'_> {
         Ok(FlowError::Thrown(message))
     }
 
-    /// Experimental protected invocation currently accepts owned Lua closures
-    /// and the error/assert builtins. This is not yet full callable Lua parity.
+    /// Protected calls share Lua's bounded callable-table redirects with
+    /// ordinary bytecode calls. General builtins remain an incomplete subset.
     fn protected_target(
         &mut self,
         callable: Value,
         parameters: &[Value],
     ) -> Result<Vec<Value>, FlowError> {
+        let mut callable = callable;
+        let mut arguments = parameters.to_vec();
+        let mut redirects = 0;
+        while let Value::Table(handle) = callable {
+            if redirects >= MAX_CALL_DEPTH {
+                return Err(FlowError::CallDepthExceeded);
+            }
+            if self.steps >= self.budget {
+                return Err(FlowError::StepBudgetExceeded);
+            }
+            self.steps += 1;
+            let metamethod = self
+                .metatable_field(handle, b"__call")?
+                .ok_or(FlowError::TypeError)?;
+            if arguments.len() >= MAX_STACK {
+                return Err(FlowError::TooLarge);
+            }
+            arguments.insert(0, callable);
+            callable = metamethod;
+            redirects += 1;
+        }
         match callable {
-            Value::Function(handle) => self.call_owned_function(handle, parameters),
+            Value::Function(handle) => self.call_owned_function(handle, &arguments),
             Value::Builtin(Builtin::Error) => Err(FlowError::Thrown(
-                parameters.first().copied().unwrap_or(Value::Nil),
+                arguments.first().copied().unwrap_or(Value::Nil),
             )),
             Value::Builtin(Builtin::Assert) => {
-                if parameters.first().copied().unwrap_or(Value::Nil).truthy() {
-                    Ok(parameters.to_vec())
+                if arguments.first().copied().unwrap_or(Value::Nil).truthy() {
+                    Ok(arguments)
                 } else {
-                    Err(self.assertion_failure(parameters)?)
+                    Err(self.assertion_failure(&arguments)?)
                 }
             }
             _ => Err(FlowError::TypeError),
@@ -3870,6 +3891,46 @@ mod tests {
         assert_eq!(
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
+        );
+    }
+
+    #[test]
+    fn protected_calls_forward_callable_tables_and_enforce_redirect_limits() {
+        for (source, expected) in [
+            (
+                "local t=setmetatable({base=4},{__call=function(self,x) return self.base+x end}); local ok,v=pcall(t,5); return ok and v or 0",
+                9,
+            ),
+            (
+                "local t=setmetatable({},{__call=function(_,x) return x,x+1 end}); local ok,a,b=pcall(t,7); return ok and a*10+b or 0",
+                78,
+            ),
+            (
+                "local inner=setmetatable({},{__call=function(_,self,x) return self.base+x end}); local t=setmetatable({base=4},{__call=inner}); local ok,v=pcall(t,5); return ok and v or 0",
+                9,
+            ),
+            (
+                "local t=setmetatable({},{__call=function() error(7) end}); local ok,e=pcall(t); return not ok and e==7 and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({},{__call=function(_,x) error(x) end}); local ok,e=xpcall(t,function(e) return e*2 end,5); return not ok and e==10 and 1 or 0",
+                1,
+            ),
+            (
+                "local t={}; local ok,e=pcall(t); return not ok and type(e)=='string' and 1 or 0",
+                1,
+            ),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        let cyclic = compile_flow_chunk(
+            "local t={}; setmetatable(t,{__call=t}); return pcall(t)",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_values(&cyclic, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
         );
     }
 
