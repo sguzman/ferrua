@@ -948,20 +948,53 @@ mod tests {
     #[test]
     fn register_returning_branches_do_not_leak_bindings_into_other_paths() {
         for (source, expected) in [
-            ("local x=4; if false then x=9; return x else return x end", 4),
+            (
+                "local x=4; if false then x=9; return x else return x end",
+                4,
+            ),
             ("local x=4; if true then x=9; return x else return x end", 9),
             ("local x=4; if false then x=9; return x end; return x", 4),
             ("local x=4; if true then x=9; return x end; return x", 9),
-            ("local x=4; if false then x=9; return x elseif true then return x end; return 1", 4),
-            ("local x=4; if true then x=9; return x elseif true then return x end; return 1", 9),
-            ("local x=2; if false then x=5; return x elseif true then x=7; return x else return x end", 7),
-            ("local x=2; if false then x=5; return x elseif false then x=7; return x else return x end", 2),
-            ("local x=2; if true then x=5; return x elseif true then x=7; return x else return x end", 5),
-            ("local x=2; if false then x=5; return x else do local x=9; return x end end", 9),
-            ("local x=2; if false then x=5; return x else return x+6 end", 8),
-            ("local x=2; if false then x=5; return x end; do x=x+3 end; return x", 5),
-            ("local x=2; do if false then x=10; return x end end; return x", 2),
-            ("local x=2; do if true then x=10; return x end end; return x", 10),
+            (
+                "local x=4; if false then x=9; return x elseif true then return x end; return 1",
+                4,
+            ),
+            (
+                "local x=4; if true then x=9; return x elseif true then return x end; return 1",
+                9,
+            ),
+            (
+                "local x=2; if false then x=5; return x elseif true then x=7; return x else return x end",
+                7,
+            ),
+            (
+                "local x=2; if false then x=5; return x elseif false then x=7; return x else return x end",
+                2,
+            ),
+            (
+                "local x=2; if true then x=5; return x elseif true then x=7; return x else return x end",
+                5,
+            ),
+            (
+                "local x=2; if false then x=5; return x else do local x=9; return x end end",
+                9,
+            ),
+            (
+                "local x=2; if false then x=5; return x else return x+6 end",
+                8,
+            ),
+            (
+                "local x=2; if false then x=5; return x end; do x=x+3 end; return x",
+                5,
+            ),
+            (
+                "local x=2; do if false then x=10; return x end end; return x",
+                2,
+            ),
+            (
+                "local x=2; do if true then x=10; return x end end; return x",
+                10,
+            ),
         ] {
             let program = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
