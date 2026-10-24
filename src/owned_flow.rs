@@ -2170,6 +2170,12 @@ impl Execution<'_> {
     fn xpcall_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
         let callable = args.first().copied().unwrap_or(Value::Nil);
         let handler = args.get(1).copied().unwrap_or(Value::Nil);
+        // Lua 5.4 requires an actual function as message handler:
+        // a table with __call is *not* accepted in this position.
+        // Validate before executing f, including on the success path.
+        if !matches!(handler, Value::Function(_) | Value::Builtin(_)) {
+            return Err(FlowError::TypeError);
+        }
         let parameters = args.get(2..).unwrap_or_default();
         match self.protected_target(callable, parameters) {
             Ok(mut results) => {
@@ -3930,22 +3936,24 @@ mod tests {
     }
 
     #[test]
-    fn xpcall_handlers_accept_bounded_callable_tables_and_builtin_handlers() {
+    fn xpcall_requires_function_handlers_before_invoking_target() {
+        for source in [
+            "return xpcall(error, {}, 8)",
+            "return xpcall(error, nil, 8)",
+            "return xpcall(function() return 5 end, {})",
+            "return xpcall(function() return 5 end)",
+            "local h=setmetatable({},{__call=function(_,e) return e end}); return xpcall(error,h,8)",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::TypeError),
+                "{source}"
+            );
+        }
         for (source, expected) in [
             (
-                "local h=setmetatable({offset=3},{__call=function(self,e) return self.offset+e end}); local ok,v=xpcall(error,h,4); return not ok and v or 0",
-                7,
-            ),
-            (
-                "local inner=setmetatable({scale=4},{__call=function(self,h,e) return h.base+e*self.scale end}); local h=setmetatable({base=3},{__call=inner}); local ok,v=xpcall(error,h,5); return not ok and v or 0",
-                23,
-            ),
-            (
-                "local h=setmetatable({},{__call=function(_,e) return e,false end}); local ok,v=xpcall(error,h,9); return not ok and v or 0",
-                9,
-            ),
-            (
-                "local calls=0; local h=setmetatable({},{__call=function(_,e) calls=calls+1; if calls==1 then error(4) end; return e+calls end}); local ok,v=xpcall(error,h,9); return not ok and calls==2 and v==6 and 1 or 0",
+                "local calls=0; local f=function() calls=calls+1; return 5 end; local ok,v=xpcall(f,function(e) return e end); return ok and v==5 and calls or 0",
                 1,
             ),
             (
@@ -3957,23 +3965,12 @@ mod tests {
                 1,
             ),
             (
-                "local h={}; local ok,e=xpcall(error,h,8); return not ok and type(e)=='string' and 1 or 0",
-                1,
-            ),
-            (
-                "local calls=0; local h=setmetatable({},{__call=function() calls=calls+1; return 0 end}); local ok,v=xpcall(function() return 3 end,h); return ok and v==3 and calls==0 and 1 or 0",
+                "local ok,e=xpcall(7,function(e) return type(e) end); return not ok and e=='string' and 1 or 0",
                 1,
             ),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
-        let cyclic =
-            compile_flow_chunk("local h={}; setmetatable(h,{__call=h}); return xpcall(error,h,5)")
-                .unwrap();
-        assert_eq!(
-            execute_flow_values(&cyclic, DEFAULT_STEP_BUDGET),
-            Err(FlowError::CallDepthExceeded)
-        );
     }
 
     #[test]
