@@ -21,7 +21,28 @@ pub enum Instruction {
     BitNot { dest: usize, input: usize },
     Shl { dest: usize, lhs: usize, rhs: usize },
     Shr { dest: usize, lhs: usize, rhs: usize },
+    /// Conditional comparison values are internal boolean guard registers,
+    /// not general integer-valued Lua expressions.
+    Compare {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+        operation: CompareOperation,
+    },
+    BranchIfFalse { condition: usize, target: usize },
+    Return { source: usize },
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompareOperation {
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
     code: Vec<Instruction>,
@@ -144,6 +165,64 @@ fn emit<'a>(
     Ok(output)
 }
 
+/// Compile only integer comparisons and explicit Lua true/false literals as
+/// internal guards. Lua numeric values are truthy even when zero, so they are
+/// deliberately not represented by our comparison boolean registers.
+fn emit_condition<'a>(
+    program: &mut Program,
+    expression: &Expr<'a>,
+    locals: &[HashMap<&'a str, RegisterBinding>],
+    depth: usize,
+) -> Result<usize, Error> {
+    if depth > 64 || program.registers >= MAX_REGISTERS {
+        return Err(Error::TooLarge);
+    }
+    match expression {
+        Expr::Grouped(inner) => emit_condition(program, inner, locals, depth + 1),
+        Expr::Atom(value) if matches!(*value, "true" | "false") => {
+            let dest = program.registers;
+            program.registers += 1;
+            program.code.push(Instruction::Load {
+                dest,
+                value: i64::from(*value == "true"),
+            });
+            Ok(dest)
+        }
+        Expr::Binary { op, left, right } => {
+            let operation = match *op {
+                "==" => CompareOperation::Equal,
+                "~=" => CompareOperation::NotEqual,
+                "<" => CompareOperation::Less,
+                "<=" => CompareOperation::LessEqual,
+                ">" => CompareOperation::Greater,
+                ">=" => CompareOperation::GreaterEqual,
+                _ => {
+                    return Err(Error::Unsupported(
+                        "integer conditional needs a comparison or Boolean literal".into(),
+                    ));
+                }
+            };
+            let lhs = emit(program, left, depth + 1, locals)?;
+            let rhs = emit(program, right, depth + 1, locals)?;
+            if program.registers >= MAX_REGISTERS {
+                return Err(Error::TooLarge);
+            }
+            let dest = program.registers;
+            program.registers += 1;
+            program.code.push(Instruction::Compare {
+                dest,
+                lhs,
+                rhs,
+                operation,
+            });
+            Ok(dest)
+        }
+        _ => Err(Error::Unsupported(
+            "integer conditional needs a comparison or Boolean literal".into(),
+        )),
+    }
+}
+
 /// Compile only standalone integer arithmetic and bitwise expressions into owned IR.
 /// Variables, functions, floats, tables and side effects are unsupported.
 pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
@@ -161,8 +240,9 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 /// Compile a static subset of Lua chunks to Ferrua-owned register bytecode.
 ///
 /// Supports integer locals with initializers, parallel assignments to locals,
-/// nested do/end blocks and a single integer return from any active block.
-/// Calls, conditionals, loops, globals, nil and closures remain unsupported.
+/// nested do/end blocks, integer comparison if/elseif/else branches in which
+/// every path returns, and a single integer return from an active block.
+/// Calls, general truthiness, loops, globals, nil and closures remain unsupported.
 pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
     let mut program = Program {
@@ -266,8 +346,48 @@ fn compile_statements<'a>(
                     break;
                 }
             }
+            Statement::If {
+                branches,
+                else_branch: Some(else_body),
+            } => {
+                // Every arm must terminate with an integer return, so there
+                // is no register-state merge or fallthrough across arms.
+                for (condition, body) in branches {
+                    let guard = emit_condition(program, condition, scopes, 0)?;
+                    let branch_at = program.code.len();
+                    program.code.push(Instruction::BranchIfFalse {
+                        condition: guard,
+                        target: usize::MAX,
+                    });
+                    scopes.push(HashMap::new());
+                    let returned = compile_statements(body, program, scopes, depth + 1)?;
+                    scopes.pop();
+                    if returned.is_none() {
+                        return Err(Error::Unsupported(
+                            "integer if arms must all return a value".into(),
+                        ));
+                    }
+                    let target = program.code.len();
+                    program.code[branch_at] = Instruction::BranchIfFalse {
+                        condition: guard,
+                        target,
+                    };
+                }
+                scopes.push(HashMap::new());
+                let final_return = compile_statements(else_body, program, scopes, depth + 1)?;
+                scopes.pop();
+                if final_return.is_none() {
+                    return Err(Error::Unsupported(
+                        "integer if arms must all return a value".into(),
+                    ));
+                }
+                result = Some(0);
+                break;
+            }
             Statement::Return(values) if values.len() == 1 => {
-                result = Some(emit(program, &values[0], 0, scopes)?);
+                let value = emit(program, &values[0], 0, scopes)?;
+                program.code.push(Instruction::Return { source: value });
+                result = Some(value);
             }
             _ => {
                 return Err(Error::Unsupported(
@@ -341,8 +461,39 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
             .flatten()
             .ok_or(Error::InvalidBytecode)
     }
-    for instruction in &program.code {
-        let (dest, value) = match *instruction {
+    let mut pc = 0;
+    while pc < program.code.len() {
+        let (dest, value) = match program.code[pc] {
+            Instruction::BranchIfFalse { condition, target } => {
+                if target <= pc || target >= program.code.len() {
+                    return Err(Error::InvalidBytecode);
+                }
+                pc = if read(&registers, condition)? == 0 {
+                    target
+                } else {
+                    pc + 1
+                };
+                continue;
+            }
+            Instruction::Return { source } => return read(&registers, source),
+            Instruction::Compare {
+                dest,
+                lhs,
+                rhs,
+                operation,
+            } => {
+                let left = read(&registers, lhs)?;
+                let right = read(&registers, rhs)?;
+                let flag = match operation {
+                    CompareOperation::Equal => left == right,
+                    CompareOperation::NotEqual => left != right,
+                    CompareOperation::Less => left < right,
+                    CompareOperation::LessEqual => left <= right,
+                    CompareOperation::Greater => left > right,
+                    CompareOperation::GreaterEqual => left >= right,
+                };
+                (dest, i64::from(flag))
+            }
             Instruction::Load { dest, value } => (dest, value),
             Instruction::Neg { dest, input } => (dest, read(&registers, input)?.wrapping_neg()),
             Instruction::Add { dest, lhs, rhs } => (
@@ -389,6 +540,7 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
             return Err(Error::InvalidBytecode);
         }
         *target = Some(value);
+        pc += 1;
     }
     read(&registers, program.result)
 }
@@ -508,6 +660,48 @@ mod tests {
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
+    }
+
+    #[test]
+    fn register_integer_conditional_return_arms_and_comparisons() {
+        for (source, expected) in [
+            ("if true then return 7 else return 11 end", 7),
+            ("if false then return 7 else return 11 end", 11),
+            ("if 4<5 then return 9 else return 2 end", 9),
+            ("if 4>5 then return 9 else return 2 end", 2),
+            ("if 4<=4 then return 8 else return 1 end", 8),
+            ("if 4>=5 then return 8 else return 1 end", 1),
+            ("if 4==4 then return 8 else return 1 end", 8),
+            ("if 4~=4 then return 8 else return 1 end", 1),
+            ("if 1>2 then return 1 elseif 3<4 then return 17 else return 9 end", 17),
+            ("if 1>2 then return 1 elseif 4<3 then return 17 else return 9 end", 9),
+            ("local x=5; if x>3 then local y=x+2; return y else return 0 end", 7),
+            ("local x=5; if x<3 then return 0 else do return x+9 end end", 14),
+            ("if true then do return 8 end else return 9 end", 8),
+            ("if (4*2)==8 then return (5<<2)|3 else return 0 end", 23),
+            ("if 0==0 then if 3>=2 then return 19 else return 2 end else return 7 end", 19),
+        ] {
+            let bytecode = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_integer_program(&bytecode), Ok(expected), "{source}");
+        }
+        for source in [
+            "if true then return 1 end",
+            "if true then local a=2 else return 3 end",
+            "if 0 then return 1 else return 2 end",
+            "if false then return 2 else local a=3 end",
+            "if true then return nil else return 2 end",
+        ] {
+            assert!(compile_integer_chunk(source).is_err(), "{source}");
+        }
+        let invalid = Program {
+            code: vec![
+                Instruction::Load { dest: 0, value: 1 },
+                Instruction::BranchIfFalse { condition: 0, target: 0 },
+            ],
+            registers: 1,
+            result: 0,
+        };
+        assert_eq!(execute_integer_program(&invalid), Err(Error::InvalidBytecode));
     }
 
     #[test]
