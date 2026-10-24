@@ -3218,6 +3218,33 @@
                   "evidence": "GitHub Actions 40054589028: all five jobs passed synchronized README, documentation, machine ledger and generated roadmap, with Lua 5.4 reference tests"
                 }
               ]
+            },
+            {
+              "id": "T403",
+              "emoji": "🧭",
+              "name": "Lua builtin __index/__newindex metamethod dispatch with table redirect precedence",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Invoke function-valued Lua indexing and assignment metamethods through bounded protected callable dispatch",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::lookup_with_metatable and assign_with_metatable delegate callable non-tables to protected_target; CI 40055237278"
+                },
+                {
+                  "text": "Preserve table-valued redirect semantics even for tables with __call, including existing-key bypass, rawset and hard recursive depth limits",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: callable_index_and_newindex_hooks_preserve_raw_redirection_and_hard_depth; 18 fixtures and 2 hard-limit cases"
+                },
+                {
+                  "text": "Pass upstream Lua 5.4 and production fer differential parity, Linux tests, Rust 1.96, Arch archive and downstream consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40055237278 all five jobs successful on bf21dbd1b06d873b5cc5da35225346ae260891ab"
+                },
+                {
+                  "text": "Synchronize owned-engine docs, README, ledger and roadmap after verified CI acceptance",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3911,6 +3938,13 @@
           "name": "Callable binary and unary Lua metamethod targets",
           "task_ids": [
             "T402"
+          ]
+        },
+        {
+          "emoji": "🧭",
+          "name": "Bounded builtin index/newindex metamethod callbacks",
+          "task_ids": [
+            "T403"
           ]
         }
       ]

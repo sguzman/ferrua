@@ -39,7 +39,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [four primary jobs green plus aggregate status; callable Lua arithmetic/comparison metamethods, __len/__tostring/__pairs hooks and bounded protected calls, negative-path conformance, Arch archive smoke and Lua 5.4.6 differentials](https://github.com/sguzman/ferrua/actions/runs/40054377514). Pinned Arch container verification is not native EndeavourOS/Hyprland QA; native acceptance, a published stable release and complete Ferrua-owned VM remain pending.
+**Latest verified CI:** [four primary jobs green plus aggregate status; built-in Lua __index/__newindex hooks, callable metatables and bounded protected calls, negative-path conformance, Arch archive smoke and Lua 5.4.6 differentials](https://github.com/sguzman/ferrua/actions/runs/40055237278). Pinned Arch container verification is not native EndeavourOS/Hyprland QA; native acceptance, a published stable release and complete Ferrua-owned VM remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
