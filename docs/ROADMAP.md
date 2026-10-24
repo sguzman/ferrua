@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 138 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 139 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -616,6 +616,11 @@
   - [x] Report const reassignment for captured upvalues but not writable shadowed locals or reads — src/scope.rs: Reference.const_reassignment and constant_local_attributes_follow_capture_and_shadowing_resolution
   - [x] Pass Linux Rust formatting, lint and tests; Rust 1.96; action consumer; Lua 5.4 differential CI — GitHub Actions 40112914625: all five jobs passed commit b76abff4643e0f2848b75b03bc53fd27f334af6d
   - [x] Synchronize machine-readable ledger, generated roadmap, README and documented analyzer limits under passing CI — GitHub Actions 40113187574: five successful jobs for synchronized README, scope metadata documentation and roadmap
+- 🔒 **T410** Lexically distinguish Lua <close> read-only reassignments without implementing finalizers — `████████░░ 75%`
+  - [x] Classify writes to captured or local to-be-closed bindings distinctly from <const> writes — src/scope.rs: Reference.close_reassignment and Resolver::record; Lua 5.4 §3.3.8 defines <close> as const-like
+  - [x] Exercise capture, readable references, const-table field mutation and writable shadowed bindings — src/scope.rs: to_be_closed_bindings_are_readonly_even_through_captures; fixed Lua attribute test whitespace
+  - [x] Pass Rust tests/Clippy/format, Rust 1.96, Lua 5.4 differential and composite consumer acceptance — GitHub Actions 40113575729: all five jobs green for 44b372447e4c7810a38ec6555ae91d73fe0ccfe0
+  - [ ] Synchronize analyzer docs, README, progress ledger and generated roadmap under passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -724,4 +729,5 @@
 - 📞 Lua table/string shorthand call expression grammar — `██████████ 100%`
 - 🔒 Lua 5.4 const locals, capture protection and close attribute syntax — `██████████ 100%`
 - 🔎 Const capture/write metadata in lexical scope resolver — `██████████ 100%`
+- 🔒 Read-only <close> lexical assignment metadata — `████████░░ 75%`
 

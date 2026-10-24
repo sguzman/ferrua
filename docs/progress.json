@@ -3414,6 +3414,33 @@
                   "evidence": "GitHub Actions 40113187574: five successful jobs for synchronized README, scope metadata documentation and roadmap"
                 }
               ]
+            },
+            {
+              "id": "T410",
+              "emoji": "🔒",
+              "name": "Lexically distinguish Lua <close> read-only reassignments without implementing finalizers",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Classify writes to captured or local to-be-closed bindings distinctly from <const> writes",
+                  "passed": true,
+                  "evidence": "src/scope.rs: Reference.close_reassignment and Resolver::record; Lua 5.4 §3.3.8 defines <close> as const-like"
+                },
+                {
+                  "text": "Exercise capture, readable references, const-table field mutation and writable shadowed bindings",
+                  "passed": true,
+                  "evidence": "src/scope.rs: to_be_closed_bindings_are_readonly_even_through_captures; fixed Lua attribute test whitespace"
+                },
+                {
+                  "text": "Pass Rust tests/Clippy/format, Rust 1.96, Lua 5.4 differential and composite consumer acceptance",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40113575729: all five jobs green for 44b372447e4c7810a38ec6555ae91d73fe0ccfe0"
+                },
+                {
+                  "text": "Synchronize analyzer docs, README, progress ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4156,6 +4183,13 @@
           "name": "Const capture/write metadata in lexical scope resolver",
           "task_ids": [
             "T409"
+          ]
+        },
+        {
+          "emoji": "🔒",
+          "name": "Read-only <close> lexical assignment metadata",
+          "task_ids": [
+            "T410"
           ]
         }
       ]
