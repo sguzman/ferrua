@@ -2126,6 +2126,40 @@ impl Execution<'_> {
                     Err(self.assertion_failure(&arguments)?)
                 }
             }
+            Value::Builtin(Builtin::Type) => {
+                let argument = *arguments.first().ok_or(FlowError::TypeError)?;
+                let name: &[u8] = match argument {
+                    Value::Integer(_) | Value::Float(_) => b"number",
+                    Value::Boolean(_) => b"boolean",
+                    Value::Nil => b"nil",
+                    Value::String(_) => b"string",
+                    Value::Table(_) => b"table",
+                    Value::Function(_) | Value::Builtin(_) => b"function",
+                };
+                Ok(vec![self.intern_string(name.to_vec())?])
+            }
+            Value::Builtin(Builtin::ToNumber) => {
+                if arguments.is_empty() {
+                    return Err(FlowError::TypeError);
+                }
+                Ok(vec![self.tonumber_builtin(&arguments)?])
+            }
+            Value::Builtin(Builtin::RawLen) => {
+                let argument = *arguments.first().ok_or(FlowError::TypeError)?;
+                Ok(vec![self.raw_len(argument)?])
+            }
+            Value::Builtin(Builtin::RawEqual) => {
+                let left = *arguments.first().ok_or(FlowError::TypeError)?;
+                let right = *arguments.get(1).ok_or(FlowError::TypeError)?;
+                let equal = if matches!(left, Value::Integer(_) | Value::Float(_))
+                    && matches!(right, Value::Integer(_) | Value::Float(_))
+                {
+                    numeric_equal(left, right)?
+                } else {
+                    left == right
+                };
+                Ok(vec![Value::Boolean(equal)])
+            }
             _ => Err(FlowError::TypeError),
         }
     }
@@ -3933,6 +3967,54 @@ mod tests {
             execute_flow_values(&cyclic, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
         );
+    }
+
+    #[test]
+    fn selected_standard_builtins_work_inside_protected_calls() {
+        for (source, expected) in [
+            (
+                "local ok,v=pcall(type,12); return ok and v=='number' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,v=pcall(tonumber,'ff',16); return ok and v or 0",
+                255,
+            ),
+            (
+                "local ok,v=pcall(tonumber,'bad'); return ok and v==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,v=pcall(rawlen,{1,2,3}); return ok and v or 0",
+                3,
+            ),
+            (
+                "local ok,v=pcall(rawequal,7,7.0); return ok and v and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,v=xpcall(error,type,42); return not ok and v=='number' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,v=xpcall(error,rawlen,{4,5}); return not ok and v==2 and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,v=xpcall(error,tonumber,7); return not ok and v==7 and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,e=pcall(type); return not ok and type(e)=='string' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,e=pcall(rawequal,8); return not ok and type(e)=='string' and 1 or 0",
+                1,
+            ),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
     }
 
     #[test]
