@@ -3666,6 +3666,33 @@
                   "evidence": "GitHub Actions 40119966143: all five acceptance jobs passed synchronized docs, README, machine ledger and roadmap"
                 }
               ]
+            },
+            {
+              "id": "T419",
+              "emoji": "🏗️",
+              "name": "Bound nested function-body parser blocks across function boundaries",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Account for every parser block recursively, including function bodies that reset lexical block depth",
+                  "passed": true,
+                  "evidence": "src/expr.rs: Parser::block increments/decrements shared block_depth and delegates to block_inner"
+                },
+                {
+                  "text": "Reject deeply nested function definitions with controlled block-depth errors while parsing shallower nested definitions",
+                  "passed": true,
+                  "evidence": "src/expr.rs: nested_function_body_blocks_share_host_stack_depth_budget"
+                },
+                {
+                  "text": "Pass Rust 1.96, Linux format/Clippy/tests, Lua 5.4 differential, Arch release preview and consumer CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40120107157: all five acceptance jobs green for 280f933a7ff7f9d8c560add870d777936c033ecc"
+                },
+                {
+                  "text": "Synchronize documentation, machine ledger and generated roadmap with passing CI evidence",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4471,6 +4498,13 @@
           "name": "Iterative expression AST chain safety",
           "task_ids": [
             "T418"
+          ]
+        },
+        {
+          "emoji": "🏗️",
+          "name": "Cross-function Lua parser block recursion safety",
+          "task_ids": [
+            "T419"
           ]
         }
       ]

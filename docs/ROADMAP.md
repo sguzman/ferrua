@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 147 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 148 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -661,6 +661,11 @@
   - [x] Reject excessively deep left-associative and suffix chains while preserving shallower Lua expressions in both standalone expressions and chunks — src/expr.rs: long_left_associative_and_postfix_chains_are_bounded
   - [x] Pass Linux format/Clippy/tests, Rust 1.96, production/differential and composite-action CI — GitHub Actions 40119727210: all five jobs passed on 25e027af5fef5c71db9165bae0835cf5eae08fff
   - [x] Synchronize README, parser depth documentation, ledger and generated roadmap with CI evidence — GitHub Actions 40119966143: all five acceptance jobs passed synchronized docs, README, machine ledger and roadmap
+- 🏗️ **T419** Bound nested function-body parser blocks across function boundaries — `████████░░ 75%`
+  - [x] Account for every parser block recursively, including function bodies that reset lexical block depth — src/expr.rs: Parser::block increments/decrements shared block_depth and delegates to block_inner
+  - [x] Reject deeply nested function definitions with controlled block-depth errors while parsing shallower nested definitions — src/expr.rs: nested_function_body_blocks_share_host_stack_depth_budget
+  - [x] Pass Rust 1.96, Linux format/Clippy/tests, Lua 5.4 differential, Arch release preview and consumer CI — GitHub Actions 40120107157: all five acceptance jobs green for 280f933a7ff7f9d8c560add870d777936c033ecc
+  - [ ] Synchronize documentation, machine ledger and generated roadmap with passing CI evidence
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -778,4 +783,5 @@
 - 🧪 Generated Lua grammar acceptance combinations — `██████████ 100%`
 - 🛡️ Expression parser host-stack safety — `██████████ 100%`
 - 🔗 Iterative expression AST chain safety — `██████████ 100%`
+- 🏗️ Cross-function Lua parser block recursion safety — `████████░░ 75%`
 
