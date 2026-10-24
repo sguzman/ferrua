@@ -3106,6 +3106,33 @@
                   "evidence": "GitHub Actions 40052902459: all five jobs successful with synchronized documentation, generated roadmap and reference tests"
                 }
               ]
+            },
+            {
+              "id": "T399",
+              "emoji": "🔁",
+              "name": "Callable __pairs metamethod targets with shared bounded host frames",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Allow Lua __pairs callbacks to invoke first-party closures, builtin functions and chained callable tables through shared dispatch",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::pairs_ipairs_builtin invokes protected_target on __pairs raw metatable field"
+                },
+                {
+                  "text": "Maintain triple adjustment and hard noncatchable depth limits for self-recursive __pairs and __call callback chains",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: callable_pairs_metamethods_preserve_triples_and_hard_limits; two explicit cycle-limit cases"
+                },
+                {
+                  "text": "Pass Rust 1.96, Linux format/Clippy/tests, archive smoke, action consumer and Lua 5.4/fer differential references",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40053300659: five passing CI jobs on commit d2a91b52c01695de4a0b2cfa93fb26cfeeca48d0, 12 reference fixtures"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned-engine semantic limitations under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3771,6 +3798,13 @@
           "name": "Nested bounded pcall/xpcall first-class targets",
           "task_ids": [
             "T398"
+          ]
+        },
+        {
+          "emoji": "🔁",
+          "name": "Callable-table and builtin Lua __pairs callbacks",
+          "task_ids": [
+            "T399"
           ]
         }
       ]

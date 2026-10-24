@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 127 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 96%` across 128 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -561,6 +561,11 @@
   - [x] Share conservative MAX_CALL_DEPTH between nested builtin calls and closure frames; leave hard budget errors uncatchable — src/owned_flow.rs: nested_protected_builtin and nested_protected_call_builtins_preserve_values_and_bound_depth
   - [x] Pass 15 Lua 5.4/production fer differential fixtures, deterministic depth failure, Rust 1.96, Linux tests and consumer CI — GitHub Actions 40052701456: all five primary/reporter jobs green for 1fc94b87da2a53adcbaf7dd5d44ebda60fde231d
   - [x] Synchronize README, owned-engine documentation, progress ledger and generated roadmap in successful CI — GitHub Actions 40052902459: all five jobs successful with synchronized documentation, generated roadmap and reference tests
+- 🔁 **T399** Callable __pairs metamethod targets with shared bounded host frames — `████████░░ 75%`
+  - [x] Allow Lua __pairs callbacks to invoke first-party closures, builtin functions and chained callable tables through shared dispatch — src/owned_flow.rs: Execution::pairs_ipairs_builtin invokes protected_target on __pairs raw metatable field
+  - [x] Maintain triple adjustment and hard noncatchable depth limits for self-recursive __pairs and __call callback chains — src/owned_flow.rs: callable_pairs_metamethods_preserve_triples_and_hard_limits; two explicit cycle-limit cases
+  - [x] Pass Rust 1.96, Linux format/Clippy/tests, archive smoke, action consumer and Lua 5.4/fer differential references — GitHub Actions 40053300659: five passing CI jobs on commit d2a91b52c01695de4a0b2cfa93fb26cfeeca48d0, 12 reference fixtures
+  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine semantic limitations under passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -658,4 +663,5 @@
 - ↪️ Protected select/next/ipairs iterator result triples — `██████████ 100%`
 - 🔄 Protected pairs/ipairs triples with lazy validation — `██████████ 100%`
 - 🪆 Nested bounded pcall/xpcall first-class targets — `██████████ 100%`
+- 🔁 Callable-table and builtin Lua __pairs callbacks — `████████░░ 75%`
 
