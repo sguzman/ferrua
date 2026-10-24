@@ -3503,7 +3503,7 @@
               "id": "T413",
               "emoji": "📍",
               "name": "Accurate end-of-file Lua parser line and byte diagnostics",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Track physical Lua source ending line in parser, respecting CRLF/LFCR and trailing source comments",
@@ -3522,6 +3522,34 @@
                 },
                 {
                   "text": "Synchronize machine progress, generated roadmap, README and first-party diagnostic documentation under CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40117631335: all five jobs passed EOF diagnostic documentation, synchronized roadmap and long-string implementation"
+                }
+              ]
+            },
+            {
+              "id": "T414",
+              "emoji": "↵",
+              "name": "Lua 5.4 long-bracket string physical newline normalization",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Normalize CRLF, LFCR, lone CR and LF to single LF bytes inside Lua long-bracket literal strings",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: decode_lua_string long-bracket body normalization with no raw byte widening"
+                },
+                {
+                  "text": "Preserve leading long-bracket newline removal, UTF-8 bytes and repeated-linebreak semantics",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: long_brackets_normalize_crlf_lfcr_and_single_cr_line_breaks; tests/owned_flow.rs eight new differential cases"
+                },
+                {
+                  "text": "Pass pinned upstream Lua 5.4 and production fer differential results, Rust unit/lint/format, MSRV and downstream GitHub consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40117631335: all five jobs green after rustfmt on 093e13bc3c67532215f6e7249dbe0b8f849c19e4"
+                },
+                {
+                  "text": "Synchronize engine documentation, README, machine ledger and generated roadmap in passing CI",
                   "passed": false
                 }
               ]
@@ -4295,6 +4323,13 @@
           "name": "Parser EOF diagnostics retain Lua physical line and byte position",
           "task_ids": [
             "T413"
+          ]
+        },
+        {
+          "emoji": "↵",
+          "name": "Long-bracket string line-break normalization",
+          "task_ids": [
+            "T414"
           ]
         }
       ]
