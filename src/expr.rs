@@ -1135,7 +1135,6 @@ mod tests {
             "do local x=1",
             "end",
             "do return 1; local x=2 end",
-            "do local x=1 end print(x)",
             "do do local a=1 end",
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
@@ -1237,6 +1236,7 @@ mod tests {
             "local x=1 do goto done end ::done:: return x",
             "local function f() return 8 end return f()",
             "repeat local x=1 until true return 2",
+            "do local x=1 end print(x)",
             "local a=1 print(a)",
         ] {
             assert!(parse_chunk(script).is_ok(), "{script}");
