@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 124 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 96%` across 125 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -546,6 +546,11 @@
   - [x] Protect getmetatable and setmetatable semantics, including __metatable locks and observable table mutation — src/owned_flow.rs: Execution::protected_target delegates to existing getmetatable_builtin/setmetatable_builtin; 14 differential cases
   - [x] Pass Rust quality/tests, upstream Lua 5.4 and production fer reference corpus, Rust 1.96 and action consumer CI — GitHub Actions 40051457030: all five primary/reporting jobs successful for 84452bc5be6453da7f4e76cbe194f29046f03e47
   - [x] Synchronize documentation and machine-readable progress ledger under CI acceptance — GitHub Actions 40051622021: five jobs green including source/docs/ledger/roadmap integrity and Lua 5.4 differential parity
+- ↪️ **T396** Protected Lua select/next/ipairs iterator multi-result parity — `████████░░ 75%`
+  - [x] Expose first-party select, next and ipairs-iterator builtin values through protected target dispatch — src/owned_flow.rs: Execution::protected_target routes to select_builtin, next_builtin and ipairs_iterator
+  - [x] Preserve multiple return adjustment, nil termination, raw iteration and bounded __index behavior — src/owned_flow.rs: protected_multivalue_builtins_preserve_lua_result_adjustment; tests/owned_flow.rs 14 fixtures
+  - [x] Pass Linux Rust tests/format/lint, Rust 1.96, production fer/upstream Lua 5.4 reference parity and action consumer — GitHub Actions 40051756734: all five jobs green on d6f2271e1dbff0deae096f38ae53ff5e7ffe267c
+  - [ ] Synchronize README, engine design, ledger and derived roadmap with passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -640,4 +645,5 @@
 - 🧮 Selected builtin protected calls — `██████████ 100%`
 - 📝 Shared protected tostring and numeric __tostring parity — `██████████ 100%`
 - 🔐 Protected raw table and metatable standard builtins — `██████████ 100%`
+- ↪️ Protected select/next/ipairs iterator result triples — `████████░░ 75%`
 

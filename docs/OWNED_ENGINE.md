@@ -506,7 +506,7 @@ The experimental owned VM's `pcall` can now invoke the existing first-party `typ
 
 Ten curated fixtures cover successful type and number conversion, invalid numeral returning nil, raw length, numeric raw equality, builtin error handlers and protected invalid arguments. [CI #40046376588](https://github.com/sguzman/ferrua/actions/runs/40046376588) passed Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential tests, Arch packaging, composite consumer and aggregate status.
 
-This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. `next`, `pairs`, `ipairs`, `pcall` and `xpcall` as nested builtin targets, arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.
+This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. `pairs`, `ipairs`, `pcall` and `xpcall` as nested builtin targets, arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.
 
 ### Lua 5.4 numeric __tostring callback returns
 
@@ -523,3 +523,9 @@ Ordinary `tostring` and protected `pcall(tostring, ...)` or `xpcall(error, tostr
 The experimental owned interpreter routes `pcall(rawget, ...)` and `pcall(rawset, ...)` through the same first-party raw table helpers as ordinary bytecode calls, bypassing `__index` and `__newindex` metamethod callbacks. `getmetatable` and `setmetatable` work as protected callable builtin values, preserving the existing `__metatable` protection checks and table-return conventions. `xpcall` may invoke a function-valued builtin such as `getmetatable` as its message handler, but the handler still receives only the error object, per Lua 5.4.
 
 Fourteen curated unit and reference fixtures cover raw access, mutation, missing keys, invalid raw keys and arities, locked and unlocked metatables, protected updates, and a builtin `xpcall` handler. [CI #40051457030](https://github.com/sguzman/ferrua/actions/runs/40051457030) passed all five jobs including Lua 5.4 differential parity, Linux tests/lint and pinned Arch packaging. Capacity failures remain noncatchable VM guard conditions. Complete builtin call semantics, garbage collection and production cutover remain outside the accepted subset.
+
+### Verified protected Lua select, next and ipairs iterator calls
+
+The bounded owned interpreter now accepts first-class `select`, `next` and the internal `ipairs` iterator as protected-call targets, retaining their ordinary Lua variable return lists. This includes `select('#', ...)` result counts, negative selectors, iterator key/value pairs, nil termination, invalid key rejection and `ipairs`' metatable-aware indexing. `pcall` still prepends its Boolean success result and the same VM scan/instruction budgets protect both normal and protected `next` calls. The public `ipairs(table)` constructor and public `pairs(table)` function are **not yet** callable targets in the protected-call subset, but their returned iterator functions can be.
+
+Fourteen owned-VM unit and upstream Lua 5.4/production `fer` differential fixtures cover these cases, including native error paths and result adjustment. [CI #40051756734](https://github.com/sguzman/ferrua/actions/runs/40051756734) passed all five jobs for the implementation. This does not imply complete generic-for, iterator metatable or standard library parity, nor change the production backend.
