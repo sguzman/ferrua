@@ -517,11 +517,11 @@
   - [x] Replace generic failed-assert type errors with explicit Lua thrown values and default assertion message — src/owned_flow.rs: Execution::assertion_failure, Builtin::Assert and FlowError::Thrown
   - [x] Test direct and protected assert with missing, nil, false, integer and string messages against Lua 5.4 — src/owned_flow.rs: assertion_failures_preserve_custom_error_values_in_pcall; tests/owned_flow.rs differential fixtures
   - [x] Pass Linux fmt/lint/tests, Rust 1.96, composite action consumer and Lua 5.4 differential CI — GitHub Actions 40043618093: four primary jobs and reporter successful, including Lua 5.4 assertion cases, no-argument panic guard, and full Rust tests
-- 🛟 **T390** Bounded Lua xpcall message handlers and recoverable error transformation — `████████░░ 75%`
+- 🛟 **T390** Bounded Lua xpcall message handlers and recoverable error transformation — `██████████ 100%`
   - [x] Implement first-class xpcall with forwarded target arguments and correct success multiple-result behavior — src/owned_flow.rs: Builtin::Xpcall, Execution::xpcall_builtin; GitHub Actions 40044530094 full Linux and Rust 1.96 checks passed
   - [x] Preserve explicit thrown Lua values through first-party message handlers, truncate handler results and keep hard VM limits uncatchable — src/owned_flow.rs: protected_target, protected_error_value, unprotectable_error and xpcall_runs_bounded_message_handlers_and_preserves_success_results
-  - [x] Pass production fer and upstream Lua 5.4 differential parity for bounded xpcall regression fixtures — tests/owned_flow.rs: nine xpcall success/error fixtures; GitHub Actions 40044530094 five jobs succeeded
-  - [ ] Synchronize README, independent-engine documentation, machine ledger and generated roadmap in successful Linux CI
+  - [x] Pass production fer and upstream Lua 5.4 differential parity for xpcall errors, protected multiple results and handler re-entry — tests/owned_flow.rs: twelve curated xpcall fixtures, including three handler-reentry cases; GitHub Actions 40044851537 five jobs succeeded
+  - [x] Synchronize README, independent-engine documentation, machine ledger and generated roadmap in successful Linux CI — docs/OWNED_ENGINE.md, README.md, docs/progress.json, docs/ROADMAP.md; GitHub Actions 40044720754 passed all five jobs for synchronized docs and pending-ledger baseline
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -610,5 +610,5 @@
 - 🚫 Intentional syntax and runtime failure parity — `██████████ 100%`
 - 🧯 Explicit Lua error values and protected closure calls — `██████████ 100%`
 - 🗣️ Lua assertion error objects and default messages — `██████████ 100%`
-- 🛟 Lua xpcall bounded error handlers — `████████░░ 75%`
+- 🛟 Lua xpcall bounded error handlers — `██████████ 100%`
 

@@ -2864,7 +2864,7 @@
               "id": "T390",
               "emoji": "🛟",
               "name": "Bounded Lua xpcall message handlers and recoverable error transformation",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Implement first-class xpcall with forwarded target arguments and correct success multiple-result behavior",
@@ -2877,13 +2877,14 @@
                   "evidence": "src/owned_flow.rs: protected_target, protected_error_value, unprotectable_error and xpcall_runs_bounded_message_handlers_and_preserves_success_results"
                 },
                 {
-                  "text": "Pass production fer and upstream Lua 5.4 differential parity for bounded xpcall regression fixtures",
+                  "text": "Pass production fer and upstream Lua 5.4 differential parity for xpcall errors, protected multiple results and handler re-entry",
                   "passed": true,
-                  "evidence": "tests/owned_flow.rs: nine xpcall success/error fixtures; GitHub Actions 40044530094 five jobs succeeded"
+                  "evidence": "tests/owned_flow.rs: twelve curated xpcall fixtures, including three handler-reentry cases; GitHub Actions 40044851537 five jobs succeeded"
                 },
                 {
                   "text": "Synchronize README, independent-engine documentation, machine ledger and generated roadmap in successful Linux CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "docs/OWNED_ENGINE.md, README.md, docs/progress.json, docs/ROADMAP.md; GitHub Actions 40044720754 passed all five jobs for synchronized docs and pending-ledger baseline"
                 }
               ]
             }
