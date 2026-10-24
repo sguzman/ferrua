@@ -267,10 +267,13 @@ fn emit_condition<'a>(
         Expr::Atom(value) if matches!(*value, "true" | "false") => {
             let dest = program.registers;
             program.registers += 1;
-            emit_instruction(program, Instruction::Load {
-                dest,
-                value: i64::from(*value == "true"),
-            })?;
+            emit_instruction(
+                program,
+                Instruction::Load {
+                    dest,
+                    value: i64::from(*value == "true"),
+                },
+            )?;
             Ok(dest)
         }
         Expr::Unary { op, right } if *op == "not" => {
@@ -280,10 +283,13 @@ fn emit_condition<'a>(
             }
             let dest = program.registers;
             program.registers += 1;
-            emit_instruction(program, Instruction::BooleanNot {
-                dest,
-                input: source,
-            })?;
+            emit_instruction(
+                program,
+                Instruction::BooleanNot {
+                    dest,
+                    input: source,
+                },
+            )?;
             Ok(dest)
         }
         Expr::Binary { op, left, right } if matches!(*op, "and" | "or") => {
@@ -294,10 +300,13 @@ fn emit_condition<'a>(
             let dest = program.registers;
             program.registers += 1;
             let branch_at = program.code.len();
-            emit_instruction(program, Instruction::BranchIfFalse {
-                condition: lhs,
-                target: usize::MAX,
-            })?;
+            emit_instruction(
+                program,
+                Instruction::BranchIfFalse {
+                    condition: lhs,
+                    target: usize::MAX,
+                },
+            )?;
             if *op == "and" {
                 // False lhs skips evaluation of the rhs completely.
                 let rhs = emit_condition(program, right, locals, depth + 1)?;
@@ -352,12 +361,15 @@ fn emit_condition<'a>(
             }
             let dest = program.registers;
             program.registers += 1;
-            emit_instruction(program, Instruction::Compare {
-                dest,
-                lhs,
-                rhs,
-                operation,
-            })?;
+            emit_instruction(
+                program,
+                Instruction::Compare {
+                    dest,
+                    lhs,
+                    rhs,
+                    operation,
+                },
+            )?;
             Ok(dest)
         }
         _ => {
@@ -451,10 +463,13 @@ fn emit_merge_copies<'a>(
             .and_then(|scope| scope.get(name))
             .ok_or(Error::InvalidBytecode)?
             .register;
-        emit_instruction(program, Instruction::MergeCopy {
-            dest,
-            input: source,
-        })?;
+        emit_instruction(
+            program,
+            Instruction::MergeCopy {
+                dest,
+                input: source,
+            },
+        )?;
     }
     Ok(())
 }
@@ -634,10 +649,13 @@ fn compile_statements<'a>(
                 for (condition, body) in branches {
                     let guard = emit_condition(program, condition, scopes, 0)?;
                     let branch_at = program.code.len();
-                    emit_instruction(program, Instruction::BranchIfFalse {
-                        condition: guard,
-                        target: usize::MAX,
-                    })?;
+                    emit_instruction(
+                        program,
+                        Instruction::BranchIfFalse {
+                            condition: guard,
+                            target: usize::MAX,
+                        },
+                    )?;
                     let mut branch_scopes = scopes.clone();
                     branch_scopes.push(HashMap::new());
                     let returned =
