@@ -505,9 +505,13 @@ fn compile_statements<'a>(
                         condition: guard,
                         target: usize::MAX,
                     });
-                    scopes.push(HashMap::new());
-                    let returned = compile_statements(body, program, scopes, depth + 1)?;
-                    scopes.pop();
+                    // A returning arm never rejoins its sibling or the
+                    // following block. Do not let its compile-time local
+                    // rebindings leak into the false branch.
+                    let mut branch_scopes = scopes.clone();
+                    branch_scopes.push(HashMap::new());
+                    let returned =
+                        compile_statements(body, program, &mut branch_scopes, depth + 1)?;
                     if returned.is_none() {
                         return Err(Error::Unsupported(
                             "integer if arms must all return a value".into(),
@@ -520,9 +524,10 @@ fn compile_statements<'a>(
                     };
                 }
                 if let Some(else_body) = else_branch {
-                    scopes.push(HashMap::new());
-                    let final_return = compile_statements(else_body, program, scopes, depth + 1)?;
-                    scopes.pop();
+                    let mut branch_scopes = scopes.clone();
+                    branch_scopes.push(HashMap::new());
+                    let final_return =
+                        compile_statements(else_body, program, &mut branch_scopes, depth + 1)?;
                     if final_return.is_none() {
                         return Err(Error::Unsupported(
                             "integer if arms must all return a value".into(),
@@ -937,6 +942,29 @@ mod tests {
             "if false then return 5 elseif true then local x=6 end; return 9",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
+        }
+    }
+
+    #[test]
+    fn register_returning_branches_do_not_leak_bindings_into_other_paths() {
+        for (source, expected) in [
+            ("local x=4; if false then x=9; return x else return x end", 4),
+            ("local x=4; if true then x=9; return x else return x end", 9),
+            ("local x=4; if false then x=9; return x end; return x", 4),
+            ("local x=4; if true then x=9; return x end; return x", 9),
+            ("local x=4; if false then x=9; return x elseif true then return x end; return 1", 4),
+            ("local x=4; if true then x=9; return x elseif true then return x end; return 1", 9),
+            ("local x=2; if false then x=5; return x elseif true then x=7; return x else return x end", 7),
+            ("local x=2; if false then x=5; return x elseif false then x=7; return x else return x end", 2),
+            ("local x=2; if true then x=5; return x elseif true then x=7; return x else return x end", 5),
+            ("local x=2; if false then x=5; return x else do local x=9; return x end end", 9),
+            ("local x=2; if false then x=5; return x else return x+6 end", 8),
+            ("local x=2; if false then x=5; return x end; do x=x+3 end; return x", 5),
+            ("local x=2; do if false then x=10; return x end end; return x", 2),
+            ("local x=2; do if true then x=10; return x end end; return x", 10),
+        ] {
+            let program = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
         }
     }
 

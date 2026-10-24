@@ -277,6 +277,54 @@ fn integer_register_guard_clauses_match_fer_and_lua54() {
 }
 
 #[test]
+fn register_branch_bindings_match_reference_interpreters() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("local x=4; if false then x=9; return x else return x end", 4),
+        ("local x=4; if true then x=9; return x else return x end", 9),
+        ("local x=4; if false then x=9; return x end; return x", 4),
+        ("local x=4; if true then x=9; return x end; return x", 9),
+        ("local x=4; if false then x=9; return x elseif true then return x end; return 1", 4),
+        ("local x=4; if true then x=9; return x elseif true then return x end; return 1", 9),
+        ("local x=2; if false then x=5; return x elseif true then x=7; return x else return x end", 7),
+        ("local x=2; if false then x=5; return x elseif false then x=7; return x else return x end", 2),
+        ("local x=2; if true then x=5; return x elseif true then x=7; return x else return x end", 5),
+        ("local x=2; if false then x=5; return x else do local x=9; return x end end", 9),
+        ("local x=2; if false then x=5; return x else return x+6 end", 8),
+        ("local x=2; if false then x=5; return x end; do x=x+3 end; return x", 5),
+        ("local x=2; do if false then x=10; return x end end; return x", 2),
+        ("local x=2; do if true then x=10; return x end end; return x", 10),
+    ] {
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        let code = format!("print((function() {source} end)())");
+        for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if binary == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(binary);
+            if binary != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                expected.to_string(),
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
 fn numeric_truthiness_guard_matrix_matches_production_and_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
