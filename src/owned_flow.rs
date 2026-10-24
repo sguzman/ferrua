@@ -2099,10 +2099,15 @@ impl Execution<'_> {
             Value::Nil => self.intern_string(b"nil".to_vec())?,
             Value::Table(handle) => {
                 if let Some(method) = self.metatable_field(handle, b"__tostring")? {
-                    let Value::Function(callback) = method else {
-                        return Err(FlowError::TypeError);
-                    };
-                    let returned = self.call_owned_function(callback, &[value])?;
+                    // Lua invokes __tostring as a normal callable value.
+                    // Bound the host frame even for self-referential builtins.
+                    if self.depth >= MAX_CALL_DEPTH {
+                        return Err(FlowError::CallDepthExceeded);
+                    }
+                    self.depth += 1;
+                    let result = self.protected_target(method, &[value]);
+                    self.depth -= 1;
+                    let returned = result?;
                     match returned.first().copied().unwrap_or(Value::Nil) {
                         Value::String(index) => Value::String(index),
                         Value::Integer(number) => {
@@ -4161,6 +4166,37 @@ mod tests {
             "local t={}; local ok,e=pcall(rawset,t,1,5); return ok and e==t and t[1]==5 and 1 or 0",
         ] {
             assert_eq!(evaluate(source), 1, "{source}");
+        }
+    }
+
+    #[test]
+    fn callable_tostring_metamethods_and_builtin_callbacks_are_bounded() {
+        for source in [
+            "local h=setmetatable({name='hi'},{__call=function(self,t) return self.name end}); local t=setmetatable({},{__tostring=h}); local ok,v=pcall(tostring,t); return ok and v=='hi' and 1 or 0",
+            "local h=setmetatable({},{__call=function(_,t) return 7 end}); local t=setmetatable({},{__tostring=h}); return tostring(t)=='7' and 1 or 0",
+            "local h=setmetatable({},{__call=function(_,t) return 2.5 end}); local t=setmetatable({},{__tostring=h}); local ok,v=pcall(tostring,t); return ok and v=='2.5' and 1 or 0",
+            "local inner=setmetatable({},{__call=function(_,h,t) return h.name end}); local h=setmetatable({name='ok'},{__call=inner}); local t=setmetatable({},{__tostring=h}); return tostring(t)=='ok' and 1 or 0",
+            "local t=setmetatable({},{__tostring=type}); local ok,v=pcall(tostring,t); return ok and v=='table' and 1 or 0",
+            "local t=setmetatable({},{__tostring=function() return 'first', 'extra' end}); return tostring(t)=='first' and 1 or 0",
+            "local h=setmetatable({},{__call=function() return false end}); local t=setmetatable({},{__tostring=h}); local ok,e=pcall(tostring,t); return not ok and type(e)=='string' and 1 or 0",
+            "local h=setmetatable({},{__call=function() return nil end}); local t=setmetatable({},{__tostring=h}); local ok,e=pcall(tostring,t); return not ok and type(e)=='string' and 1 or 0",
+            "local t=setmetatable({},{__tostring=error}); local ok,e=pcall(tostring,t); return not ok and rawequal(e,t) and 1 or 0",
+            "local h=setmetatable({},{__call=function() error(15) end}); local t=setmetatable({},{__tostring=h}); local ok,e=pcall(tostring,t); return not ok and e==15 and 1 or 0",
+            "local t=setmetatable({},{__tostring=type}); local ok,v=xpcall(error,tostring,t); return not ok and v=='table' and 1 or 0",
+            "local t=setmetatable({},{__tostring=9}); local ok,e=pcall(tostring,t); return not ok and type(e)=='string' and 1 or 0",
+        ] {
+            assert_eq!(evaluate(source), 1, "{source}");
+        }
+        for source in [
+            "local t={}; setmetatable(t,{__tostring=tostring}); return pcall(tostring,t)",
+            "local method={}; setmetatable(method,{__call=method}); local t=setmetatable({}, {__tostring=method}); return pcall(tostring,t)",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::CallDepthExceeded),
+                "{source}"
+            );
         }
     }
 
