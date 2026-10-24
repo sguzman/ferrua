@@ -116,3 +116,27 @@ fn generated_lexical_environment_closure_cases_match_lua54() {
         assert_parity(&source, true);
     }
 }
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
