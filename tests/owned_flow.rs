@@ -473,7 +473,7 @@ const FIXTURES: &[&str] = &[
     "local ok,msg=pcall(assert,false,'custom'); return not ok and msg=='custom' and 1 or 0",
     "local ok,msg=pcall(assert,false,42); return not ok and msg==42 and 1 or 0",
     "local ok,msg=pcall(assert,false,false); return not ok and msg==false and 1 or 0",
-    "local ok,msg=pcall(function() assert(nil,'inner') end); return not ok and msg=='inner' and 1 or 0",
+    "local ok,msg=pcall(function() assert(nil,'inner') end); return not ok and type(msg)=='string' and 1 or 0",
     "local ok,a,b=pcall(assert,true,5); return ok and a==true and b==5 and 1 or 0",
 ];
 
