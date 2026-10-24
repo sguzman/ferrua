@@ -3694,6 +3694,33 @@
                   "evidence": "GitHub Actions 40120416624: all five jobs passed documentation, machine ledger and generated roadmap"
                 }
               ]
+            },
+            {
+              "id": "T420",
+              "emoji": "📜",
+              "name": "Propagate nested do-block integer returns in first-party register VM",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Compile one integer return inside nested do/end blocks and propagate its register through outer scopes without emitting unreachable instructions",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: compile_statements propagates nested return register and stops later static lowering"
+                },
+                {
+                  "text": "Cover nested scopes, shadowed integer locals, early returns, bitwise expressions and rejection of unsupported noninteger return values",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: nested_do_blocks_propagate_integer_returns_and_skip_unreachable_code"
+                },
+                {
+                  "text": "Compare nested returns with pinned production fer and upstream Lua 5.4 and pass Rust 1.96, Linux, consumer CI",
+                  "passed": true,
+                  "evidence": "tests/owned_vm.rs: nested_integer_returns_match_production_and_upstream_lua; GitHub Actions 40120936256 five jobs green"
+                },
+                {
+                  "text": "Synchronize documentation, machine ledger and derived roadmap under CI acceptance",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4506,6 +4533,13 @@
           "name": "Cross-function Lua parser block recursion safety",
           "task_ids": [
             "T419"
+          ]
+        },
+        {
+          "emoji": "📜",
+          "name": "Register-VM nested integer return propagation",
+          "task_ids": [
+            "T420"
           ]
         }
       ]
