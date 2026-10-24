@@ -1038,9 +1038,8 @@ mod tests {
             let program = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
         }
-        for source in ["if true then return 7 end"] {
-            assert!(compile_integer_chunk(source).is_err(), "{source}");
-        }
+        let source = "if true then return 7 end";
+        assert!(compile_integer_chunk(source).is_err(), "{source}");
     }
 
     #[test]
