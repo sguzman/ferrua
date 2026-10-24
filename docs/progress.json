@@ -2656,18 +2656,18 @@
             {
               "id": "T381",
               "emoji": "📝",
-              "name": "Bounded Lua table __tostring callback and return validation",
+              "name": "Bounded Lua table __tostring callback and convertible return validation",
               "progress": 100,
               "checks": [
                 {
-                  "text": "Invoke first-party Lua __tostring closures with the original table and require a string result",
+                  "text": "Invoke first-party Lua __tostring closures with the original table, accepting string or numeric results",
                   "passed": true,
-                  "evidence": "src/owned_flow.rs: Builtin::ToString table dispatch"
+                  "evidence": "src/owned_flow.rs: Execution::tostring_builtin; CI 40047343376 verified native and protected paths"
                 },
                 {
-                  "text": "Test lexical captures, string-only returns, default stringification, depth limits and Lua 5.4 differential fixtures",
+                  "text": "Test captures, string/numeric returns, rejection of nil/Boolean, fallback, depth limits and upstream Lua 5.4 parity",
                   "passed": true,
-                  "evidence": "src/owned_flow.rs: tostring_metatable_hook_requires_string_and_bounds_recursive_calls; tests/owned_flow.rs"
+                  "evidence": "src/owned_flow.rs: tostring_metatable_hook_coerces_numeric_and_bounds_recursive_calls; tests/owned_flow.rs"
                 },
                 {
                   "text": "Pass Linux formatting/Clippy/Rust tests, Rust 1.96, action consumer and Lua 5.4 differential CI",
@@ -2964,6 +2964,33 @@
                   "text": "Synchronize owned-engine documentation, README, ledger and generated roadmap under passing CI",
                   "passed": true,
                   "evidence": "GitHub Actions 40046538133: all five jobs passed synced README, docs/OWNED_ENGINE.md, progress ledger and roadmap check"
+                }
+              ]
+            },
+            {
+              "id": "T394",
+              "emoji": "📝",
+              "name": "Shared protected tostring and Lua 5.4 numeric metamethod return coercion",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Unify protected and ordinary tostring execution with first-party __tostring callbacks",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::tostring_builtin used by protected_target and ordinary builtin dispatch"
+                },
+                {
+                  "text": "Accept string and numeric __tostring results, reject invalid types and preserve recursion/budget safeguards",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: protected_tostring_reuses_lua_metatable_callback_semantics and tostring_metatable_hook_coerces_numeric_and_bounds_recursive_calls"
+                },
+                {
+                  "text": "Pass production fer plus upstream Lua 5.4 differential parity, Linux quality/tests, Rust 1.96 and consumer acceptance",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40047343376 all five jobs green for commit 30cc8fc9d492dfdbf63946d737a75fdb441953ec"
+                },
+                {
+                  "text": "Synchronize corrected engine docs, README, machine ledger and generated roadmap in verified CI",
+                  "passed": false
                 }
               ]
             }
@@ -3509,7 +3536,7 @@
         },
         {
           "emoji": "📝",
-          "name": "Lua __tostring closures with validated string returns",
+          "name": "Lua __tostring closures with validated convertible returns",
           "task_ids": [
             "T381"
           ]
@@ -3596,6 +3623,13 @@
           "name": "Selected builtin protected calls",
           "task_ids": [
             "T393"
+          ]
+        },
+        {
+          "emoji": "📝",
+          "name": "Shared protected tostring and numeric __tostring parity",
+          "task_ids": [
+            "T394"
           ]
         }
       ]

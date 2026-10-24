@@ -506,10 +506,14 @@ The experimental owned VM's `pcall` can now invoke the existing first-party `typ
 
 Ten curated fixtures cover successful type and number conversion, invalid numeral returning nil, raw length, numeric raw equality, builtin error handlers and protected invalid arguments. [CI #40046376588](https://github.com/sguzman/ferrua/actions/runs/40046376588) passed Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential tests, Arch packaging, composite consumer and aggregate status.
 
-This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. `tostring` (including `__tostring`), `rawget`, `rawset`, `next`, `pairs`, `ipairs`, `pcall` and `xpcall` as nested builtin targets, arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.
+This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. `rawget`, `rawset`, `next`, `pairs`, `ipairs`, `pcall` and `xpcall` as nested builtin targets, arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.
 
 ### Lua 5.4 numeric __tostring callback returns
 
 The bounded owned VM now converts string and numeric `__tostring` callback results to Lua byte strings. This corrects an observed discrepancy: the earlier first-party VM rejected numeric returns, whereas both the pinned production `fer` backend and upstream Lua 5.4 accept them. The numeric case is restored to the shared differential suite, including integer and fractional returns. Boolean results remain an invalid callback return type. These behaviors are tested separately from the normal primitive `tostring` conversions and retain the existing bounded callback execution and recursion safeguards.
 
-The initial incorrect discrepancy classification was superseded by actual Lua reference output. This implementation and the corrected documentation are pending CI acceptance; no full standard-library conformance or owned-engine graduation is claimed.
+The initial incorrect discrepancy classification was superseded by actual Lua reference output. [CI #40047343376](https://github.com/sguzman/ferrua/actions/runs/40047343376) accepted corrected numeric coercion, native and protected regressions, Lua 5.4 differential parity and all release-safety jobs. No full standard-library conformance or owned-engine graduation is claimed.
+
+### Verified shared protected Lua tostring execution
+
+Ordinary `tostring` and protected `pcall(tostring, ...)` or `xpcall(error, tostring, ...)` use the same `Execution::tostring_builtin` dispatch. The first-party `__tostring` callback is evaluated once, with only its first result used. The bounded VM follows Lua 5.4 by allowing byte strings and numeric callback results converted to Lua byte strings, while rejecting nil and Boolean results. Metamethod recursion still respects the native-stack call-depth safeguard. [CI #40047343376](https://github.com/sguzman/ferrua/actions/runs/40047343376) passed all five acceptance jobs after correction of an earlier incorrect interpretation of the reference oracle. The production `fer` backend is unchanged.
