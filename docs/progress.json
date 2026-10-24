@@ -4091,7 +4091,7 @@
               "id": "T434",
               "emoji": "🚀",
               "name": "Strict opt-in first-party Lua CLI execution",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Run owned Lua 5.4 chunks, stdin, syntax checks and bounded budgets without falling back to luna-core",
@@ -4110,7 +4110,8 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check"
                 }
               ]
             },
@@ -4118,7 +4119,7 @@
               "id": "T435",
               "emoji": "🖨️",
               "name": "Bounded first-party Lua print output",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Execute first-class print with Lua tab/newline formatting and captured output before errors",
@@ -4137,7 +4138,8 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check"
                 }
               ]
             },
@@ -4145,7 +4147,7 @@
               "id": "T436",
               "emoji": "🧳",
               "name": "Mutable bounded Lua command-line arg table",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Provide lazily initialized shared writable arg[0..n] with -e and script path identity",
@@ -4164,7 +4166,8 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check"
                 }
               ]
             },
@@ -4172,7 +4175,7 @@
               "id": "T437",
               "emoji": "🌐",
               "name": "Late-bound shared mutable Lua globals",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Read missing globals as nil and let nested Lua calls observe runtime global writes",
@@ -4191,7 +4194,8 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check"
                 }
               ]
             },
@@ -4199,7 +4203,7 @@
               "id": "T438",
               "emoji": "📜",
               "name": "Global function definitions and Lua colon methods",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Lower named and dotted global function declarations into shared globals with method receiver forwarding",
@@ -4218,7 +4222,8 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check"
                 }
               ]
             },
@@ -4226,7 +4231,7 @@
               "id": "T439",
               "emoji": "🌍",
               "name": "Writable _G table and global-name coherency",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Expose _G._G and shared mutable table and direct identifier values",
@@ -4245,7 +4250,8 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check"
                 }
               ]
             },
@@ -4253,7 +4259,7 @@
               "id": "T440",
               "emoji": "🧪",
               "name": "End-to-end owned CLI versus Lua 5.4 differential matrix",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Exercise curated CLI success/error parity plus 48 deterministic combined global/branch cases",
@@ -4272,7 +4278,8 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check"
                 }
               ]
             },
@@ -4280,7 +4287,7 @@
               "id": "T441",
               "emoji": "🔐",
               "name": "Lexical _ENV redirection and captured environment parity",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Compile unresolved lexical identifiers and assignments through the visible _ENV table",
@@ -4299,6 +4306,34 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check"
+                }
+              ]
+            },
+            {
+              "id": "T442",
+              "emoji": "🗣️",
+              "name": "Preserve explicit Lua error values in the owned CLI",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Capture explicit string, integer, nil and Boolean Lua error objects before interpreter-local storage ends",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: FlowOutcome::error_text, execute_flow_capture_with_args; capture_preserves_explicit_lua_errors_and_prior_prints"
+                },
+                {
+                  "text": "Render meaningful CLI error details without losing output preceding a failure",
+                  "passed": true,
+                  "evidence": "src/main.rs: run_owned_source; tests/cli.rs: owned_cli_reports_original_explicit_error_values"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/tests, upstream Lua 5.4 differential, Rust 1.96, Arch archive smoke and action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40135554634: all five jobs passed on c0e6d9523e50e780d1d33f6864ab22f0ef21ffd1"
+                },
+                {
+                  "text": "Synchronize error compatibility docs, machine ledger, generated roadmap and README under passing CI",
                   "passed": false
                 }
               ]
@@ -5268,6 +5303,13 @@
           "name": "Lexical _ENV redirection and captured environment parity",
           "task_ids": [
             "T441"
+          ]
+        },
+        {
+          "emoji": "🗣️",
+          "name": "Original Lua error object preservation in owned CLI diagnostics",
+          "task_ids": [
+            "T442"
           ]
         }
       ]

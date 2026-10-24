@@ -40,7 +40,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [all five jobs passed on `788c55a`, including 72 generated global/environment CLI cases versus pinned upstream Lua 5.4, full Linux tests, Rust 1.96, Arch packaging and downstream action consumer](https://github.com/sguzman/ferrua/actions/runs/40135287744). Arch container tests do not establish native EndeavourOS/Hyprland QA. Complete owned-engine parity, a published stable release and native runtime graduation remain pending.
+**Latest verified CI:** [all five jobs green on `c0e6d95`, including bounded owned print and arguments, lexical `_ENV`, error-object diagnostics, 72 generated global/environment parity cases, Rust 1.96, Arch packaging and the downstream consumer](https://github.com/sguzman/ferrua/actions/runs/40135554634). Native EndeavourOS/Hyprland QA and stable owned-engine graduation remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 

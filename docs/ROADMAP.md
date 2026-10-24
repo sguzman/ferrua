@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 96%` across 170 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 171 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -736,46 +736,51 @@
   - [x] Check both clean output values and selected division-by-zero errors against production fer and pinned Lua 5.4 — tests/owned_vm_merge_edges.rs: explicit success and failure cases, reference stdout parsing and zero-division error attribution
   - [x] Pass five CI jobs: Rust 1.96, Linux quality/tests, upstream Lua differential, Arch installation smoke and downstream consumer — GitHub Actions 40130027003: all five jobs successful for de8ae68b17454f79fde42974d81928bd91b0312c
   - [x] Update README, owned-engine conformance documentation, machine ledger and derived roadmap under passing CI — GitHub Actions 40130258560: all five CI jobs passed updated README, docs/OWNED_ENGINE.md, machine progress and regenerated roadmap
-- 🚀 **T434** Strict opt-in first-party Lua CLI execution — `████████░░ 75%`
+- 🚀 **T434** Strict opt-in first-party Lua CLI execution — `██████████ 100%`
   - [x] Run owned Lua 5.4 chunks, stdin, syntax checks and bounded budgets without falling back to luna-core — src/main.rs: --engine=owned, run_owned_source, execute_owned; tests/cli.rs: owned_engine_opt_in_executes_only_the_first_party_subset
   - [x] Reject unsupported dialect/sandbox combinations and preserve production default — tests/cli.rs and src/main.rs: parse_explicit_first_party_engine_without_changing_default
   - [x] Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer — GitHub Actions 40132402892: all five jobs passed on the accepted implementation
-  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI
-- 🖨️ **T435** Bounded first-party Lua print output — `████████░░ 75%`
+  - [x] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI — GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check
+- 🖨️ **T435** Bounded first-party Lua print output — `██████████ 100%`
   - [x] Execute first-class print with Lua tab/newline formatting and captured output before errors — src/owned_flow.rs: Builtin::Print, print_builtin, FlowOutcome; tests/cli.rs: owned_print_matches_production_cli_and_preserves_prior_output_on_error
   - [x] Limit captured output to 64 KiB and preserve resource budgets inside protected calls — src/owned_flow.rs: print_emits_bounded_lua_tab_delimited_output; explicit TooLarge cap
   - [x] Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer — GitHub Actions 40133022798: all five jobs passed on the accepted implementation
-  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI
-- 🧳 **T436** Mutable bounded Lua command-line arg table — `████████░░ 75%`
+  - [x] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI — GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check
+- 🧳 **T436** Mutable bounded Lua command-line arg table — `██████████ 100%`
   - [x] Provide lazily initialized shared writable arg[0..n] with -e and script path identity — src/owned_flow.rs: argument_table and execute_flow_capture_with_args; tests/cli.rs: owned_arg_table_matches_production_cli_and_script_name
   - [x] Reject excess argv slots and oversized argument strings — src/owned_flow.rs: argument_table_is_lazy_shared_mutable_and_resource_bounded
   - [x] Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer — GitHub Actions 40133328233: all five jobs passed on the accepted implementation
-  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI
-- 🌐 **T437** Late-bound shared mutable Lua globals — `████████░░ 75%`
+  - [x] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI — GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check
+- 🌐 **T437** Late-bound shared mutable Lua globals — `██████████ 100%`
   - [x] Read missing globals as nil and let nested Lua calls observe runtime global writes — src/owned_flow.rs: ReadGlobal, PrepareGlobal and Execution::globals; tests/cli.rs: owned_global_mutation_and_late_binding_match_production_lua
   - [x] Allow replacing and restoring builtin globals without mutating production fer — src/owned_flow.rs: ordinary_globals_are_shared_across_calls_and_overrides_are_writable
   - [x] Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer — GitHub Actions 40133684877: all five jobs passed on the accepted implementation
-  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI
-- 📜 **T438** Global function definitions and Lua colon methods — `████████░░ 75%`
+  - [x] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI — GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check
+- 📜 **T438** Global function definitions and Lua colon methods — `██████████ 100%`
   - [x] Lower named and dotted global function declarations into shared globals with method receiver forwarding — src/owned_flow.rs: Statement::Function global branch; tests/cli.rs: owned_named_global_and_method_declarations_match_production
   - [x] Preserve recursive and forward global function lookup under the shared runtime environment — src/owned_flow.rs: global_and_dotted_function_declarations_share_late_bound_environment
   - [x] Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer — GitHub Actions 40133912837: all five jobs passed on the accepted implementation
-  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI
-- 🌍 **T439** Writable _G table and global-name coherency — `████████░░ 75%`
+  - [x] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI — GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check
+- 🌍 **T439** Writable _G table and global-name coherency — `██████████ 100%`
   - [x] Expose _G._G and shared mutable table and direct identifier values — src/owned_flow.rs: materialize_global_table and read_global; tests/cli.rs: owned_g_table_writes_and_metatable_reads_match_production
   - [x] Check global deletion, builtin override and bounded metatable reads — src/owned_flow.rs: global_environment_table_and_globals_share_mutable_identity
   - [x] Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer — GitHub Actions 40134287690: all five jobs passed on the accepted implementation
-  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI
-- 🧪 **T440** End-to-end owned CLI versus Lua 5.4 differential matrix — `████████░░ 75%`
+  - [x] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI — GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check
+- 🧪 **T440** End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
   - [x] Exercise curated CLI success/error parity plus 48 deterministic combined global/branch cases — tests/owned_cli_differential.rs: curated_global_function_print_and_error_semantics_match_lua54 and generated_branch_and_environment_interactions_match_lua54
   - [x] Run real production fer and pinned upstream Lua from dedicated reference CI — .github/workflows/ci.yml: Compare owned CLI interactions with upstream Lua; FERRUA_COMPARE_OWNED_WITH_LUA=1
   - [x] Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer — GitHub Actions 40134491004: all five jobs passed on the accepted implementation
-  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI
-- 🔐 **T441** Lexical _ENV redirection and captured environment parity — `████████░░ 75%`
+  - [x] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI — GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check
+- 🔐 **T441** Lexical _ENV redirection and captured environment parity — `██████████ 100%`
   - [x] Compile unresolved lexical identifiers and assignments through the visible _ENV table — src/owned_flow.rs: emit_global_read and emit_global_target; tests/cli.rs: owned_lexical_env_rebinding_matches_production_lua
   - [x] Compare 24 generated lexical environment closure scenarios against upstream Lua 5.4 — tests/owned_cli_differential.rs: generated_lexical_environment_closure_cases_match_lua54; FERRUA_COMPARE_OWNED_WITH_LUA=1
   - [x] Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer — GitHub Actions 40134992509: all five jobs passed on the accepted implementation
-  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI
+  - [x] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI — GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check
+- 🗣️ **T442** Preserve explicit Lua error values in the owned CLI — `████████░░ 75%`
+  - [x] Capture explicit string, integer, nil and Boolean Lua error objects before interpreter-local storage ends — src/owned_flow.rs: FlowOutcome::error_text, execute_flow_capture_with_args; capture_preserves_explicit_lua_errors_and_prior_prints
+  - [x] Render meaningful CLI error details without losing output preceding a failure — src/main.rs: run_owned_source; tests/cli.rs: owned_cli_reports_original_explicit_error_values
+  - [x] Pass Linux formatting/lint/tests, upstream Lua 5.4 differential, Rust 1.96, Arch archive smoke and action consumer — GitHub Actions 40135554634: all five jobs passed on c0e6d9523e50e780d1d33f6864ab22f0ef21ffd1
+  - [ ] Synchronize error compatibility docs, machine ledger, generated roadmap and README under passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -908,12 +913,13 @@
 - 🚧 Instruction-at-emission resource guarding — `██████████ 100%`
 - 🧪 Generated nested integer branch-path differential coverage — `██████████ 100%`
 - ⚠️ Generated selected/skipped branch error differential coverage — `██████████ 100%`
-- 🚀 Strict opt-in first-party Lua CLI execution — `████████░░ 75%`
-- 🖨️ Bounded first-party Lua print output — `████████░░ 75%`
-- 🧳 Mutable bounded Lua command-line arg table — `████████░░ 75%`
-- 🌐 Late-bound shared mutable Lua globals — `████████░░ 75%`
-- 📜 Global function definitions and Lua colon methods — `████████░░ 75%`
-- 🌍 Writable _G table and global-name coherency — `████████░░ 75%`
-- 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `████████░░ 75%`
-- 🔐 Lexical _ENV redirection and captured environment parity — `████████░░ 75%`
+- 🚀 Strict opt-in first-party Lua CLI execution — `██████████ 100%`
+- 🖨️ Bounded first-party Lua print output — `██████████ 100%`
+- 🧳 Mutable bounded Lua command-line arg table — `██████████ 100%`
+- 🌐 Late-bound shared mutable Lua globals — `██████████ 100%`
+- 📜 Global function definitions and Lua colon methods — `██████████ 100%`
+- 🌍 Writable _G table and global-name coherency — `██████████ 100%`
+- 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
+- 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
+- 🗣️ Original Lua error object preservation in owned CLI diagnostics — `████████░░ 75%`
 
