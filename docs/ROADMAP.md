@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 96%` across 119 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 96%` across 120 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -522,6 +522,10 @@
   - [x] Preserve explicit thrown Lua values through first-party message handlers, truncate handler results and keep hard VM limits uncatchable — src/owned_flow.rs: protected_target, protected_error_value, unprotectable_error and xpcall_runs_bounded_message_handlers_and_preserves_success_results
   - [x] Pass production fer and upstream Lua 5.4 differential parity for xpcall errors, protected multiple results and handler re-entry — tests/owned_flow.rs: twelve curated xpcall fixtures, including three handler-reentry cases; GitHub Actions 40044851537 five jobs succeeded
   - [x] Synchronize README, independent-engine documentation, machine ledger and generated roadmap in successful Linux CI — docs/OWNED_ENGINE.md, README.md, docs/progress.json, docs/ROADMAP.md; GitHub Actions 40044720754 passed all five jobs for synchronized docs and pending-ledger baseline
+- 📞 **T391** Bounded callable-table targets in Lua protected calls — `██████████ 100%`
+  - [x] Forward __call receiver and user arguments through bounded callable-table chains during pcall/xpcall target invocation — src/owned_flow.rs: Execution::protected_target resolves table-valued __call recursively without native-stack recursion; GitHub Actions 40045174135 passed full CI
+  - [x] Preserve successful multiple results and explicit protected failures while rejecting cyclic call chains under shared resource limits — src/owned_flow.rs: protected_calls_forward_callable_tables_and_enforce_redirect_limits; tests/owned_flow.rs: six callable-table differential fixtures
+  - [x] Pass Linux Rust tests, lint, Rust 1.96, composite consumer and upstream Lua 5.4 parity — GitHub Actions 40045174135: all five CI jobs succeeded for commit 13afe3046a6f2b4d67efd78de27e289bac663d42
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -611,4 +615,5 @@
 - 🧯 Explicit Lua error values and protected closure calls — `██████████ 100%`
 - 🗣️ Lua assertion error objects and default messages — `██████████ 100%`
 - 🛟 Lua xpcall bounded error handlers — `██████████ 100%`
+- 📞 Callable-table protected call targets — `██████████ 100%`
 

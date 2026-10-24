@@ -2887,6 +2887,29 @@
                   "evidence": "docs/OWNED_ENGINE.md, README.md, docs/progress.json, docs/ROADMAP.md; GitHub Actions 40044720754 passed all five jobs for synchronized docs and pending-ledger baseline"
                 }
               ]
+            },
+            {
+              "id": "T391",
+              "emoji": "📞",
+              "name": "Bounded callable-table targets in Lua protected calls",
+              "progress": 100,
+              "checks": [
+                {
+                  "text": "Forward __call receiver and user arguments through bounded callable-table chains during pcall/xpcall target invocation",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::protected_target resolves table-valued __call recursively without native-stack recursion; GitHub Actions 40045174135 passed full CI"
+                },
+                {
+                  "text": "Preserve successful multiple results and explicit protected failures while rejecting cyclic call chains under shared resource limits",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: protected_calls_forward_callable_tables_and_enforce_redirect_limits; tests/owned_flow.rs: six callable-table differential fixtures"
+                },
+                {
+                  "text": "Pass Linux Rust tests, lint, Rust 1.96, composite consumer and upstream Lua 5.4 parity",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40045174135: all five CI jobs succeeded for commit 13afe3046a6f2b4d67efd78de27e289bac663d42"
+                }
+              ]
             }
           ]
         }
@@ -3496,6 +3519,13 @@
           "name": "Lua xpcall bounded error handlers",
           "task_ids": [
             "T390"
+          ]
+        },
+        {
+          "emoji": "📞",
+          "name": "Callable-table protected call targets",
+          "task_ids": [
+            "T391"
           ]
         }
       ]
