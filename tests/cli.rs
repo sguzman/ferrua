@@ -421,3 +421,20 @@ fn owned_lexical_env_rebinding_matches_production_lua() {
         assert_eq!(owned.stdout, production.stdout);
     }
 }
+
+#[test]
+fn owned_cli_reports_original_explicit_error_values() {
+    for (source, marker, prior_stdout) in [
+        ("print('before'); error('failure detail')", "failure detail", "before\n"),
+        ("assert(false, 'assertion detail')", "assertion detail", ""),
+        ("error(42)", "42", ""),
+        ("error(nil)", "error object is a nil value", ""),
+    ] {
+        let output = fer(&["--engine=owned", "-e", source]);
+        assert!(!output.status.success(), "{source}");
+        assert_eq!(output.stdout, prior_stdout.as_bytes(), "{source}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(marker), "{source}: {stderr}");
+    }
+}
+
