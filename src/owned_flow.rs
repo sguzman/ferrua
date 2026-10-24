@@ -1630,6 +1630,8 @@ struct Execution<'a> {
     steps: usize,
     depth: usize,
     tables: Vec<TableStorage>,
+    free_tables: Vec<usize>,
+    retired_tables: HashSet<usize>,
     table_cells: usize,
     closures: Vec<Closure>,
     cells: Vec<Option<Value>>,
@@ -1735,6 +1737,100 @@ impl Execution<'_> {
         Ok(())
     }
 
+    /// Root-frame-only bounded mark-and-sweep for table cycles.
+    /// Suspended nested Lua stacks are not available to the collector.
+    fn collect_root_tables(
+        &mut self, stack: &[Value], slots: &[usize], prepared: &[PendingTarget],
+    ) -> Result<(), FlowError> {
+        if self.depth != 0 || self.frame_allocations.len() != 1 {
+            return Ok(());
+        }
+        let mut marked_tables = vec![false; self.tables.len()];
+        let mut marked_closures = vec![false; self.closures.len()];
+        let mut work = stack.to_vec();
+        for &cell in slots {
+            if let Some(Some(value)) = self.cells.get(cell) {
+                work.push(*value);
+            }
+        }
+        work.extend(self.globals.values().copied());
+        for target in prepared {
+            if let PendingTarget::Indexed { table, key } = *target {
+                work.push(Value::Table(table));
+                if let TableKey::Hashed(key) = key { work.push(key); }
+            }
+        }
+        for handle in [self.arg_handle, self.global_table, self.math_table]
+            .into_iter().flatten()
+        {
+            work.push(Value::Table(handle));
+        }
+        while let Some(value) = work.pop() {
+            if self.steps >= self.budget {
+                return Err(FlowError::StepBudgetExceeded);
+            }
+            self.steps += 1;
+            match value {
+                Value::Table(handle) => {
+                    let marked = marked_tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
+                    if *marked { continue; }
+                    if self.retired_tables.contains(&handle) {
+                        return Err(FlowError::InvalidBytecode);
+                    }
+                    let table = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                    *marked = true;
+                    if let Some(meta) = table.metatable {
+                        work.push(Value::Table(meta));
+                    }
+                    work.extend(table.array.iter().flatten().copied());
+                    for (&key, &value) in &table.hashed {
+                        work.push(key);
+                        work.push(value);
+                    }
+                }
+                Value::Function(handle) => {
+                    let marked = marked_closures.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
+                    if *marked { continue; }
+                    *marked = true;
+                    let closure = self.closures.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                    for &(_, cell) in &closure.captures {
+                        if let Some(Some(value)) = self.cells.get(cell) {
+                            work.push(*value);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Sweep only after all roots have been traced within the budget.
+        for (handle, live) in marked_tables.into_iter().enumerate() {
+            if !live && !self.retired_tables.contains(&handle) {
+                let table = &mut self.tables[handle];
+                self.table_cells -= table.array.len() + table.hashed.len();
+                *table = TableStorage {
+                    array: Vec::new(), hashed: HashMap::new(), metatable: None,
+                };
+                self.retired_tables.insert(handle);
+                self.free_tables.push(handle);
+            }
+        }
+        Ok(())
+    }
+
+    fn insert_table(&mut self, table: TableStorage) -> Result<usize, FlowError> {
+        if let Some(handle) = self.free_tables.pop() {
+            if !self.retired_tables.remove(&handle) {
+                return Err(FlowError::InvalidBytecode);
+            }
+            *self.tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)? = table;
+            return Ok(handle);
+        }
+        if self.tables.len() >= MAX_TABLES { return Err(FlowError::TooLarge); }
+        let handle = self.tables.len();
+        self.tables.push(table);
+        Ok(handle)
+    }
+
     /// A small first-party Lua 5.4 numeric library. Unsupported math
     /// functions remain absent rather than falling back to another runtime.
     fn math_builtin(&mut self, builtin: Builtin, args: &[Value]) -> Result<Value, FlowError> {
@@ -1817,12 +1913,11 @@ impl Execution<'_> {
         if self.tables.len() >= MAX_TABLES {
             return Err(FlowError::TooLarge);
         }
-        let handle = self.tables.len();
-        self.tables.push(TableStorage {
+        let handle = self.insert_table(TableStorage {
             array: Vec::new(),
             hashed: HashMap::new(),
             metatable: None,
-        });
+        })?;
         self.math_table = Some(handle);
         for &(name, builtin) in MATH_GLOBALS {
             let key = self.intern_string(name.to_vec())?;
@@ -1852,12 +1947,11 @@ impl Execution<'_> {
         if self.tables.len() >= MAX_TABLES {
             return Err(FlowError::TooLarge);
         }
-        let handle = self.tables.len();
-        self.tables.push(TableStorage {
+        let handle = self.insert_table(TableStorage {
             array: Vec::new(),
             hashed: HashMap::new(),
             metatable: None,
-        });
+        })?;
         self.global_table = Some(handle);
         for &(name, builtin) in BUILTIN_GLOBALS {
             let key = self.intern_string(name.to_vec())?;
@@ -1922,12 +2016,11 @@ impl Execution<'_> {
             return Err(FlowError::TooLarge);
         }
         let name = self.intern_string(self.script_name.as_bytes().to_vec())?;
-        let handle = self.tables.len();
-        self.tables.push(TableStorage {
+        let handle = self.insert_table(TableStorage {
             array: Vec::new(),
             hashed: HashMap::new(),
             metatable: None,
-        });
+        })?;
         self.write_table(handle, TableKey::Hashed(Value::Integer(0)), name)?;
         for (index, argument) in self.script_args.iter().enumerate() {
             let text = self.intern_string(argument.as_bytes().to_vec())?;
@@ -3438,23 +3531,28 @@ impl Execution<'_> {
                     } else {
                         *count
                     };
-                    if arity > MAX_TABLE_FIELDS
-                        || self.tables.len() >= MAX_TABLES
+                    if arity > MAX_TABLE_FIELDS || stack.len() < arity {
+                        return Err(FlowError::TooLarge);
+                    }
+                    if (self.tables.len() >= MAX_TABLES && self.free_tables.is_empty())
                         || self.table_cells.saturating_add(arity) > MAX_TABLE_CELLS_TOTAL
-                        || stack.len() < arity
+                    {
+                        self.collect_root_tables(&stack, &slots, &prepared)?;
+                    }
+                    if (self.tables.len() >= MAX_TABLES && self.free_tables.is_empty())
+                        || self.table_cells.saturating_add(arity) > MAX_TABLE_CELLS_TOTAL
                     {
                         return Err(FlowError::TooLarge);
                     }
                     let values = stack.split_off(stack.len() - arity);
-                    let handle = self.tables.len();
-                    self.tables.push(TableStorage {
+                    let handle = self.insert_table(TableStorage {
                         array: values
                             .into_iter()
                             .map(|value| (value != Value::Nil).then_some(value))
                             .collect(),
                         hashed: HashMap::new(),
                         metatable: None,
-                    });
+                    })?;
                     self.table_cells += arity;
                     stack.push(Value::Table(handle));
                 }
@@ -3826,6 +3924,8 @@ pub fn execute_flow_capture_with_args<'a>(
         steps: 0,
         depth: 0,
         tables: Vec::new(),
+        free_tables: Vec::new(),
+        retired_tables: HashSet::new(),
         table_cells: 0,
         closures: Vec::new(),
         cells: Vec::new(),
@@ -7198,6 +7298,26 @@ mod tests {
         let huge = vec!["x".repeat(MAX_STRING_POOL_BYTES + 1)];
         let outcome = execute_flow_capture_with_args(&program, 1000, "script.lua", &huge);
         assert_eq!(outcome.result, Err(FlowError::TooLarge));
+    }
+
+    #[test]
+    fn root_table_collector_reuses_unreachable_cycles_and_keeps_live_tables() {
+        let program = compile_flow_chunk(
+            "local keep={value=42}; keep.self=keep; for i=1,17000 do local t={}; t.self=t end; print(keep.value,keep.self==keep)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 1_000_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"42\ttrue\n");
+
+        let program = compile_flow_chunk(
+            "local keep={}; for i=1,17000 do keep[i]={} end; print('unexpected')",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_capture(&program, 1_000_000).result,
+            Err(FlowError::TooLarge)
+        );
     }
 
     #[test]
