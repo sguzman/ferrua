@@ -292,6 +292,33 @@ impl<'a> Compiler<'a> {
             .ok_or_else(|| FlowError::Unsupported(format!("global or unbound variable: {name}")))
     }
 
+    /// Lua 5.4 resolves an unbound identifier through the nearest lexical
+    /// _ENV, if any. Otherwise use the execution's default environment.
+    fn emit_global_read(&mut self, name: &str) -> Result<(), FlowError> {
+        let key = self.intern_bytes(name.as_bytes().to_vec())?;
+        if let Ok(slot) = self.slot("_ENV") {
+            self.push(Op::ReadLocal(slot))?;
+            self.push(Op::Constant(Value::String(key)))?;
+            self.push(Op::GetTable)?;
+        } else {
+            self.push(Op::ReadGlobal(key))?;
+        }
+        Ok(())
+    }
+
+    /// Prepare a table address before computing the assignment's RHS.
+    fn emit_global_target(&mut self, name: &str) -> Result<(), FlowError> {
+        let key = self.intern_bytes(name.as_bytes().to_vec())?;
+        if let Ok(slot) = self.slot("_ENV") {
+            self.push(Op::ReadLocal(slot))?;
+            self.push(Op::Constant(Value::String(key)))?;
+            self.push(Op::PrepareIndexed)?;
+        } else {
+            self.push(Op::PrepareGlobal(key))?;
+        }
+        Ok(())
+    }
+
     fn compile_function(
         &mut self,
         parameters: &[&'a str],
@@ -506,12 +533,7 @@ impl<'a> Compiler<'a> {
                         Ok(slot) => {
                             self.push(Op::ReadLocal(slot))?;
                         }
-                        Err(_) => {
-                            // Resolve globals at execution time so function
-                            // calls observe mutations, including overwritten builtins.
-                            let key = self.intern_bytes(text.as_bytes().to_vec())?;
-                            self.push(Op::ReadGlobal(key))?;
-                        }
+                        Err(_) => self.emit_global_read(text)?,
                     }
                 }
             }
@@ -834,8 +856,7 @@ impl<'a> Compiler<'a> {
                         if let Ok(slot) = self.slot(name) {
                             self.push(Op::ReadLocal(slot))?;
                         } else {
-                            let key = self.intern_bytes(name.as_bytes().to_vec())?;
-                            self.push(Op::ReadGlobal(key))?;
+                            self.emit_global_read(name)?;
                         }
                         let mut path = fields.clone();
                         if let Some(method) = method {
@@ -878,8 +899,7 @@ impl<'a> Compiler<'a> {
                             self.slot(name).ok()
                         };
                         if slot.is_none() {
-                            let key = self.intern_bytes(name.as_bytes().to_vec())?;
-                            self.push(Op::PrepareGlobal(key))?;
+                            self.emit_global_target(name)?;
                         }
                         let function = self.compile_function(parameters, *vararg, body)?;
                         if *local {
@@ -948,8 +968,7 @@ impl<'a> Compiler<'a> {
                                     }
                                     self.push(Op::PrepareLocal(slot))?;
                                 } else {
-                                    let key = self.intern_bytes(name.as_bytes().to_vec())?;
-                                    self.push(Op::PrepareGlobal(key))?;
+                                    self.emit_global_target(name)?;
                                 }
                             }
                             Expr::Index { object, key } => {
@@ -1730,7 +1749,7 @@ impl Execution<'_> {
         if let Some(&value) = self.globals.get(&key) {
             return Ok(value);
         }
-        if name == b"_G" {
+        if name == b"_G" || name == b"_ENV" {
             let handle = self.materialize_global_table()?;
             return Ok(Value::Table(handle));
         }
@@ -6899,6 +6918,21 @@ mod tests {
                 Ok(program) => assert!(execute_flow_chunk(&program, 100).is_err(), "{source}"),
             }
         }
+    }
+
+    #[test]
+    fn lexical_env_redirects_global_reads_writes_and_nested_functions() {
+        let source = "local saved=_ENV; assert(saved==_G); local box={print=print,base=39}; do local _ENV=box; answer=base+3; function twice(x) return x*2 end; print(answer,twice(3)) end; assert(box.answer==42); assert(answer==nil)";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 5000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"42\t6\n");
+
+        let source = "local env={print=print,x=4}; do local _ENV=env; function read() return x end; x=9; print(read()) end; assert(env.read()==9); print(env.x)";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 5000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"9\n9\n");
     }
 
     #[test]

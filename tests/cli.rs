@@ -399,3 +399,25 @@ fn owned_g_table_writes_and_metatable_reads_match_production() {
     assert_eq!(owned.stdout, reference.stdout);
     assert_eq!(owned.stdout, b"17\n");
 }
+
+#[test]
+fn owned_lexical_env_rebinding_matches_production_lua() {
+    for source in [
+        "local saved=_ENV; assert(saved==_G); local box={print=print,base=39}; do local _ENV=box; answer=base+3; function twice(x) return x*2 end; print(answer,twice(3)) end; assert(box.answer==42); assert(answer==nil)",
+        "local env={print=print,x=4}; do local _ENV=env; function read() return x end; x=9; print(read()) end; assert(env.read()==9); print(env.x)",
+    ] {
+        let owned = fer(&["--engine=owned", "-e", source]);
+        let production = fer(&["--lua=5.4", "-e", source]);
+        assert!(
+            owned.status.success(),
+            "{}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, production.stdout);
+    }
+}

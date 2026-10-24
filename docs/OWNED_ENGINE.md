@@ -795,3 +795,7 @@ The owned compiler now lowers ordinary `function name(...) ... end` definitions 
 ### Materialized global environment table (experimental)
 
 On first access to `_G`, the owned VM constructs a bounded Lua table containing the available core functions, `arg`, `_VERSION`, and a self-reference. Earlier global assignments are applied to that same table. Once materialized, direct global lookups and assignments share table storage with `_G.key` indexing, using the supported `__index` and `__newindex` hooks. Assigning nil removes global fields, including first-party builtins. This is progress toward Lua's environment model but does not implement complete `_ENV` lexical rebinding, library loading or garbage collection.
+
+### Lexical _ENV reads and assignments (experimental)
+
+When a lexical local named `_ENV` is visible, the bounded owned compiler now lowers otherwise-unbound identifier reads to `_ENV[name]`, and prepared assignments to writes into that same table. Closure captures inherit the nearest lexical `_ENV`, allowing functions declared within the scope to observe later changes to that table. Without a lexical `_ENV`, global names continue to use the shared default environment; reading the default `_ENV` returns the default `_G` table. This does not yet guarantee complete Lua 5.4 environment semantics for arbitrary upvalue rebinding, module loading or all bytecode forms.
