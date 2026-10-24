@@ -3643,7 +3643,7 @@
               "id": "T418",
               "emoji": "🔗",
               "name": "Bound iterative left-associative and postfix Lua AST nesting",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Limit iterative Pratt operator chains and postfix field/index/call/method lowering before nested ASTs exhaust the Rust stack",
@@ -3662,7 +3662,8 @@
                 },
                 {
                   "text": "Synchronize README, parser depth documentation, ledger and generated roadmap with CI evidence",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40119966143: all five acceptance jobs passed synchronized docs, README, machine ledger and roadmap"
                 }
               ]
             }
