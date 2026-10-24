@@ -736,8 +736,9 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
                 pc = target;
                 continue;
             }
-            Instruction::BooleanCopy { dest, input }
-            | Instruction::MergeCopy { dest, input } => (dest, read(&registers, input)?),
+            Instruction::BooleanCopy { dest, input } | Instruction::MergeCopy { dest, input } => {
+                (dest, read(&registers, input)?)
+            }
             Instruction::NumericTruthy { dest, input } => {
                 read(&registers, input)?;
                 (dest, 1)
@@ -1037,9 +1038,7 @@ mod tests {
             let program = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
         }
-        for source in [
-            "if true then return 7 end",
-        ] {
+        for source in ["if true then return 7 end"] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
     }
@@ -1174,7 +1173,10 @@ mod tests {
             ("local x=1; if true then return 5 else x=2 end; return x", 5),
             ("local x=1; if true then x=2; do x=x+3 end end; return x", 5),
             ("local a,b=1,2; if true then a,b=b,a end; return a*10+b", 21),
-            ("local a,b=1,2; if false then a,b=b,a end; return a*10+b", 12),
+            (
+                "local a,b=1,2; if false then a,b=b,a end; return a*10+b",
+                12,
+            ),
             ("local x=1; if true then local x=5; x=6 end; return x", 1),
             ("local x=1; if false then x=2 else x=x+3 end; return x", 4),
             (
