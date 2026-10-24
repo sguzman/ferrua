@@ -5,9 +5,9 @@ use serde::Deserialize;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
-use std::process::{Command, Stdio};
 #[cfg(target_os = "linux")]
 use std::os::unix::process::CommandExt;
+use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -247,9 +247,8 @@ mod tests {
     #[test]
     fn inherited_background_pipes_cannot_outlive_the_timeout() {
         let start = Instant::now();
-        let response = run_serialized(
-            r#"{"program":"sh","args":["-c","sleep 8 &"],"timeout_ms":200}"#.into(),
-        );
+        let response =
+            run_serialized(r#"{"program":"sh","args":["-c","sleep 8 &"],"timeout_ms":200}"#.into());
         let decoded: Value = serde_json::from_str(&response).unwrap();
         assert_eq!(decoded["timed_out"], true, "{response}");
         assert_eq!(decoded["ok"], false, "{response}");
