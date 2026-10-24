@@ -2417,7 +2417,9 @@ impl Execution<'_> {
                         redirects += 1;
                     }
                     if let Value::Builtin(builtin) = callable {
-                        if args.is_empty() && !matches!(builtin, Builtin::Error | Builtin::Pcall | Builtin::Assert) {
+                        if args.is_empty()
+                            && !matches!(builtin, Builtin::Error | Builtin::Pcall | Builtin::Assert)
+                        {
                             return Err(FlowError::TypeError);
                         }
                         if builtin == Builtin::Error {
@@ -3929,13 +3931,34 @@ mod tests {
     #[test]
     fn assertion_failures_preserve_custom_error_values_in_pcall() {
         for (source, expected) in [
-            ("local ok,msg=pcall(assert,false); return not ok and msg=='assertion failed!' and 1 or 0", 1),
-            ("local ok,msg=pcall(assert); return not ok and type(msg)=='string' and 1 or 0", 1),
-            ("local ok,msg=pcall(assert,false,'custom'); return not ok and msg=='custom' and 1 or 0", 1),
-            ("local ok,msg=pcall(assert,false,42); return not ok and msg==42 and 1 or 0", 1),
-            ("local ok,msg=pcall(assert,false,false); return not ok and msg==false and 1 or 0", 1),
-            ("local ok,msg=pcall(function() assert(nil,'inner') end); return not ok and msg=='inner' and 1 or 0", 1),
-            ("local ok,a,b=pcall(assert,true,5); return ok and a==true and b==5 and 1 or 0", 1),
+            (
+                "local ok,msg=pcall(assert,false); return not ok and msg=='assertion failed!' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,msg=pcall(assert); return not ok and type(msg)=='string' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,msg=pcall(assert,false,'custom'); return not ok and msg=='custom' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,msg=pcall(assert,false,42); return not ok and msg==42 and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,msg=pcall(assert,false,false); return not ok and msg==false and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,msg=pcall(function() assert(nil,'inner') end); return not ok and msg=='inner' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,a,b=pcall(assert,true,5); return ok and a==true and b==5 and 1 or 0",
+                1,
+            ),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
