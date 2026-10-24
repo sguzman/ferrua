@@ -84,11 +84,14 @@ impl From<LexError> for ParseError {
     }
 }
 
+const MAX_EXPRESSION_DEPTH: usize = 64;
+
 struct Parser<'a> {
     tokens: Vec<Token<'a>>,
     index: usize,
     length: usize,
     eof_line: usize,
+    expression_depth: usize,
     loop_depth: usize,
     function_depth: usize,
     vararg_allowed: bool,
@@ -323,6 +326,18 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
     fn expression(&mut self, min_bp: u8) -> Result<Expr<'a>, ParseError> {
+        // A deep expression tree must fail as Lua syntax, not overflow the
+        // host Rust stack. Keep this separate from the block nesting limit.
+        if self.expression_depth >= MAX_EXPRESSION_DEPTH {
+            return Err(self.error("Lua expression nesting limit exceeded"));
+        }
+        self.expression_depth += 1;
+        let result = self.expression_inner(min_bp);
+        self.expression_depth -= 1;
+        result
+    }
+
+    fn expression_inner(&mut self, min_bp: u8) -> Result<Expr<'a>, ParseError> {
         let mut left = self.prefix()?;
         left = self.postfix(left)?;
         while let Some(op) = self.peek().map(|t| t.spelling) {
@@ -369,6 +384,7 @@ pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
         index: 0,
         length: source.len(),
         eof_line: source_eof_line(source),
+        expression_depth: 0,
         loop_depth: 0,
         function_depth: 0,
         vararg_allowed: true,
@@ -869,6 +885,7 @@ pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
         index: 0,
         length: source.len(),
         eof_line: source_eof_line(source),
+        expression_depth: 0,
         loop_depth: 0,
         function_depth: 0,
         vararg_allowed: true,
@@ -915,6 +932,36 @@ mod tests {
             Expr::Vararg => "...".to_owned(),
             Expr::Table(fields) => format!("(table {} fields)", fields.len()),
         }
+    }
+
+    #[test]
+    fn deeply_nested_expressions_fail_without_exhausting_host_stack() {
+        for source in [
+            format!("{}1{}", "(".repeat(200), ")".repeat(200)),
+            format!("{}1", "-".repeat(200)),
+            format!("{}1", "not ".repeat(200)),
+            "1^".repeat(200) + "1",
+            format!("return {}1{}", "{".repeat(200), "}".repeat(200)),
+        ] {
+            let error = if source.starts_with("return ") {
+                parse_chunk(&source).unwrap_err()
+            } else {
+                parse_expression(&source).unwrap_err()
+            };
+            assert_eq!(
+                error.message, "Lua expression nesting limit exceeded",
+                "{source}"
+            );
+        }
+        for count in [1, 8, 24] {
+            let source = format!("{}1{}", "(".repeat(count), ")".repeat(count));
+            assert!(parse_expression(&source).is_ok(), "{count}");
+        }
+        let source = format!("return {}1{}", "(".repeat(200), ")".repeat(200));
+        assert_eq!(
+            parse_chunk(&source).unwrap_err().message,
+            "Lua expression nesting limit exceeded"
+        );
     }
 
     #[test]
