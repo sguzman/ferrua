@@ -385,8 +385,9 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 ///
 /// Supports integer locals with initializers, parallel assignments to locals,
 /// nested do/end blocks, bounded integer/Boolean if/elseif/else branches
-/// with returning explicit arms, optional guard-clause fallthrough to a later
-/// integer return, and a single integer return from an active block.
+/// with return-only and local-only branches, guard-clause fallthrough,
+/// rejection of parent-binding updates across joins, and a single integer
+/// return from an active block.
 /// Calls, general truthiness, loops, globals, nil and closures remain unsupported.
 pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
@@ -400,6 +401,19 @@ pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
         .ok_or_else(|| Error::Unsupported("chunk requires one final return value".into()))?;
     program.result = value;
     Ok(program)
+}
+
+/// A non-returning conditional path can only rejoin the enclosing block
+/// if it does not change a parent local's static register binding.
+fn enclosing_bindings_changed<'a>(
+    before: &[HashMap<&'a str, RegisterBinding>],
+    branch: &[HashMap<&'a str, RegisterBinding>],
+) -> bool {
+    before.iter().zip(branch).any(|(original, updated)| {
+        original.iter().any(|(name, binding)| {
+            updated.get(name).is_none_or(|other| other.register != binding.register)
+        })
+    })
 }
 
 fn compile_statements<'a>(
@@ -495,9 +509,12 @@ fn compile_statements<'a>(
                 branches,
                 else_branch,
             } => {
-                // The explicit arms all return, so no live register state
-                // needs merging. Without an else, a false guard falls
-                // through to later statements in the enclosing block.
+                // Branches compile against independent binding snapshots.
+                // Non-returning arms may rejoin only when they leave every
+                // enclosing local binding unchanged; mutable joins require
+                // real register phi/merge instructions.
+                let mut exit_jumps = Vec::new();
+                let mut every_arm_returns = true;
                 for (condition, body) in branches {
                     let guard = emit_condition(program, condition, scopes, 0)?;
                     let branch_at = program.code.len();
@@ -505,17 +522,19 @@ fn compile_statements<'a>(
                         condition: guard,
                         target: usize::MAX,
                     });
-                    // A returning arm never rejoins its sibling or the
-                    // following block. Do not let its compile-time local
-                    // rebindings leak into the false branch.
                     let mut branch_scopes = scopes.clone();
                     branch_scopes.push(HashMap::new());
                     let returned =
                         compile_statements(body, program, &mut branch_scopes, depth + 1)?;
                     if returned.is_none() {
-                        return Err(Error::Unsupported(
-                            "integer if arms must all return a value".into(),
-                        ));
+                        if enclosing_bindings_changed(scopes, &branch_scopes) {
+                            return Err(Error::Unsupported(
+                                "conditional local updates need register-state joins".into(),
+                            ));
+                        }
+                        every_arm_returns = false;
+                        exit_jumps.push(program.code.len());
+                        program.code.push(Instruction::Jump { target: usize::MAX });
                     }
                     let target = program.code.len();
                     program.code[branch_at] = Instruction::BranchIfFalse {
@@ -523,16 +542,25 @@ fn compile_statements<'a>(
                         target,
                     };
                 }
-                if let Some(else_body) = else_branch {
+                let else_returns = if let Some(else_body) = else_branch {
                     let mut branch_scopes = scopes.clone();
                     branch_scopes.push(HashMap::new());
-                    let final_return =
+                    let returned =
                         compile_statements(else_body, program, &mut branch_scopes, depth + 1)?;
-                    if final_return.is_none() {
+                    if returned.is_none() && enclosing_bindings_changed(scopes, &branch_scopes) {
                         return Err(Error::Unsupported(
-                            "integer if arms must all return a value".into(),
+                            "conditional local updates need register-state joins".into(),
                         ));
                     }
+                    returned.is_some()
+                } else {
+                    false
+                };
+                let after = program.code.len();
+                for at in exit_jumps {
+                    program.code[at] = Instruction::Jump { target: after };
+                }
+                if every_arm_returns && else_returns {
                     result = Some(0);
                     break;
                 }
@@ -999,6 +1027,56 @@ mod tests {
             let program = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
         }
+    }
+
+    #[test]
+    fn integer_nonreturning_conditional_arms_merge_only_unmodified_bindings() {
+        for (source, expected) in [
+            ("if true then local tmp=3 end; return 9", 9),
+            ("if false then local tmp=1 end; return 8", 8),
+            ("local x=4; if x>2 then local y=x*3 end; return x+1", 5),
+            (
+                "if true then local t=1 elseif true then return 99 else return 1 end; return 4",
+                4,
+            ),
+            (
+                "if false then local t=1 elseif true then return 19 else return 1 end; return 4",
+                19,
+            ),
+            ("if false then local t=1 else local q=2 end; return 4", 4),
+            ("if true then return 2 else local q=3 end; return 4", 2),
+            ("if false then return 2 else local q=3 end; return 4", 4),
+            ("if true then local q=8 else return 9 end; return 4", 4),
+            ("if false then local q=8 else return 9 end; return 4", 9),
+            (
+                "local x=2; if false then local y=x+1 elseif true then local z=x*2 end; return x+5",
+                7,
+            ),
+            (
+                "local x=1; if true then local y=x+2 end; do x=x+7 end; return x",
+                8,
+            ),
+            ("if false and (1//0>0) then local x=8 end; return 3", 3),
+            ("if true or (1//0>0) then local y=3 end; return 12", 12),
+        ] {
+            let program = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        }
+        for source in [
+            "local x=1; if true then x=2 end; return x",
+            "local x=1; if false then x=2 else return 7 end; return x",
+            "local x=1; if false then return 7 else x=2 end; return x",
+            "if true then local a=1 end",
+        ] {
+            assert!(compile_integer_chunk(source).is_err(), "{source}");
+        }
+        let program = compile_integer_chunk("if true then local y=1//0 end; return 1").unwrap();
+        assert_eq!(
+            execute_integer_program(&program),
+            Err(Error::DivisionByZero)
+        );
+        let program = compile_integer_chunk("if false then local y=1//0 end; return 1").unwrap();
+        assert_eq!(execute_integer_program(&program), Ok(1));
     }
 
     #[test]
