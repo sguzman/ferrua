@@ -150,13 +150,28 @@ fn integer_conditional_branches_match_fer_and_upstream_lua() {
         ("if 4>=5 then return 8 else return 1 end", 1),
         ("if 4==4 then return 8 else return 1 end", 8),
         ("if 4~=4 then return 8 else return 1 end", 1),
-        ("if 1>2 then return 1 elseif 3<4 then return 17 else return 9 end", 17),
-        ("if 1>2 then return 1 elseif 4<3 then return 17 else return 9 end", 9),
-        ("local x=5; if x>3 then local y=x+2; return y else return 0 end", 7),
-        ("local x=5; if x<3 then return 0 else do return x+9 end end", 14),
+        (
+            "if 1>2 then return 1 elseif 3<4 then return 17 else return 9 end",
+            17,
+        ),
+        (
+            "if 1>2 then return 1 elseif 4<3 then return 17 else return 9 end",
+            9,
+        ),
+        (
+            "local x=5; if x>3 then local y=x+2; return y else return 0 end",
+            7,
+        ),
+        (
+            "local x=5; if x<3 then return 0 else do return x+9 end end",
+            14,
+        ),
         ("if true then do return 8 end else return 9 end", 8),
         ("if (4*2)==8 then return (5<<2)|3 else return 0 end", 23),
-        ("if 0==0 then if 3>=2 then return 19 else return 2 end else return 7 end", 19),
+        (
+            "if 0==0 then if 3>=2 then return 19 else return 2 end else return 7 end",
+            19,
+        ),
     ] {
         let bytecode = compile_integer_chunk(source).unwrap();
         assert_eq!(execute_integer_program(&bytecode), Ok(expected), "{source}");
@@ -165,7 +180,11 @@ fn integer_conditional_branches_match_fer_and_upstream_lua() {
             .args(["--lua=5.4", "-e", &code])
             .output()
             .unwrap();
-        assert!(production.status.success(), "{source}: {}", String::from_utf8_lossy(&production.stderr));
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
         assert_eq!(
             String::from_utf8_lossy(&production.stdout).trim(),
             expected.to_string(),
@@ -173,7 +192,11 @@ fn integer_conditional_branches_match_fer_and_upstream_lua() {
         );
         if compare_upstream {
             let upstream = Command::new("lua5.4").args(["-e", &code]).output().unwrap();
-            assert!(upstream.status.success(), "{source}: {}", String::from_utf8_lossy(&upstream.stderr));
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
             assert_eq!(
                 String::from_utf8_lossy(&upstream.stdout).trim(),
                 expected.to_string(),

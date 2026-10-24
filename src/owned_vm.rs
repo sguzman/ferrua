@@ -8,19 +8,68 @@ const MAX_REGISTERS: usize = 16384;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Instruction {
-    Load { dest: usize, value: i64 },
-    Neg { dest: usize, input: usize },
-    Add { dest: usize, lhs: usize, rhs: usize },
-    Sub { dest: usize, lhs: usize, rhs: usize },
-    Mul { dest: usize, lhs: usize, rhs: usize },
-    FloorDiv { dest: usize, lhs: usize, rhs: usize },
-    Mod { dest: usize, lhs: usize, rhs: usize },
-    BitAnd { dest: usize, lhs: usize, rhs: usize },
-    BitOr { dest: usize, lhs: usize, rhs: usize },
-    BitXor { dest: usize, lhs: usize, rhs: usize },
-    BitNot { dest: usize, input: usize },
-    Shl { dest: usize, lhs: usize, rhs: usize },
-    Shr { dest: usize, lhs: usize, rhs: usize },
+    Load {
+        dest: usize,
+        value: i64,
+    },
+    Neg {
+        dest: usize,
+        input: usize,
+    },
+    Add {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    Sub {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    Mul {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    FloorDiv {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    Mod {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    BitAnd {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    BitOr {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    BitXor {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    BitNot {
+        dest: usize,
+        input: usize,
+    },
+    Shl {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    Shr {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
     /// Conditional comparison values are internal boolean guard registers,
     /// not general integer-valued Lua expressions.
     Compare {
@@ -29,8 +78,13 @@ pub enum Instruction {
         rhs: usize,
         operation: CompareOperation,
     },
-    BranchIfFalse { condition: usize, target: usize },
-    Return { source: usize },
+    BranchIfFalse {
+        condition: usize,
+        target: usize,
+    },
+    Return {
+        source: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -673,13 +727,28 @@ mod tests {
             ("if 4>=5 then return 8 else return 1 end", 1),
             ("if 4==4 then return 8 else return 1 end", 8),
             ("if 4~=4 then return 8 else return 1 end", 1),
-            ("if 1>2 then return 1 elseif 3<4 then return 17 else return 9 end", 17),
-            ("if 1>2 then return 1 elseif 4<3 then return 17 else return 9 end", 9),
-            ("local x=5; if x>3 then local y=x+2; return y else return 0 end", 7),
-            ("local x=5; if x<3 then return 0 else do return x+9 end end", 14),
+            (
+                "if 1>2 then return 1 elseif 3<4 then return 17 else return 9 end",
+                17,
+            ),
+            (
+                "if 1>2 then return 1 elseif 4<3 then return 17 else return 9 end",
+                9,
+            ),
+            (
+                "local x=5; if x>3 then local y=x+2; return y else return 0 end",
+                7,
+            ),
+            (
+                "local x=5; if x<3 then return 0 else do return x+9 end end",
+                14,
+            ),
             ("if true then do return 8 end else return 9 end", 8),
             ("if (4*2)==8 then return (5<<2)|3 else return 0 end", 23),
-            ("if 0==0 then if 3>=2 then return 19 else return 2 end else return 7 end", 19),
+            (
+                "if 0==0 then if 3>=2 then return 19 else return 2 end else return 7 end",
+                19,
+            ),
         ] {
             let bytecode = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_integer_program(&bytecode), Ok(expected), "{source}");
@@ -696,36 +765,42 @@ mod tests {
         let invalid = Program {
             code: vec![
                 Instruction::Load { dest: 0, value: 1 },
-                Instruction::BranchIfFalse { condition: 0, target: 0 },
+                Instruction::BranchIfFalse {
+                    condition: 0,
+                    target: 0,
+                },
             ],
             registers: 1,
             result: 0,
         };
-        assert_eq!(execute_integer_program(&invalid), Err(Error::InvalidBytecode));
+        assert_eq!(
+            execute_integer_program(&invalid),
+            Err(Error::InvalidBytecode)
+        );
     }
 
     #[test]
     fn integer_register_locals_track_lua_const_attributes_and_shadowing() {
         for (source, expected) in [
-            ("local x<const>=3; return x+4", 7),
+            ("local x<const> =3; return x+4", 7),
             ("local a<const>,b=3,4; b=7; return a+b", 10),
-            ("local a,b<const>=1,2; a=7; return a+b", 9),
-            ("local x<const>=3; local x=x+2; x=9; return x", 9),
-            ("local x<const>=3; do local x=5; x=6 end; return x", 3),
-            ("local x<const>=3; do local x=4; return x end", 4),
-            ("local x=2; do local x<const>=x*3; return x+1 end", 7),
-            ("local x<const>=3; local y=x+4; return y", 7),
-            ("local x<const>=3; do local y=x+5; return y end", 8),
-            ("local x<const>=3; local y=2; y=x+y; return y", 5),
+            ("local a,b<const> =1,2; a=7; return a+b", 9),
+            ("local x<const> =3; local x=x+2; x=9; return x", 9),
+            ("local x<const> =3; do local x=5; x=6 end; return x", 3),
+            ("local x<const> =3; do local x=4; return x end", 4),
+            ("local x=2; do local x<const> =x*3; return x+1 end", 7),
+            ("local x<const> =3; local y=x+4; return y", 7),
+            ("local x<const> =3; do local y=x+5; return y end", 8),
+            ("local x<const> =3; local y=2; y=x+y; return y", 5),
         ] {
             let bytecode = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_integer_program(&bytecode), Ok(expected), "{source}");
         }
         for source in [
-            "local x<const>=3; x=4; return x",
-            "local x<const>=3; do x=4 end; return x",
-            "local a,b<const>=1,2; b=4; return a+b",
-            "local x<close>=3; return x",
+            "local x<const> =3; x=4; return x",
+            "local x<const> =3; do x=4 end; return x",
+            "local a,b<const> =1,2; b=4; return a+b",
+            "local x<close> =3; return x",
             "local x<const>; return 1",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
