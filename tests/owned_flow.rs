@@ -798,7 +798,11 @@ fn generated_grammar_fixtures() -> Vec<String> {
     let mut fixtures = Vec::with_capacity(PATTERNS.len() * 2);
     for number in [1, 3] {
         for pattern in PATTERNS {
-            fixtures.push(pattern.replace("$N", &number.to_string()).replace("$M", "2"));
+            fixtures.push(
+                pattern
+                    .replace("$N", &number.to_string())
+                    .replace("$M", "2"),
+            );
         }
     }
     fixtures
@@ -818,7 +822,11 @@ fn generated_invalid_grammar_fixtures() -> Vec<String> {
     let mut fixtures = Vec::with_capacity(PATTERNS.len() * 2);
     for number in [1, 3] {
         for pattern in PATTERNS {
-            fixtures.push(pattern.replace("$N", &number.to_string()).replace("$M", "2"));
+            fixtures.push(
+                pattern
+                    .replace("$N", &number.to_string())
+                    .replace("$M", "2"),
+            );
         }
     }
     fixtures
