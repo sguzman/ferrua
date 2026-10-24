@@ -92,6 +92,7 @@ struct Parser<'a> {
     length: usize,
     eof_line: usize,
     expression_depth: usize,
+    block_depth: usize,
     loop_depth: usize,
     function_depth: usize,
     vararg_allowed: bool,
@@ -406,6 +407,7 @@ pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
         length: source.len(),
         eof_line: source_eof_line(source),
         expression_depth: 0,
+        block_depth: 0,
         loop_depth: 0,
         function_depth: 0,
         vararg_allowed: true,
@@ -849,8 +851,22 @@ impl<'a> Parser<'a> {
         terminators: &[&str],
         depth: usize,
     ) -> Result<Vec<Statement<'a>>, ParseError> {
-        // A bounded parser also protects library users from deeply nested
-        // inputs that would otherwise exhaust the Rust stack.
+        // Function bodies can reset their lexical-block depth argument.
+        // Account for every recursive parser block, across that boundary.
+        if self.block_depth >= 64 {
+            return Err(self.error("Lua block nesting limit exceeded"));
+        }
+        self.block_depth += 1;
+        let result = self.block_inner(terminators, depth);
+        self.block_depth -= 1;
+        result
+    }
+
+    fn block_inner(
+        &mut self,
+        terminators: &[&str],
+        depth: usize,
+    ) -> Result<Vec<Statement<'a>>, ParseError> {
         if depth > 64 {
             return Err(self.error("Lua block nesting limit exceeded"));
         }
@@ -907,6 +923,7 @@ pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
         length: source.len(),
         eof_line: source_eof_line(source),
         expression_depth: 0,
+        block_depth: 0,
         loop_depth: 0,
         function_depth: 0,
         vararg_allowed: true,
@@ -1013,6 +1030,27 @@ mod tests {
             parse_chunk(&source).unwrap_err().message,
             "Lua expression nesting limit exceeded"
         );
+    }
+
+    #[test]
+    fn nested_function_body_blocks_share_host_stack_depth_budget() {
+        let deep = format!(
+            "{}return 1 {}",
+            "function f() ".repeat(120),
+            "end ".repeat(120)
+        );
+        assert_eq!(
+            parse_chunk(&deep).unwrap_err().message,
+            "Lua block nesting limit exceeded"
+        );
+        for depth in [1, 4, 12] {
+            let source = format!(
+                "{}return 1 {}",
+                "function f() ".repeat(depth),
+                "end ".repeat(depth)
+            );
+            assert!(parse_chunk(&source).is_ok(), "{depth}");
+        }
     }
 
     #[test]
