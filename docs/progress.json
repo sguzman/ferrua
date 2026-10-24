@@ -4337,6 +4337,33 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T443",
+              "emoji": "♻️",
+              "name": "Bounded root-frame cyclic Lua table reclamation",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Trace reachable tables, metatables, closures and root-frame values without crossing suspended nested call stacks",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: collect_root_tables and insert_table; root_table_collector_reuses_unreachable_cycles_and_keeps_live_tables"
+                },
+                {
+                  "text": "Reclaim cyclic allocations across multiple sweeps while preserving captured closures and retaining strict reachable-heap limits",
+                  "passed": true,
+                  "evidence": "tests/owned_cli_differential.rs: owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure (40,000 tables); src/owned_flow.rs unit tests for live-table retention"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/tests, pinned upstream Lua 5.4 differentials, Rust 1.96, Arch userspace, and downstream action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40138156924: all five acceptance jobs passed on fe227c107c0fe1c87cc5b2659d1d005348177480"
+                },
+                {
+                  "text": "Synchronize README, evidence docs, machine ledger and generator-derived roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }

@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 171 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 172 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -781,6 +781,11 @@
   - [x] Render meaningful CLI error details without losing output preceding a failure — src/main.rs: run_owned_source; tests/cli.rs: owned_cli_reports_original_explicit_error_values
   - [x] Pass Linux formatting/lint/tests, upstream Lua 5.4 differential, Rust 1.96, Arch archive smoke and action consumer — GitHub Actions 40135554634: all five jobs passed on c0e6d9523e50e780d1d33f6864ab22f0ef21ffd1
   - [ ] Synchronize error compatibility docs, machine ledger, generated roadmap and README under passing CI
+- ♻️ **T443** Bounded root-frame cyclic Lua table reclamation — `████████░░ 75%`
+  - [x] Trace reachable tables, metatables, closures and root-frame values without crossing suspended nested call stacks — src/owned_flow.rs: collect_root_tables and insert_table; root_table_collector_reuses_unreachable_cycles_and_keeps_live_tables
+  - [x] Reclaim cyclic allocations across multiple sweeps while preserving captured closures and retaining strict reachable-heap limits — tests/owned_cli_differential.rs: owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure (40,000 tables); src/owned_flow.rs unit tests for live-table retention
+  - [x] Pass Linux formatting/lint/tests, pinned upstream Lua 5.4 differentials, Rust 1.96, Arch userspace, and downstream action consumer — GitHub Actions 40138156924: all five acceptance jobs passed on fe227c107c0fe1c87cc5b2659d1d005348177480
+  - [ ] Synchronize README, evidence docs, machine ledger and generator-derived roadmap under passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
