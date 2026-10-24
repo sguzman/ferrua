@@ -3475,7 +3475,7 @@
               "id": "T412",
               "emoji": "🔢",
               "name": "Lua 5.4 malformed numeral adjacency rejection in owned lexer/parser",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Reject numeral-adjacent identifiers, Unicode name suffixes, underscores, extra radix points and unspaced concatenation in the owned scanner",
@@ -3494,7 +3494,8 @@
                 },
                 {
                   "text": "Synchronize language grammar documentation, machine ledger, generated roadmap and README with passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40116809191: all five jobs green for synchronized README, progress ledger, generated roadmap and owned-engine docs"
                 }
               ]
             }
