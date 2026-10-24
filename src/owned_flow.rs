@@ -2091,43 +2091,31 @@ impl Execution<'_> {
     fn tostring_builtin(&mut self, value: Value) -> Result<Value, FlowError> {
         let text = match value {
             Value::String(_) => value,
-            Value::Integer(number) => {
-                self.intern_string(number.to_string().into_bytes())?
+            Value::Integer(number) => self.intern_string(number.to_string().into_bytes())?,
+            Value::Float(bits) => {
+                self.intern_string(format!("{:?}", f64::from_bits(bits)).into_bytes())?
             }
-            Value::Float(bits) => self.intern_string(
-                format!("{:?}", f64::from_bits(bits)).into_bytes(),
-            )?,
-            Value::Boolean(boolean) => {
-                self.intern_string(boolean.to_string().into_bytes())?
-            }
+            Value::Boolean(boolean) => self.intern_string(boolean.to_string().into_bytes())?,
             Value::Nil => self.intern_string(b"nil".to_vec())?,
             Value::Table(handle) => {
-                if let Some(method) =
-                    self.metatable_field(handle, b"__tostring")?
-                {
+                if let Some(method) = self.metatable_field(handle, b"__tostring")? {
                     let Value::Function(callback) = method else {
                         return Err(FlowError::TypeError);
                     };
-                    let returned =
-                        self.call_owned_function(callback, &[value])?;
+                    let returned = self.call_owned_function(callback, &[value])?;
                     let text = returned.first().copied().unwrap_or(Value::Nil);
                     if !matches!(text, Value::String(_)) {
                         return Err(FlowError::TypeError);
                     }
                     text
                 } else {
-                    self.intern_string(
-                        format!("table: 0x{handle:x}").into_bytes(),
-                    )?
+                    self.intern_string(format!("table: 0x{handle:x}").into_bytes())?
                 }
             }
-            Value::Function(handle) => self.intern_string(
-                format!("function: 0x{handle:x}").into_bytes(),
-            )?,
-            Value::Builtin(_) => {
-                self.intern_string(b"function: builtin".to_vec())?
+            Value::Function(handle) => {
+                self.intern_string(format!("function: 0x{handle:x}").into_bytes())?
             }
-
+            Value::Builtin(_) => self.intern_string(b"function: builtin".to_vec())?,
         };
         Ok(text)
     }
