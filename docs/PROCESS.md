@@ -29,10 +29,10 @@ A process inherits its parent's OS privileges and environment unless explicitly 
 
 The `code`, `signal`, and `spawn_error` fields may contain `json.null`. `ok` means zero exit status without a timeout. `stdout` and `stderr` are lossy UTF-8 text, individually bounded to 2 MiB; the corresponding `*_truncated` flags indicate truncation. The `signal` field is only meaningful on Unix. Avoid this API for streaming huge binary data or long-running interactive applications.
 
-Timeouts terminate the directly launched child, **not its entire process tree**. Descendants may inherit pipes; choose well-behaved commands and avoid backgrounding subprocesses in this API. The interface is designed for local automation, not hostile-input sandbox containment.
+On Linux, each launched child gets a separate process group. The timeout applies to the child and to draining its inherited pipes; on expiry Ferrua signals the group, including descendants that remain in it. Descendants that deliberately create a different process group/session can evade group termination, so avoid backgrounding untrusted or long-lived subprocesses. This trusted-mode interface is not hostile-input sandbox containment.
 
 ### Verification
 
 `cargo run -- examples/process.lua` exercises argument passing, exit status, errors, stdin, child environment, and timeouts. CI also verifies that `process` and its native bridge are unavailable in sandbox mode.
 
-The Rust subprocess reader continues consuming stdout and stderr after either 2 MiB capture ceiling, rather than shutting the pipe and risking child deadlock. Text beyond the ceiling is discarded while `stdout_truncated`/`stderr_truncated` is set; a regression launches a real process emitting more than the bound. Timeouts still apply independently.
+The Rust subprocess reader continues consuming stdout and stderr after either 2 MiB capture ceiling, rather than shutting the pipe and risking child deadlock. Text beyond the ceiling is discarded while `stdout_truncated`/`stderr_truncated` is set; a regression launches a real process emitting more than the bound. The Linux regression verifies that a short-lived shell cannot evade the operation timeout by leaving a background child holding its output pipes.

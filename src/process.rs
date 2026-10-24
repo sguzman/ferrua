@@ -6,12 +6,33 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
+#[cfg(target_os = "linux")]
+use std::os::unix::process::CommandExt;
 use std::thread;
 use std::time::{Duration, Instant};
 
 const MAX_OUTPUT: u64 = 2 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS: u64 = 60_000;
 const MAX_TIMEOUT_MS: u64 = 300_000;
+
+// Isolate each Linux subprocess in its own process group. A shell may
+// leave descendants holding inherited pipes after the direct child exits.
+#[cfg(target_os = "linux")]
+unsafe extern "C" {
+    fn kill(pid: i32, signal: i32) -> i32;
+}
+
+#[cfg(target_os = "linux")]
+fn kill_subprocess_group(pid: u32) {
+    if let Ok(pid) = i32::try_from(pid) {
+        // SAFETY: Linux kill(2) accepts a negative process-group ID. The
+        // process was launched with process_group(0), so this ID denotes
+        // its private group rather than the interpreter's own group.
+        unsafe {
+            let _ = kill(-pid, 9);
+        }
+    }
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -91,6 +112,8 @@ pub fn run_serialized(request: String) -> String {
     } else {
         Stdio::null()
     });
+    #[cfg(target_os = "linux")]
+    command.process_group(0);
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(err) => return error(format!("could not start process: {err}")),
@@ -112,12 +135,29 @@ pub fn run_serialized(request: String) -> String {
             Err(err) => break Err(err),
             Ok(None) if start.elapsed() >= Duration::from_millis(timeout_ms) => {
                 timed_out = true;
+                #[cfg(target_os = "linux")]
+                kill_subprocess_group(child.id());
                 let _ = child.kill();
                 break child.wait();
             }
             Ok(None) => thread::sleep(Duration::from_millis(10)),
         }
     };
+    // The direct child can exit while its descendants keep stdout/stderr
+    // open. Bound the *entire* operation, not just child.wait(), before
+    // joining the reader and optional stdin writer threads.
+    #[cfg(target_os = "linux")]
+    while !stdout.is_finished()
+        || !stderr.is_finished()
+        || stdin.as_ref().is_some_and(|writer| !writer.is_finished())
+    {
+        if start.elapsed() >= Duration::from_millis(timeout_ms) {
+            timed_out = true;
+            kill_subprocess_group(child.id());
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
     if let Some(writer) = stdin {
         let _ = writer.join();
     }
@@ -200,6 +240,22 @@ mod tests {
         assert_eq!(
             decoded["stdout"].as_str().unwrap().len(),
             MAX_OUTPUT as usize
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn inherited_background_pipes_cannot_outlive_the_timeout() {
+        let start = Instant::now();
+        let response = run_serialized(
+            r#"{"program":"sh","args":["-c","sleep 8 &"],"timeout_ms":200}"#.into(),
+        );
+        let decoded: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(decoded["timed_out"], true, "{response}");
+        assert_eq!(decoded["ok"], false, "{response}");
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "background descendant kept the process API blocked"
         );
     }
 
