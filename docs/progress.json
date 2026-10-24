@@ -4007,7 +4007,7 @@
               "id": "T431",
               "emoji": "🚧",
               "name": "Cap emitted integer bytecode while constructing each instruction",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Centralize all register-compiler instruction appends through a bounded emit_instruction guard",
@@ -4026,6 +4026,34 @@
                 },
                 {
                   "text": "Synchronize code-limit documentation, README, machine ledger and generated roadmap under passing CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40129500224: five CI jobs passed synchronized README, owned-engine docs, progress ledger and derived roadmap"
+                }
+              ]
+            },
+            {
+              "id": "T432",
+              "emoji": "🧪",
+              "name": "Deterministic cross-branch register merge differential matrix",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Generate 48 reproducible nested integer branch, elseif, shadowing, mutable-local and short-circuit cases",
+                  "passed": true,
+                  "evidence": "tests/owned_vm_merge_edges.rs: generated_nested_branch_joins_match_reference_interpreters, seeds 0..47"
+                },
+                {
+                  "text": "Compare selected register-VM execution with production fer and pinned upstream Lua 5.4 under CI",
+                  "passed": true,
+                  "evidence": "tests/owned_vm_merge_edges.rs: executes fer for all cases; lua5.4 when FERRUA_COMPARE_OWNED_WITH_LUA=1"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/unit tests, Rust 1.96, upstream Lua 5.4 and production differential, Arch smoke and action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40129671233: five successful jobs on 39419e7b8ec0b1c0667e278fd0f29a9d4c236953"
+                },
+                {
+                  "text": "Synchronize generated corpus documentation, machine-readable ledger, README and roadmap under passing CI",
                   "passed": false
                 }
               ]
@@ -4925,6 +4953,13 @@
           "name": "Instruction-at-emission resource guarding",
           "task_ids": [
             "T431"
+          ]
+        },
+        {
+          "emoji": "🧪",
+          "name": "Generated nested integer branch-path differential coverage",
+          "task_ids": [
+            "T432"
           ]
         }
       ]
