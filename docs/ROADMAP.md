@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 137 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 138 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -611,6 +611,11 @@
   - [x] Enforce immutable <const> bindings across local scopes and captured closures without prohibiting mutation of referenced tables; reject unimplemented <close> runtime semantics explicitly — src/owned_flow.rs: Compiler::statements and captured child.read_only; positive and failure unit regressions; src/owned_vm.rs explicit prototype guard
   - [x] Pass production fer/upstream Lua 5.4 conformance, Rust 1.96, Linux formatting/lint/tests, Arch archive and action consumer — GitHub Actions 40057835794: all five jobs succeeded for commit ded715d1f8045bf2a8f275f9b3260408a5725ca0; 7 positive and 5 negative flow fixtures
   - [x] Synchronize README, owned-engine limitations, machine ledger and generated roadmap under passing CI — GitHub Actions 40057998428: all five jobs passed synchronized T408 docs, README, machine ledger and generated roadmap
+- 🔎 **T409** Const local attributes and lexical captured-write metadata in scope analyzer — `████████░░ 75%`
+  - [x] Propagate parsed Lua local <const>/<close> attributes to scope resolver bindings without treating declarations as post-initialization writes — src/scope.rs: Binding.attribute, Resolver::bind_with_attribute, Statement::Local resolution
+  - [x] Report const reassignment for captured upvalues but not writable shadowed locals or reads — src/scope.rs: Reference.const_reassignment and constant_local_attributes_follow_capture_and_shadowing_resolution
+  - [x] Pass Linux Rust formatting, lint and tests; Rust 1.96; action consumer; Lua 5.4 differential CI — GitHub Actions 40112914625: all five jobs passed commit b76abff4643e0f2848b75b03bc53fd27f334af6d
+  - [ ] Synchronize machine-readable ledger, generated roadmap, README and documented analyzer limits under passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -718,4 +723,5 @@
 - ↩️ Lua loop breaks with subsequent unreachable statements — `██████████ 100%`
 - 📞 Lua table/string shorthand call expression grammar — `██████████ 100%`
 - 🔒 Lua 5.4 const locals, capture protection and close attribute syntax — `██████████ 100%`
+- 🔎 Const capture/write metadata in lexical scope resolver — `████████░░ 75%`
 
