@@ -3055,7 +3055,7 @@
               "id": "T397",
               "emoji": "🔄",
               "name": "Protected Lua pairs/ipairs iterator triples and deferred type checks",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Share ordinary and protected pairs/ipairs iterator construction and custom __pairs triple adjustment",
@@ -3074,7 +3074,8 @@
                 },
                 {
                   "text": "Synchronize corrected pairs/ipairs semantics, README, machine ledger and generated roadmap in passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40052585700: all five acceptance jobs passed docs/ROADMAP, progress ledger, README, owned-engine docs and differential corpus"
                 }
               ]
             }
