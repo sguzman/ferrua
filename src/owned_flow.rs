@@ -63,7 +63,24 @@ pub enum Builtin {
     Error,
     Pcall,
     Xpcall,
+    MathAbs,
+    MathFloor,
+    MathCeil,
+    MathMax,
+    MathMin,
+    MathType,
+    MathToInteger,
 }
+
+const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
+    (b"abs", Builtin::MathAbs),
+    (b"floor", Builtin::MathFloor),
+    (b"ceil", Builtin::MathCeil),
+    (b"max", Builtin::MathMax),
+    (b"min", Builtin::MathMin),
+    (b"type", Builtin::MathType),
+    (b"tointeger", Builtin::MathToInteger),
+];
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"print", Builtin::Print),
@@ -1616,6 +1633,7 @@ struct Execution<'a> {
     arg_handle: Option<usize>,
     globals: HashMap<usize, Value>,
     global_table: Option<usize>,
+    math_table: Option<usize>,
 }
 
 impl Execution<'_> {
@@ -1705,6 +1723,111 @@ impl Execution<'_> {
         Ok(())
     }
 
+    /// A small first-party Lua 5.4 numeric library. Unsupported math
+    /// functions remain absent rather than falling back to another runtime.
+    fn math_builtin(&mut self, builtin: Builtin, args: &[Value]) -> Result<Value, FlowError> {
+        let first = args.first().copied().unwrap_or(Value::Nil);
+        match builtin {
+            Builtin::MathType => match first {
+                Value::Integer(_) => self.intern_string(b"integer".to_vec()),
+                Value::Float(_) => self.intern_string(b"float".to_vec()),
+                _ => Ok(Value::Nil),
+            },
+            Builtin::MathToInteger => {
+                let operand = self.arithmetic_operand(first);
+                Ok(operand
+                    .ok()
+                    .and_then(|number| self.exact_integer_operand(number).ok())
+                    .map(Value::Integer)
+                    .unwrap_or(Value::Nil))
+            }
+            Builtin::MathAbs => match self.arithmetic_operand(first)? {
+                Value::Integer(number) => Ok(Value::Integer(number.wrapping_abs())),
+                Value::Float(bits) => {
+                    Ok(Value::Float(f64::from_bits(bits).abs().to_bits()))
+                }
+                _ => Err(FlowError::TypeError),
+            },
+            Builtin::MathFloor | Builtin::MathCeil => {
+                let input = self.arithmetic_operand(first)?;
+                let Value::Float(bits) = input else {
+                    return Ok(input);
+                };
+                let number = f64::from_bits(bits);
+                let rounded = if builtin == Builtin::MathFloor {
+                    number.floor()
+                } else {
+                    number.ceil()
+                };
+                if rounded.is_finite()
+                    && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
+                        .contains(&rounded)
+                {
+                    Ok(Value::Integer(rounded as i64))
+                } else {
+                    Ok(Value::Float(rounded.to_bits()))
+                }
+            }
+            Builtin::MathMax | Builtin::MathMin => {
+                let mut best = *args.first().ok_or(FlowError::TypeError)?;
+                for &value in &args[1..] {
+                    let ordering = match (best, value) {
+                        (Value::Integer(_) | Value::Float(_),
+                         Value::Integer(_) | Value::Float(_)) => numeric_order(best, value),
+                        (Value::String(a), Value::String(b)) => Some(
+                            self.strings
+                                .get(a)
+                                .ok_or(FlowError::InvalidBytecode)?
+                                .cmp(self.strings.get(b).ok_or(FlowError::InvalidBytecode)?),
+                        ),
+                        _ => return Err(FlowError::TypeError),
+                    };
+                    let take = if builtin == Builtin::MathMax {
+                        ordering == Some(std::cmp::Ordering::Less)
+                    } else {
+                        ordering == Some(std::cmp::Ordering::Greater)
+                    };
+                    if take {
+                        best = value;
+                    }
+                }
+                Ok(best)
+            }
+            _ => Err(FlowError::InvalidBytecode),
+        }
+    }
+
+    /// Create one bounded numeric-library table for this execution.
+    fn materialize_math_table(&mut self) -> Result<usize, FlowError> {
+        if let Some(handle) = self.math_table {
+            return Ok(handle);
+        }
+        if self.tables.len() >= MAX_TABLES {
+            return Err(FlowError::TooLarge);
+        }
+        let handle = self.tables.len();
+        self.tables.push(TableStorage {
+            array: Vec::new(),
+            hashed: HashMap::new(),
+            metatable: None,
+        });
+        self.math_table = Some(handle);
+        for &(name, builtin) in MATH_GLOBALS {
+            let key = self.intern_string(name.to_vec())?;
+            self.write_table(handle, TableKey::Hashed(key), Value::Builtin(builtin))?;
+        }
+        for (name, value) in [
+            (b"pi".as_slice(), Value::Float(std::f64::consts::PI.to_bits())),
+            (b"huge".as_slice(), Value::Float(f64::INFINITY.to_bits())),
+            (b"maxinteger".as_slice(), Value::Integer(i64::MAX)),
+            (b"mininteger".as_slice(), Value::Integer(i64::MIN)),
+        ] {
+            let key = self.intern_string(name.to_vec())?;
+            self.write_table(handle, TableKey::Hashed(key), value)?;
+        }
+        Ok(handle)
+    }
+
     /// Lazily expose the real global environment as a writable Lua table.
     /// Prior global overrides are folded in before the table becomes visible.
     fn materialize_global_table(&mut self) -> Result<usize, FlowError> {
@@ -1733,6 +1856,9 @@ impl Execution<'_> {
         let arg_key = self.intern_string(b"arg".to_vec())?;
         let arguments = self.argument_table()?;
         self.write_table(handle, TableKey::Hashed(arg_key), arguments)?;
+        let math_key = self.intern_string(b"math".to_vec())?;
+        let math = self.materialize_math_table()?;
+        self.write_table(handle, TableKey::Hashed(math_key), Value::Table(math))?;
         for (key, value) in std::mem::take(&mut self.globals) {
             self.write_table(handle, TableKey::Hashed(Value::String(key)), value)?;
         }
@@ -1761,6 +1887,9 @@ impl Execution<'_> {
         }
         if name == b"arg" {
             return self.argument_table();
+        }
+        if name == b"math" {
+            return Ok(Value::Table(self.materialize_math_table()?));
         }
         if name == b"_VERSION" {
             return self.intern_string(b"Lua 5.4".to_vec());
@@ -2597,6 +2726,9 @@ impl Execution<'_> {
             Value::Builtin(Builtin::SetMetatable) => {
                 Ok(vec![self.setmetatable_builtin(&arguments)?])
             }
+            Value::Builtin(builtin) if MATH_GLOBALS.iter().any(|&(_, item)| item == builtin) => {
+                Ok(vec![self.math_builtin(builtin, &arguments)?])
+            }
             _ => Err(FlowError::TypeError),
         }
     }
@@ -2990,6 +3122,8 @@ impl Execution<'_> {
                                     | Builtin::Pcall
                                     | Builtin::Xpcall
                                     | Builtin::Assert
+                                    | Builtin::MathType
+                                    | Builtin::MathToInteger
                             )
                         {
                             return Err(FlowError::TypeError);
@@ -3088,6 +3222,13 @@ impl Execution<'_> {
                                 )
                             }
                             Builtin::ToString => self.tostring_builtin(value)?,
+                            Builtin::MathAbs
+                            | Builtin::MathFloor
+                            | Builtin::MathCeil
+                            | Builtin::MathMax
+                            | Builtin::MathMin
+                            | Builtin::MathType
+                            | Builtin::MathToInteger => self.math_builtin(builtin, &args)?,
                         };
                         if matches!(
                             instructions[pc],
@@ -3674,6 +3815,7 @@ pub fn execute_flow_capture_with_args<'a>(
         arg_handle: None,
         globals: HashMap::new(),
         global_table: None,
+        math_table: None,
     };
     let result = execution.run(&program.instructions, program.slots, &[], &[], &[]);
     let error_text = match &result {
@@ -7030,6 +7172,28 @@ mod tests {
         let huge = vec!["x".repeat(MAX_STRING_POOL_BYTES + 1)];
         let outcome = execute_flow_capture_with_args(&program, 1000, "script.lua", &huge);
         assert_eq!(outcome.result, Err(FlowError::TooLarge));
+    }
+
+    #[test]
+    fn partial_numeric_math_library_has_lua_number_types_and_shared_identity() {
+        let program = compile_flow_chunk(
+            "local m=math; assert(_G.math==m); assert(math==m); print(math.abs(-7),math.floor(3.75),math.ceil(-3.75),math.max(2,9,5),math.min(2,9,5),math.type(3),math.type(3.0),math.tointeger('42')); print(math.pi>3 and math.pi<4,math.huge>1e100,math.maxinteger>0,math.mininteger<0)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 5000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(
+            outcome.stdout,
+            b"7\t3\t-3\t9\t2\tinteger\tfloat\t42\ntrue\ttrue\ttrue\ttrue\n"
+        );
+
+        let program = compile_flow_chunk(
+            "local original=math.abs; math.abs=function(v) return v end; print(math.abs(-5)); math.abs=original; print(math.abs(-5)); local ok=pcall(math.abs,'wrong'); assert(not ok)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 2000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"-5\n5\n");
     }
 
     #[test]
