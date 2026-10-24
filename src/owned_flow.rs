@@ -2,7 +2,7 @@
 //! This bounded stack VM evaluates integer, Boolean and nil Lua values with
 //! lexical locals and control flow. It is not a complete Lua runtime or the register backend.
 
-use crate::expr::{Expr, Statement, TableField, parse_chunk};
+use crate::expr::{Expr, LocalAttribute, Statement, TableField, parse_chunk};
 use crate::owned_vm::{floor_div, lua_mod, shift};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -316,6 +316,9 @@ impl<'a> Compiler<'a> {
             let child_slot = child.slots;
             child.slots += 1;
             child.frames[0].insert(name, child_slot);
+            if self.read_only.contains(&parent_slot) {
+                child.read_only.insert(child_slot);
+            }
             captures.push((parent_slot, child_slot));
         }
         let mut formal_slots = Vec::new();
@@ -907,13 +910,21 @@ impl<'a> Compiler<'a> {
                 }
                 Statement::Local {
                     names,
+                    attributes,
                     initializers,
                 } => {
+                    if attributes.iter().any(|attribute| {
+                        matches!(attribute, Some(LocalAttribute::Close))
+                    }) {
+                        return Err(FlowError::Unsupported(
+                            "to-be-closed Lua variables are not implemented".into(),
+                        ));
+                    }
                     // Initializers see only previous bindings, including
                     // when extra RHS values are subsequently discarded.
                     self.values(initializers, names.len())?;
                     let mut targets = Vec::with_capacity(names.len());
-                    for name in names {
+                    for (name, attribute) in names.iter().zip(attributes) {
                         if self.slots >= MAX_SLOTS {
                             return Err(FlowError::TooLarge);
                         }
@@ -925,6 +936,9 @@ impl<'a> Compiler<'a> {
                             .expect("root scope")
                             .insert(*name, slot);
                         self.active_locals.push(slot);
+                        if matches!(attribute, Some(LocalAttribute::Const)) {
+                            self.read_only.insert(slot);
+                        }
                     }
                     self.push(Op::DeclareLocals(targets))?;
                 }
@@ -937,7 +951,7 @@ impl<'a> Compiler<'a> {
                                 let slot = self.slot(name)?;
                                 if self.read_only.contains(&slot) {
                                     return Err(FlowError::Unsupported(
-                                        "numeric for control variable is read-only".into(),
+                                        "read-only Lua local or for control variable".into(),
                                     ));
                                 }
                                 self.push(Op::PrepareLocal(slot))?;
@@ -6453,6 +6467,30 @@ mod tests {
             execute_flow_chunk(&compiled, 0),
             Err(FlowError::StepBudgetExceeded)
         );
+    }
+
+    #[test]
+    fn const_locals_preserve_shadowing_capture_and_assignment_guards() {
+        for (source, expected) in [
+            ("local x<const> = 7; return x", 7),
+            ("local x<const>, y = 4,5; y=8; return x+y", 12),
+            ("local x<const> = {n=4}; x.n=8; return x.n", 8),
+            ("local x<const> = 4; local function f() return x+1 end; return f()", 5),
+            ("local x<const> = 4; do local x=7; x=8 end; return x", 4),
+            ("local x<const> = 2; do local x<const> = 7 end; return x", 2),
+            ("local x<const>; return x==nil and 1 or 0", 1),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        for source in [
+            "local x<const> = 5; x=6; return x",
+            "local x<const> = 5; do x=6 end; return x",
+            "local x<const> = 5; local function f() x=6 end; return x",
+            "local x<const>, y = 4,5; x=7; return y",
+            "local x<close> = nil; return x",
+        ] {
+            assert!(compile_flow_chunk(source).is_err(), "{source}");
+        }
     }
 
     #[test]

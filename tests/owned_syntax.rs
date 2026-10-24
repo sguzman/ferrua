@@ -157,6 +157,44 @@ fn malformed_unicode_and_numeric_corners_do_not_panic() {
 }
 
 #[test]
+fn lua_local_attribute_syntax_matches_lua_54_when_requested() {
+    let cases = [
+        ("local x<const> = 7; return x", true),
+        ("local x<const>, y = 4,5; return x+y", true),
+        ("local x, y<const> = 4,5; return x+y", true),
+        ("local x<close> = nil; return 1", true),
+        ("local x<const>; return x", true),
+        ("local x<const>,y<const> = 1,2; return x+y", true),
+        ("local x<unknown> = 1", false),
+        ("local x<const = 1", false),
+        ("local x<1> = 1", false),
+        ("local x<> = 1", false),
+        ("local x<const><close> = 1", false),
+    ];
+    for (source, valid) in cases {
+        let parsed = ferrua::expr::parse_chunk(source).is_ok();
+        assert_eq!(parsed, valid, "owned local attribute grammar: {source}");
+        if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
+            let reference = format!("assert(load([====[{source}]====]))");
+            let result = std::process::Command::new("lua5.4")
+                .args(["-e", &reference])
+                .output()
+                .unwrap();
+            assert_eq!(
+                parsed,
+                result.status.success(),
+                "Lua 5.4 local attribute grammar differs: {source}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+        }
+    }
+}
+
+#[test]
 fn lua_short_string_escape_syntax_matches_upstream_when_requested() {
     if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()

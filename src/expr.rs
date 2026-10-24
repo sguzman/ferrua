@@ -50,6 +50,12 @@ pub enum TableField<'a> {
     Value(Expr<'a>),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocalAttribute {
+    Const,
+    Close,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParseError {
     pub line: usize,
@@ -366,6 +372,7 @@ pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
 pub enum Statement<'a> {
     Local {
         names: Vec<&'a str>,
+        attributes: Vec<Option<LocalAttribute>>,
         initializers: Vec<Expr<'a>>,
     },
     Return(Vec<Expr<'a>>),
@@ -687,10 +694,30 @@ impl<'a> Parser<'a> {
                     body,
                 });
             }
-            let mut names = vec![self.name()?];
-            while self.peek().is_some_and(|token| token.spelling == ",") {
-                self.pop();
+            let mut names = Vec::new();
+            let mut attributes = Vec::new();
+            loop {
                 names.push(self.name()?);
+                let attribute = if self.peek().map(|token| token.spelling) == Some("<") {
+                    self.pop();
+                    let attribute = match self.name()? {
+                        "const" => LocalAttribute::Const,
+                        "close" => LocalAttribute::Close,
+                        _ => return Err(self.error("unknown Lua local attribute")),
+                    };
+                    if self.peek().map(|token| token.spelling) != Some(">") {
+                        return Err(self.error("expected closing > for local attribute"));
+                    }
+                    self.pop();
+                    Some(attribute)
+                } else {
+                    None
+                };
+                attributes.push(attribute);
+                if self.peek().map(|token| token.spelling) != Some(",") {
+                    break;
+                }
+                self.pop();
             }
             let initializers = if self.peek().is_some_and(|token| token.spelling == "=") {
                 self.pop();
@@ -700,6 +727,7 @@ impl<'a> Parser<'a> {
             };
             return Ok(Statement::Local {
                 names,
+                attributes,
                 initializers,
             });
         }
@@ -1079,9 +1107,11 @@ mod tests {
         match &parsed[0] {
             Statement::Local {
                 names,
+                attributes,
                 initializers,
             } => {
                 assert_eq!(names, &["a", "b"]);
+                assert_eq!(attributes, &[None, None]);
                 assert_eq!(initializers.len(), 2);
             }
             _ => panic!("first statement must be local"),
@@ -1227,6 +1257,29 @@ mod tests {
             "repeat local x=1 until",
             "return 1\nprint(2)",
             "repeat local x=1; return 2; print(x) until true",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
+    }
+
+    #[test]
+    fn parses_lua_local_attributes_without_accepting_unknown_names() {
+        for source in [
+            "local x<const> =7; return x",
+            "local x<const>, y=4,5; return x+y",
+            "local x, y<const> =4,5; return x+y",
+            "local x<close> =nil; return 1",
+            "local x<const>; return x==nil",
+            "local x<const>,y<const> =1,2; return x+y",
+        ] {
+            assert!(parse_chunk(source).is_ok(), "{source}");
+        }
+        for source in [
+            "local x<unknown> =1",
+            "local x<const=1",
+            "local x<1>=1",
+            "local x<>=1",
+            "local x<const><close>=1",
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
         }
