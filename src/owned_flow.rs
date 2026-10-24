@@ -2086,6 +2086,52 @@ impl Execution<'_> {
         Ok(FlowError::Thrown(message))
     }
 
+    /// Shared stringification for ordinary and protected builtin calls.
+    /// Metamethod callbacks remain subject to the owned VM call-depth guard.
+    fn tostring_builtin(&mut self, value: Value) -> Result<Value, FlowError> {
+        let text = match value {
+            Value::String(_) => value,
+            Value::Integer(number) => {
+                self.intern_string(number.to_string().into_bytes())?
+            }
+            Value::Float(bits) => self.intern_string(
+                format!("{:?}", f64::from_bits(bits)).into_bytes(),
+            )?,
+            Value::Boolean(boolean) => {
+                self.intern_string(boolean.to_string().into_bytes())?
+            }
+            Value::Nil => self.intern_string(b"nil".to_vec())?,
+            Value::Table(handle) => {
+                if let Some(method) =
+                    self.metatable_field(handle, b"__tostring")?
+                {
+                    let Value::Function(callback) = method else {
+                        return Err(FlowError::TypeError);
+                    };
+                    let returned =
+                        self.call_owned_function(callback, &[value])?;
+                    let text = returned.first().copied().unwrap_or(Value::Nil);
+                    if !matches!(text, Value::String(_)) {
+                        return Err(FlowError::TypeError);
+                    }
+                    text
+                } else {
+                    self.intern_string(
+                        format!("table: 0x{handle:x}").into_bytes(),
+                    )?
+                }
+            }
+            Value::Function(handle) => self.intern_string(
+                format!("function: 0x{handle:x}").into_bytes(),
+            )?,
+            Value::Builtin(_) => {
+                self.intern_string(b"function: builtin".to_vec())?
+            }
+
+        };
+        Ok(text)
+    }
+
     /// Protected calls share Lua's bounded callable-table redirects with
     /// ordinary bytecode calls. General builtins remain an incomplete subset.
     fn protected_target(
@@ -2143,6 +2189,10 @@ impl Execution<'_> {
                     return Err(FlowError::TypeError);
                 }
                 Ok(vec![self.tonumber_builtin(&arguments)?])
+            }
+            Value::Builtin(Builtin::ToString) => {
+                let argument = *arguments.first().ok_or(FlowError::TypeError)?;
+                Ok(vec![self.tostring_builtin(argument)?])
             }
             Value::Builtin(Builtin::RawLen) => {
                 let argument = *arguments.first().ok_or(FlowError::TypeError)?;
@@ -2686,45 +2736,7 @@ impl Execution<'_> {
                                     "iteration/selection builtins handled as multiple results"
                                 )
                             }
-                            Builtin::ToString => match value {
-                                Value::String(_) => value,
-                                Value::Integer(number) => {
-                                    self.intern_string(number.to_string().into_bytes())?
-                                }
-                                Value::Float(bits) => self.intern_string(
-                                    format!("{:?}", f64::from_bits(bits)).into_bytes(),
-                                )?,
-                                Value::Boolean(boolean) => {
-                                    self.intern_string(boolean.to_string().into_bytes())?
-                                }
-                                Value::Nil => self.intern_string(b"nil".to_vec())?,
-                                Value::Table(handle) => {
-                                    if let Some(method) =
-                                        self.metatable_field(handle, b"__tostring")?
-                                    {
-                                        let Value::Function(callback) = method else {
-                                            return Err(FlowError::TypeError);
-                                        };
-                                        let returned =
-                                            self.call_owned_function(callback, &[value])?;
-                                        let text = returned.first().copied().unwrap_or(Value::Nil);
-                                        if !matches!(text, Value::String(_)) {
-                                            return Err(FlowError::TypeError);
-                                        }
-                                        text
-                                    } else {
-                                        self.intern_string(
-                                            format!("table: 0x{handle:x}").into_bytes(),
-                                        )?
-                                    }
-                                }
-                                Value::Function(handle) => self.intern_string(
-                                    format!("function: 0x{handle:x}").into_bytes(),
-                                )?,
-                                Value::Builtin(_) => {
-                                    self.intern_string(b"function: builtin".to_vec())?
-                                }
-                            },
+                            Builtin::ToString => self.tostring_builtin(value)?,
                         };
                         if matches!(
                             instructions[pc],
@@ -3967,6 +3979,42 @@ mod tests {
             execute_flow_values(&cyclic, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
         );
+    }
+
+    #[test]
+    fn protected_tostring_reuses_lua_metatable_callback_semantics() {
+        for (source, expected) in [
+            (
+                "local ok,v=pcall(tostring,17); return ok and v=='17' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,v=pcall(tostring,nil); return ok and v=='nil' and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({x=7},{__tostring=function(self) return 'x'..self.x end}); local ok,v=pcall(tostring,t); return ok and v=='x7' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,v=xpcall(error,tostring,42); return not ok and v=='42' and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({}, {__tostring=function() return 'special' end}); local ok,v=xpcall(error,tostring,t); return not ok and v=='special' and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({}, {__tostring=function() return 1 end}); local ok,e=pcall(tostring,t); return not ok and type(e)=='string' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,e=pcall(tostring); return not ok and type(e)=='string' and 1 or 0",
+                1,
+            ),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
     }
 
     #[test]
