@@ -411,7 +411,9 @@ fn enclosing_bindings_changed<'a>(
 ) -> bool {
     before.iter().zip(branch).any(|(original, updated)| {
         original.iter().any(|(name, binding)| {
-            updated.get(name).is_none_or(|other| other.register != binding.register)
+            updated
+                .get(name)
+                .is_none_or(|other| other.register != binding.register)
         })
     })
 }
