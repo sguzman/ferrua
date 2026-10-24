@@ -2971,7 +2971,7 @@
               "id": "T394",
               "emoji": "📝",
               "name": "Shared protected tostring and Lua 5.4 numeric metamethod return coercion",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Unify protected and ordinary tostring execution with first-party __tostring callbacks",
@@ -2990,7 +2990,8 @@
                 },
                 {
                   "text": "Synchronize corrected engine docs, README, machine ledger and generated roadmap in verified CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40051235510: five successful jobs including regenerated roadmap integrity, README, owned-engine docs and Lua 5.4 differential"
                 }
               ]
             }

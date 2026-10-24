@@ -536,11 +536,11 @@
   - [x] Support numeric raw equality and selected builtin message handlers without relaxing xpcall handler typing — src/owned_flow.rs: selected_standard_builtins_work_inside_protected_calls; tests/owned_flow.rs
   - [x] Pass reference Lua 5.4 differential matrix, Linux tests/lint, Rust 1.96, action consumer and aggregate status — GitHub Actions 40046376588: five jobs successful including ten new positive/error fixtures
   - [x] Synchronize owned-engine documentation, README, ledger and generated roadmap under passing CI — GitHub Actions 40046538133: all five jobs passed synced README, docs/OWNED_ENGINE.md, progress ledger and roadmap check
-- 📝 **T394** Shared protected tostring and Lua 5.4 numeric metamethod return coercion — `████████░░ 75%`
+- 📝 **T394** Shared protected tostring and Lua 5.4 numeric metamethod return coercion — `██████████ 100%`
   - [x] Unify protected and ordinary tostring execution with first-party __tostring callbacks — src/owned_flow.rs: Execution::tostring_builtin used by protected_target and ordinary builtin dispatch
   - [x] Accept string and numeric __tostring results, reject invalid types and preserve recursion/budget safeguards — src/owned_flow.rs: protected_tostring_reuses_lua_metatable_callback_semantics and tostring_metatable_hook_coerces_numeric_and_bounds_recursive_calls
   - [x] Pass production fer plus upstream Lua 5.4 differential parity, Linux quality/tests, Rust 1.96 and consumer acceptance — GitHub Actions 40047343376 all five jobs green for commit 30cc8fc9d492dfdbf63946d737a75fdb441953ec
-  - [ ] Synchronize corrected engine docs, README, machine ledger and generated roadmap in verified CI
+  - [x] Synchronize corrected engine docs, README, machine ledger and generated roadmap in verified CI — GitHub Actions 40051235510: five successful jobs including regenerated roadmap integrity, README, owned-engine docs and Lua 5.4 differential
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -633,5 +633,5 @@
 - 📞 Callable-table protected call targets — `██████████ 100%`
 - 🧪 Strict xpcall handler type parity — `██████████ 100%`
 - 🧮 Selected builtin protected calls — `██████████ 100%`
-- 📝 Shared protected tostring and numeric __tostring parity — `████████░░ 75%`
+- 📝 Shared protected tostring and numeric __tostring parity — `██████████ 100%`
 
