@@ -1885,20 +1885,33 @@ impl Execution<'_> {
         name: &[u8],
         left: Value,
         right: Value,
-    ) -> Result<Option<usize>, FlowError> {
+    ) -> Result<Option<Value>, FlowError> {
         for operand in [left, right] {
             let Value::Table(handle) = operand else {
                 continue;
             };
-            let Some(method) = self.metatable_field(handle, name)? else {
-                continue;
-            };
-            let Value::Function(callback) = method else {
-                return Err(FlowError::TypeError);
-            };
-            return Ok(Some(callback));
+            if let Some(method) = self.metatable_field(handle, name)? {
+                return Ok(Some(method));
+            }
         }
         Ok(None)
+    }
+
+    /// Invoke a binary metamethod as an ordinary Lua callable with a bounded
+    /// host frame, including callable tables and builtin function values.
+    fn invoke_binary_metamethod(
+        &mut self,
+        callback: Value,
+        left: Value,
+        right: Value,
+    ) -> Result<Vec<Value>, FlowError> {
+        if self.depth >= MAX_CALL_DEPTH {
+            return Err(FlowError::CallDepthExceeded);
+        }
+        self.depth += 1;
+        let result = self.protected_target(callback, &[left, right]);
+        self.depth -= 1;
+        result
     }
 
     /// Callbacks reuse closure frames, recursion depth and shared step limits.
@@ -1911,7 +1924,7 @@ impl Execution<'_> {
         let callback = self
             .binary_metamethod_callback(name, left, right)?
             .ok_or(FlowError::TypeError)?;
-        let returned = self.call_owned_function(callback, &[left, right])?;
+        let returned = self.invoke_binary_metamethod(callback, left, right)?;
         Ok(returned.first().copied().unwrap_or(Value::Nil))
     }
 
@@ -1926,7 +1939,7 @@ impl Execution<'_> {
         let equal = if left == right {
             true
         } else if let Some(callback) = self.binary_metamethod_callback(b"__eq", left, right)? {
-            self.call_owned_function(callback, &[left, right])?
+            self.invoke_binary_metamethod(callback, left, right)?
                 .first()
                 .copied()
                 .unwrap_or(Value::Nil)
@@ -1958,7 +1971,7 @@ impl Execution<'_> {
         };
         if let Some(callback) = self.binary_metamethod_callback(name, left, right)? {
             let truthy = self
-                .call_owned_function(callback, &[left, right])?
+                .invoke_binary_metamethod(callback, left, right)?
                 .first()
                 .copied()
                 .unwrap_or(Value::Nil)
@@ -1970,7 +1983,7 @@ impl Execution<'_> {
                 .binary_metamethod_callback(b"__lt", right, left)?
                 .ok_or(FlowError::TypeError)?;
             let truthy = self
-                .call_owned_function(callback, &[right, left])?
+                .invoke_binary_metamethod(callback, right, left)?
                 .first()
                 .copied()
                 .unwrap_or(Value::Nil)
@@ -4079,6 +4092,41 @@ mod tests {
             execute_flow_values(&program, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
         );
+    }
+
+    #[test]
+    fn callable_binary_metamethods_preserve_lua_dispatch_and_depth_limits() {
+        for source in [
+            "local h=setmetatable({n=9},{__call=function(self,a,b) return self.n end}); local t=setmetatable({},{__add=h}); return t+3==9 and 1 or 0",
+            "local inner=setmetatable({},{__call=function(_,h,a,b) return h.n end}); local h=setmetatable({n=7},{__call=inner}); local t=setmetatable({},{__sub=h}); return t-2==7 and 1 or 0",
+            "local t=setmetatable({},{__mul=type}); return t*2=='table' and 1 or 0",
+            "local h=setmetatable({},{__call=function() return 5 end}); local t=setmetatable({},{__div=h}); return t/2==5 and 1 or 0",
+            "local h=setmetatable({},{__call=function() return 6,9 end}); local t=setmetatable({},{__mod=h}); return t%2==6 and 1 or 0",
+            "local h=setmetatable({},{__call=function() return 5 end}); local t=setmetatable({},{__band=h}); return (t&2)==5 and 1 or 0",
+            "local h=setmetatable({},{__call=function() return 7 end}); local t=setmetatable({},{__bor=h}); return (t|2)==7 and 1 or 0",
+            "local h=setmetatable({},{__call=function() return 'ok' end}); local t=setmetatable({},{__concat=h}); return t..'x'=='ok' and 1 or 0",
+            "local h=setmetatable({},{__call=function(_,a,b) return true end}); local mt={__eq=h}; local a=setmetatable({},mt); local b=setmetatable({},mt); return a==b and 1 or 0",
+            "local h=setmetatable({},{__call=function(_,a,b) return a.n<b.n end}); local mt={__lt=h}; local a=setmetatable({n=2},mt); local b=setmetatable({n=4},mt); return a<b and 1 or 0",
+            "local h=setmetatable({},{__call=function(_,a,b) return a.n<=b.n end}); local mt={__le=h}; local a=setmetatable({n=2},mt); local b=setmetatable({n=4},mt); return a<=b and 1 or 0",
+            "local h=setmetatable({},{__call=function(_,a,b) return a.n<b.n end}); local mt={__lt=h}; local a=setmetatable({n=2},mt); local b=setmetatable({n=4},mt); return a<=b and 1 or 0",
+            "local h=setmetatable({},{__call=function() error(17) end}); local t=setmetatable({},{__add=h}); local ok,e=pcall(function() return t+2 end); return not ok and e==17 and 1 or 0",
+            "local t=setmetatable({},{__add=9}); local ok,e=pcall(function() return t+2 end); return not ok and type(e)=='string' and 1 or 0",
+            "local n=0; local h=setmetatable({},{__call=function() n=n+1; return false end}); local mt={__eq=h}; local t=setmetatable({},mt); return t==t and n==0 and 1 or 0",
+            "local h=setmetatable({},{__call=function() return false end}); local mt={__lt=h}; local a=setmetatable({},mt); local b=setmetatable({},mt); return (a<b)==false and 1 or 0",
+        ] {
+            assert_eq!(evaluate(source), 1, "{source}");
+        }
+        for source in [
+            "local h={}; setmetatable(h,{__call=h}); local t=setmetatable({}, {__add=h}); return pcall(function() return t+1 end)",
+            "local t={}; setmetatable(t,{__add=function(x,y) return x+y end}); return pcall(function() return t+1 end)",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::CallDepthExceeded),
+                "{source}"
+            );
+        }
     }
 
     #[test]
