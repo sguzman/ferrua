@@ -1704,25 +1704,13 @@ impl Execution<'_> {
         self.global_table = Some(handle);
         for &(name, builtin) in BUILTIN_GLOBALS {
             let key = self.intern_string(name.to_vec())?;
-            self.write_table(
-                handle,
-                TableKey::Hashed(key),
-                Value::Builtin(builtin),
-            )?;
+            self.write_table(handle, TableKey::Hashed(key), Value::Builtin(builtin))?;
         }
         let version = self.intern_string(b"_VERSION".to_vec())?;
         let number = self.intern_string(b"Lua 5.4".to_vec())?;
-        self.write_table(
-            handle,
-            TableKey::Hashed(version),
-            number,
-        )?;
+        self.write_table(handle, TableKey::Hashed(version), number)?;
         let self_key = self.intern_string(b"_G".to_vec())?;
-        self.write_table(
-            handle,
-            TableKey::Hashed(self_key),
-            Value::Table(handle),
-        )?;
+        self.write_table(handle, TableKey::Hashed(self_key), Value::Table(handle))?;
         let arg_key = self.intern_string(b"arg".to_vec())?;
         let arguments = self.argument_table()?;
         self.write_table(handle, TableKey::Hashed(arg_key), arguments)?;
@@ -1737,10 +1725,7 @@ impl Execution<'_> {
     fn read_global(&mut self, key: usize) -> Result<Value, FlowError> {
         let name = self.strings.get(key).ok_or(FlowError::InvalidBytecode)?;
         if let Some(handle) = self.global_table {
-            return self.lookup_with_metatable(
-                handle,
-                TableKey::Hashed(Value::String(key)),
-            );
+            return self.lookup_with_metatable(handle, TableKey::Hashed(Value::String(key)));
         }
         if let Some(&value) = self.globals.get(&key) {
             return Ok(value);

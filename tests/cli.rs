@@ -390,7 +390,11 @@ fn owned_g_table_writes_and_metatable_reads_match_production() {
     let source = "setmetatable(_G,{__index=function(_,key) if key=='unknown' then return 17 end end}); print(unknown)";
     let owned = fer(&["--engine=owned", "-e", source]);
     let reference = fer(&["--lua=5.4", "-e", source]);
-    assert!(owned.status.success(), "{}", String::from_utf8_lossy(&owned.stderr));
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
     assert!(reference.status.success());
     assert_eq!(owned.stdout, reference.stdout);
     assert_eq!(owned.stdout, b"17\n");
