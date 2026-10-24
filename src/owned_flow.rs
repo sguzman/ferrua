@@ -1236,6 +1236,36 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
     })
 }
 
+/// Lua 5.4 string escapes use the original 1–6 byte UTF-8 encoding,
+/// including surrogate values and scalars above Unicode's 0x10FFFF limit.
+/// Rust's char::from_u32 would incorrectly reject those byte sequences.
+fn append_lua_utf8_escape(mut scalar: u32, result: &mut Vec<u8>) -> Result<(), FlowError> {
+    if scalar > 0x7fff_ffff {
+        return Err(FlowError::Unsupported("Unicode escape overflow".into()));
+    }
+    if scalar < 0x80 {
+        result.push(scalar as u8);
+        return Ok(());
+    }
+    let mut continuation = [0u8; 5];
+    let mut count = 0;
+    let mut max_first = 0x3fu32;
+    loop {
+        continuation[count] = 0x80 | (scalar as u8 & 0x3f);
+        count += 1;
+        scalar >>= 6;
+        max_first >>= 1;
+        if scalar <= max_first {
+            break;
+        }
+    }
+    result.push(((!max_first << 1) | scalar) as u8);
+    for byte in continuation[..count].iter().rev() {
+        result.push(*byte);
+    }
+    Ok(())
+}
+
 fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
     let bytes = spelling.as_bytes();
     if bytes.is_empty() {
@@ -1351,11 +1381,7 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
                     return Err(FlowError::Unsupported("unfinished Unicode escape".into()));
                 }
                 i += 1;
-                let ch = char::from_u32(scalar).ok_or_else(|| {
-                    FlowError::Unsupported("Unicode escape requires a valid scalar".into())
-                })?;
-                let mut encoded = [0; 4];
-                result.extend_from_slice(ch.encode_utf8(&mut encoded).as_bytes());
+                append_lua_utf8_escape(scalar, &mut result)?;
                 None
             }
             b'0'..=b'9' => {
@@ -6135,6 +6161,23 @@ mod tests {
             ("[[a\r\rb]]", b"a\n\nb".as_slice()),
         ] {
             assert_eq!(decode_lua_string(source).unwrap(), expected, "{source:?}");
+        }
+    }
+
+    #[test]
+    fn lua_54_utf8_escapes_support_full_thirty_one_bit_byte_range() {
+        for (source, expected) in [
+            (r#""\u{0}""#, vec![0x00]),
+            (r#""\u{7F}""#, vec![0x7f]),
+            (r#""\u{80}""#, vec![0xc2, 0x80]),
+            (r#""\u{D800}""#, vec![0xed, 0xa0, 0x80]),
+            (r#""\u{10FFFF}""#, vec![0xf4, 0x8f, 0xbf, 0xbf]),
+            (r#""\u{110000}""#, vec![0xf4, 0x90, 0x80, 0x80]),
+            (r#""\u{200000}""#, vec![0xf8, 0x88, 0x80, 0x80, 0x80]),
+            (r#""\u{4000000}""#, vec![0xfc, 0x84, 0x80, 0x80, 0x80, 0x80]),
+            (r#""\u{7FFFFFFF}""#, vec![0xfd, 0xbf, 0xbf, 0xbf, 0xbf, 0xbf]),
+        ] {
+            assert_eq!(decode_lua_string(source).unwrap(), expected, "{source}");
         }
     }
 
