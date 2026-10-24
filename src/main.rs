@@ -346,7 +346,10 @@ fn run_owned_source(options: &Options, source: &str, name: &str) -> Result<(), S
     io::stdout()
         .write_all(&outcome.stdout)
         .map_err(|err| format!("{name}: stdout write failed: {err}"))?;
-    outcome.result.map(|_| ()).map_err(|err| format!("{name}: {err}"))
+    outcome
+        .result
+        .map(|_| ())
+        .map_err(|err| format!("{name}: {err}"))
 }
 
 fn execute_owned(options: &Options) -> Result<(), String> {

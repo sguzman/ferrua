@@ -6797,10 +6797,9 @@ mod tests {
         assert!(matches!(outcome.result, Err(FlowError::Thrown(_))));
         assert_eq!(outcome.stdout, b"before\n");
 
-        let program = compile_flow_chunk(
-            "local f=print; local ok=pcall(f, 'protected', 9); assert(ok)",
-        )
-        .unwrap();
+        let program =
+            compile_flow_chunk("local f=print; local ok=pcall(f, 'protected', 9); assert(ok)")
+                .unwrap();
         let outcome = execute_flow_capture(&program, 1000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"protected\t9\n");

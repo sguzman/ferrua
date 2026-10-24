@@ -281,7 +281,11 @@ fn owned_print_matches_production_cli_and_preserves_prior_output_on_error() {
     let source = "print(6*7, 'hello', true, nil); print(); local f=print; f('last')";
     let owned = fer(&["--engine=owned", "-e", source]);
     let production = fer(&["--lua=5.4", "-e", source]);
-    assert!(owned.status.success(), "{}", String::from_utf8_lossy(&owned.stderr));
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
     assert!(production.status.success());
     assert_eq!(owned.stdout, production.stdout);
     assert_eq!(owned.stdout, b"42\thello\ttrue\tnil\n\nlast\n");
