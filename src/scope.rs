@@ -1,7 +1,7 @@
 //! Experimental local-name resolver for the Ferrua-owned chunk AST.
 //! This handles nested do/end blocks, not function scopes or closures.
 
-use crate::expr::{Expr, ParseError, Statement, parse_chunk};
+use crate::expr::{Expr, LocalAttribute, ParseError, Statement, parse_chunk};
 use crate::lex::{Kind, tokenize};
 use std::collections::HashMap;
 
@@ -24,6 +24,8 @@ pub struct Binding<'src> {
     pub slot: usize,
     pub statement: usize,
     pub scope_depth: usize,
+    /// Lua 5.4 declaration attribute; resource-close behavior is not implemented.
+    pub attribute: Option<LocalAttribute>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -33,6 +35,8 @@ pub struct Reference<'src> {
     pub access: Access,
     pub statement: usize,
     pub scope_depth: usize,
+    /// True for a write to a lexically resolved <const> binding.
+    pub const_reassignment: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -92,12 +96,17 @@ impl<'src> Resolver<'src> {
                 }
             }
         }
+        let const_reassignment = access == Access::Write
+            && binding.is_some_and(|(_, slot)| {
+                self.result.bindings[slot].attribute == Some(LocalAttribute::Const)
+            });
         self.result.references.push(Reference {
             name,
             resolution,
             access,
             statement,
             scope_depth: self.scopes.len() - 1,
+            const_reassignment,
         });
     }
 
@@ -167,6 +176,15 @@ impl<'src> Resolver<'src> {
     }
 
     fn bind(&mut self, name: &'src str, statement: usize) {
+        self.bind_with_attribute(name, statement, None);
+    }
+
+    fn bind_with_attribute(
+        &mut self,
+        name: &'src str,
+        statement: usize,
+        attribute: Option<LocalAttribute>,
+    ) {
         let slot = self.result.bindings.len();
         self.scopes
             .last_mut()
@@ -177,6 +195,7 @@ impl<'src> Resolver<'src> {
             slot,
             statement,
             scope_depth: self.scopes.len() - 1,
+            attribute,
         });
     }
 
@@ -226,16 +245,16 @@ impl<'src> Resolver<'src> {
         match node {
             Statement::Local {
                 names,
+                attributes,
                 initializers,
-                ..
             } => {
                 // A local initializer resolves against outer/previous locals,
                 // not the newly declared names in the same statement.
                 for value in initializers {
                     self.read_expression(value, number);
                 }
-                for name in names {
-                    self.bind(name, number);
+                for (name, attribute) in names.iter().zip(attributes) {
+                    self.bind_with_attribute(name, number, *attribute);
                 }
             }
             Statement::Assign { targets, values } => {
@@ -642,6 +661,43 @@ mod tests {
                 .any(|r| r.name == "self" && r.resolution == Resolution::Local(implicit.slot))
         );
         assert!(!summary.references.iter().any(|r| r.name == "run"));
+    }
+
+    #[test]
+    fn constant_local_attributes_follow_capture_and_shadowing_resolution() {
+        let summary = analyze(
+            "local x<const> = 4; local y<close> = nil; local f=function() x=5 end; do local x=2; x=3 end; return x",
+        )
+        .unwrap();
+        assert_eq!(summary.bindings[0].attribute, Some(LocalAttribute::Const));
+        assert_eq!(summary.bindings[1].attribute, Some(LocalAttribute::Close));
+        assert_eq!(summary.bindings[2].attribute, None);
+        let captured = summary
+            .references
+            .iter()
+            .find(|reference| {
+                reference.name == "x"
+                    && reference.access == Access::Write
+                    && reference.resolution == Resolution::Upvalue(0)
+            })
+            .unwrap();
+        assert!(captured.const_reassignment);
+        let shadowed = summary
+            .references
+            .iter()
+            .find(|reference| {
+                reference.name == "x"
+                    && reference.access == Access::Write
+                    && reference.resolution == Resolution::Local(3)
+            })
+            .unwrap();
+        assert!(!shadowed.const_reassignment);
+        assert!(summary
+            .references
+            .iter()
+            .any(|reference| reference.name == "x"
+                && reference.access == Access::Read
+                && !reference.const_reassignment));
     }
 
     #[test]
