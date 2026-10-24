@@ -2108,9 +2108,9 @@ impl Execution<'_> {
                         Value::Integer(number) => {
                             self.intern_string(number.to_string().into_bytes())?
                         }
-                        Value::Float(bits) => self.intern_string(
-                            format!("{:?}", f64::from_bits(bits)).into_bytes(),
-                        )?,
+                        Value::Float(bits) => {
+                            self.intern_string(format!("{:?}", f64::from_bits(bits)).into_bytes())?
+                        }
                         _ => return Err(FlowError::TypeError),
                     }
                 } else {
