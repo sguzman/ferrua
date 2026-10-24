@@ -227,6 +227,7 @@ impl<'src> Resolver<'src> {
             Statement::Local {
                 names,
                 initializers,
+                ..
             } => {
                 // A local initializer resolves against outer/previous locals,
                 // not the newly declared names in the same statement.

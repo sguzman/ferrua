@@ -189,8 +189,14 @@ fn compile_statements<'a>(
         match node {
             Statement::Local {
                 names,
+                attributes,
                 initializers,
             } => {
+                if attributes.iter().any(Option::is_some) {
+                    return Err(Error::Unsupported(
+                        "Lua local attributes are not supported by register prototype".into(),
+                    ));
+                }
                 if names.is_empty() || names.len() != initializers.len() {
                     return Err(Error::Unsupported(
                         "all locals need one integer initializer".into(),

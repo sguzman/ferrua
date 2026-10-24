@@ -913,9 +913,10 @@ impl<'a> Compiler<'a> {
                     attributes,
                     initializers,
                 } => {
-                    if attributes.iter().any(|attribute| {
-                        matches!(attribute, Some(LocalAttribute::Close))
-                    }) {
+                    if attributes
+                        .iter()
+                        .any(|attribute| matches!(attribute, Some(LocalAttribute::Close)))
+                    {
                         return Err(FlowError::Unsupported(
                             "to-be-closed Lua variables are not implemented".into(),
                         ));
@@ -6475,7 +6476,10 @@ mod tests {
             ("local x<const> = 7; return x", 7),
             ("local x<const>, y = 4,5; y=8; return x+y", 12),
             ("local x<const> = {n=4}; x.n=8; return x.n", 8),
-            ("local x<const> = 4; local function f() return x+1 end; return f()", 5),
+            (
+                "local x<const> = 4; local function f() return x+1 end; return f()",
+                5,
+            ),
             ("local x<const> = 4; do local x=7; x=8 end; return x", 4),
             ("local x<const> = 2; do local x<const> = 7 end; return x", 2),
             ("local x<const>; return x==nil and 1 or 0", 1),
