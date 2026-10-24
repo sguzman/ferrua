@@ -692,12 +692,14 @@ mod tests {
             })
             .unwrap();
         assert!(!shadowed.const_reassignment);
-        assert!(summary
-            .references
-            .iter()
-            .any(|reference| reference.name == "x"
-                && reference.access == Access::Read
-                && !reference.const_reassignment));
+        assert!(
+            summary
+                .references
+                .iter()
+                .any(|reference| reference.name == "x"
+                    && reference.access == Access::Read
+                    && !reference.const_reassignment)
+        );
     }
 
     #[test]
