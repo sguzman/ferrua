@@ -3559,7 +3559,7 @@
               "id": "T415",
               "emoji": "🌐",
               "name": "Lua 5.4 full 31-bit UTF-8 string escape encoding",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Encode \\u{...} Lua escapes using one to six original UTF-8 bytes without relying on Rust Unicode scalar validation",
@@ -3578,7 +3578,8 @@
                 },
                 {
                   "text": "Synchronize README, detailed independent-engine documentation, machine ledger and generated roadmap with passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40118292248: all five CI jobs passed synchronized docs, machine ledger, generated roadmap and 31-bit Lua UTF-8 differential matrix"
                 }
               ]
             }

@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -641,11 +641,11 @@
   - [x] Preserve leading long-bracket newline removal, UTF-8 bytes and repeated-linebreak semantics — src/owned_flow.rs: long_brackets_normalize_crlf_lfcr_and_single_cr_line_breaks; tests/owned_flow.rs eight new differential cases
   - [x] Pass pinned upstream Lua 5.4 and production fer differential results, Rust unit/lint/format, MSRV and downstream GitHub consumer — GitHub Actions 40117631335: all five jobs green after rustfmt on 093e13bc3c67532215f6e7249dbe0b8f849c19e4
   - [x] Synchronize engine documentation, README, machine ledger and generated roadmap in passing CI — GitHub Actions 40118094275: all five jobs passed synchronized long-string documentation and extended Unicode escape implementation
-- 🌐 **T415** Lua 5.4 full 31-bit UTF-8 string escape encoding — `████████░░ 75%`
+- 🌐 **T415** Lua 5.4 full 31-bit UTF-8 string escape encoding — `██████████ 100%`
   - [x] Encode \u{...} Lua escapes using one to six original UTF-8 bytes without relying on Rust Unicode scalar validation — src/owned_flow.rs: append_lua_utf8_escape, code points 0..0x7FFFFFFF and direct byte-vector comparison
   - [x] Preserve invalid scalar byte encodings and six-byte values, while rejecting UTF-8 escape values beyond the Lua 5.4 limit — src/owned_flow.rs: lua_54_utf8_escapes_support_full_thirty_one_bit_byte_range, unicode_scalar_escapes_encode_utf8_bytes; lexical overflow rejected
   - [x] Pass pinned production fer and upstream Lua 5.4 differential reference cases, Linux tests/lint, MSRV and composite consumer — GitHub Actions 40118094275: five green jobs including seven new extended UTF-8 fixtures
-  - [ ] Synchronize README, detailed independent-engine documentation, machine ledger and generated roadmap with passing CI
+  - [x] Synchronize README, detailed independent-engine documentation, machine ledger and generated roadmap with passing CI — GitHub Actions 40118292248: all five CI jobs passed synchronized docs, machine ledger, generated roadmap and 31-bit Lua UTF-8 differential matrix
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -759,5 +759,5 @@
 - 🔢 Lua numeral lexical boundary and malformed literal conformance — `██████████ 100%`
 - 📍 Parser EOF diagnostics retain Lua physical line and byte position — `██████████ 100%`
 - ↵ Long-bracket string line-break normalization — `██████████ 100%`
-- 🌐 Original six-byte Lua UTF-8 escape semantics — `████████░░ 75%`
+- 🌐 Original six-byte Lua UTF-8 escape semantics — `██████████ 100%`
 
