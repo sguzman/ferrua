@@ -800,6 +800,12 @@ const SYNTAX_ERROR_FIXTURES: &[&str] = &[
     "local x<const> = 5; local function f() x=6 end; return x",
     "local x<const>, y = 4,5; x=7; return y",
     "local x<unknown> = 1",
+    "return 12abc",
+    "return 0x1g",
+    "return 1e3foo",
+    "return 1..2",
+    "return 3.4.5",
+    "return .5abc",
     "local x='unterminated",
 ];
 

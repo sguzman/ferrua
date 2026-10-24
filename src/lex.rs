@@ -418,8 +418,8 @@ mod tests {
         assert_eq!(
             spellings("return 1 .. 2, 0x1.fp+2 + 3.e1 - .5, 0xe+1"),
             [
-                "return", "1", "..", "2", ",", "0x1.fp+2", "+",
-                "3.e1", "-", ".5", ",", "0xe", "+", "1",
+                "return", "1", "..", "2", ",", "0x1.fp+2", "+", "3.e1", "-", ".5", ",", "0xe", "+",
+                "1",
             ]
         );
         assert_eq!(spellings("return 1e-2+0xA.p+2"), ["return", "1e-2", "+", "0xA.p+2"]);
