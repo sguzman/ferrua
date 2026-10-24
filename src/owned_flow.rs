@@ -60,6 +60,7 @@ pub enum Builtin {
     SetMetatable,
     Error,
     Pcall,
+    Xpcall,
 }
 
 impl Value {
@@ -481,6 +482,9 @@ impl<'a> Compiler<'a> {
                         }
                         Err(_) if *text == "pcall" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::Pcall)))?;
+                        }
+                        Err(_) if *text == "xpcall" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::Xpcall)))?;
                         }
                         Err(_) if *text == "next" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::Next)))?;
@@ -2082,13 +2086,14 @@ impl Execution<'_> {
         Ok(FlowError::Thrown(message))
     }
 
-    /// Bounded protected Lua closure calls preserve explicit error values.
-    /// Resource exhaustion remains fatal to prevent protected calls from
-    /// defeating the VM's global instruction and allocation budgets.
-    fn pcall_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
-        let callable = args.first().copied().unwrap_or(Value::Nil);
-        let parameters = args.get(1..).unwrap_or_default();
-        let outcome = match callable {
+    /// Experimental protected invocation currently accepts owned Lua closures
+    /// and the error/assert builtins. This is not yet full callable Lua parity.
+    fn protected_target(
+        &mut self,
+        callable: Value,
+        parameters: &[Value],
+    ) -> Result<Vec<Value>, FlowError> {
+        match callable {
             Value::Function(handle) => self.call_owned_function(handle, parameters),
             Value::Builtin(Builtin::Error) => Err(FlowError::Thrown(
                 parameters.first().copied().unwrap_or(Value::Nil),
@@ -2101,22 +2106,74 @@ impl Execution<'_> {
                 }
             }
             _ => Err(FlowError::TypeError),
-        };
-        match outcome {
+        }
+    }
+
+    /// A protected call must not swallow any global VM resource limit.
+    fn unprotectable_error(error: &FlowError) -> bool {
+        matches!(
+            error,
+            FlowError::StepBudgetExceeded | FlowError::TooLarge | FlowError::CallDepthExceeded
+        )
+    }
+
+    fn protected_error_value(&mut self, error: FlowError) -> Result<Value, FlowError> {
+        match error {
+            FlowError::Thrown(value) => Ok(value),
+            other => self.intern_string(other.to_string().into_bytes()),
+        }
+    }
+
+    /// Bounded pcall returns false plus the original error value, or a string
+    /// describing a runtime fault. Successful calls preserve all results.
+    fn pcall_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let callable = args.first().copied().unwrap_or(Value::Nil);
+        let parameters = args.get(1..).unwrap_or_default();
+        match self.protected_target(callable, parameters) {
             Ok(mut results) => {
                 let mut values = vec![Value::Boolean(true)];
                 values.append(&mut results);
                 Ok(values)
             }
-            Err(
-                error @ (FlowError::StepBudgetExceeded
-                | FlowError::TooLarge
-                | FlowError::CallDepthExceeded),
-            ) => Err(error),
-            Err(FlowError::Thrown(value)) => Ok(vec![Value::Boolean(false), value]),
-            Err(other) => {
-                let message = self.intern_string(other.to_string().into_bytes())?;
-                Ok(vec![Value::Boolean(false), message])
+            Err(error) if Self::unprotectable_error(&error) => Err(error),
+            Err(error) => Ok(vec![
+                Value::Boolean(false),
+                self.protected_error_value(error)?,
+            ]),
+        }
+    }
+
+    /// xpcall(f, handler, ...) executes the first-party message handler only
+    /// after a recoverable failure. Handler returns are truncated to one Lua
+    /// value, while successful targets preserve their full result list.
+    fn xpcall_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let callable = args.first().copied().unwrap_or(Value::Nil);
+        let handler = args.get(1).copied().unwrap_or(Value::Nil);
+        let parameters = args.get(2..).unwrap_or_default();
+        match self.protected_target(callable, parameters) {
+            Ok(mut results) => {
+                let mut values = vec![Value::Boolean(true)];
+                values.append(&mut results);
+                Ok(values)
+            }
+            Err(error) if Self::unprotectable_error(&error) => Err(error),
+            Err(error) => {
+                let message = self.protected_error_value(error)?;
+                let handled = match handler {
+                    Value::Function(handle) => self.call_owned_function(handle, &[message]),
+                    _ => Err(FlowError::TypeError),
+                };
+                match handled {
+                    Ok(values) => Ok(vec![
+                        Value::Boolean(false),
+                        values.first().copied().unwrap_or(Value::Nil),
+                    ]),
+                    Err(error) if Self::unprotectable_error(&error) => Err(error),
+                    Err(_) => Ok(vec![
+                        Value::Boolean(false),
+                        self.intern_string(b"error in error handling".to_vec())?,
+                    ]),
+                }
             }
         }
     }
@@ -2418,7 +2475,10 @@ impl Execution<'_> {
                     }
                     if let Value::Builtin(builtin) = callable {
                         if args.is_empty()
-                            && !matches!(builtin, Builtin::Error | Builtin::Pcall | Builtin::Assert)
+                            && !matches!(
+                                builtin,
+                                Builtin::Error | Builtin::Pcall | Builtin::Xpcall | Builtin::Assert
+                            )
                         {
                             return Err(FlowError::TypeError);
                         }
@@ -2436,10 +2496,12 @@ impl Execution<'_> {
                                 | Builtin::Ipairs
                                 | Builtin::IpairsIterator
                                 | Builtin::Pcall
+                                | Builtin::Xpcall
                         ) {
                             let returned = match builtin {
                                 Builtin::Select => self.select_builtin(&args)?,
                                 Builtin::Pcall => self.pcall_builtin(&args)?,
+                                Builtin::Xpcall => self.xpcall_builtin(&args)?,
                                 Builtin::Assert
                                     if args.first().copied().unwrap_or(Value::Nil).truthy() =>
                                 {
@@ -2547,6 +2609,7 @@ impl Execution<'_> {
                             Builtin::SetMetatable => self.setmetatable_builtin(&args)?,
                             Builtin::Error
                             | Builtin::Pcall
+                            | Builtin::Xpcall
                             | Builtin::Select
                             | Builtin::Assert
                             | Builtin::Next
@@ -3799,6 +3862,58 @@ mod tests {
         assert_eq!(
             execute_flow_chunk(&invalid, DEFAULT_STEP_BUDGET),
             Err(FlowError::TypeError)
+        );
+    }
+
+    #[test]
+    fn xpcall_runs_bounded_message_handlers_and_preserves_success_results() {
+        for (source, expected) in [
+            (
+                "local ok,a,b=xpcall(function() return 5,6 end,function(e) return e end); return ok and a*10+b or 0",
+                56,
+            ),
+            (
+                "local ok,v=xpcall(function(a,b) return a+b end,function(e) return e end,3,4); return ok and v or 0",
+                7,
+            ),
+            (
+                "local ok,e=xpcall(error,function(e) return e*2 end,7); return not ok and e or 0",
+                14,
+            ),
+            (
+                "local ok,e=xpcall(error,function(e) return e end,false); return not ok and e==false and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,e=xpcall(error,function(e) return 9,10 end,42); return not ok and e==9 and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,e=xpcall(function() return nil+1 end,function(e) return type(e) end); return not ok and e=='string' and 1 or 0",
+                1,
+            ),
+            (
+                "local n=0; local ok=xpcall(function() return 5 end,function() n=n+1 end); return ok and n or 9",
+                0,
+            ),
+            (
+                "local ok,e=xpcall(error,function() error(6) end,4); return not ok and type(e)=='string' and 1 or 0",
+                1,
+            ),
+            (
+                "return type(xpcall)=='function' and 1 or 0",
+                1,
+            ),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        let program = compile_flow_chunk(
+            "local f; f=function() return xpcall(f,function(e) return e end) end; return f()",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
         );
     }
 
