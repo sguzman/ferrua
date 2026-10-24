@@ -2154,21 +2154,22 @@ impl Execution<'_> {
         builtin: Builtin,
         args: &[Value],
     ) -> Result<Vec<Value>, FlowError> {
+        // Lua 5.4 pairs/ipairs validate that an argument exists, but do not
+        // require a table until the default iterator is actually invoked.
         let table = *args.first().ok_or(FlowError::TypeError)?;
-        let Value::Table(handle) = table else {
-            return Err(FlowError::TypeError);
-        };
         if builtin == Builtin::Pairs {
-            if let Some(method) = self.metatable_field(handle, b"__pairs")? {
-                let Value::Function(callback) = method else {
-                    return Err(FlowError::TypeError);
-                };
-                let values = self.call_owned_function(callback, &[table])?;
-                return Ok(vec![
-                    values.first().copied().unwrap_or(Value::Nil),
-                    values.get(1).copied().unwrap_or(Value::Nil),
-                    values.get(2).copied().unwrap_or(Value::Nil),
-                ]);
+            if let Value::Table(handle) = table {
+                if let Some(method) = self.metatable_field(handle, b"__pairs")? {
+                    let Value::Function(callback) = method else {
+                        return Err(FlowError::TypeError);
+                    };
+                    let values = self.call_owned_function(callback, &[table])?;
+                    return Ok(vec![
+                        values.first().copied().unwrap_or(Value::Nil),
+                        values.get(1).copied().unwrap_or(Value::Nil),
+                        values.get(2).copied().unwrap_or(Value::Nil),
+                    ]);
+                }
             }
             Ok(vec![Value::Builtin(Builtin::Next), table, Value::Nil])
         } else {
@@ -4009,12 +4010,16 @@ mod tests {
             "local mt={__pairs=function() return nil end}; local ok,f,s,k=pcall(pairs,setmetatable({},mt)); return ok and f==nil and s==nil and k==nil and 1 or 0",
             "local t=setmetatable({5},{__pairs=function() error(5) end}); local ok,e=pcall(pairs,t); return not ok and e==5 and 1 or 0",
             "local t=setmetatable({5},{__pairs=function() error(5) end}); local ok,f,s,k=pcall(ipairs,t); local i,v=f(s,k); return ok and i==1 and v==5 and 1 or 0",
-            "local ok,e=pcall(pairs,4); return not ok and type(e)=='string' and 1 or 0",
-            "local ok,e=pcall(ipairs,nil); return not ok and type(e)=='string' and 1 or 0",
+            "local ok,f,s,k=pcall(pairs,4); return ok and type(f)=='function' and s==4 and k==nil and 1 or 0",
+            "local ok,f,s,k=pcall(ipairs,nil); return ok and type(f)=='function' and s==nil and k==0 and 1 or 0",
             "local t={}; local ok,e=xpcall(error,pairs,t); return not ok and type(e)=='function' and 1 or 0",
             "local t={}; local ok,e=xpcall(error,ipairs,t); return not ok and type(e)=='function' and 1 or 0",
             "local f,s,k=pcall(pairs,{x=2}); return f and type(s)=='function' and type(k)=='table' and 1 or 0",
             "local n=0; local t=setmetatable({},{__pairs=function(self) n=n+1; return next,self,nil end}); local ok,f,s,k=pcall(pairs,t); return ok and n==1 and type(f)=='function' and 1 or 0",
+            "local ok,f,s,k=pcall(pairs,4); local works,e=pcall(f,s,k); return ok and not works and type(e)=='string' and 1 or 0",
+            "local ok,f,s,k=pcall(ipairs,nil); local works,e=pcall(f,s,k); return ok and not works and type(e)=='string' and 1 or 0",
+            "local ok,e=pcall(pairs); return not ok and type(e)=='string' and 1 or 0",
+            "local ok,e=pcall(ipairs); return not ok and type(e)=='string' and 1 or 0",
             "local t=setmetatable({}, {__pairs=7}); local ok,e=pcall(pairs,t); return not ok and type(e)=='string' and 1 or 0",
             "local t=setmetatable({}, {__pairs=function() return function() end, {a=1}, nil,9 end}); return select('#',pcall(pairs,t))==4 and 1 or 0",
         ] {
