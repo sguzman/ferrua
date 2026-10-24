@@ -3900,10 +3900,7 @@ mod tests {
                 "local ok,e=xpcall(error,function() error(6) end,4); return not ok and type(e)=='string' and 1 or 0",
                 1,
             ),
-            (
-                "return type(xpcall)=='function' and 1 or 0",
-                1,
-            ),
+            ("return type(xpcall)=='function' and 1 or 0", 1),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
