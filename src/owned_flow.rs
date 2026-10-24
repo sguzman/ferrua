@@ -2390,31 +2390,17 @@ impl Execution<'_> {
         Ok(text)
     }
 
-    /// Lua's print resolves the current global tostring instead of bypassing
-    /// overrides. Limit nested conversions so tostring=print cannot exhaust
-    /// the native Rust stack.
+    /// A bounded, host-independent implementation of Lua's print protocol.
+    /// Lua 5.4 intentionally ignores overrides of the global tostring function.
+    /// Conversion uses __tostring metamethods and shared VM safety limits.
     fn print_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
-        if self.depth >= MAX_CALL_DEPTH {
-            return Err(FlowError::CallDepthExceeded);
-        }
-        self.depth += 1;
-        let result = self.print_builtin_inner(args);
-        self.depth -= 1;
-        result
-    }
-
-    fn print_builtin_inner(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
-        let Value::String(key) = self.intern_string(b"tostring".to_vec())? else {
-            return Err(FlowError::InvalidBytecode);
-        };
-        let converter = self.read_global(key)?;
         let mut line = Vec::new();
         for (index, &argument) in args.iter().enumerate() {
             if index > 0 {
                 line.push(b'\t');
             }
-            let converted = self.protected_target(converter, &[argument])?;
-            let Value::String(handle) = converted.first().copied().unwrap_or(Value::Nil) else {
+            let converted = self.tostring_builtin(argument)?;
+            let Value::String(handle) = converted else {
                 return Err(FlowError::TypeError);
             };
             let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
@@ -7028,33 +7014,14 @@ mod tests {
     }
 
     #[test]
-    fn print_uses_mutable_tostring_and_bounds_recursive_conversions() {
+    fn print_ignores_global_tostring_overrides_but_uses_metamethods() {
         let program = compile_flow_chunk(
-            "local base=tostring; tostring=function(v) return '['..base(v)..']' end; print(6,true,'x')",
+            "tostring=function() return 'override' end; print(7,true); _G.tostring=nil; print('hello'); local t=setmetatable({}, {__tostring=function() return 'tag' end}); print(t)",
         )
         .unwrap();
         let outcome = execute_flow_capture(&program, 2000);
         assert_eq!(outcome.result, Ok(vec![]));
-        assert_eq!(outcome.stdout, b"[6]\t[true]\t[x]\n");
-
-        let program = compile_flow_chunk(
-            "local base=tostring; _G.tostring=function() return 'wrapped' end; print(7); _G.tostring=base; print(8)",
-        )
-        .unwrap();
-        let outcome = execute_flow_capture(&program, 2000);
-        assert_eq!(outcome.result, Ok(vec![]));
-        assert_eq!(outcome.stdout, b"wrapped\n8\n");
-
-        let program = compile_flow_chunk("tostring=function() return 7 end; print(1)").unwrap();
-        assert_eq!(
-            execute_flow_capture(&program, 300).result,
-            Err(FlowError::TypeError)
-        );
-        let program = compile_flow_chunk("tostring=print; print(1)").unwrap();
-        assert_eq!(
-            execute_flow_capture(&program, 300).result,
-            Err(FlowError::CallDepthExceeded)
-        );
+        assert_eq!(outcome.stdout, b"7\ttrue\nhello\ntag\n");
     }
 
     #[test]

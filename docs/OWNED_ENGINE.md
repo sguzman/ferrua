@@ -800,6 +800,6 @@ On first access to `_G`, the owned VM constructs a bounded Lua table containing 
 
 When a lexical local named `_ENV` is visible, the bounded owned compiler now lowers otherwise-unbound identifier reads to `_ENV[name]`, and prepared assignments to writes into that same table. Closure captures inherit the nearest lexical `_ENV`, allowing functions declared within the scope to observe later changes to that table. Without a lexical `_ENV`, global names continue to use the shared default environment; reading the default `_ENV` returns the default `_G` table. This does not yet guarantee complete Lua 5.4 environment semantics for arbitrary upvalue rebinding, module loading or all bytecode forms.
 
-### Dynamic tostring dispatch during print
+### Lua 5.4 print conversion (experimental)
 
-The opt-in owned print builtin resolves the mutable Lua global `tostring` at call time, rather than hardcoding its internal conversion. Overrides through `tostring` or `_G.tostring` affect output; a non-string result fails explicitly. A bounded nested-call guard prevents recursive `tostring=print` cycles from exhausting the native Rust stack. The separate 64 KiB output quota still applies. Curated upstream Lua 5.4 differential tests cover the supported override behavior.
+Lua 5.4 intentionally bypasses the mutable global `tostring` function inside `print`. Ferrua's first-party print uses its internal conversion and honors supported `__tostring` metamethods, but overriding `tostring` or `_G.tostring` cannot affect it. This behavior follows the Lua 5.4 reference manual's incompatibilities section (https://www.lua.org/manual/5.4/manual.html#8.2) and is covered by upstream CLI differential regressions. The separate 64 KiB output quota still applies.
