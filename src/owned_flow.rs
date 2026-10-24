@@ -3921,6 +3921,26 @@ mod tests {
     }
 
     #[test]
+    fn assertion_failures_preserve_custom_error_values_in_pcall() {
+        for (source, expected) in [
+            ("local ok,msg=pcall(assert,false); return not ok and msg=='assertion failed!' and 1 or 0", 1),
+            ("local ok,msg=pcall(assert); return not ok and msg=='assertion failed!' and 1 or 0", 1),
+            ("local ok,msg=pcall(assert,false,'custom'); return not ok and msg=='custom' and 1 or 0", 1),
+            ("local ok,msg=pcall(assert,false,42); return not ok and msg==42 and 1 or 0", 1),
+            ("local ok,msg=pcall(assert,false,false); return not ok and msg==false and 1 or 0", 1),
+            ("local ok,msg=pcall(function() assert(nil,'inner') end); return not ok and msg=='inner' and 1 or 0", 1),
+            ("local ok,a,b=pcall(assert,true,5); return ok and a==true and b==5 and 1 or 0", 1),
+        ] {
+            assert_eq!(evaluate(source), expected, "{source}");
+        }
+        let program = compile_flow_chunk("return assert(false,nil)").unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::Thrown(Value::Nil))
+        );
+    }
+
+    #[test]
     fn first_class_select_adjusts_bounded_lua_result_lists() {
         assert_eq!(evaluate("return select('#',4,5,6)"), 3);
         assert_eq!(evaluate("return select('#')"), 0);
