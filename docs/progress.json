@@ -2999,7 +2999,7 @@
               "id": "T395",
               "emoji": "🔐",
               "name": "Protected Lua raw table and metatable builtin parity",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Share rawget and rawset behavior across ordinary and protected calls, without consulting __index/__newindex",
@@ -3018,7 +3018,8 @@
                 },
                 {
                   "text": "Synchronize documentation and machine-readable progress ledger under CI acceptance",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40051622021: five jobs green including source/docs/ledger/roadmap integrity and Lua 5.4 differential parity"
                 }
               ]
             }

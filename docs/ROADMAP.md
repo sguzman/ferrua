@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 96%` across 124 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 124 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -541,11 +541,11 @@
   - [x] Accept string and numeric __tostring results, reject invalid types and preserve recursion/budget safeguards — src/owned_flow.rs: protected_tostring_reuses_lua_metatable_callback_semantics and tostring_metatable_hook_coerces_numeric_and_bounds_recursive_calls
   - [x] Pass production fer plus upstream Lua 5.4 differential parity, Linux quality/tests, Rust 1.96 and consumer acceptance — GitHub Actions 40047343376 all five jobs green for commit 30cc8fc9d492dfdbf63946d737a75fdb441953ec
   - [x] Synchronize corrected engine docs, README, machine ledger and generated roadmap in verified CI — GitHub Actions 40051235510: five successful jobs including regenerated roadmap integrity, README, owned-engine docs and Lua 5.4 differential
-- 🔐 **T395** Protected Lua raw table and metatable builtin parity — `████████░░ 75%`
+- 🔐 **T395** Protected Lua raw table and metatable builtin parity — `██████████ 100%`
   - [x] Share rawget and rawset behavior across ordinary and protected calls, without consulting __index/__newindex — src/owned_flow.rs: Execution::rawget_builtin and rawset_builtin; GitHub Actions 40051457030 accepted
   - [x] Protect getmetatable and setmetatable semantics, including __metatable locks and observable table mutation — src/owned_flow.rs: Execution::protected_target delegates to existing getmetatable_builtin/setmetatable_builtin; 14 differential cases
   - [x] Pass Rust quality/tests, upstream Lua 5.4 and production fer reference corpus, Rust 1.96 and action consumer CI — GitHub Actions 40051457030: all five primary/reporting jobs successful for 84452bc5be6453da7f4e76cbe194f29046f03e47
-  - [ ] Synchronize documentation and machine-readable progress ledger under CI acceptance
+  - [x] Synchronize documentation and machine-readable progress ledger under CI acceptance — GitHub Actions 40051622021: five jobs green including source/docs/ledger/roadmap integrity and Lua 5.4 differential parity
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -639,5 +639,5 @@
 - 🧪 Strict xpcall handler type parity — `██████████ 100%`
 - 🧮 Selected builtin protected calls — `██████████ 100%`
 - 📝 Shared protected tostring and numeric __tostring parity — `██████████ 100%`
-- 🔐 Protected raw table and metatable standard builtins — `████████░░ 75%`
+- 🔐 Protected raw table and metatable standard builtins — `██████████ 100%`
 
