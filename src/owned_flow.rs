@@ -2071,6 +2071,21 @@ impl Execution<'_> {
         }
     }
 
+    /// Lua error(message, level) accepts nil or an integer-convertible
+    /// optional stack level. The bounded VM does not yet prefix source
+    /// locations to string errors, but must reject invalid level types.
+    fn error_builtin(&self, args: &[Value]) -> FlowError {
+        if let Some(level) = args.get(1).copied().filter(|level| *level != Value::Nil)
+            && self
+                .exact_integer_operand(level)
+                .or_else(|_| self.integer_operand(level))
+                .is_err()
+        {
+            return FlowError::TypeError;
+        }
+        FlowError::Thrown(args.first().copied().unwrap_or(Value::Nil))
+    }
+
     /// An assertion raises the supplied Lua error value, or the default
     /// assertion message when no custom second argument is given.
     fn assertion_failure(&mut self, args: &[Value]) -> Result<FlowError, FlowError> {
@@ -2242,9 +2257,7 @@ impl Execution<'_> {
         }
         match callable {
             Value::Function(handle) => self.call_owned_function(handle, &arguments),
-            Value::Builtin(Builtin::Error) => Err(FlowError::Thrown(
-                arguments.first().copied().unwrap_or(Value::Nil),
-            )),
+            Value::Builtin(Builtin::Error) => Err(self.error_builtin(&arguments)),
             Value::Builtin(Builtin::Assert) => {
                 if arguments.first().copied().unwrap_or(Value::Nil).truthy() {
                     Ok(arguments)
@@ -2704,9 +2717,7 @@ impl Execution<'_> {
                             return Err(FlowError::TypeError);
                         }
                         if builtin == Builtin::Error {
-                            return Err(FlowError::Thrown(
-                                args.first().copied().unwrap_or(Value::Nil),
-                            ));
+                            return Err(self.error_builtin(&args));
                         }
                         if matches!(
                             builtin,
@@ -4205,6 +4216,22 @@ mod tests {
     }
 
     #[test]
+    fn lua_error_builtin_validates_optional_level_in_normal_and_protected_calls() {
+        for source in [
+            "local ok,e=pcall(error,7,'bad'); return not ok and type(e)=='string' and 1 or 0",
+            "local ok,e=pcall(error,7,{}); return not ok and type(e)=='string' and 1 or 0",
+            "local ok,e=pcall(error,7,1); return not ok and e==7 and 1 or 0",
+            "local ok,e=pcall(error,7,nil); return not ok and e==7 and 1 or 0",
+            "local ok,e=pcall(error,7,'0'); return not ok and e==7 and 1 or 0",
+            "local ok,e=pcall(error); return not ok and e==nil and 1 or 0",
+            "local t={}; local ok,e=pcall(error,t,{}); return not ok and type(e)=='string' and 1 or 0",
+            "local ok,e=xpcall(function() error(12,{}) end,function(e) return type(e) end); return not ok and e=='string' and 1 or 0",
+        ] {
+            assert_eq!(evaluate(source), 1, "{source}");
+        }
+    }
+
+    #[test]
     fn callable_len_metamethods_preserve_lua_results_and_depth_safety() {
         for source in [
             "local h=setmetatable({n=7},{__call=function(self,t) return self.n end}); local t=setmetatable({},{__len=h}); return #t==7 and 1 or 0",
@@ -4214,7 +4241,7 @@ mod tests {
             "local t=setmetatable({},{__len=type}); return #t=='table' and 1 or 0",
             "local h=setmetatable({},{__call=function() return 6,7 end}); local t=setmetatable({},{__len=h}); return #t==6 and 1 or 0",
             "local h=setmetatable({},{__call=function() error(14) end}); local t=setmetatable({},{__len=h}); local ok,e=pcall(function() return #t end); return not ok and e==14 and 1 or 0",
-            "local t=setmetatable({},{__len=error}); local ok,e=pcall(function() return #t end); return not ok and rawequal(e,t) and 1 or 0",
+            "local t=setmetatable({},{__len=error}); local ok,e=pcall(function() return #t end); return not ok and type(e)=='string' and 1 or 0",
             "local t=setmetatable({},{__len=3}); local ok,e=pcall(function() return #t end); return not ok and type(e)=='string' and 1 or 0",
             "local t=setmetatable({},{__len=function() return 'ok' end}); return #t=='ok' and 1 or 0",
             "local t=setmetatable({},{__len=function() return nil end}); return #t==nil and 1 or 0",
