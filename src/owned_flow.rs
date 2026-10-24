@@ -2147,6 +2147,39 @@ impl Execution<'_> {
         Ok(Value::Table(handle))
     }
 
+    /// Return Lua's iterator, state and initial control values for pairs
+    /// and ipairs. The protected and ordinary call paths share this lowering.
+    fn pairs_ipairs_builtin(
+        &mut self,
+        builtin: Builtin,
+        args: &[Value],
+    ) -> Result<Vec<Value>, FlowError> {
+        let table = *args.first().ok_or(FlowError::TypeError)?;
+        let Value::Table(handle) = table else {
+            return Err(FlowError::TypeError);
+        };
+        if builtin == Builtin::Pairs {
+            if let Some(method) = self.metatable_field(handle, b"__pairs")? {
+                let Value::Function(callback) = method else {
+                    return Err(FlowError::TypeError);
+                };
+                let values = self.call_owned_function(callback, &[table])?;
+                return Ok(vec![
+                    values.first().copied().unwrap_or(Value::Nil),
+                    values.get(1).copied().unwrap_or(Value::Nil),
+                    values.get(2).copied().unwrap_or(Value::Nil),
+                ]);
+            }
+            Ok(vec![Value::Builtin(Builtin::Next), table, Value::Nil])
+        } else {
+            Ok(vec![
+                Value::Builtin(Builtin::IpairsIterator),
+                table,
+                Value::Integer(0),
+            ])
+        }
+    }
+
     /// Protected calls share Lua's bounded callable-table redirects with
     /// ordinary bytecode calls. General builtins remain an incomplete subset.
     fn protected_target(
@@ -2224,6 +2257,12 @@ impl Execution<'_> {
                     left == right
                 };
                 Ok(vec![Value::Boolean(equal)])
+            }
+            Value::Builtin(Builtin::Pairs) => {
+                self.pairs_ipairs_builtin(Builtin::Pairs, &arguments)
+            }
+            Value::Builtin(Builtin::Ipairs) => {
+                self.pairs_ipairs_builtin(Builtin::Ipairs, &arguments)
             }
             Value::Builtin(Builtin::Select) => self.select_builtin(&arguments),
             Value::Builtin(Builtin::Next) => self.next_builtin(&arguments),
@@ -2652,33 +2691,7 @@ impl Execution<'_> {
                                 Builtin::Assert => return Err(self.assertion_failure(&args)?),
                                 Builtin::Next => self.next_builtin(&args)?,
                                 Builtin::Pairs | Builtin::Ipairs => {
-                                    let Value::Table(handle) = args[0] else {
-                                        return Err(FlowError::TypeError);
-                                    };
-                                    if builtin == Builtin::Pairs {
-                                        if let Some(method) =
-                                            self.metatable_field(handle, b"__pairs")?
-                                        {
-                                            let Value::Function(callback) = method else {
-                                                return Err(FlowError::TypeError);
-                                            };
-                                            let values =
-                                                self.call_owned_function(callback, &[args[0]])?;
-                                            vec![
-                                                values.first().copied().unwrap_or(Value::Nil),
-                                                values.get(1).copied().unwrap_or(Value::Nil),
-                                                values.get(2).copied().unwrap_or(Value::Nil),
-                                            ]
-                                        } else {
-                                            vec![Value::Builtin(Builtin::Next), args[0], Value::Nil]
-                                        }
-                                    } else {
-                                        vec![
-                                            Value::Builtin(Builtin::IpairsIterator),
-                                            args[0],
-                                            Value::Integer(0),
-                                        ]
-                                    }
+                                    self.pairs_ipairs_builtin(builtin, &args)?
                                 }
                                 Builtin::IpairsIterator => self.ipairs_iterator(&args)?,
                                 _ => unreachable!("only multi-result builtins enter this path"),
@@ -3985,6 +3998,30 @@ mod tests {
             execute_flow_values(&cyclic, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
         );
+    }
+
+    #[test]
+    fn protected_pairs_and_ipairs_preserve_iterator_triples() {
+        for source in [
+            "local t={a=3}; local ok,f,s,k=pcall(pairs,t); local key,val=f(s,k); return ok and key=='a' and val==3 and 1 or 0",
+            "return select('#',pcall(pairs,{}))==4 and 1 or 0",
+            "local ok,f,s,k=pcall(ipairs,{6,7}); local i,v=f(s,k); return ok and i==1 and v==6 and 1 or 0",
+            "return select('#',pcall(ipairs,{}))==4 and 1 or 0",
+            "local mt={__pairs=function(t) return function(_,k) if k==nil then return 'x',9 end end,t,nil end}; local t=setmetatable({},mt); local ok,f,s,k=pcall(pairs,t); local i,v=f(s,k); return ok and i=='x' and v==9 and 1 or 0",
+            "local mt={__pairs=function() return nil end}; local ok,f,s,k=pcall(pairs,setmetatable({},mt)); return ok and f==nil and s==nil and k==nil and 1 or 0",
+            "local t=setmetatable({5},{__pairs=function() error(5) end}); local ok,e=pcall(pairs,t); return not ok and e==5 and 1 or 0",
+            "local t=setmetatable({5},{__pairs=function() error(5) end}); local ok,f,s,k=pcall(ipairs,t); local i,v=f(s,k); return ok and i==1 and v==5 and 1 or 0",
+            "local ok,e=pcall(pairs,4); return not ok and type(e)=='string' and 1 or 0",
+            "local ok,e=pcall(ipairs,nil); return not ok and type(e)=='string' and 1 or 0",
+            "local t={}; local ok,e=xpcall(error,pairs,t); return not ok and type(e)=='function' and 1 or 0",
+            "local t={}; local ok,e=xpcall(error,ipairs,t); return not ok and type(e)=='function' and 1 or 0",
+            "local f,s,k=pcall(pairs,{x=2}); return f and type(s)=='function' and type(k)=='table' and 1 or 0",
+            "local n=0; local t=setmetatable({},{__pairs=function(self) n=n+1; return next,self,nil end}); local ok,f,s,k=pcall(pairs,t); return ok and n==1 and type(f)=='function' and 1 or 0",
+            "local t=setmetatable({}, {__pairs=7}); local ok,e=pcall(pairs,t); return not ok and type(e)=='string' and 1 or 0",
+            "local t=setmetatable({}, {__pairs=function() return function() end, {a=1}, nil,9 end}); return select('#',pcall(pairs,t))==4 and 1 or 0",
+        ] {
+            assert_eq!(evaluate(source), 1, "{source}");
+        }
     }
 
     #[test]
