@@ -3195,7 +3195,7 @@
               "id": "T402",
               "emoji": "🎭",
               "name": "Lua binary and unary metamethods accept bounded callable values",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Resolve first available binary metamethod as a Lua value, then invoke callable closures, builtin functions and tables with __call",
@@ -3214,7 +3214,8 @@
                 },
                 {
                   "text": "Synchronize README, engine docs, machine progress ledger and generated roadmap in successful CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40054589028: all five jobs passed synchronized README, documentation, machine ledger and generated roadmap, with Lua 5.4 reference tests"
                 }
               ]
             }

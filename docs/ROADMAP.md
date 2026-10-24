@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 96%` across 131 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 131 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -576,11 +576,11 @@
   - [x] Preserve Lua __len callback results and two-operand signature, validate error(message, level), and enforce cyclic-depth protections — src/owned_flow.rs: callable_len_metamethods_preserve_lua_results_and_depth_safety; lua_error_builtin_validates_optional_level_in_normal_and_protected_calls
   - [x] Pass 20 positive/error differential fixtures, two hard-limit regressions, Rust 1.96, Linux packaging/quality, Lua 5.4 and pinned fer CI — GitHub Actions 40054039668: all five jobs passed for dcc0b1bf91b428b3bc44f73e27da87986ce95b19
   - [x] Synchronize README, engine design, machine progress and generated roadmap after passing CI — GitHub Actions 40054258283: all five jobs green including updated Lua error-level docs, generated roadmap and machine progress integrity
-- 🎭 **T402** Lua binary and unary metamethods accept bounded callable values — `████████░░ 75%`
+- 🎭 **T402** Lua binary and unary metamethods accept bounded callable values — `██████████ 100%`
   - [x] Resolve first available binary metamethod as a Lua value, then invoke callable closures, builtin functions and tables with __call — src/owned_flow.rs: binary_metamethod_callback returns Option<Value>, invoke_binary_metamethod routes via protected_target
   - [x] Preserve arithmetic, bitwise, concatenation, equality and ordering operator semantics with bounded host frames and hard recursion failures — src/owned_flow.rs: callable_binary_metamethods_preserve_lua_dispatch_and_depth_limits; two cycle safety regressions
   - [x] Pass 16 Lua 5.4/production fer differential fixtures, Linux format/lint/tests/archive, Rust 1.96, action consumer and aggregate CI — GitHub Actions 40054377514: all five jobs passed on 4ee9449a9c88a791e55245fe9de810958fd4b9ea
-  - [ ] Synchronize README, engine docs, machine progress ledger and generated roadmap in successful CI
+  - [x] Synchronize README, engine docs, machine progress ledger and generated roadmap in successful CI — GitHub Actions 40054589028: all five jobs passed synchronized README, documentation, machine ledger and generated roadmap, with Lua 5.4 reference tests
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -681,5 +681,5 @@
 - 🔁 Callable-table and builtin Lua __pairs callbacks — `██████████ 100%`
 - 🗣️ Lua callable __tostring tables and builtin callbacks — `██████████ 100%`
 - 📏 Callable Lua __len callbacks and error-level parity — `██████████ 100%`
-- 🎭 Callable binary and unary Lua metamethod targets — `████████░░ 75%`
+- 🎭 Callable binary and unary Lua metamethod targets — `██████████ 100%`
 
