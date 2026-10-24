@@ -2125,6 +2125,28 @@ impl Execution<'_> {
         Ok(text)
     }
 
+    /// Raw table builtins never consult __index or __newindex callbacks.
+    /// The ordinary opcode path and protected-call path share these checks.
+    fn rawget_builtin(&self, args: &[Value]) -> Result<Value, FlowError> {
+        let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
+            return Err(FlowError::TypeError);
+        };
+        let key = *args.get(1).ok_or(FlowError::TypeError)?;
+        let key = self.table_key(key)?;
+        self.read_table(handle, key)
+    }
+
+    fn rawset_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
+            return Err(FlowError::TypeError);
+        };
+        let key = *args.get(1).ok_or(FlowError::TypeError)?;
+        let value = *args.get(2).ok_or(FlowError::TypeError)?;
+        let key = self.table_key(key)?;
+        self.write_table(handle, key, value)?;
+        Ok(Value::Table(handle))
+    }
+
     /// Protected calls share Lua's bounded callable-table redirects with
     /// ordinary bytecode calls. General builtins remain an incomplete subset.
     fn protected_target(
@@ -2202,6 +2224,14 @@ impl Execution<'_> {
                     left == right
                 };
                 Ok(vec![Value::Boolean(equal)])
+            }
+            Value::Builtin(Builtin::RawGet) => Ok(vec![self.rawget_builtin(&arguments)?]),
+            Value::Builtin(Builtin::RawSet) => Ok(vec![self.rawset_builtin(&arguments)?]),
+            Value::Builtin(Builtin::GetMetatable) => {
+                Ok(vec![self.getmetatable_builtin(&arguments)?])
+            }
+            Value::Builtin(Builtin::SetMetatable) => {
+                Ok(vec![self.setmetatable_builtin(&arguments)?])
             }
             _ => Err(FlowError::TypeError),
         }
@@ -2691,28 +2721,8 @@ impl Execution<'_> {
                                 };
                                 Value::Boolean(equal)
                             }
-                            Builtin::RawGet => {
-                                let Value::Table(handle) =
-                                    *args.first().ok_or(FlowError::TypeError)?
-                                else {
-                                    return Err(FlowError::TypeError);
-                                };
-                                let key = *args.get(1).ok_or(FlowError::TypeError)?;
-                                let key = self.table_key(key)?;
-                                self.read_table(handle, key)?
-                            }
-                            Builtin::RawSet => {
-                                let Value::Table(handle) =
-                                    *args.first().ok_or(FlowError::TypeError)?
-                                else {
-                                    return Err(FlowError::TypeError);
-                                };
-                                let key = *args.get(1).ok_or(FlowError::TypeError)?;
-                                let value = *args.get(2).ok_or(FlowError::TypeError)?;
-                                let key = self.table_key(key)?;
-                                self.write_table(handle, key, value)?;
-                                Value::Table(handle)
-                            }
+                            Builtin::RawGet => self.rawget_builtin(&args)?,
+                            Builtin::RawSet => self.rawset_builtin(&args)?,
                             Builtin::RawLen => self.raw_len(value)?,
                             Builtin::GetMetatable => self.getmetatable_builtin(&args)?,
                             Builtin::SetMetatable => self.setmetatable_builtin(&args)?,
@@ -3972,6 +3982,28 @@ mod tests {
             execute_flow_values(&cyclic, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
         );
+    }
+
+    #[test]
+    fn protected_raw_table_and_metatable_builtins_match_lua() {
+        for source in [
+            "local t=setmetatable({x=3},{__index=function() return 9 end}); local ok,v=pcall(rawget,t,'missing'); return ok and v==nil and 1 or 0",
+            "local t={}; local ok,v=pcall(rawset,t,'x',7); return ok and v==t and t.x==7 and 1 or 0",
+            "local t=setmetatable({},{__newindex=function() error('metahook') end}); local ok,v=pcall(rawset,t,'x',11); return ok and rawget(t,'x')==11 and 1 or 0",
+            "local t={x=8}; local ok,v=pcall(rawget,t,'x'); return ok and v==8 and 1 or 0",
+            "local ok,e=pcall(rawget,{}); return not ok and type(e)=='string' and 1 or 0",
+            "local ok,e=pcall(rawset,{},nil,5); return not ok and type(e)=='string' and 1 or 0",
+            "local t={}; local ok,v=pcall(getmetatable,t); return ok and v==nil and 1 or 0",
+            "local mt={__metatable='sealed'}; local t=setmetatable({},mt); local ok,v=pcall(getmetatable,t); return ok and v=='sealed' and 1 or 0",
+            "local mt={}; local t={}; local ok,v=pcall(setmetatable,t,mt); return ok and v==t and getmetatable(t)==mt and 1 or 0",
+            "local t=setmetatable({}, {__metatable='sealed'}); local ok,e=pcall(setmetatable,t,nil); return not ok and type(e)=='string' and 1 or 0",
+            "local t=setmetatable({x=9},{__metatable='sealed'}); local ok,v=pcall(rawget,t,'x'); return ok and v==9 and 1 or 0",
+            "local mt={}; local t=setmetatable({},mt); local ok,v=pcall(setmetatable,t,nil); return ok and getmetatable(t)==nil and 1 or 0",
+            "local t={}; local ok,e=xpcall(error,getmetatable,t); return not ok and e==nil and 1 or 0",
+            "local t={}; local ok,e=pcall(rawset,t,1,5); return ok and e==t and t[1]==5 and 1 or 0",
+        ] {
+            assert_eq!(evaluate(source), 1, "{source}");
+        }
     }
 
     #[test]
