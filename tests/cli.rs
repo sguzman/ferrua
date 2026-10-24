@@ -267,8 +267,7 @@ fn owned_engine_opt_in_executes_only_the_first_party_subset() {
     for flags in [
         &["--engine=owned", "--lua=5.5", "-e", "return 1"][..],
         &["--engine=owned", "--sandbox", "-e", "return 1"][..],
-        &["--engine=owned", "-e", "return 1", "extra"][..],
-    ] {
+     ] {
         assert!(
             !fer(flags).status.success(),
             "unsupported owned flags: {flags:?}"
@@ -298,4 +297,39 @@ fn owned_print_matches_production_cli_and_preserves_prior_output_on_error() {
     assert!(!failure.status.success());
     assert_eq!(failure.stdout, b"before\n");
     assert!(!failure.stderr.is_empty());
+}
+
+#[test]
+fn owned_arg_table_matches_production_cli_and_script_name() {
+    let source = "print(arg[0], arg[1], arg[2]); local t=arg; arg[1]='changed'; assert(arg==t); print(arg[1])";
+    let owned = fer(&["--engine=owned", "-e", source, "one", "two"]);
+    let reference = fer(&["--lua=5.4", "-e", source, "one", "two"]);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(reference.status.success());
+    assert_eq!(owned.stdout, reference.stdout);
+    assert_eq!(owned.stdout, b"-e\tone\ttwo\nchanged\n");
+
+    let path = std::env::temp_dir().join(format!(
+        "ferrua-owned-arg-{}.lua",
+        std::process::id()
+    ));
+    std::fs::write(&path, "print(arg[0], arg[1])").unwrap();
+    let script_path = path.to_str().unwrap();
+    let owned_file = fer(&["--engine=owned", script_path, "filearg"]);
+    let reference_file = fer(&["--lua=5.4", script_path, "filearg"]);
+    let _ = std::fs::remove_file(path);
+    assert!(
+        owned_file.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned_file.stderr)
+    );
+    assert!(reference_file.status.success());
+    assert_eq!(owned_file.stdout, reference_file.stdout);
+    let checked = fer(&["--engine=owned", "--check", "-e", source, "one"]);
+    assert!(checked.status.success());
+    assert!(checked.stdout.is_empty());
 }

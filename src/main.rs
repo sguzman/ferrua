@@ -324,8 +324,14 @@ fn repl(vm: &mut Vm) -> Result<(), String> {
     }
 }
 
-fn run_owned_source(options: &Options, source: &str, name: &str) -> Result<(), String> {
-    use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, compile_flow_chunk, execute_flow_capture};
+fn run_owned_source(
+    options: &Options,
+    source: &str,
+    name: &str,
+    arg0: &str,
+    arguments: &[String],
+) -> Result<(), String> {
+    use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, compile_flow_chunk, execute_flow_capture_with_args};
 
     // Match the production CLI's Unix shebang handling without selecting its VM.
     let normalized = source
@@ -342,7 +348,7 @@ fn run_owned_source(options: &Options, source: &str, name: &str) -> Result<(), S
         .transpose()
         .map_err(|_| "owned engine instruction budget is too large")?
         .unwrap_or(DEFAULT_STEP_BUDGET);
-    let outcome = execute_flow_capture(&program, budget);
+    let outcome = execute_flow_capture_with_args(&program, budget, arg0, arguments);
     io::stdout()
         .write_all(&outcome.stdout)
         .map_err(|err| format!("{name}: stdout write failed: {err}"))?;
@@ -355,24 +361,18 @@ fn run_owned_source(options: &Options, source: &str, name: &str) -> Result<(), S
 fn execute_owned(options: &Options) -> Result<(), String> {
     match &options.action {
         Action::Eval(source, arguments) => {
-            if !arguments.is_empty() {
-                return Err("owned engine preview does not support script arguments".into());
-            }
-            run_owned_source(options, source, "=-e")
+            run_owned_source(options, source, "=-e", "-e", arguments)
         }
         Action::Script(path, arguments) => {
-            if !arguments.is_empty() {
-                return Err("owned engine preview does not support script arguments".into());
-            }
             let source = std::fs::read_to_string(path).map_err(|err| format!("{path}: {err}"))?;
-            run_owned_source(options, &source, path)
+            run_owned_source(options, &source, path, path, arguments)
         }
         Action::Stdin => {
             let mut source = String::new();
             io::stdin()
                 .read_to_string(&mut source)
                 .map_err(|err| err.to_string())?;
-            run_owned_source(options, &source, "=stdin")
+            run_owned_source(options, &source, "=stdin", "-", &[])
         }
         Action::Repl => Err("owned engine preview does not support the REPL".into()),
         Action::Help | Action::Version => Ok(()),

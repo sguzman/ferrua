@@ -779,3 +779,7 @@ Both production `fer --lua=5.4` and pinned upstream `lua5.4` are compared in ref
 ### Owned CLI print capture (experimental)
 
 The explicit `--engine=owned` preview now executes ordinary `print(...)` calls in a pure-Rust bounded capture path. Arguments are converted with the existing first-party `tostring` implementation (including supported `__tostring` callbacks), separated by tabs and terminated with LF. The shared 64 KiB output limit produces an explicit resource error rather than allocating unbounded output. Buffered bytes are emitted by the CLI before reporting a later Lua error. The VM library itself performs no host I/O, and its existing value-only API remains available. Floating-point formatting, general global environments, and full Lua print conformance remain open. The production VM and its default CLI behavior are unchanged.
+
+### Owned argument-table parity (experimental)
+
+The opt-in owned engine creates its writable `arg` table lazily on first reference and reuses the same identity throughout a script and nested calls. `arg[0]` identifies `-e`, `-` or the input script path, and `arg[1..n]` contains the CLI arguments. String-pool and table-cell limits are enforced rather than allocating unbounded argv data. The production interpreter is unchanged. This is not yet a general, mutable Lua global environment or a complete `package` module search-path implementation.

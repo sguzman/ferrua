@@ -98,6 +98,7 @@ pub enum Binary {
 pub enum Op {
     Constant(Value),
     ReadLocal(usize),
+    ArgTable,
     AssignLocals(Vec<usize>),
     DeclareLocals(Vec<usize>),
     RenewLocal(usize),
@@ -482,6 +483,9 @@ impl<'a> Compiler<'a> {
                     match self.slot(text) {
                         Ok(slot) => {
                             self.push(Op::ReadLocal(slot))?;
+                        }
+                        Err(_) if *text == "arg" => {
+                            self.push(Op::ArgTable)?;
                         }
                         Err(_) if *text == "print" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::Print)))?;
@@ -1601,6 +1605,9 @@ struct Execution<'a> {
     frame_allocations: Vec<Vec<usize>>,
     strings: Vec<Vec<u8>>,
     stdout: Vec<u8>,
+    script_name: &'a str,
+    script_args: &'a [String],
+    arg_handle: Option<usize>,
 }
 
 impl Execution<'_> {
@@ -1688,6 +1695,31 @@ impl Execution<'_> {
             }
         }
         Ok(())
+    }
+
+    /// Materialize the standard Lua argv table only when referenced. Repeated
+    /// global lookups and calls share the same writable table identity.
+    fn argument_table(&mut self) -> Result<Value, FlowError> {
+        if let Some(handle) = self.arg_handle {
+            return Ok(Value::Table(handle));
+        }
+        if self.tables.len() >= MAX_TABLES || self.script_args.len() > MAX_TABLE_FIELDS {
+            return Err(FlowError::TooLarge);
+        }
+        let name = self.intern_string(self.script_name.as_bytes().to_vec())?;
+        let handle = self.tables.len();
+        self.tables.push(TableStorage {
+            array: Vec::new(),
+            hashed: HashMap::new(),
+            metatable: None,
+        });
+        self.write_table(handle, TableKey::Hashed(Value::Integer(0)), name)?;
+        for (index, argument) in self.script_args.iter().enumerate() {
+            let text = self.intern_string(argument.as_bytes().to_vec())?;
+            self.write_table(handle, TableKey::Positive(index + 1), text)?;
+        }
+        self.arg_handle = Some(handle);
+        Ok(Value::Table(handle))
     }
 
     /// Bounded raw table traversal. Lua leaves hash traversal order unspecified;
@@ -2823,6 +2855,7 @@ impl Execution<'_> {
             let next = pc + 1;
             match &instructions[pc] {
                 Op::Constant(value) => stack.push(*value),
+                Op::ArgTable => stack.push(self.argument_table()?),
                 Op::NewFunction(index) => {
                     if *index >= self.program.functions.len() || self.closures.len() >= MAX_CLOSURES
                     {
@@ -3524,7 +3557,12 @@ pub struct FlowOutcome {
 
 /// Run bounded first-party Lua and capture the restricted print builtin.
 /// Errors retain output emitted before failure. No production VM fallback.
-pub fn execute_flow_capture(program: &FlowProgram, budget: usize) -> FlowOutcome {
+pub fn execute_flow_capture_with_args<'a>(
+    program: &'a FlowProgram,
+    budget: usize,
+    script_name: &'a str,
+    script_args: &'a [String],
+) -> FlowOutcome {
     let mut execution = Execution {
         program,
         budget,
@@ -3539,12 +3577,20 @@ pub fn execute_flow_capture(program: &FlowProgram, budget: usize) -> FlowOutcome
         frame_allocations: Vec::new(),
         strings: program.strings.clone(),
         stdout: Vec::new(),
+        script_name,
+        script_args,
+        arg_handle: None,
     };
     let result = execution.run(&program.instructions, program.slots, &[], &[], &[]);
     FlowOutcome {
         result,
         stdout: execution.stdout,
     }
+}
+
+/// The no-arguments execution API remains suitable for pure Rust tests.
+pub fn execute_flow_capture(program: &FlowProgram, budget: usize) -> FlowOutcome {
+    execute_flow_capture_with_args(program, budget, "=owned", &[])
 }
 
 /// Keep the pure semantic API independent of CLI output capture.
@@ -6782,6 +6828,26 @@ mod tests {
                 Ok(program) => assert!(execute_flow_chunk(&program, 100).is_err(), "{source}"),
             }
         }
+    }
+
+    #[test]
+    fn argument_table_is_lazy_shared_mutable_and_resource_bounded() {
+        let program = compile_flow_chunk(
+            "print(arg[0], arg[1], arg[2] == nil); local old=arg; arg[1]='changed'; assert(arg==old); print(arg[1])",
+        )
+        .unwrap();
+        let arguments = vec!["first".to_owned()];
+        let outcome = execute_flow_capture_with_args(&program, 1000, "script.lua", &arguments);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"script.lua\tfirst\ttrue\nchanged\n");
+
+        let program = compile_flow_chunk("print(arg[0])").unwrap();
+        let too_many = vec!["x".to_owned(); MAX_TABLE_FIELDS + 1];
+        let outcome = execute_flow_capture_with_args(&program, 1000, "script.lua", &too_many);
+        assert_eq!(outcome.result, Err(FlowError::TooLarge));
+        let huge = vec!["x".repeat(MAX_STRING_POOL_BYTES + 1)];
+        let outcome = execute_flow_capture_with_args(&program, 1000, "script.lua", &huge);
+        assert_eq!(outcome.result, Err(FlowError::TooLarge));
     }
 
     #[test]
