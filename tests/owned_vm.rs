@@ -256,6 +256,57 @@ fn numeric_truthiness_guard_matrix_matches_production_and_lua54() {
 }
 
 #[test]
+fn register_short_circuit_conditions_match_lua_reference() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("if false and (1//0>0) then return 4 else return 9 end", 9),
+        ("if true or (1//0>0) then return 5 else return 9 end", 5),
+        ("if true and 0 then return 6 else return 9 end", 6),
+        ("if false or 0 then return 7 else return 9 end", 7),
+        ("if false or false then return 7 else return 9 end", 9),
+        ("if true and false then return 7 else return 9 end", 9),
+        ("if false or true and true then return 8 else return 0 end", 8),
+        ("if true and false or true then return 13 else return 0 end", 13),
+        ("if (1<2) and (3>2) then return 12 else return 0 end", 12),
+        ("if (1>2) or (3<2) then return 12 else return 2 end", 2),
+        ("if not (false or false) then return 15 else return 0 end", 15),
+        (
+            "local x=0; if (x or false) and not false then return 22 else return 0 end",
+            22,
+        ),
+        ("if (false and (1//0>0)) or true then return 17 else return 0 end", 17),
+        ("if true or false and false then return 19 else return 0 end", 19),
+    ] {
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        let code = format!("print((function() {source} end)())");
+        for interpreter in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if interpreter == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(interpreter);
+            if interpreter != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                expected.to_string(),
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
 fn static_integer_chunk_matches_upstream_lua_when_requested() {
     if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()

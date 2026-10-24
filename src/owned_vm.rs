@@ -93,6 +93,13 @@ pub enum Instruction {
         dest: usize,
         input: usize,
     },
+    BooleanCopy {
+        dest: usize,
+        input: usize,
+    },
+    Jump {
+        target: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -262,6 +269,55 @@ fn emit_condition<'a>(
                 dest,
                 input: source,
             });
+            Ok(dest)
+        }
+        Expr::Binary { op, left, right } if matches!(*op, "and" | "or") => {
+            let lhs = emit_condition(program, left, locals, depth + 1)?;
+            if program.registers >= MAX_REGISTERS {
+                return Err(Error::TooLarge);
+            }
+            let dest = program.registers;
+            program.registers += 1;
+            let branch_at = program.code.len();
+            program.code.push(Instruction::BranchIfFalse {
+                condition: lhs,
+                target: usize::MAX,
+            });
+            if *op == "and" {
+                // False lhs skips evaluation of the rhs completely.
+                let rhs = emit_condition(program, right, locals, depth + 1)?;
+                program.code.push(Instruction::BooleanCopy {
+                    dest,
+                    input: rhs,
+                });
+                let jump_at = program.code.len();
+                program.code.push(Instruction::Jump { target: usize::MAX });
+                let false_at = program.code.len();
+                program.code.push(Instruction::Load { dest, value: 0 });
+                let after = program.code.len();
+                program.code[branch_at] = Instruction::BranchIfFalse {
+                    condition: lhs,
+                    target: false_at,
+                };
+                program.code[jump_at] = Instruction::Jump { target: after };
+            } else {
+                // True lhs skips evaluation of the rhs completely.
+                program.code.push(Instruction::Load { dest, value: 1 });
+                let jump_at = program.code.len();
+                program.code.push(Instruction::Jump { target: usize::MAX });
+                let rhs_at = program.code.len();
+                let rhs = emit_condition(program, right, locals, depth + 1)?;
+                program.code.push(Instruction::BooleanCopy {
+                    dest,
+                    input: rhs,
+                });
+                let after = program.code.len();
+                program.code[branch_at] = Instruction::BranchIfFalse {
+                    condition: lhs,
+                    target: rhs_at,
+                };
+                program.code[jump_at] = Instruction::Jump { target: after };
+            }
             Ok(dest)
         }
         Expr::Binary { op, left, right }
@@ -566,6 +622,16 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
                 continue;
             }
             Instruction::Return { source } => return read(&registers, source),
+            Instruction::Jump { target } => {
+                if target <= pc || target >= program.code.len() {
+                    return Err(Error::InvalidBytecode);
+                }
+                pc = target;
+                continue;
+            }
+            Instruction::BooleanCopy { dest, input } => {
+                (dest, read(&registers, input)?)
+            }
             Instruction::NumericTruthy { dest, input } => {
                 read(&registers, input)?;
                 (dest, 1)
@@ -849,6 +915,42 @@ mod tests {
             execute_integer_program(&program),
             Err(Error::DivisionByZero)
         );
+    }
+
+    #[test]
+    fn integer_conditional_short_circuit_guards_preserve_lua_control_flow() {
+        for (source, expected) in [
+            ("if false and (1//0>0) then return 4 else return 9 end", 9),
+            ("if true or (1//0>0) then return 5 else return 9 end", 5),
+            ("if true and 0 then return 6 else return 9 end", 6),
+            ("if false or 0 then return 7 else return 9 end", 7),
+            ("if false or false then return 7 else return 9 end", 9),
+            ("if true and false then return 7 else return 9 end", 9),
+            ("if false or true and true then return 8 else return 0 end", 8),
+            ("if true and false or true then return 13 else return 0 end", 13),
+            ("if (1<2) and (3>2) then return 12 else return 0 end", 12),
+            ("if (1>2) or (3<2) then return 12 else return 2 end", 2),
+            ("if not (false or false) then return 15 else return 0 end", 15),
+            (
+                "local x=0; if (x or false) and not false then return 22 else return 0 end",
+                22,
+            ),
+            ("if (false and (1//0>0)) or true then return 17 else return 0 end", 17),
+            ("if true or false and false then return 19 else return 0 end", 19),
+        ] {
+            let program = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        }
+        for source in [
+            "if true and (1//0>0) then return 1 else return 2 end",
+            "if false or (1//0>0) then return 1 else return 2 end",
+        ] {
+            let program = compile_integer_chunk(source).unwrap();
+            assert_eq!(
+                execute_integer_program(&program),
+                Err(Error::DivisionByZero)
+            );
+        }
     }
 
     #[test]
