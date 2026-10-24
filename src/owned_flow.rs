@@ -6461,12 +6461,21 @@ mod tests {
             ("do goto out end; ::out:: return 7", 7),
             ("if true then goto done end; ::done:: return 8", 8),
             ("local x=1; do goto done end; x=4; ::done:: return x", 1),
-            ("local x=1; ::again:: x=x+1; if x<4 then do goto again end; end; return x", 4),
+            (
+                "local x=1; ::again:: x=x+1; if x<4 then do goto again end; end; return x",
+                4,
+            ),
             ("while true do goto out end; ::out:: return 5", 5),
             ("local x=1; do local x=7; goto out end; ::out:: return x", 1),
             ("local x=1; goto out; do local x=9 end; ::out:: return x", 1),
-            ("local x=0; do if true then goto out end; x=5 end; ::out:: return x", 0),
-            ("local x=0; for i=1,3 do if i==2 then goto done end; x=x+1 end; ::done:: return x", 1),
+            (
+                "local x=0; do if true then goto out end; x=5 end; ::out:: return x",
+                0,
+            ),
+            (
+                "local x=0; for i=1,3 do if i==2 then goto done end; x=x+1 end; ::done:: return x",
+                1,
+            ),
             (
                 "local x=0; for _,v in ipairs({4,5}) do if v==5 then goto done end; x=x+v end; ::done:: return x",
                 4,
@@ -6476,7 +6485,10 @@ mod tests {
                 4,
             ),
             ("do goto finish; local x=8 end; ::finish:: return 11", 11),
-            ("local x=0; do goto mark; ::mark:: x=x+1 end; ::mark:: return x", 1),
+            (
+                "local x=0; do goto mark; ::mark:: x=x+1 end; ::mark:: return x",
+                1,
+            ),
         ] {
             assert_eq!(evaluate(script), expected, "{script}");
         }
