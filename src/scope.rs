@@ -1,5 +1,5 @@
 //! Experimental local-name resolver for the Ferrua-owned chunk AST.
-//! This handles nested do/end blocks, not function scopes or closures.
+//! Supports nested blocks and closure captures; it reports metadata, not full Lua semantic diagnostics.
 
 use crate::expr::{Expr, LocalAttribute, ParseError, Statement, parse_chunk};
 use crate::lex::{Kind, tokenize};
@@ -37,6 +37,10 @@ pub struct Reference<'src> {
     pub scope_depth: usize,
     /// True for a write to a lexically resolved <const> binding.
     pub const_reassignment: bool,
+    /// True for a write to a lexically resolved <close> binding, which Lua
+    /// 5.4 also treats as read-only after initialization. This reports
+    /// metadata only; it does not implement __close scope-exit behavior.
+    pub close_reassignment: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -96,10 +100,13 @@ impl<'src> Resolver<'src> {
                 }
             }
         }
-        let const_reassignment = access == Access::Write
-            && binding.is_some_and(|(_, slot)| {
-                self.result.bindings[slot].attribute == Some(LocalAttribute::Const)
-            });
+        let reassigned_attribute = if access == Access::Write {
+            binding.and_then(|(_, slot)| self.result.bindings[slot].attribute)
+        } else {
+            None
+        };
+        let const_reassignment = reassigned_attribute == Some(LocalAttribute::Const);
+        let close_reassignment = reassigned_attribute == Some(LocalAttribute::Close);
         self.result.references.push(Reference {
             name,
             resolution,
@@ -107,6 +114,7 @@ impl<'src> Resolver<'src> {
             statement,
             scope_depth: self.scopes.len() - 1,
             const_reassignment,
+            close_reassignment,
         });
     }
 
@@ -287,7 +295,7 @@ impl<'src> Resolver<'src> {
                 self.function_scope(parameters, body, method.is_some());
             }
             // Labels and jump targets introduce no lexical variable bindings.
-            // The owned bytecode compiler rejects goto until jump lowering exists.
+            // This resolver does not validate goto visibility or local lifetimes.
             Statement::Break | Statement::Label(_) | Statement::Goto(_) => {}
             Statement::Return(values) => {
                 for value in values {
@@ -365,9 +373,9 @@ impl<'src> Resolver<'src> {
     }
 }
 
-/// Analyze binding slots and references for the deliberately restricted
-/// semicolon-delimited Lua chunk subset. Supports nested do/end scopes;
-/// no function, upvalue, closure, or flow-sensitive resolution.
+/// Analyze lexical bindings, closure captures and references in the owned Lua
+/// AST. This is a metadata pass, not a compiler or control-flow validator:
+/// goto legality, <close> finalization and flow-sensitive analysis are separate.
 pub fn analyze(source: &str) -> Result<ScopeSummary<'_>, ParseError> {
     let statements = parse_chunk(source)?;
     let mut resolver = Resolver {
@@ -700,6 +708,49 @@ mod tests {
                     && reference.access == Access::Read
                     && !reference.const_reassignment)
         );
+    }
+
+    #[test]
+    fn to_be_closed_bindings_are_readonly_even_through_captures() {
+        let source = "local closer<close>=nil; local f=function() closer=nil end; local t<const>={}; t.key=1; local a=closer; do local closer=0; closer=1 end";
+        let summary = analyze(source).unwrap();
+        assert_eq!(summary.bindings[0].attribute, Some(LocalAttribute::Close));
+        assert_eq!(summary.bindings[2].attribute, Some(LocalAttribute::Const));
+        let captured = summary
+            .references
+            .iter()
+            .find(|r| {
+                r.name == "closer"
+                    && r.access == Access::Write
+                    && r.resolution == Resolution::Upvalue(0)
+            })
+            .unwrap();
+        assert!(captured.close_reassignment);
+        assert!(!captured.const_reassignment);
+
+        // Reading an attributed local, mutating fields of a const table,
+        // and assigning a writable shadow are not reassignment violations.
+        let shadowed = summary
+            .references
+            .iter()
+            .find(|r| {
+                r.name == "closer"
+                    && r.access == Access::Write
+                    && r.resolution == Resolution::Local(4)
+            })
+            .unwrap();
+        assert!(!shadowed.close_reassignment);
+        assert!(!shadowed.const_reassignment);
+        assert!(summary.references.iter().any(|r| {
+            r.name == "t"
+                && r.access == Access::Read
+                && r.resolution == Resolution::Local(2)
+        }));
+        assert!(summary
+            .references
+            .iter()
+            .filter(|r| r.access == Access::Read)
+            .all(|r| !r.const_reassignment && !r.close_reassignment));
     }
 
     #[test]
