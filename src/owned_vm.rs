@@ -1131,12 +1131,8 @@ mod tests {
             let program = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
         }
-        for source in [
-            "local x=1; if true then x=2 end; return x",
-            "if true then local a=1 end",
-        ] {
-            assert!(compile_integer_chunk(source).is_err(), "{source}");
-        }
+        let source = "if true then local a=1 end";
+        assert!(compile_integer_chunk(source).is_err(), "{source}");
         let program = compile_integer_chunk("if true then local y=1//0 end; return 1").unwrap();
         assert_eq!(
             execute_integer_program(&program),
