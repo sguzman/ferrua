@@ -749,14 +749,58 @@ pub(crate) fn shift(value: i64, distance: i64, left: bool) -> i64 {
     }
 }
 
-/// Run the tiny integer register IR with initialized-register validation.
-pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
+/// Validate every instruction before executing the bounded register VM.
+/// An untaken branch or early return must not conceal malformed bytecode.
+fn validate_integer_program(program: &Program) -> Result<(), Error> {
+    let size = program.code.len();
     if program.registers == 0
         || program.registers > MAX_REGISTERS
-        || program.code.len() > MAX_REGISTERS
+        || size == 0
+        || size > MAX_REGISTERS
+        || program.result >= program.registers
     {
         return Err(Error::InvalidBytecode);
     }
+    let register = |index: usize| index < program.registers;
+    for (pc, instruction) in program.code.iter().enumerate() {
+        let valid = match *instruction {
+            Instruction::Load { dest, .. } => register(dest),
+            Instruction::Neg { dest, input }
+            | Instruction::BitNot { dest, input }
+            | Instruction::NumericTruthy { dest, input }
+            | Instruction::BooleanNot { dest, input }
+            | Instruction::BooleanCopy { dest, input }
+            | Instruction::MergeCopy { dest, input } => register(dest) && register(input),
+            Instruction::Add { dest, lhs, rhs }
+            | Instruction::Sub { dest, lhs, rhs }
+            | Instruction::Mul { dest, lhs, rhs }
+            | Instruction::FloorDiv { dest, lhs, rhs }
+            | Instruction::Mod { dest, lhs, rhs }
+            | Instruction::BitAnd { dest, lhs, rhs }
+            | Instruction::BitOr { dest, lhs, rhs }
+            | Instruction::BitXor { dest, lhs, rhs }
+            | Instruction::Shl { dest, lhs, rhs }
+            | Instruction::Shr { dest, lhs, rhs }
+            | Instruction::Compare { dest, lhs, rhs, .. } => {
+                register(dest) && register(lhs) && register(rhs)
+            }
+            Instruction::BranchIfFalse { condition, target } => {
+                register(condition) && target > pc && target < size
+            }
+            Instruction::Jump { target } => target > pc && target < size,
+            Instruction::Return { source } => register(source),
+        };
+        if !valid {
+            return Err(Error::InvalidBytecode);
+        }
+    }
+    Ok(())
+}
+
+/// Run the tiny integer register IR with initialized-register validation.
+/// Statically reject malformed instructions, including unreachable ones.
+pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
+    validate_integer_program(program)?;
     let mut registers: Vec<Option<i64>> = vec![None; program.registers];
     fn read(registers: &[Option<i64>], at: usize) -> Result<i64, Error> {
         registers
@@ -1384,6 +1428,86 @@ mod tests {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
     }
+    #[test]
+    fn validates_unreachable_integer_bytecode_and_register_bounds() {
+        let valid = Program {
+            code: vec![
+                Instruction::Load { dest: 0, value: 7 },
+                Instruction::Return { source: 0 },
+            ],
+            registers: 1,
+            result: 0,
+        };
+        assert_eq!(execute_integer_program(&valid), Ok(7));
+
+        let malformed = [
+            Program {
+                code: vec![
+                    Instruction::Load { dest: 0, value: 7 },
+                    Instruction::Return { source: 0 },
+                    Instruction::Jump { target: 0 },
+                ],
+                ..valid.clone()
+            },
+            Program {
+                code: vec![
+                    Instruction::Load { dest: 0, value: 7 },
+                    Instruction::Return { source: 0 },
+                    Instruction::Add {
+                        dest: 2,
+                        lhs: 0,
+                        rhs: 0,
+                    },
+                ],
+                ..valid.clone()
+            },
+            Program {
+                code: vec![
+                    Instruction::Load { dest: 0, value: 7 },
+                    Instruction::Return { source: 0 },
+                    Instruction::BranchIfFalse {
+                        condition: 5,
+                        target: 3,
+                    },
+                    Instruction::Return { source: 0 },
+                ],
+                ..valid.clone()
+            },
+            Program {
+                result: usize::MAX,
+                ..valid.clone()
+            },
+            Program {
+                code: vec![
+                    Instruction::Load { dest: 0, value: 7 },
+                    Instruction::Return { source: 0 },
+                    Instruction::MergeCopy { dest: 1, input: 0 },
+                ],
+                ..valid.clone()
+            },
+            Program {
+                code: vec![
+                    Instruction::Load { dest: 0, value: 7 },
+                    Instruction::Return { source: 0 },
+                    Instruction::Compare {
+                        dest: 0,
+                        lhs: usize::MAX,
+                        rhs: 0,
+                        operation: CompareOperation::Equal,
+                    },
+                ],
+                ..valid.clone()
+            },
+        ];
+        for (index, program) in malformed.iter().enumerate() {
+            assert_eq!(
+                execute_integer_program(program),
+                Err(Error::InvalidBytecode),
+                "malformed case {index}"
+            );
+        }
+    }
+
     #[test]
     fn rejects_invalid_register_bytecode() {
         let p = Program {
