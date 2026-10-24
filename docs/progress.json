@@ -3251,7 +3251,7 @@
               "id": "T404",
               "emoji": "🏷️",
               "name": "Lua enclosing-block goto label resolution and local lifetime checks",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Record lexical block ancestry, label offsets and source/target active local bindings for the independent flow compiler",
@@ -3270,7 +3270,8 @@
                 },
                 {
                   "text": "Synchronize owned grammar limitations, README, machine ledger and generated roadmap under successful CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40056084746: all five jobs passed synced README, owned engine docs, progress ledger and generated roadmap"
                 }
               ]
             }

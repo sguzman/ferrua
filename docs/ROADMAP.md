@@ -586,11 +586,11 @@
   - [x] Preserve table-valued redirect semantics even for tables with __call, including existing-key bypass, rawset and hard recursive depth limits — src/owned_flow.rs: callable_index_and_newindex_hooks_preserve_raw_redirection_and_hard_depth; 18 fixtures and 2 hard-limit cases
   - [x] Pass upstream Lua 5.4 and production fer differential parity, Linux tests, Rust 1.96, Arch archive and downstream consumer — GitHub Actions 40055237278 all five jobs successful on bf21dbd1b06d873b5cc5da35225346ae260891ab
   - [x] Synchronize owned-engine docs, README, ledger and roadmap after verified CI acceptance — GitHub Actions 40055368051 passed all five jobs: documentation, machine ledger, roadmap generation and upstream Lua 5.4 parity
-- 🏷️ **T404** Lua enclosing-block goto label resolution and local lifetime checks — `████████░░ 75%`
+- 🏷️ **T404** Lua enclosing-block goto label resolution and local lifetime checks — `██████████ 100%`
   - [x] Record lexical block ancestry, label offsets and source/target active local bindings for the independent flow compiler — src/owned_flow.rs: Compiler::statements, resolve_gotos, LabelSite and GotoSite; GitHub Actions 40055943072
   - [x] Accept visible ancestor goto labels and backward local exits while rejecting invisible sibling targets or jumps into new locals — src/owned_flow.rs: visible_enclosing_goto_labels_preserve_lexical_local_lifetimes; 13 reference fixtures, seven invalid-scope cases
   - [x] Pass upstream Lua 5.4 plus pinned production fer differential checks, Rust 1.96, Linux unit/lint/format, Arch and action consumer CI — GitHub Actions 40055943072: five successful jobs for e75ed225f7ba514ce4dd69de0f256466c76febfe
-  - [ ] Synchronize owned grammar limitations, README, machine ledger and generated roadmap under successful CI
+  - [x] Synchronize owned grammar limitations, README, machine ledger and generated roadmap under successful CI — GitHub Actions 40056084746: all five jobs passed synced README, owned engine docs, progress ledger and generated roadmap
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -693,5 +693,5 @@
 - 📏 Callable Lua __len callbacks and error-level parity — `██████████ 100%`
 - 🎭 Callable binary and unary Lua metamethod targets — `██████████ 100%`
 - 🧭 Bounded builtin index/newindex metamethod callbacks — `██████████ 100%`
-- 🏷️ Lexically scoped Lua goto across visible blocks — `████████░░ 75%`
+- 🏷️ Lexically scoped Lua goto across visible blocks — `██████████ 100%`
 
