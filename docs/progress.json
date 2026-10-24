@@ -3811,7 +3811,7 @@
               "id": "T424",
               "emoji": "🚦",
               "name": "Integer register-VM returning guard clauses with later fallback",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Compile returning if/elseif arms without else and fall through to a subsequent integer return",
@@ -3830,7 +3830,8 @@
                 },
                 {
                   "text": "Synchronize README, owned-engine design note, evidence ledger and generated roadmap under successful CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40124637352: all five jobs passed synchronized docs/progress.json, derived roadmap, owned-engine documentation and README"
                 }
               ]
             }
