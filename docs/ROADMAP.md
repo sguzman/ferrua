@@ -696,11 +696,11 @@
   - [x] Prevent skipped branch assignments from poisoning sibling/fallback return registers and preserve selected-branch assignments — src/owned_vm.rs: register_returning_branches_do_not_leak_bindings_into_other_paths; tests/owned_vm.rs 14 cross-branch cases
   - [x] Pass unit/lint/formatter, Rust 1.96, upstream Lua 5.4 and fer differential suite, Arch smoke and consumer — GitHub Actions 40124937687 all five jobs successful on commit 01cc1de79eb880d2d3ca17f0603bd614d36b4d72
   - [x] Synchronize README, engine documentation, machine ledger and generated roadmap under passing CI — GitHub Actions 40125247612: five CI jobs green including documentation, roadmap source integrity and Lua 5.4 differential
-- 🌱 **T426** Safe nonreturning integer conditional arm fallthrough without register joins — `████████░░ 75%`
+- 🌱 **T426** Safe nonreturning integer conditional arm fallthrough without register joins — `██████████ 100%`
   - [x] Compile nonreturning local-only conditional branches and jump past sibling arms to an enclosing later return — src/owned_vm.rs: compile_statements uses exit_jumps and patches branch fallthrough after full if/elseif/else
   - [x] Reject nonreturning paths mutating enclosing local register bindings and preserve selected runtime arithmetic errors — src/owned_vm.rs: enclosing_bindings_changed, integer_nonreturning_conditional_arms_merge_only_unmodified_bindings
   - [x] Pass 14 upstream Lua 5.4/production fer comparison cases, unit/lint/format, Rust 1.96 and Arch/action consumer — GitHub Actions 40125718824 all five jobs successful for commit 4e38f2e15c37fc9481be7d6edf0ce88ff6791adb
-  - [ ] Synchronize documented join limitation, README, machine ledger and generated roadmap under passing CI
+  - [x] Synchronize documented join limitation, README, machine ledger and generated roadmap under passing CI — GitHub Actions 40125903144 all five CI jobs passed synced README, OWNED_ENGINE.md, machine ledger and generated roadmap
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -825,5 +825,5 @@
 - ↪️ Bounded Lua short-circuit conditional register guards — `██████████ 100%`
 - 🚦 Returning guard clause fallthrough in bounded register VM — `██████████ 100%`
 - 🌿 Lexically isolated register-VM conditional return paths — `██████████ 100%`
-- 🌱 Nonreturning local-only register conditional fallthrough — `████████░░ 75%`
+- 🌱 Nonreturning local-only register conditional fallthrough — `██████████ 100%`
 

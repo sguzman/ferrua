@@ -3867,7 +3867,7 @@
               "id": "T426",
               "emoji": "🌱",
               "name": "Safe nonreturning integer conditional arm fallthrough without register joins",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Compile nonreturning local-only conditional branches and jump past sibling arms to an enclosing later return",
@@ -3886,7 +3886,8 @@
                 },
                 {
                   "text": "Synchronize documented join limitation, README, machine ledger and generated roadmap under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40125903144 all five CI jobs passed synced README, OWNED_ENGINE.md, machine ledger and generated roadmap"
                 }
               ]
             }
