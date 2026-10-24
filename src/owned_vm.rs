@@ -384,8 +384,9 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 /// Compile a static subset of Lua chunks to Ferrua-owned register bytecode.
 ///
 /// Supports integer locals with initializers, parallel assignments to locals,
-/// nested do/end blocks, bounded integer/Boolean if/elseif/else branches in
-/// which every path returns, and a single integer return from an active block.
+/// nested do/end blocks, bounded integer/Boolean if/elseif/else branches
+/// with returning explicit arms, optional guard-clause fallthrough to a later
+/// integer return, and a single integer return from an active block.
 /// Calls, general truthiness, loops, globals, nil and closures remain unsupported.
 pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
@@ -492,10 +493,11 @@ fn compile_statements<'a>(
             }
             Statement::If {
                 branches,
-                else_branch: Some(else_body),
+                else_branch,
             } => {
-                // Every arm must terminate with an integer return, so there
-                // is no register-state merge or fallthrough across arms.
+                // The explicit arms all return, so no live register state
+                // needs merging. Without an else, a false guard falls
+                // through to later statements in the enclosing block.
                 for (condition, body) in branches {
                     let guard = emit_condition(program, condition, scopes, 0)?;
                     let branch_at = program.code.len();
@@ -517,16 +519,18 @@ fn compile_statements<'a>(
                         target,
                     };
                 }
-                scopes.push(HashMap::new());
-                let final_return = compile_statements(else_body, program, scopes, depth + 1)?;
-                scopes.pop();
-                if final_return.is_none() {
-                    return Err(Error::Unsupported(
-                        "integer if arms must all return a value".into(),
-                    ));
+                if let Some(else_body) = else_branch {
+                    scopes.push(HashMap::new());
+                    let final_return = compile_statements(else_body, program, scopes, depth + 1)?;
+                    scopes.pop();
+                    if final_return.is_none() {
+                        return Err(Error::Unsupported(
+                            "integer if arms must all return a value".into(),
+                        ));
+                    }
+                    result = Some(0);
+                    break;
                 }
-                result = Some(0);
-                break;
             }
             Statement::Return(values) if values.len() == 1 => {
                 let value = emit(program, &values[0], 0, scopes)?;
@@ -882,6 +886,40 @@ mod tests {
             execute_integer_program(&invalid),
             Err(Error::InvalidBytecode)
         );
+    }
+
+    #[test]
+    fn integer_guard_clauses_fall_through_to_a_later_return() {
+        for (source, expected) in [
+            ("if true then return 7 end; return 11", 7),
+            ("if false then return 7 end; return 11", 11),
+            ("if 0 then return 8 end; return 4", 8),
+            ("if not 0 then return 8 end; return 4", 4),
+            ("local x=3; if x>2 then return x+5 end; return 0", 8),
+            ("local x=3; if x<2 then return x+5 end; return x*3", 9),
+            ("if false then return 1 elseif true then return 13 end; return 9", 13),
+            ("if false then return 1 elseif false then return 13 end; return 9", 9),
+            ("local x=2; if x>3 then return 1 elseif x==2 then return 17 end; return 0", 17),
+            ("if false and (1//0>0) then return 6 end; return 12", 12),
+            ("if true or (1//0>0) then return 15 end; return 0", 15),
+            ("if not (2<1) then do return 21 end end; return 9", 21),
+            ("do if false then return 2 end end; return 19", 19),
+            ("local x=7; do if x<5 then return 2 end end; return x+4", 11),
+            ("local x=0; if x==1 then return 3 end; x=6; return x+2", 8),
+            ("if false then return 3 end; if true then return 24 end; return 5", 24),
+            ("if false then return 3 end; if false then return 24 end; return 5", 5),
+            ("local x=5; if x==5 then local y=3; return x*y end; return 0", 15),
+        ] {
+            let program = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        }
+        for source in [
+            "if true then return 7 end",
+            "if true then local x=2 end; return 5",
+            "if false then return 5 elseif true then local x=6 end; return 9",
+        ] {
+            assert!(compile_integer_chunk(source).is_err(), "{source}");
+        }
     }
 
     #[test]
