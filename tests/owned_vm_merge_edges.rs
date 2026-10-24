@@ -168,3 +168,69 @@ fn branch_merges_preserve_errors_and_constant_local_restrictions() {
         Err(Error::DivisionByZero)
     );
 }
+
+#[test]
+fn generated_nested_branch_joins_match_reference_interpreters() {
+    let compare_upstream = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    // Fixed arithmetic seeds make the corpus reproducible without rand.
+    // Every case forces a different combination of taken/skipped sibling
+    // branches, shadowed locals, and mutable enclosing register joins.
+    for seed in 0_i64..48 {
+        let a = seed % 11 - 4;
+        let b = (seed * 3) % 13 - 5;
+        let c = (seed * 7) % 17 - 8;
+        let limit_a = seed % 9 - 3;
+        let limit_b = (seed * 2) % 11 - 4;
+        let plus = seed % 5 + 1;
+        let minus = seed % 4 + 1;
+        let threshold = seed % 7 - 3;
+        let source = format!(
+            "local a={a}; local b={b}; local c={c}; \
+             if a<{limit_a} then \
+                if b>{limit_b} then a=a+{plus}; b=b+a else b=b-{minus}; a=a+b end; \
+                if c%2==0 then c=c+a else c=c-b end \
+             elseif b<{limit_b} then \
+                local b=a+1; c=c+b; \
+                if a>0 then a=a-b else c=c+a end \
+             else \
+                a=a-{minus}; b=b+{plus} \
+             end; \
+             if not (a<b) or c>{threshold} then a=a+b else b=b+c end; \
+             return a*10000+b*100+c"
+        );
+        let program = compile_integer_chunk(&source)
+            .unwrap_or_else(|error| panic!("seed {seed}: compile error {error}: {source}"));
+        let actual = execute_integer_program(&program)
+            .unwrap_or_else(|error| panic!("seed {seed}: execution error {error}: {source}"));
+        let lua_code = format!("print((function() {source} end)())");
+        for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if binary == "lua5.4" && !compare_upstream {
+                continue;
+            }
+            let mut command = Command::new(binary);
+            if binary != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command
+                .args(["-e", &lua_code])
+                .output()
+                .unwrap_or_else(|error| panic!("seed {seed}: {binary}: {error}"));
+            assert!(
+                output.status.success(),
+                "seed {seed} ({binary}): {source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let expected = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .parse::<i64>()
+                .unwrap_or_else(|error| panic!("seed {seed} ({binary}): {error}: {source}"));
+            assert_eq!(
+                actual, expected,
+                "seed {seed}: register VM vs {binary}: {source}"
+            );
+        }
+    }
+}
