@@ -6856,7 +6856,8 @@ mod tests {
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"120\n42\n18\n");
 
-        let source = "function first() return second() end; function second() return 11 end; print(first())";
+        let source =
+            "function first() return second() end; function second() return 11 end; print(first())";
         let program = compile_flow_chunk(source).unwrap();
         let outcome = execute_flow_capture(&program, 1000);
         assert_eq!(outcome.result, Ok(vec![]));
