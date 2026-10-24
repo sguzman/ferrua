@@ -513,10 +513,10 @@
   - [x] Represent explicit Lua error values and expose lexically shadowable error/pcall builtins without production-engine changes — src/owned_flow.rs: FlowError::Thrown, Builtin::Error, Builtin::Pcall and compiler fallback resolution
   - [x] Implement bounded closure pcall success/failure result adjustment, preservation of thrown values and non-catchable resource limits; add Rust and upstream Lua regression fixtures — src/owned_flow.rs: Execution::pcall_builtin, bounded_lua_error_and_protected_closure_calls_preserve_values; tests/owned_flow.rs
   - [x] Pass Linux formatting/lint/full tests, Rust 1.96 and Lua 5.4 differential CI including protected errors and reference outcomes — GitHub Actions 40042884149: Linux format/lint/full tests, Rust 1.96, Lua 5.4 differential including error/pcall cases and composite consumer passed
-- 🗣️ **T389** Lua assert failure messages and explicit error-object identity — `███████░░░ 67%`
+- 🗣️ **T389** Lua assert failure messages and explicit error-object identity — `██████████ 100%`
   - [x] Replace generic failed-assert type errors with explicit Lua thrown values and default assertion message — src/owned_flow.rs: Execution::assertion_failure, Builtin::Assert and FlowError::Thrown
   - [x] Test direct and protected assert with missing, nil, false, integer and string messages against Lua 5.4 — src/owned_flow.rs: assertion_failures_preserve_custom_error_values_in_pcall; tests/owned_flow.rs differential fixtures
-  - [ ] Pass Linux fmt/lint/tests, Rust 1.96, composite action consumer and Lua 5.4 differential CI
+  - [x] Pass Linux fmt/lint/tests, Rust 1.96, composite action consumer and Lua 5.4 differential CI — GitHub Actions 40043618093: four primary jobs and reporter successful, including Lua 5.4 assertion cases, no-argument panic guard, and full Rust tests
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -604,5 +604,5 @@
 - 🔬 Generated deterministic owned-VM numeric differential coverage — `██████████ 100%`
 - 🚫 Intentional syntax and runtime failure parity — `██████████ 100%`
 - 🧯 Explicit Lua error values and protected closure calls — `██████████ 100%`
-- 🗣️ Lua assertion error objects and default messages — `███████░░░ 67%`
+- 🗣️ Lua assertion error objects and default messages — `██████████ 100%`
 
