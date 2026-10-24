@@ -509,10 +509,10 @@
   - [x] Add deterministic invalid-source fixtures partitioned into parser rejection and owned-VM runtime failures — tests/owned_flow.rs: SYNTAX_ERROR_FIXTURES, RUNTIME_ERROR_FIXTURES, check_rejected_source
   - [x] Exercise the same failure fixtures against production fer and opt-in upstream Lua 5.4; compare stages and failure exit statuses without falsely matching diagnostics — tests/owned_flow.rs: check and check_rejected_source integration harness
   - [x] Pass full Linux quality/test suite and upstream Lua 5.4 rejection parity in CI — GitHub Actions 40042287118: Linux formatting/lint/full tests, Rust 1.96, Lua 5.4 differential including intentional error cases, and action consumer passed
-- 🧯 **T388** Bounded Lua error values and protected closure calls — `███████░░░ 67%`
+- 🧯 **T388** Bounded Lua error values and protected closure calls — `██████████ 100%`
   - [x] Represent explicit Lua error values and expose lexically shadowable error/pcall builtins without production-engine changes — src/owned_flow.rs: FlowError::Thrown, Builtin::Error, Builtin::Pcall and compiler fallback resolution
   - [x] Implement bounded closure pcall success/failure result adjustment, preservation of thrown values and non-catchable resource limits; add Rust and upstream Lua regression fixtures — src/owned_flow.rs: Execution::pcall_builtin, bounded_lua_error_and_protected_closure_calls_preserve_values; tests/owned_flow.rs
-  - [ ] Pass Linux formatting/lint/full tests, Rust 1.96 and Lua 5.4 differential CI including protected errors and reference outcomes
+  - [x] Pass Linux formatting/lint/full tests, Rust 1.96 and Lua 5.4 differential CI including protected errors and reference outcomes — GitHub Actions 40042884149: Linux format/lint/full tests, Rust 1.96, Lua 5.4 differential including error/pcall cases and composite consumer passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -599,5 +599,5 @@
 - ↪️ Safe bounded same-block Lua goto execution — `██████████ 100%`
 - 🔬 Generated deterministic owned-VM numeric differential coverage — `██████████ 100%`
 - 🚫 Intentional syntax and runtime failure parity — `██████████ 100%`
-- 🧯 Explicit Lua error values and protected closure calls — `███████░░░ 67%`
+- 🧯 Explicit Lua error values and protected closure calls — `██████████ 100%`
 
