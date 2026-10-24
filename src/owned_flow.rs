@@ -2161,10 +2161,16 @@ impl Execution<'_> {
             if let Value::Table(handle) = table
                 && let Some(method) = self.metatable_field(handle, b"__pairs")?
             {
-                let Value::Function(callback) = method else {
-                    return Err(FlowError::TypeError);
-                };
-                let values = self.call_owned_function(callback, &[table])?;
+                // __pairs is called using Lua's regular callable semantics:
+                // an owned closure, a callable table, or a function builtin.
+                // Count the host frame even for builtin-to-builtin redirects.
+                if self.depth >= MAX_CALL_DEPTH {
+                    return Err(FlowError::CallDepthExceeded);
+                }
+                self.depth += 1;
+                let result = self.protected_target(method, &[table]);
+                self.depth -= 1;
+                let values = result?;
                 return Ok(vec![
                     values.first().copied().unwrap_or(Value::Nil),
                     values.get(1).copied().unwrap_or(Value::Nil),
@@ -4053,6 +4059,37 @@ mod tests {
             execute_flow_values(&program, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
         );
+    }
+
+    #[test]
+    fn callable_pairs_metamethods_preserve_triples_and_hard_limits() {
+        for source in [
+            "local handler=setmetatable({},{__call=function(_,t) return next,t,nil end}); local t=setmetatable({x=7},{__pairs=handler}); local ok,f,s,k=pcall(pairs,t); local a,v=f(s,k); return ok and a=='x' and v==7 and 1 or 0",
+            "local handler=setmetatable({},{__call=function(_,t) return next,t,nil end}); local t=setmetatable({x=7},{__pairs=handler}); local s=0; for _,v in pairs(t) do s=s+v end; return s==7 and 1 or 0",
+            "local inner=setmetatable({},{__call=function(_,h,t) return next,t,nil end}); local outer=setmetatable({},{__call=inner}); local t=setmetatable({x=6},{__pairs=outer}); local ok,f,s,k=pcall(pairs,t); local a,v=f(s,k); return ok and a=='x' and v==6 and 1 or 0",
+            "local t=setmetatable({9},{__pairs=ipairs}); local ok,f,s,k=pcall(pairs,t); local a,v=f(s,k); return ok and a==1 and v==9 and 1 or 0",
+            "local t=setmetatable({5},{__pairs=next}); local ok,f,s,k=pcall(pairs,t); return ok and f==1 and s==5 and k==nil and 1 or 0",
+            "local t=setmetatable({x=9},{__pairs=function(self) return next,self,nil,123 end}); local ok,f,s,k=pcall(pairs,t); return ok and type(f)=='function' and s==t and k==nil and 1 or 0",
+            "local t=setmetatable({}, {__pairs=setmetatable({},{__call=function() error(7) end})}); local ok,e=pcall(pairs,t); return not ok and e==7 and 1 or 0",
+            "local t=setmetatable({4},{__pairs=setmetatable({},{__call=function() error(7) end})}); local ok,f,s,k=pcall(ipairs,t); local i,v=f(s,k); return ok and i==1 and v==4 and 1 or 0",
+            "local t=setmetatable({}, {__pairs=13}); local ok,e=pcall(pairs,t); return not ok and type(e)=='string' and 1 or 0",
+            "local n=0; local h=setmetatable({},{__call=function(_,t) n=n+1; return next,t,nil end}); local t=setmetatable({v=3},{__pairs=h}); local ok,f,s,k=pcall(pairs,t); return ok and n==1 and type(f)=='function' and 1 or 0",
+            "local t=setmetatable({}, {__pairs=setmetatable({},{__call=function() return nil end})}); local ok,f,s,k=pcall(pairs,t); return ok and f==nil and s==nil and k==nil and 1 or 0",
+            "local h=setmetatable({},{__call=function(_,t) return next,t,nil end}); local t=setmetatable({}, {__pairs=h}); return select('#',pcall(pairs,t))==4 and 1 or 0",
+        ] {
+            assert_eq!(evaluate(source), 1, "{source}");
+        }
+        for source in [
+            "local t={}; setmetatable(t,{__pairs=pairs}); return pcall(pairs,t)",
+            "local method={}; setmetatable(method,{__call=method}); local t=setmetatable({}, {__pairs=method}); return pcall(pairs,t)",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::CallDepthExceeded),
+                "{source}"
+            );
+        }
     }
 
     #[test]
