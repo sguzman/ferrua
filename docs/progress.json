@@ -3895,7 +3895,7 @@
               "id": "T427",
               "emoji": "🔀",
               "name": "Merge integer local register state across conditional paths",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Compile mutable enclosing locals through SSA-like MergeCopy destinations on continuing if/elseif/else paths",
@@ -3914,7 +3914,8 @@
                 },
                 {
                   "text": "Synchronize corrected engine limitations, README, machine ledger and derived roadmap under successful CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40127520366: all five jobs accepted synchronized README, owned-engine docs, machine-readable checks and generated roadmap"
                 }
               ]
             },
@@ -3922,7 +3923,7 @@
               "id": "T428",
               "emoji": "🧵",
               "name": "Sparse assignment-aware conditional merge register allocation",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Reserve join destinations only for mutable enclosing names statically assigned in a conditional branch",
@@ -3941,7 +3942,8 @@
                 },
                 {
                   "text": "Synchronize current performance/semantics docs and acceptance ledger in passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40127520366: all five jobs accepted synchronized README, owned-engine docs, machine-readable checks and generated roadmap"
                 }
               ]
             }
