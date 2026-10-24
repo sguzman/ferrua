@@ -305,7 +305,9 @@ fn emit_condition<'a>(
             }
             let dest = program.registers;
             program.registers += 1;
-            program.code.push(Instruction::NumericTruthy { dest, input });
+            program
+                .code
+                .push(Instruction::NumericTruthy { dest, input });
             Ok(dest)
         }
     }
@@ -842,10 +844,7 @@ mod tests {
             let bytecode = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_integer_program(&bytecode), Ok(expected), "{source}");
         }
-        let program = compile_integer_chunk(
-            "if 1//0 then return 1 else return 2 end",
-        )
-        .unwrap();
+        let program = compile_integer_chunk("if 1//0 then return 1 else return 2 end").unwrap();
         assert_eq!(
             execute_integer_program(&program),
             Err(Error::DivisionByZero)
