@@ -3134,6 +3134,33 @@
                   "evidence": "GitHub Actions 40053437772: all five CI jobs successful, including generated roadmap consistency, README and owned-engine documentation"
                 }
               ]
+            },
+            {
+              "id": "T400",
+              "emoji": "🗣️",
+              "name": "Callable Lua __tostring tables and builtin metamethod callbacks",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Invoke __tostring callback through shared callable dispatch for owned closures, builtin functions and chained __call tables",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::tostring_builtin via protected_target"
+                },
+                {
+                  "text": "Preserve converted numeric/string returns, reject invalid callback results and enforce native-stack-safe hard recursion limits",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: callable_tostring_metamethods_and_builtin_callbacks_are_bounded; two cyclic safety regressions"
+                },
+                {
+                  "text": "Pass 12 Lua 5.4/production fer differential fixtures, full Linux quality/tests, Rust 1.96, and action consumer CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40053556576: all five jobs green on 1b7d2607dd40c67891ecf8e670396b39447f788e"
+                },
+                {
+                  "text": "Synchronize engine documentation, README, machine ledger and generated roadmap with successful CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3806,6 +3833,13 @@
           "name": "Callable-table and builtin Lua __pairs callbacks",
           "task_ids": [
             "T399"
+          ]
+        },
+        {
+          "emoji": "🗣️",
+          "name": "Lua callable __tostring tables and builtin callbacks",
+          "task_ids": [
+            "T400"
           ]
         }
       ]
