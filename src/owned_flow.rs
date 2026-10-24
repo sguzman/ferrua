@@ -2158,18 +2158,18 @@ impl Execution<'_> {
         // require a table until the default iterator is actually invoked.
         let table = *args.first().ok_or(FlowError::TypeError)?;
         if builtin == Builtin::Pairs {
-            if let Value::Table(handle) = table {
-                if let Some(method) = self.metatable_field(handle, b"__pairs")? {
-                    let Value::Function(callback) = method else {
-                        return Err(FlowError::TypeError);
-                    };
-                    let values = self.call_owned_function(callback, &[table])?;
-                    return Ok(vec![
-                        values.first().copied().unwrap_or(Value::Nil),
-                        values.get(1).copied().unwrap_or(Value::Nil),
-                        values.get(2).copied().unwrap_or(Value::Nil),
-                    ]);
-                }
+            if let Value::Table(handle) = table
+                && let Some(method) = self.metatable_field(handle, b"__pairs")?
+            {
+                let Value::Function(callback) = method else {
+                    return Err(FlowError::TypeError);
+                };
+                let values = self.call_owned_function(callback, &[table])?;
+                return Ok(vec![
+                    values.first().copied().unwrap_or(Value::Nil),
+                    values.get(1).copied().unwrap_or(Value::Nil),
+                    values.get(2).copied().unwrap_or(Value::Nil),
+                ]);
             }
             Ok(vec![Value::Builtin(Builtin::Next), table, Value::Nil])
         } else {
