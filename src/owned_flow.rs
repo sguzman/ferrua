@@ -2225,6 +2225,9 @@ impl Execution<'_> {
                 };
                 Ok(vec![Value::Boolean(equal)])
             }
+            Value::Builtin(Builtin::Select) => self.select_builtin(&arguments),
+            Value::Builtin(Builtin::Next) => self.next_builtin(&arguments),
+            Value::Builtin(Builtin::IpairsIterator) => self.ipairs_iterator(&arguments),
             Value::Builtin(Builtin::RawGet) => Ok(vec![self.rawget_builtin(&arguments)?]),
             Value::Builtin(Builtin::RawSet) => Ok(vec![self.rawset_builtin(&arguments)?]),
             Value::Builtin(Builtin::GetMetatable) => {
@@ -3982,6 +3985,28 @@ mod tests {
             execute_flow_values(&cyclic, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
         );
+    }
+
+    #[test]
+    fn protected_multivalue_builtins_preserve_lua_result_adjustment() {
+        for source in [
+            "local ok,n=pcall(select,'#',3,4,5); return ok and n==3 and 1 or 0",
+            "local ok,a,b=pcall(select,2,1,3,4); return ok and a==3 and b==4 and 1 or 0",
+            "local ok,n=pcall(select,-1,3,4,5); return ok and n==5 and 1 or 0",
+            "return select('#',pcall(select,3,7,8))==1 and 1 or 0",
+            "local ok,k,v=pcall(next,{a=7}); return ok and k=='a' and v==7 and 1 or 0",
+            "local ok,k=pcall(next,{}); return ok and k==nil and 1 or 0",
+            "local ok,k,v=pcall(next,{[1]=3,[2]=4},1); return ok and k==2 and v==4 and 1 or 0",
+            "local ok,e=pcall(next,{x=3},'missing'); return not ok and type(e)=='string' and 1 or 0",
+            "local ok,e=pcall(select,0,1); return not ok and type(e)=='string' and 1 or 0",
+            "local iter,t,i=ipairs({6,7}); local ok,k,v=pcall(iter,t,i); return ok and k==1 and v==6 and 1 or 0",
+            "local iter,t,i=ipairs({}); local ok,k=pcall(iter,t,i); return ok and k==nil and 1 or 0",
+            "local t=setmetatable({}, {__index=function(_,i) if i==1 then return 8 end end}); local iter,s,i=ipairs(t); local ok,k,v=pcall(iter,s,i); return ok and k==1 and v==8 and 1 or 0",
+            "local ok,k=pcall(next,1); return not ok and type(k)=='string' and 1 or 0",
+            "return select('#',pcall(next,{}))==2 and 1 or 0",
+        ] {
+            assert_eq!(evaluate(source), 1, "{source}");
+        }
     }
 
     #[test]
