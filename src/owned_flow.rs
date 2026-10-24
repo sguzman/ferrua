@@ -3924,10 +3924,8 @@ mod tests {
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
-        let cyclic = compile_flow_chunk(
-            "local t={}; setmetatable(t,{__call=t}); return pcall(t)",
-        )
-        .unwrap();
+        let cyclic =
+            compile_flow_chunk("local t={}; setmetatable(t,{__call=t}); return pcall(t)").unwrap();
         assert_eq!(
             execute_flow_values(&cyclic, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
