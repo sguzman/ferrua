@@ -1219,13 +1219,10 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
     };
     compiler.statements(&statements)?;
     compiler.resolve_gotos()?;
-    if !compiler
-        .code
-        .iter()
-        .any(|op| matches!(op, Op::Return | Op::ReturnMany(_) | Op::ReturnTail(_)))
-    {
-        return Err(FlowError::NoReturn);
-    }
+    // Lua chunks implicitly return zero values when control falls off the end.
+    // Resolve jumps first: a label at EOF will now land on this real return.
+    // An existing explicit return still exits before reaching the tail.
+    compiler.push(Op::ReturnMany(0))?;
     let compiled_functions = functions.borrow().clone();
     let compiled_strings = strings.borrow().clone();
     Ok(FlowProgram {
@@ -6730,12 +6727,33 @@ mod tests {
     }
 
     #[test]
-    fn missing_returns_cannot_be_mistaken_for_success() {
-        assert!(matches!(
-            compile_flow_chunk("local n=1"),
-            Err(FlowError::NoReturn)
-        ));
-        let program = compile_flow_chunk("if false then return 1 end").unwrap();
-        assert_eq!(execute_flow_chunk(&program, 100), Err(FlowError::NoReturn));
+    fn top_level_chunks_implicitly_return_zero_values_on_fallthrough() {
+        for source in [
+            "",
+            "local n=1",
+            "if false then return 1 end",
+            "if true then local n=1 end",
+            "do local n=2 end",
+            "local n=1; while n<3 do n=n+1 end",
+            "goto done; ::done::",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(execute_flow_values(&program, 1000), Ok(vec![]), "{source}");
+            assert_eq!(
+                execute_flow_value(&program, 1000),
+                Err(FlowError::ReturnArity),
+                "{source}"
+            );
+        }
+        let returning = compile_flow_chunk("if true then return 9 end").unwrap();
+        assert_eq!(
+            execute_flow_values(&returning, 100),
+            Ok(vec![Value::Integer(9)])
+        );
+        let failing = compile_flow_chunk("local n=1//0").unwrap();
+        assert_eq!(
+            execute_flow_values(&failing, 100),
+            Err(FlowError::DivisionByZero)
+        );
     }
 }
