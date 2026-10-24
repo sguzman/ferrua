@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 144 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 145 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -646,6 +646,11 @@
   - [x] Preserve invalid scalar byte encodings and six-byte values, while rejecting UTF-8 escape values beyond the Lua 5.4 limit — src/owned_flow.rs: lua_54_utf8_escapes_support_full_thirty_one_bit_byte_range, unicode_scalar_escapes_encode_utf8_bytes; lexical overflow rejected
   - [x] Pass pinned production fer and upstream Lua 5.4 differential reference cases, Linux tests/lint, MSRV and composite consumer — GitHub Actions 40118094275: five green jobs including seven new extended UTF-8 fixtures
   - [x] Synchronize README, detailed independent-engine documentation, machine ledger and generated roadmap with passing CI — GitHub Actions 40118292248: all five CI jobs passed synchronized docs, machine ledger, generated roadmap and 31-bit Lua UTF-8 differential matrix
+- 🧪 **T416** Deterministic valid/invalid Lua 5.4 grammar cross-feature differential corpus — `████████░░ 75%`
+  - [x] Generate deterministic combinations of accepted Lua grammar including local scopes, functions, varargs, methods, goto, loops, attributes and table constructors — tests/owned_flow.rs: generated_grammar_fixtures yields 32 repeatable valid cross-feature Lua programs
+  - [x] Generate and reject invalid combinations of captured const writes, goto scope violations, duplicate labels, malformed fields, block errors and close declarations — tests/owned_flow.rs: generated_invalid_grammar_fixtures yields 16 invalid examples; generated_grammar_inputs_are_deterministic asserts sizes/stability
+  - [x] Compare all 48 generated cases with production fer and upstream Lua 5.4, with Rust 1.96 and full Linux/action acceptance — GitHub Actions 40118756930: all five CI jobs passed compiled positive cases and syntax-failure matrix
+  - [ ] Synchronize README, first-party grammar coverage documentation, machine ledger and generated roadmap under CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -760,4 +765,5 @@
 - 📍 Parser EOF diagnostics retain Lua physical line and byte position — `██████████ 100%`
 - ↵ Long-bracket string line-break normalization — `██████████ 100%`
 - 🌐 Original six-byte Lua UTF-8 escape semantics — `██████████ 100%`
+- 🧪 Generated Lua grammar acceptance combinations — `████████░░ 75%`
 

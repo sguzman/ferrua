@@ -657,3 +657,11 @@ Lua 5.4's short-string `\\u{...}` escape encodes a code-point value using its or
 Nine direct byte-array regressions cover NUL, ASCII, two-byte, surrogate, maximum Unicode and extended four-/five-/six-byte values. Seven additional cases compare resulting Lua string byte lengths and byte equality with both the pinned Lua 5.4 reference and production `fer`. Values at or above `0x80000000` are still rejected by the lexer as malformed. [CI #40118094275](https://github.com/sguzman/ferrua/actions/runs/40118094275) passed all five jobs after the old surrogate-rejection test was correctly updated.
 
 This proves the stated `\\u` escape subset only; it does not establish complete text/UTF-8 library support, a production engine switch, or general runtime graduation.
+
+### Generated valid/invalid Lua grammar interaction corpus
+
+The owned compiler differential test harness now generates 48 additional deterministic syntax/program cases instead of relying only on isolated hard-coded feature fixtures: 32 valid combinations and 16 invalid ones. Valid cases combine local shadowing, calls with table/string shorthand, table constructors, functions and captures, varargs, method declarations/calls, conditionals, numeric/repeat/while loops, goto/label resolution, constant declarations and parallel assignments. Invalid cases exercise captured `<const>` writes, prohibited jumps into a local scope, duplicate labels, unterminated blocks, invalid table fields, multiple `<close>` declarations and `break` outside a loop.
+
+Both accepted results and rejected-source status are compared against the pinned production `fer` interpreter and upstream Lua 5.4. The generator is deterministic and includes explicit count and repeatability tests; it adds no runtime randomness, network dependency or new external language tooling. [CI #40118756930](https://github.com/sguzman/ferrua/actions/runs/40118756930) passed all five jobs.
+
+These 48 cases improve the **generated syntax** component of the T301 graduation evidence. They do not prove all lexical/grammar combinations, complete error diagnostics, GC/coroutine behavior or register VM coverage; T301 and T302 remain open.

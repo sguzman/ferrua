@@ -3582,6 +3582,33 @@
                   "evidence": "GitHub Actions 40118292248: all five CI jobs passed synchronized docs, machine ledger, generated roadmap and 31-bit Lua UTF-8 differential matrix"
                 }
               ]
+            },
+            {
+              "id": "T416",
+              "emoji": "🧪",
+              "name": "Deterministic valid/invalid Lua 5.4 grammar cross-feature differential corpus",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Generate deterministic combinations of accepted Lua grammar including local scopes, functions, varargs, methods, goto, loops, attributes and table constructors",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs: generated_grammar_fixtures yields 32 repeatable valid cross-feature Lua programs"
+                },
+                {
+                  "text": "Generate and reject invalid combinations of captured const writes, goto scope violations, duplicate labels, malformed fields, block errors and close declarations",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs: generated_invalid_grammar_fixtures yields 16 invalid examples; generated_grammar_inputs_are_deterministic asserts sizes/stability"
+                },
+                {
+                  "text": "Compare all 48 generated cases with production fer and upstream Lua 5.4, with Rust 1.96 and full Linux/action acceptance",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40118756930: all five CI jobs passed compiled positive cases and syntax-failure matrix"
+                },
+                {
+                  "text": "Synchronize README, first-party grammar coverage documentation, machine ledger and generated roadmap under CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4366,6 +4393,13 @@
           "name": "Original six-byte Lua UTF-8 escape semantics",
           "task_ids": [
             "T415"
+          ]
+        },
+        {
+          "emoji": "🧪",
+          "name": "Generated Lua grammar acceptance combinations",
+          "task_ids": [
+            "T416"
           ]
         }
       ]
