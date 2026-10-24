@@ -7219,16 +7219,22 @@ mod tests {
 
     #[test]
     fn indexed_runtime_strings_preserve_lua_values_and_limits() {
-        let program = compile_flow_chunk(
-            "local last=''; for i=1,1500 do last=tostring(i) end; print(last)",
-        )
-        .unwrap();
+        let program =
+            compile_flow_chunk("local last=''; for i=1,1500 do last=tostring(i) end; print(last)")
+                .unwrap();
         let outcome = execute_flow_capture(&program, 100_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"1500\n");
 
-        let source = format!("print('{}'); print('{}')", "z".repeat(33_000), "q".repeat(33_000));
-        assert!(matches!(compile_flow_chunk(&source), Err(FlowError::TooLarge)));
+        let source = format!(
+            "print('{}'); print('{}')",
+            "z".repeat(33_000),
+            "q".repeat(33_000)
+        );
+        assert!(matches!(
+            compile_flow_chunk(&source),
+            Err(FlowError::TooLarge)
+        ));
     }
 
     #[test]
