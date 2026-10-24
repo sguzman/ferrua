@@ -234,3 +234,76 @@ fn generated_nested_branch_joins_match_reference_interpreters() {
         }
     }
 }
+
+#[test]
+fn generated_nested_guard_failures_match_reference_interpreters() {
+    let compare_upstream = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    // Each fixed seed changes which potentially failing expression is
+    // selected. Skipped Lua arms must never evaluate integer division by zero.
+    let mut observed_success = 0;
+    let mut observed_failure = 0;
+    for seed in 0_i64..48 {
+        let x = (seed * 3) % 15 - 6;
+        let y = (seed * 7) % 13 - 6;
+        let cutoff = seed % 9 - 4;
+        let add = seed % 5 + 1;
+        let source = format!(
+            "local x={x}; local y={y}; \
+             if x<{cutoff} then \
+                if y%2==0 or (1//0)>0 then x=x+{add} else x=x-1 end \
+             elseif x>{cutoff} then \
+                if y%3==0 then x=1//0 else x=x+y end \
+             else \
+                if false and (1//0)>0 then x=0 else x=x*2 end \
+             end; \
+             return x"
+        );
+        let program = compile_integer_chunk(&source)
+            .unwrap_or_else(|error| panic!("seed {seed}: compilation error {error}: {source}"));
+        let owned = execute_integer_program(&program);
+        if owned.is_ok() {
+            observed_success += 1;
+        } else {
+            observed_failure += 1;
+            assert_eq!(owned, Err(Error::DivisionByZero), "seed {seed}: {source}");
+        }
+
+        let lua_code = format!("print((function() {source} end)())");
+        for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if binary == "lua5.4" && !compare_upstream {
+                continue;
+            }
+            let mut command = Command::new(binary);
+            if binary != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command
+                .args(["-e", &lua_code])
+                .output()
+                .unwrap_or_else(|error| panic!("seed {seed}: {binary}: {error}"));
+            if output.status.success() {
+                let reference = String::from_utf8_lossy(&output.stdout)
+                    .trim()
+                    .parse::<i64>()
+                    .unwrap_or_else(|error| panic!("seed {seed}: {binary}: {error}"));
+                assert_eq!(owned, Ok(reference), "seed {seed}: {binary}: {source}");
+            } else {
+                let error = String::from_utf8_lossy(&output.stderr);
+                assert!(
+                    error.to_lowercase().contains("zero"),
+                    "seed {seed}: unexpected {binary} failure for {source}: {error}"
+                );
+                assert_eq!(
+                    owned,
+                    Err(Error::DivisionByZero),
+                    "seed {seed}: {binary}: {source}"
+                );
+            }
+        }
+    }
+    assert!(observed_success > 0, "all generated paths failed");
+    assert!(observed_failure > 0, "no selected guard raised its error");
+}
