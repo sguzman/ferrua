@@ -5473,11 +5473,32 @@ mod tests {
             execute_flow_values(&program, 200),
             Ok(vec![Value::Integer(1), Value::Integer(1)])
         );
+        for (source, expected) in [
+            (
+                "return pairs(3)",
+                vec![Value::Builtin(Builtin::Next), Value::Integer(3), Value::Nil],
+            ),
+            (
+                "return ipairs(nil)",
+                vec![
+                    Value::Builtin(Builtin::IpairsIterator),
+                    Value::Nil,
+                    Value::Integer(0),
+                ],
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+                Ok(expected),
+                "{source}"
+            );
+        }
         for source in [
             "return next()",
             "return next(3)",
-            "return pairs(3)",
-            "return ipairs(nil)",
+            "return pairs()",
+            "return ipairs()",
             "local t={3}; return next(t,2)",
             "local t={}; return next(t,0)",
         ] {
