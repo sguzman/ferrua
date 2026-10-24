@@ -250,7 +250,7 @@ fn owned_engine_opt_in_executes_only_the_first_party_subset() {
     );
     let invalid = fer(&["--engine=owned", "--check", "-e", "local ="]);
     assert!(!invalid.status.success());
-    let missing_global = fer(&["--engine=owned", "-e", "print(42)"]);
+    let missing_global = fer(&["--engine=owned", "-e", "io.write(42)"]);
     assert!(
         !missing_global.status.success(),
         "no fallback to production VM"
