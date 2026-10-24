@@ -219,18 +219,36 @@ fn integer_register_guard_clauses_match_fer_and_lua54() {
         ("if not 0 then return 8 end; return 4", 4),
         ("local x=3; if x>2 then return x+5 end; return 0", 8),
         ("local x=3; if x<2 then return x+5 end; return x*3", 9),
-        ("if false then return 1 elseif true then return 13 end; return 9", 13),
-        ("if false then return 1 elseif false then return 13 end; return 9", 9),
-        ("local x=2; if x>3 then return 1 elseif x==2 then return 17 end; return 0", 17),
+        (
+            "if false then return 1 elseif true then return 13 end; return 9",
+            13,
+        ),
+        (
+            "if false then return 1 elseif false then return 13 end; return 9",
+            9,
+        ),
+        (
+            "local x=2; if x>3 then return 1 elseif x==2 then return 17 end; return 0",
+            17,
+        ),
         ("if false and (1//0>0) then return 6 end; return 12", 12),
         ("if true or (1//0>0) then return 15 end; return 0", 15),
         ("if not (2<1) then do return 21 end end; return 9", 21),
         ("do if false then return 2 end end; return 19", 19),
         ("local x=7; do if x<5 then return 2 end end; return x+4", 11),
         ("local x=0; if x==1 then return 3 end; x=6; return x+2", 8),
-        ("if false then return 3 end; if true then return 24 end; return 5", 24),
-        ("if false then return 3 end; if false then return 24 end; return 5", 5),
-        ("local x=5; if x==5 then local y=3; return x*y end; return 0", 15),
+        (
+            "if false then return 3 end; if true then return 24 end; return 5",
+            24,
+        ),
+        (
+            "if false then return 3 end; if false then return 24 end; return 5",
+            5,
+        ),
+        (
+            "local x=5; if x==5 then local y=3; return x*y end; return 0",
+            15,
+        ),
     ] {
         let program = compile_integer_chunk(source).unwrap();
         assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
