@@ -3162,6 +3162,33 @@
                   "evidence": "GitHub Actions 40053772976: all five jobs passed synchronized owned-engine docs, README, machine progress and roadmap check"
                 }
               ]
+            },
+            {
+              "id": "T401",
+              "emoji": "📏",
+              "name": "Callable __len metamethods with Lua error-level validation",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Execute first-party __len callback values as ordinary bounded Lua callables, including tables with __call and builtin functions",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::length_with_metatable delegates to protected_target"
+                },
+                {
+                  "text": "Preserve Lua __len callback results and two-operand signature, validate error(message, level), and enforce cyclic-depth protections",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: callable_len_metamethods_preserve_lua_results_and_depth_safety; lua_error_builtin_validates_optional_level_in_normal_and_protected_calls"
+                },
+                {
+                  "text": "Pass 20 positive/error differential fixtures, two hard-limit regressions, Rust 1.96, Linux packaging/quality, Lua 5.4 and pinned fer CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40054039668: all five jobs passed for dcc0b1bf91b428b3bc44f73e27da87986ce95b19"
+                },
+                {
+                  "text": "Synchronize README, engine design, machine progress and generated roadmap after passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3841,6 +3868,13 @@
           "name": "Lua callable __tostring tables and builtin callbacks",
           "task_ids": [
             "T400"
+          ]
+        },
+        {
+          "emoji": "📏",
+          "name": "Callable Lua __len callbacks and error-level parity",
+          "task_ids": [
+            "T401"
           ]
         }
       ]

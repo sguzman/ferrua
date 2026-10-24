@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 129 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 96%` across 130 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -571,6 +571,11 @@
   - [x] Preserve converted numeric/string returns, reject invalid callback results and enforce native-stack-safe hard recursion limits — src/owned_flow.rs: callable_tostring_metamethods_and_builtin_callbacks_are_bounded; two cyclic safety regressions
   - [x] Pass 12 Lua 5.4/production fer differential fixtures, full Linux quality/tests, Rust 1.96, and action consumer CI — GitHub Actions 40053556576: all five jobs green on 1b7d2607dd40c67891ecf8e670396b39447f788e
   - [x] Synchronize engine documentation, README, machine ledger and generated roadmap with successful CI — GitHub Actions 40053772976: all five jobs passed synchronized owned-engine docs, README, machine progress and roadmap check
+- 📏 **T401** Callable __len metamethods with Lua error-level validation — `████████░░ 75%`
+  - [x] Execute first-party __len callback values as ordinary bounded Lua callables, including tables with __call and builtin functions — src/owned_flow.rs: Execution::length_with_metatable delegates to protected_target
+  - [x] Preserve Lua __len callback results and two-operand signature, validate error(message, level), and enforce cyclic-depth protections — src/owned_flow.rs: callable_len_metamethods_preserve_lua_results_and_depth_safety; lua_error_builtin_validates_optional_level_in_normal_and_protected_calls
+  - [x] Pass 20 positive/error differential fixtures, two hard-limit regressions, Rust 1.96, Linux packaging/quality, Lua 5.4 and pinned fer CI — GitHub Actions 40054039668: all five jobs passed for dcc0b1bf91b428b3bc44f73e27da87986ce95b19
+  - [ ] Synchronize README, engine design, machine progress and generated roadmap after passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -670,4 +675,5 @@
 - 🪆 Nested bounded pcall/xpcall first-class targets — `██████████ 100%`
 - 🔁 Callable-table and builtin Lua __pairs callbacks — `██████████ 100%`
 - 🗣️ Lua callable __tostring tables and builtin callbacks — `██████████ 100%`
+- 📏 Callable Lua __len callbacks and error-level parity — `████████░░ 75%`
 
