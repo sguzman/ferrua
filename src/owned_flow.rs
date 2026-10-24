@@ -2158,22 +2158,30 @@ impl Execution<'_> {
             }
             Err(error) if Self::unprotectable_error(&error) => Err(error),
             Err(error) => {
-                let message = self.protected_error_value(error)?;
-                let handled = match handler {
-                    Value::Function(handle) => self.call_owned_function(handle, &[message]),
-                    _ => Err(FlowError::TypeError),
-                };
-                match handled {
-                    Ok(values) => Ok(vec![
-                        Value::Boolean(false),
-                        values.first().copied().unwrap_or(Value::Nil),
-                    ]),
-                    Err(error) if Self::unprotectable_error(&error) => Err(error),
-                    Err(_) => Ok(vec![
-                        Value::Boolean(false),
-                        self.intern_string(b"error in error handling".to_vec())?,
-                    ]),
+                let mut message = self.protected_error_value(error)?;
+                // Lua retries its message handler on ordinary errors from that
+                // handler. Iterate rather than recursing on the Rust stack;
+                // this experimental limit is not general Lua recursion parity.
+                for _ in 0..MAX_CALL_DEPTH {
+                    let handled = match handler {
+                        Value::Function(handle) => self.call_owned_function(handle, &[message]),
+                        _ => Err(FlowError::TypeError),
+                    };
+                    match handled {
+                        Ok(values) => {
+                            return Ok(vec![
+                                Value::Boolean(false),
+                                values.first().copied().unwrap_or(Value::Nil),
+                            ]);
+                        }
+                        Err(error) if Self::unprotectable_error(&error) => return Err(error),
+                        Err(error) => message = self.protected_error_value(error)?,
+                    }
                 }
+                Ok(vec![
+                    Value::Boolean(false),
+                    self.intern_string(b"error in error handling".to_vec())?,
+                ])
             }
         }
     }
@@ -3898,6 +3906,18 @@ mod tests {
             ),
             (
                 "local ok,e=xpcall(error,function() error(6) end,4); return not ok and type(e)=='string' and 1 or 0",
+                1,
+            ),
+            (
+                "local n=0; local ok,e=xpcall(error,function(x) n=n+1; if n==1 then error(3) end; return x+10 end,2); return not ok and n==2 and e==13 and 1 or 0",
+                1,
+            ),
+            (
+                "local n=0; local ok,e=xpcall(error,function(x) n=n+1; if n<3 then error(n) end; return x*10 end,2); return not ok and n==3 and e==20 and 1 or 0",
+                1,
+            ),
+            (
+                "local n=0; local ok,e=xpcall(error,function(x) n=n+1; if n==1 then error(false) end; return x==false and 41 or 0 end,1); return not ok and n==2 and e==41 and 1 or 0",
                 1,
             ),
             ("return type(xpcall)=='function' and 1 or 0", 1),
