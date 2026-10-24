@@ -353,8 +353,7 @@ fn source_eof_line(source: &str) -> usize {
     let mut line = 1;
     let mut previous = None;
     for byte in source.bytes() {
-        if (byte == b'\r' && previous != Some(b'\n'))
-            || (byte == b'\n' && previous != Some(b'\r'))
+        if (byte == b'\r' && previous != Some(b'\n')) || (byte == b'\n' && previous != Some(b'\r'))
         {
             line += 1;
         }
