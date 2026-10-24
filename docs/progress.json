@@ -3610,6 +3610,33 @@
                   "evidence": "GitHub Actions 40118930822: all five jobs passed synchronized README, first-party engine documentation, progress ledger and generated roadmap"
                 }
               ]
+            },
+            {
+              "id": "T417",
+              "emoji": "🛡️",
+              "name": "Bound deeply recursive Lua expression parsing before Rust host stack exhaustion",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Enforce a conservative 64-level expression parser recursion cap with an error and decrement depth on all parse exit paths",
+                  "passed": true,
+                  "evidence": "src/expr.rs: MAX_EXPRESSION_DEPTH and expression/expression_inner with depth guard"
+                },
+                {
+                  "text": "Reject deeply nested parentheses, unary operators, right-associative powers and table constructors in expressions and chunks, while retaining shallow expressions",
+                  "passed": true,
+                  "evidence": "src/expr.rs: deeply_nested_expressions_fail_without_exhausting_host_stack"
+                },
+                {
+                  "text": "Pass Rust 1.96, Linux lint/tests, Lua differential, isolated Arch smoke and consumer CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40119363138: all five jobs successful for ffcf2d6ab160393d81874dc59c64f0d9bc8b7cc0"
+                },
+                {
+                  "text": "Synchronize parser safety documentation, machine ledger and generated roadmap under CI acceptance",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4401,6 +4428,13 @@
           "name": "Generated Lua grammar acceptance combinations",
           "task_ids": [
             "T416"
+          ]
+        },
+        {
+          "emoji": "🛡️",
+          "name": "Expression parser host-stack safety",
+          "task_ids": [
+            "T417"
           ]
         }
       ]

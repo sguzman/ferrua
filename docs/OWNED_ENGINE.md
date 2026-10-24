@@ -665,3 +665,9 @@ The owned compiler differential test harness now generates 48 additional determi
 Both accepted results and rejected-source status are compared against the pinned production `fer` interpreter and upstream Lua 5.4. The generator is deterministic and includes explicit count and repeatability tests; it adds no runtime randomness, network dependency or new external language tooling. [CI #40118756930](https://github.com/sguzman/ferrua/actions/runs/40118756930) passed all five jobs.
 
 These 48 cases improve the **generated syntax** component of the T301 graduation evidence. They do not prove all lexical/grammar combinations, complete error diagnostics, GC/coroutine behavior or register VM coverage; T301 and T302 remain open.
+
+### Conservative Lua expression parser recursion guard
+
+The standalone first-party expression parser now rejects recursive expression descent beyond 64 frames. Nested grouping, repeated unary operators, right-associative power expressions and nested table constructors fail with `Lua expression nesting limit exceeded` rather than allowing unbounded Rust host-stack recursion. Depth is decremented after successful and failed parsing. This is separate from the existing 64-level statement-block guard. The regression checks both standalone `parse_expression` and `parse_chunk`, and retains successful shallow nested expressions.
+
+[CI #40119363138](https://github.com/sguzman/ferrua/actions/runs/40119363138) accepted Rust test, lint, Rust 1.96, upstream Lua comparison, Arch archive and consumer checks. The 64-frame cap is intentionally more restrictive than all Lua 5.4 inputs and does not satisfy the full T301 parser acceptance gate. Long, iteratively constructed expression chains and other parser resource surfaces require separate testing. The production `fer` interpreter remains unchanged.
