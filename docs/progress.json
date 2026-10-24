@@ -2915,7 +2915,7 @@
               "id": "T392",
               "emoji": "🧪",
               "name": "Lua 5.4 xpcall function-only handler and early rejection parity",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Require an actual Lua function-valued message handler before executing xpcall target",
@@ -2934,7 +2934,8 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, owned-engine documentation and README under verified CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40046094740: all five jobs passed synchronized progress.json, roadmap generator check, README and owned-engine docs"
                 }
               ]
             }

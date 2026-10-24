@@ -526,11 +526,11 @@
   - [x] Forward __call receiver and user arguments through bounded callable-table chains during pcall/xpcall target invocation — src/owned_flow.rs: Execution::protected_target resolves table-valued __call recursively without native-stack recursion; GitHub Actions 40045174135 passed full CI
   - [x] Preserve successful multiple results and explicit protected failures while rejecting cyclic call chains under shared resource limits — src/owned_flow.rs: protected_calls_forward_callable_tables_and_enforce_redirect_limits; tests/owned_flow.rs: six callable-table differential fixtures
   - [x] Pass Linux Rust tests, lint, Rust 1.96, composite consumer and upstream Lua 5.4 parity — GitHub Actions 40045174135: all five CI jobs succeeded for commit 13afe3046a6f2b4d67efd78de27e289bac663d42
-- 🧪 **T392** Lua 5.4 xpcall function-only handler and early rejection parity — `████████░░ 75%`
+- 🧪 **T392** Lua 5.4 xpcall function-only handler and early rejection parity — `██████████ 100%`
   - [x] Require an actual Lua function-valued message handler before executing xpcall target — src/owned_flow.rs: Execution::xpcall_builtin early handler-type guard; GitHub Actions 40045839543
   - [x] Reject nil, missing and callable-table message handlers without running successful or failing targets — src/owned_flow.rs: xpcall_requires_function_handlers_before_invoking_target; tests/owned_flow.rs: five runtime-rejection cases
   - [x] Pass production fer and upstream Lua 5.4 positive/error differential matrix, Rust tests/lint, Rust 1.96 and downstream action — GitHub Actions 40045839543: five successful jobs, including strict negative-path Lua reference checks
-  - [ ] Synchronize machine ledger, generated roadmap, owned-engine documentation and README under verified CI
+  - [x] Synchronize machine ledger, generated roadmap, owned-engine documentation and README under verified CI — GitHub Actions 40046094740: all five jobs passed synchronized progress.json, roadmap generator check, README and owned-engine docs
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -621,5 +621,5 @@
 - 🗣️ Lua assertion error objects and default messages — `██████████ 100%`
 - 🛟 Lua xpcall bounded error handlers — `██████████ 100%`
 - 📞 Callable-table protected call targets — `██████████ 100%`
-- 🧪 Strict xpcall handler type parity — `████████░░ 75%`
+- 🧪 Strict xpcall handler type parity — `██████████ 100%`
 
