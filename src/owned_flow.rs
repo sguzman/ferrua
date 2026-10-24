@@ -1706,7 +1706,7 @@ impl Execution<'_> {
             let key = self.intern_string(name.to_vec())?;
             self.write_table(
                 handle,
-                TableKey::Hashed(Value::String(key)),
+                TableKey::Hashed(key),
                 Value::Builtin(builtin),
             )?;
         }
@@ -1714,18 +1714,18 @@ impl Execution<'_> {
         let number = self.intern_string(b"Lua 5.4".to_vec())?;
         self.write_table(
             handle,
-            TableKey::Hashed(Value::String(version)),
-            Value::String(number),
+            TableKey::Hashed(version),
+            number,
         )?;
         let self_key = self.intern_string(b"_G".to_vec())?;
         self.write_table(
             handle,
-            TableKey::Hashed(Value::String(self_key)),
+            TableKey::Hashed(self_key),
             Value::Table(handle),
         )?;
         let arg_key = self.intern_string(b"arg".to_vec())?;
         let arguments = self.argument_table()?;
-        self.write_table(handle, TableKey::Hashed(Value::String(arg_key)), arguments)?;
+        self.write_table(handle, TableKey::Hashed(arg_key), arguments)?;
         for (key, value) in std::mem::take(&mut self.globals) {
             self.write_table(handle, TableKey::Hashed(Value::String(key)), value)?;
         }
