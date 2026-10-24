@@ -246,7 +246,8 @@ impl<'a> Parser<'a> {
             }
             _ if self.peek().is_some_and(|token| {
                 matches!(token.kind, Kind::ShortString | Kind::LongString)
-            }) => {
+            }) =>
+            {
                 let token = self
                     .pop()
                     .ok_or_else(|| self.error("expected call arguments"))?;
