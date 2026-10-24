@@ -98,11 +98,12 @@ pub enum Binary {
 pub enum Op {
     Constant(Value),
     ReadLocal(usize),
-    ArgTable,
+    ReadGlobal(usize),
     AssignLocals(Vec<usize>),
     DeclareLocals(Vec<usize>),
     RenewLocal(usize),
     PrepareLocal(usize),
+    PrepareGlobal(usize),
     PrepareIndexed,
     AssignPrepared(usize),
     NewTable(usize),
@@ -484,64 +485,12 @@ impl<'a> Compiler<'a> {
                         Ok(slot) => {
                             self.push(Op::ReadLocal(slot))?;
                         }
-                        Err(_) if *text == "arg" => {
-                            self.push(Op::ArgTable)?;
+                        Err(_) => {
+                            // Resolve globals at execution time so function
+                            // calls observe mutations, including overwritten builtins.
+                            let key = self.intern_bytes(text.as_bytes().to_vec())?;
+                            self.push(Op::ReadGlobal(key))?;
                         }
-                        Err(_) if *text == "print" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::Print)))?;
-                        }
-                        Err(_) if *text == "type" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::Type)))?;
-                        }
-                        Err(_) if *text == "tostring" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::ToString)))?;
-                        }
-                        Err(_) if *text == "tonumber" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::ToNumber)))?;
-                        }
-                        Err(_) if *text == "rawequal" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::RawEqual)))?;
-                        }
-                        Err(_) if *text == "rawget" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::RawGet)))?;
-                        }
-                        Err(_) if *text == "rawset" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::RawSet)))?;
-                        }
-                        Err(_) if *text == "rawlen" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::RawLen)))?;
-                        }
-                        Err(_) if *text == "select" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::Select)))?;
-                        }
-                        Err(_) if *text == "assert" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::Assert)))?;
-                        }
-                        Err(_) if *text == "error" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::Error)))?;
-                        }
-                        Err(_) if *text == "pcall" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::Pcall)))?;
-                        }
-                        Err(_) if *text == "xpcall" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::Xpcall)))?;
-                        }
-                        Err(_) if *text == "next" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::Next)))?;
-                        }
-                        Err(_) if *text == "pairs" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::Pairs)))?;
-                        }
-                        Err(_) if *text == "ipairs" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::Ipairs)))?;
-                        }
-                        Err(_) if *text == "getmetatable" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::GetMetatable)))?;
-                        }
-                        Err(_) if *text == "setmetatable" => {
-                            self.push(Op::Constant(Value::Builtin(Builtin::SetMetatable)))?;
-                        }
-                        Err(error) => return Err(error),
                     }
                 }
             }
@@ -958,13 +907,17 @@ impl<'a> Compiler<'a> {
                     for target in targets {
                         match target {
                             Expr::Atom(name) => {
-                                let slot = self.slot(name)?;
-                                if self.read_only.contains(&slot) {
-                                    return Err(FlowError::Unsupported(
-                                        "read-only Lua local or for control variable".into(),
-                                    ));
+                                if let Ok(slot) = self.slot(name) {
+                                    if self.read_only.contains(&slot) {
+                                        return Err(FlowError::Unsupported(
+                                            "read-only Lua local or for control variable".into(),
+                                        ));
+                                    }
+                                    self.push(Op::PrepareLocal(slot))?;
+                                } else {
+                                    let key = self.intern_bytes(name.as_bytes().to_vec())?;
+                                    self.push(Op::PrepareGlobal(key))?;
                                 }
-                                self.push(Op::PrepareLocal(slot))?;
                             }
                             Expr::Index { object, key } => {
                                 self.expression(object, 0)?;
@@ -1575,6 +1528,7 @@ enum TableKey {
 #[derive(Clone, Copy)]
 enum PendingTarget {
     Local(usize),
+    Global(usize),
     Indexed { table: usize, key: TableKey },
 }
 
@@ -1608,6 +1562,7 @@ struct Execution<'a> {
     script_name: &'a str,
     script_args: &'a [String],
     arg_handle: Option<usize>,
+    globals: HashMap<usize, Value>,
 }
 
 impl Execution<'_> {
@@ -1695,6 +1650,47 @@ impl Execution<'_> {
             }
         }
         Ok(())
+    }
+
+    /// Global reads share one execution-local environment across call frames.
+    /// Named core functions are lazily provided unless explicitly overwritten,
+    /// including by nil. Other missing globals read as nil, as in Lua.
+    fn read_global(&mut self, key: usize) -> Result<Value, FlowError> {
+        if let Some(&value) = self.globals.get(&key) {
+            return Ok(value);
+        }
+        let name = self.strings.get(key).ok_or(FlowError::InvalidBytecode)?;
+        let builtin = match name.as_slice() {
+            b"print" => Some(Builtin::Print),
+            b"type" => Some(Builtin::Type),
+            b"tostring" => Some(Builtin::ToString),
+            b"tonumber" => Some(Builtin::ToNumber),
+            b"rawequal" => Some(Builtin::RawEqual),
+            b"rawget" => Some(Builtin::RawGet),
+            b"rawset" => Some(Builtin::RawSet),
+            b"rawlen" => Some(Builtin::RawLen),
+            b"select" => Some(Builtin::Select),
+            b"assert" => Some(Builtin::Assert),
+            b"error" => Some(Builtin::Error),
+            b"pcall" => Some(Builtin::Pcall),
+            b"xpcall" => Some(Builtin::Xpcall),
+            b"next" => Some(Builtin::Next),
+            b"pairs" => Some(Builtin::Pairs),
+            b"ipairs" => Some(Builtin::Ipairs),
+            b"getmetatable" => Some(Builtin::GetMetatable),
+            b"setmetatable" => Some(Builtin::SetMetatable),
+            _ => None,
+        };
+        if let Some(builtin) = builtin {
+            return Ok(Value::Builtin(builtin));
+        }
+        if name == b"arg" {
+            return self.argument_table();
+        }
+        if name == b"_VERSION" {
+            return self.intern_string(b"Lua 5.4".to_vec());
+        }
+        Ok(Value::Nil)
     }
 
     /// Materialize the standard Lua argv table only when referenced. Repeated
@@ -2855,7 +2851,7 @@ impl Execution<'_> {
             let next = pc + 1;
             match &instructions[pc] {
                 Op::Constant(value) => stack.push(*value),
-                Op::ArgTable => stack.push(self.argument_table()?),
+                Op::ReadGlobal(key) => stack.push(self.read_global(*key)?),
                 Op::NewFunction(index) => {
                     if *index >= self.program.functions.len() || self.closures.len() >= MAX_CLOSURES
                     {
@@ -3108,6 +3104,13 @@ impl Execution<'_> {
                     }
                     prepared.push(PendingTarget::Local(cell));
                 }
+                Op::PrepareGlobal(key) => {
+                    self.strings.get(*key).ok_or(FlowError::InvalidBytecode)?;
+                    if prepared.len() >= MAX_SLOTS {
+                        return Err(FlowError::TooLarge);
+                    }
+                    prepared.push(PendingTarget::Global(*key));
+                }
                 Op::PrepareIndexed => {
                     let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
                     let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
@@ -3134,6 +3137,9 @@ impl Execution<'_> {
                             PendingTarget::Local(cell) => {
                                 *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? =
                                     Some(value);
+                            }
+                            PendingTarget::Global(key) => {
+                                self.globals.insert(key, value);
                             }
                             PendingTarget::Indexed { table, key } => {
                                 self.assign_with_metatable(table, key, value)?;
@@ -3580,6 +3586,7 @@ pub fn execute_flow_capture_with_args<'a>(
         script_name,
         script_args,
         arg_handle: None,
+        globals: HashMap::new(),
     };
     let result = execution.run(&program.instructions, program.slots, &[], &[], &[]);
     FlowOutcome {
@@ -6817,7 +6824,6 @@ mod tests {
     #[test]
     fn rejects_unsupported_and_unbound_forms() {
         for source in [
-            "x=1; return x",
             "return print(3)",
             "return 1.2",
             "for k in pairs(t) do return 1 end; return 0",
@@ -6828,6 +6834,28 @@ mod tests {
                 Ok(program) => assert!(execute_flow_chunk(&program, 100).is_err(), "{source}"),
             }
         }
+    }
+
+    #[test]
+    fn ordinary_globals_are_shared_across_calls_and_overrides_are_writable() {
+        let program = compile_flow_chunk(
+            "counter=2; local function bump() counter=counter+1; return counter end; print(bump(),bump()); print(missing==nil); local saved=print; print=function(x) return x*2 end; assert(print(21)==42); print=saved; print(_VERSION)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 5000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"3\t4\ntrue\nLua 5.4\n");
+
+        let program = compile_flow_chunk(
+            "local original=arg; arg=nil; assert(arg==nil); arg=original; print(arg[0]); x=7; x=nil; assert(x==nil)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 1000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"=owned\n");
+
+        let program = compile_flow_chunk("x=8; x=x+3; return x").unwrap();
+        assert_eq!(execute_flow_chunk(&program, 1000), Ok(11));
     }
 
     #[test]

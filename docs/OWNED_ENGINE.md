@@ -783,3 +783,7 @@ The explicit `--engine=owned` preview now executes ordinary `print(...)` calls i
 ### Owned argument-table parity (experimental)
 
 The opt-in owned engine creates its writable `arg` table lazily on first reference and reuses the same identity throughout a script and nested calls. `arg[0]` identifies `-e`, `-` or the input script path, and `arg[1..n]` contains the CLI arguments. String-pool and table-cell limits are enforced rather than allocating unbounded argv data. The production interpreter is unchanged. This is not yet a general, mutable Lua global environment or a complete `package` module search-path implementation.
+
+### Shared execution-local globals (experimental)
+
+The opt-in compiler now emits runtime reads for unbound identifiers and prepared writes for nonlocal assignments, rather than embedding immutable function constants in bytecode. Missing globals evaluate to nil; available first-party core functions resolve lazily; user assignments can replace them, including with nil. Nested calls share the same per-execution overrides. The Lua 5.4 `_VERSION` string and the bounded `arg` table resolve through that same environment. The complete `_G` table, module-loading environment model and broader standard library are still unimplemented. Production `fer` remains on luna-core.

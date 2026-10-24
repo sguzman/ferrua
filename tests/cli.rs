@@ -330,3 +330,22 @@ fn owned_arg_table_matches_production_cli_and_script_name() {
     assert!(checked.status.success());
     assert!(checked.stdout.is_empty());
 }
+
+#[test]
+fn owned_global_mutation_and_late_binding_match_production_lua() {
+    let source = "counter=1; function_dummy=function() counter=counter+1; return counter end; print(function_dummy(), function_dummy()); print(unbound == nil); local saved=print; print=function(x) return x*2 end; assert(print(21)==42); print=saved; print(_VERSION)";
+    let owned = fer(&["--engine=owned", "-e", source]);
+    let reference = fer(&["--lua=5.4", "-e", source]);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(
+        reference.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reference.stderr)
+    );
+    assert_eq!(owned.stdout, reference.stdout);
+    assert_eq!(owned.stdout, b"2\t3\ntrue\nLua 5.4\n");
+}
