@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 152 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 153 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -686,6 +686,11 @@
   - [x] Preserve Lua precedence, zero numeric truthiness, nested negation, and skipped/propagated runtime errors — src/owned_vm.rs: integer_conditional_short_circuit_guards_preserve_lua_control_flow; fourteen positive and two error paths
   - [x] Pass Rust tests/Clippy, Rust 1.96, production fer and pinned Lua 5.4 differential fixtures and composite consumer — GitHub Actions 40123272148: all five CI jobs passed on commit b6b4a8d0e0f5a02db4da7d6b219694c738327517
   - [x] Synchronize README, owned-engine documentation, machine ledger and generated roadmap in CI — GitHub Actions 40123499126: all five CI jobs passed synchronized docs, ledger, README and generated roadmap
+- 🚦 **T424** Integer register-VM returning guard clauses with later fallback — `████████░░ 75%`
+  - [x] Compile returning if/elseif arms without else and fall through to a subsequent integer return — src/owned_vm.rs: compile_statements Statement::If supports optional else and patches all false-branch targets
+  - [x] Retain short-circuit and lexical locals while rejecting missing final returns and nonreturning conditional bodies — src/owned_vm.rs: integer_guard_clauses_fall_through_to_a_later_return; three explicit unsupported cases
+  - [x] Pass native Rust tests, Rust 1.96, Arch package/consumer and reference Lua 5.4 differential corpus — GitHub Actions 40124323318 all five jobs green on 0fac6838732ec636595401ea64f3276583858883; 18 comparison fixtures
+  - [ ] Synchronize README, owned-engine design note, evidence ledger and generated roadmap under successful CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -808,4 +813,5 @@
 - 🌿 Register-VM exhaustive integer conditional returns — `██████████ 100%`
 - 🔎 Register-VM Lua numeric truthiness and negated guards — `██████████ 100%`
 - ↪️ Bounded Lua short-circuit conditional register guards — `██████████ 100%`
+- 🚦 Returning guard clause fallthrough in bounded register VM — `████████░░ 75%`
 

@@ -3806,6 +3806,33 @@
                   "evidence": "GitHub Actions 40123499126: all five CI jobs passed synchronized docs, ledger, README and generated roadmap"
                 }
               ]
+            },
+            {
+              "id": "T424",
+              "emoji": "🚦",
+              "name": "Integer register-VM returning guard clauses with later fallback",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Compile returning if/elseif arms without else and fall through to a subsequent integer return",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: compile_statements Statement::If supports optional else and patches all false-branch targets"
+                },
+                {
+                  "text": "Retain short-circuit and lexical locals while rejecting missing final returns and nonreturning conditional bodies",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: integer_guard_clauses_fall_through_to_a_later_return; three explicit unsupported cases"
+                },
+                {
+                  "text": "Pass native Rust tests, Rust 1.96, Arch package/consumer and reference Lua 5.4 differential corpus",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40124323318 all five jobs green on 0fac6838732ec636595401ea64f3276583858883; 18 comparison fixtures"
+                },
+                {
+                  "text": "Synchronize README, owned-engine design note, evidence ledger and generated roadmap under successful CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4646,6 +4673,13 @@
           "name": "Bounded Lua short-circuit conditional register guards",
           "task_ids": [
             "T423"
+          ]
+        },
+        {
+          "emoji": "🚦",
+          "name": "Returning guard clause fallthrough in bounded register VM",
+          "task_ids": [
+            "T424"
           ]
         }
       ]
