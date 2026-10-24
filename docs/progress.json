@@ -4058,6 +4058,33 @@
                   "evidence": "GitHub Actions 40129834086: five jobs passed synchronized generated fixture documentation, machine progress ledger and roadmap"
                 }
               ]
+            },
+            {
+              "id": "T433",
+              "emoji": "⚠️",
+              "name": "Deterministic Lua short-circuit branch error-path differential matrix",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Generate 48 deterministic nested conditional scripts mixing evaluated/skipped division-by-zero, short-circuit and mutable registers",
+                  "passed": true,
+                  "evidence": "tests/owned_vm_merge_edges.rs: generated_nested_guard_failures_match_reference_interpreters, fixed seeds 0..47"
+                },
+                {
+                  "text": "Check both clean output values and selected division-by-zero errors against production fer and pinned Lua 5.4",
+                  "passed": true,
+                  "evidence": "tests/owned_vm_merge_edges.rs: explicit success and failure cases, reference stdout parsing and zero-division error attribution"
+                },
+                {
+                  "text": "Pass five CI jobs: Rust 1.96, Linux quality/tests, upstream Lua differential, Arch installation smoke and downstream consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40130027003: all five jobs successful for de8ae68b17454f79fde42974d81928bd91b0312c"
+                },
+                {
+                  "text": "Update README, owned-engine conformance documentation, machine ledger and derived roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4961,6 +4988,13 @@
           "name": "Generated nested integer branch-path differential coverage",
           "task_ids": [
             "T432"
+          ]
+        },
+        {
+          "emoji": "⚠️",
+          "name": "Generated selected/skipped branch error differential coverage",
+          "task_ids": [
+            "T433"
           ]
         }
       ]
