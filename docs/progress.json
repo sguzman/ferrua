@@ -3246,6 +3246,33 @@
                   "evidence": "GitHub Actions 40055368051 passed all five jobs: documentation, machine ledger, roadmap generation and upstream Lua 5.4 parity"
                 }
               ]
+            },
+            {
+              "id": "T404",
+              "emoji": "🏷️",
+              "name": "Lua enclosing-block goto label resolution and local lifetime checks",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Record lexical block ancestry, label offsets and source/target active local bindings for the independent flow compiler",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Compiler::statements, resolve_gotos, LabelSite and GotoSite; GitHub Actions 40055943072"
+                },
+                {
+                  "text": "Accept visible ancestor goto labels and backward local exits while rejecting invisible sibling targets or jumps into new locals",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: visible_enclosing_goto_labels_preserve_lexical_local_lifetimes; 13 reference fixtures, seven invalid-scope cases"
+                },
+                {
+                  "text": "Pass upstream Lua 5.4 plus pinned production fer differential checks, Rust 1.96, Linux unit/lint/format, Arch and action consumer CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40055943072: five successful jobs for e75ed225f7ba514ce4dd69de0f256466c76febfe"
+                },
+                {
+                  "text": "Synchronize owned grammar limitations, README, machine ledger and generated roadmap under successful CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3946,6 +3973,13 @@
           "name": "Bounded builtin index/newindex metamethod callbacks",
           "task_ids": [
             "T403"
+          ]
+        },
+        {
+          "emoji": "🏷️",
+          "name": "Lexically scoped Lua goto across visible blocks",
+          "task_ids": [
+            "T404"
           ]
         }
       ]
