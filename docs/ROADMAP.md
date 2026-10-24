@@ -666,11 +666,11 @@
   - [x] Reject deeply nested function definitions with controlled block-depth errors while parsing shallower nested definitions — src/expr.rs: nested_function_body_blocks_share_host_stack_depth_budget
   - [x] Pass Rust 1.96, Linux format/Clippy/tests, Lua 5.4 differential, Arch release preview and consumer CI — GitHub Actions 40120107157: all five acceptance jobs green for 280f933a7ff7f9d8c560add870d777936c033ecc
   - [x] Synchronize documentation, machine ledger and generated roadmap with passing CI evidence — GitHub Actions 40120416624: all five jobs passed documentation, machine ledger and generated roadmap
-- 📜 **T420** Propagate nested do-block integer returns in first-party register VM — `████████░░ 75%`
+- 📜 **T420** Propagate nested do-block integer returns in first-party register VM — `██████████ 100%`
   - [x] Compile one integer return inside nested do/end blocks and propagate its register through outer scopes without emitting unreachable instructions — src/owned_vm.rs: compile_statements propagates nested return register and stops later static lowering
   - [x] Cover nested scopes, shadowed integer locals, early returns, bitwise expressions and rejection of unsupported noninteger return values — src/owned_vm.rs: nested_do_blocks_propagate_integer_returns_and_skip_unreachable_code
   - [x] Compare nested returns with pinned production fer and upstream Lua 5.4 and pass Rust 1.96, Linux, consumer CI — tests/owned_vm.rs: nested_integer_returns_match_production_and_upstream_lua; GitHub Actions 40120936256 five jobs green
-  - [ ] Synchronize documentation, machine ledger and derived roadmap under CI acceptance
+  - [x] Synchronize documentation, machine ledger and derived roadmap under CI acceptance — GitHub Actions 40121153222: five successful acceptance jobs for README, OWNED_ENGINE, roadmap, ledger and reference tests
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -789,5 +789,5 @@
 - 🛡️ Expression parser host-stack safety — `██████████ 100%`
 - 🔗 Iterative expression AST chain safety — `██████████ 100%`
 - 🏗️ Cross-function Lua parser block recursion safety — `██████████ 100%`
-- 📜 Register-VM nested integer return propagation — `████████░░ 75%`
+- 📜 Register-VM nested integer return propagation — `██████████ 100%`
 

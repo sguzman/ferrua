@@ -3699,7 +3699,7 @@
               "id": "T420",
               "emoji": "📜",
               "name": "Propagate nested do-block integer returns in first-party register VM",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Compile one integer return inside nested do/end blocks and propagate its register through outer scopes without emitting unreachable instructions",
@@ -3718,7 +3718,8 @@
                 },
                 {
                   "text": "Synchronize documentation, machine ledger and derived roadmap under CI acceptance",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40121153222: five successful acceptance jobs for README, OWNED_ENGINE, roadmap, ledger and reference tests"
                 }
               ]
             }
