@@ -819,7 +819,7 @@ impl<'a> Compiler<'a> {
                         return Err(FlowError::Unsupported("duplicate goto label".into()));
                     }
                     self.labels.push(LabelSite {
-                        name: *name,
+                        name,
                         block,
                         address: self.code.len(),
                         locals: self.active_locals.clone(),
@@ -828,7 +828,7 @@ impl<'a> Compiler<'a> {
                 Statement::Goto(name) => {
                     let address = self.push(Op::Jump(usize::MAX))?;
                     self.pending_gotos.push(GotoSite {
-                        name: *name,
+                        name,
                         block,
                         address,
                         locals: self.active_locals.clone(),
