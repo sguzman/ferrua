@@ -3358,6 +3358,33 @@
                   "evidence": "GitHub Actions 40057447101: all five jobs green for synchronized docs/ROADMAP.md, machine ledger, README and owned parser docs"
                 }
               ]
+            },
+            {
+              "id": "T408",
+              "emoji": "🔒",
+              "name": "Lua local <const> attribute binding and captured assignment protection",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Parse Lua 5.4 <const>/<close> attribute syntax with exact supported names and reject malformed attributes",
+                  "passed": true,
+                  "evidence": "src/expr.rs: LocalAttribute, Parser::statement; tests/owned_syntax.rs 11 upstream Lua 5.4 syntax cases"
+                },
+                {
+                  "text": "Enforce immutable <const> bindings across local scopes and captured closures without prohibiting mutation of referenced tables; reject unimplemented <close> runtime semantics explicitly",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Compiler::statements and captured child.read_only; positive and failure unit regressions; src/owned_vm.rs explicit prototype guard"
+                },
+                {
+                  "text": "Pass production fer/upstream Lua 5.4 conformance, Rust 1.96, Linux formatting/lint/tests, Arch archive and action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40057835794: all five jobs succeeded for commit ded715d1f8045bf2a8f275f9b3260408a5725ca0; 7 positive and 5 negative flow fixtures"
+                },
+                {
+                  "text": "Synchronize README, owned-engine limitations, machine ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4086,6 +4113,13 @@
           "name": "Lua table/string shorthand call expression grammar",
           "task_ids": [
             "T407"
+          ]
+        },
+        {
+          "emoji": "🔒",
+          "name": "Lua 5.4 const locals, capture protection and close attribute syntax",
+          "task_ids": [
+            "T408"
           ]
         }
       ]
