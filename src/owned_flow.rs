@@ -1686,9 +1686,17 @@ impl Execution<'_> {
             }
             match self.metatable_field(handle, b"__index")? {
                 Some(Value::Table(fallback)) => handle = fallback,
-                Some(Value::Function(callback)) => {
+                Some(callback) if !matches!(callback, Value::Table(_)) => {
+                    // A function-valued metamethod may be a builtin. Table
+                    // values stay on the raw __index redirect path above.
                     let args = [Value::Table(handle), Self::table_key_value(key)];
-                    let returned = self.call_owned_function(callback, &args)?;
+                    if self.depth >= MAX_CALL_DEPTH {
+                        return Err(FlowError::CallDepthExceeded);
+                    }
+                    self.depth += 1;
+                    let result = self.protected_target(callback, &args);
+                    self.depth -= 1;
+                    let returned = result?;
                     return Ok(returned.first().copied().unwrap_or(Value::Nil));
                 }
                 None => return Ok(Value::Nil),
@@ -1715,9 +1723,15 @@ impl Execution<'_> {
             }
             match self.metatable_field(handle, b"__newindex")? {
                 Some(Value::Table(fallback)) => handle = fallback,
-                Some(Value::Function(callback)) => {
+                Some(callback) if !matches!(callback, Value::Table(_)) => {
                     let args = [Value::Table(handle), Self::table_key_value(key), value];
-                    self.call_owned_function(callback, &args)?;
+                    if self.depth >= MAX_CALL_DEPTH {
+                        return Err(FlowError::CallDepthExceeded);
+                    }
+                    self.depth += 1;
+                    let result = self.protected_target(callback, &args);
+                    self.depth -= 1;
+                    result?;
                     return Ok(());
                 }
                 None => return self.write_table(handle, key, value),
@@ -4119,6 +4133,43 @@ mod tests {
         for source in [
             "local h={}; setmetatable(h,{__call=h}); local t=setmetatable({}, {__add=h}); return pcall(function() return t+1 end)",
             "local t={}; setmetatable(t,{__add=function(x,y) return x+y end}); return pcall(function() return t+1 end)",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::CallDepthExceeded),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn callable_index_and_newindex_hooks_preserve_raw_redirection_and_hard_depth() {
+        for source in [
+            "local t=setmetatable({}, {__index=type}); return t.missing=='table' and 1 or 0",
+            "local t=setmetatable({x=4},{__index=type}); return t.x==4 and t.y=='table' and 1 or 0",
+            "local h=setmetatable({v=8},{__call=function(self,t,k) return self.v end}); local t=setmetatable({}, {__index=h}); return t.missing==8 and 1 or 0",
+            "local inner=setmetatable({},{__call=function(_,h,t,k) return h.v end}); local h=setmetatable({v=9},{__call=inner}); local t=setmetatable({},{__index=h}); return t.unknown==9 and 1 or 0",
+            "local n=0; local h=setmetatable({value=7},{__call=function() n=n+1; return 99 end}); local t=setmetatable({}, {__index=h}); return t.value==7 and n==0 and 1 or 0",
+            "local h=setmetatable({},{__call=function() error(7) end}); local t=setmetatable({}, {__index=h}); local ok,e=pcall(function() return t.x end); return not ok and e==7 and 1 or 0",
+            "local t=setmetatable({},{__index=error}); local ok,e=pcall(function() return t.x end); return not ok and rawequal(e,t) and 1 or 0",
+            "local t=setmetatable({},{__index=rawget}); return t.no==nil and 1 or 0",
+            "local t=setmetatable({},{__newindex=rawset}); t.x=5; return rawget(t,'x')==5 and 1 or 0",
+            "local t=setmetatable({x=4},{__newindex=error}); t.x=7; return rawget(t,'x')==7 and 1 or 0",
+            "local h=setmetatable({},{__call=function(_,t,k,v) rawset(t,k,v+2) end}); local t=setmetatable({},{__newindex=h}); t.x=5; return rawget(t,'x')==7 and 1 or 0",
+            "local h=setmetatable({},{__call=function() error(17) end}); local t=setmetatable({},{__newindex=h}); local ok,e=pcall(function() t.x=4 end); return not ok and e==17 and 1 or 0",
+            "local t=setmetatable({},{__newindex=error}); local ok,e=pcall(function() t.y=4 end); return not ok and rawequal(e,t) and 1 or 0",
+            "local n=0; local h=setmetatable({},{__call=function() n=n+1 end}); local t=setmetatable({},{__newindex=h}); rawset(t,'x',2); return t.x==2 and n==0 and 1 or 0",
+            "local n=0; local h=setmetatable({},{__call=function() n=n+1 end}); local t=setmetatable({},{__newindex=h}); t.a=6; return rawget(t,'a')==nil and n==1 and 1 or 0",
+            "local s=setmetatable({},{__call=function() error(7) end}); local t=setmetatable({},{__newindex=s}); t.x=4; return rawget(s,'x')==4 and 1 or 0",
+            "local h=setmetatable({},{__call=function(_,t,k,v) rawset(t,k,v) end}); local t=setmetatable({}, {__newindex=h}); t[1]=8; return t[1]==8 and 1 or 0",
+            "local h=setmetatable({},{__call=function(_,t,k,v) rawset(t,k,v) end}); local t=setmetatable({}, {__newindex=h}); t.x,t.y=4,5; return t.x+t.y==9 and 1 or 0",
+        ] {
+            assert_eq!(evaluate(source), 1, "{source}");
+        }
+        for source in [
+            "local t={}; setmetatable(t,{__index=function(self,k) return self[k] end}); return pcall(function() return t.x end)",
+            "local t={}; setmetatable(t,{__newindex=function(self,k,v) self[k]=v end}); return pcall(function() t.x=2 end)",
         ] {
             let program = compile_flow_chunk(source).unwrap();
             assert_eq!(
