@@ -3078,6 +3078,33 @@
                   "evidence": "GitHub Actions 40052585700: all five acceptance jobs passed docs/ROADMAP, progress ledger, README, owned-engine docs and differential corpus"
                 }
               ]
+            },
+            {
+              "id": "T398",
+              "emoji": "🪆",
+              "name": "Bounded nested first-class pcall/xpcall calls with hard depth limits",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Invoke pcall and xpcall as first-class protected builtin targets with correct multiple return adjustment",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::protected_target dispatch to nested_protected_builtin"
+                },
+                {
+                  "text": "Share conservative MAX_CALL_DEPTH between nested builtin calls and closure frames; leave hard budget errors uncatchable",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: nested_protected_builtin and nested_protected_call_builtins_preserve_values_and_bound_depth"
+                },
+                {
+                  "text": "Pass 15 Lua 5.4/production fer differential fixtures, deterministic depth failure, Rust 1.96, Linux tests and consumer CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40052701456: all five primary/reporter jobs green for 1fc94b87da2a53adcbaf7dd5d44ebda60fde231d"
+                },
+                {
+                  "text": "Synchronize README, owned-engine documentation, progress ledger and generated roadmap in successful CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3736,6 +3763,13 @@
           "name": "Protected pairs/ipairs triples with lazy validation",
           "task_ids": [
             "T397"
+          ]
+        },
+        {
+          "emoji": "🪆",
+          "name": "Nested bounded pcall/xpcall first-class targets",
+          "task_ids": [
+            "T398"
           ]
         }
       ]

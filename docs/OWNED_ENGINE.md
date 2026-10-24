@@ -506,7 +506,7 @@ The experimental owned VM's `pcall` can now invoke the existing first-party `typ
 
 Ten curated fixtures cover successful type and number conversion, invalid numeral returning nil, raw length, numeric raw equality, builtin error handlers and protected invalid arguments. [CI #40046376588](https://github.com/sguzman/ferrua/actions/runs/40046376588) passed Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential tests, Arch packaging, composite consumer and aggregate status.
 
-This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. `pcall` and `xpcall` as nested builtin targets, arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.
+This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.
 
 ### Lua 5.4 numeric __tostring callback returns
 
@@ -535,3 +535,11 @@ Fourteen owned-VM unit and upstream Lua 5.4/production `fer` differential fixtur
 Protected `pcall(pairs, value)` and `pcall(ipairs, value)` now use the same owned helper as ordinary calls. For tables, `pairs` executes function-valued `__pairs` exactly once and adjusts its returns to three iterator components; without a hook it returns `next, value, nil`. `ipairs` returns the first-party sequential iterator, original state and initial index zero, and deliberately ignores `__pairs`. The protected call prepends a successful Boolean without losing the three iterator positions. Both functions accept any **present** Lua value when producing their default iterator triple, including a number or nil; a non-table type error arises only when the default iterator is actually called. Omitted arguments remain an immediate error. Primitive host metatables and arbitrary callable `__pairs` values beyond owned closures are not implemented.
 
 The CI-accepted curated matrix includes 20 new positive/error fixtures, tests that defer non-table rejection until iterator invocation, callback errors, nil/extra result adjustment, ignored `__pairs` on `ipairs`, and recursion-aware native-safe callbacks. [CI #40052438402](https://github.com/sguzman/ferrua/actions/runs/40052438402) passed all five jobs, including upstream Lua 5.4 and pinned production `fer` differential parity. This does not graduate the owned interpreter into the production CLI.
+
+### Verified bounded nested protected pcall/xpcall targets
+
+The first-party `pcall` and `xpcall` builtin function values can now be targets of other protected calls. These calls preserve Lua's leading success Boolean, nested Boolean/error results, multiple values, side effects, and first-class error handlers. A dedicated `nested_protected_builtin` helper accounts for each nested protected builtin frame using the same conservative `MAX_CALL_DEPTH` guard as Lua closure invocations; its depth counter is restored on both success and recoverable errors. Exhausted call depth remains a hard, noncatchable VM limit.
+
+Fifteen curated success/error fixtures verify `pcall(pcall, ...)`, `pcall(xpcall, ...)`, `xpcall(error, pcall, ...)`, nested `assert` and numeric conversions, and correct result adjustment. A separate dynamically constructed regression nests protected builtin values beyond the configured depth limit, requiring `FlowError::CallDepthExceeded` rather than a native Rust-stack abort. [CI #40052701456](https://github.com/sguzman/ferrua/actions/runs/40052701456) accepted the implementation with full Linux, Rust 1.96, production `fer`, upstream Lua 5.4 and downstream action tests.
+
+This bounded subset is not general exception unwinding, complete error tracing, unrestricted recursion, or permission to migrate the production `fer` binary to the experimental VM.
