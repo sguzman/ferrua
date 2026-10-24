@@ -696,13 +696,20 @@ impl<'a> Parser<'a> {
             }
             let mut names = Vec::new();
             let mut attributes = Vec::new();
+            let mut has_close = false;
             loop {
                 names.push(self.name()?);
                 let attribute = if self.peek().map(|token| token.spelling) == Some("<") {
                     self.pop();
                     let attribute = match self.name()? {
                         "const" => LocalAttribute::Const,
-                        "close" => LocalAttribute::Close,
+                        "close" => {
+                            if has_close {
+                                return Err(self.error("multiple to-be-closed local variables"));
+                            }
+                            has_close = true;
+                            LocalAttribute::Close
+                        },
                         _ => return Err(self.error("unknown Lua local attribute")),
                     };
                     if self.peek().map(|token| token.spelling) != Some(">") {
@@ -1271,6 +1278,8 @@ mod tests {
             "local x<close> =nil; return 1",
             "local x<const>; return x==nil",
             "local x<const>,y<const> =1,2; return x+y",
+            "local a<close>, b<const> =nil,2; return b",
+            "local a<const>, b<close>, c=2,nil,3; return a+c",
         ] {
             assert!(parse_chunk(source).is_ok(), "{source}");
         }
@@ -1280,6 +1289,9 @@ mod tests {
             "local x<1>=1",
             "local x<>=1",
             "local x<const><close>=1",
+            "local x<close>, y<close> =nil,nil",
+            "local x, y<close>, z<close> =1,nil,nil",
+            "local x<close>, y<const>, z<close> =nil,2,nil",
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
         }
