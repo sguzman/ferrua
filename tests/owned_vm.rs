@@ -170,6 +170,49 @@ fn static_integer_chunk_matches_upstream_lua_when_requested() {
 }
 
 #[test]
+fn nested_integer_returns_match_production_and_upstream_lua() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("do return 7 end", 7),
+        ("local x=3; do return x+4 end", 7),
+        ("do do return 11 end end", 11),
+        ("local a=2; do local b=a*3; return b+1 end", 7),
+        ("local n=1; do n=n+9; do return n end end", 10),
+        ("do return (7<<2)|3 end", 31),
+        ("do return 8 end; local unused=9; return unused", 8),
+        ("local x=5; do return x end; x=0; return x", 5),
+        ("do local x=4 end; return 6", 6),
+        ("do local x=3; do local x=x+9; return x end end", 12),
+    ] {
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        let lua = format!("print((function() {source} end)())");
+        for (interpreter, args) in [
+            (env!("CARGO_BIN_EXE_fer"), vec!["--lua=5.4", "-e", lua.as_str()]),
+            ("lua5.4", vec!["-e", lua.as_str()]),
+        ] {
+            if interpreter == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let output = Command::new(interpreter).args(args).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{interpreter} rejected {source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let actual: i64 = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .parse()
+                .unwrap();
+            assert_eq!(actual, expected, "{interpreter} disagrees: {source}");
+        }
+    }
+}
+
+#[test]
 fn deterministic_integer_operator_matrix_matches_lua_54_when_requested() {
     if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
