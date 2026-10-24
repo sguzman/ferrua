@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 134 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 135 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -596,6 +596,11 @@
   - [x] Preserve syntax errors for invalid statements while accepting adjacent locals, assignments, loop/conditional blocks, functions and labels — src/expr.rs: parses_adjacent_lua_statements_without_required_semicolons; src/owned_flow.rs 14 runtime regressions
   - [x] Pass upstream Lua 5.4 and production fer differential fixtures, Rust 1.96, Linux formatter/lint/tests, Arch archive and composite action consumer — GitHub Actions 40056402369: all five successful jobs on 594ff74f5b5c081fb12cb689adba6f5fe8bfa8c1
   - [x] Synchronize parser scope and remaining dialect limits in README/owned-engine docs, machine ledger and generated roadmap — GitHub Actions 40056530163: all five jobs passed synchronized documentation and machine ledger after grammar acceptance
+- ↩️ **T406** Lua nonterminal break statements and unreachable loop-body syntax — `████████░░ 75%`
+  - [x] Accept Lua break followed by additional statements in valid while, repeat, numeric/generic loop blocks while rejecting out-of-loop breaks — src/expr.rs: Parser::block terminal validation applies to return only; break_is_scoped_to_loops_but_need_not_end_a_block
+  - [x] Preserve immediate runtime loop exit and ignore unreachable statements and labels after a break — src/owned_flow.rs: break_statements_can_precede_unreachable_lua_statements; tests/owned_flow.rs 10 curated fixtures
+  - [x] Pass upstream Lua 5.4 and production fer reference comparisons, Rust 1.96, Linux format/lint/tests, Arch archive smoke and action consumer CI — GitHub Actions 40056833051: all five jobs successful for e80fe54fc417f74f739ee5e584d5a01511bea81a
+  - [ ] Synchronize machine ledger, roadmap, README and owned-engine docs after accepted CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -700,4 +705,5 @@
 - 🧭 Bounded builtin index/newindex metamethod callbacks — `██████████ 100%`
 - 🏷️ Lexically scoped Lua goto across visible blocks — `██████████ 100%`
 - 📝 Semicolon-optional Lua statement boundaries — `██████████ 100%`
+- ↩️ Lua loop breaks with subsequent unreachable statements — `████████░░ 75%`
 
