@@ -709,7 +709,7 @@ impl<'a> Parser<'a> {
                             }
                             has_close = true;
                             LocalAttribute::Close
-                        },
+                        }
                         _ => return Err(self.error("unknown Lua local attribute")),
                     };
                     if self.peek().map(|token| token.spelling) != Some(">") {
