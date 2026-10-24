@@ -4315,7 +4315,7 @@
               "id": "T442",
               "emoji": "🗣️",
               "name": "Preserve explicit Lua error values in the owned CLI",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Capture explicit string, integer, nil and Boolean Lua error objects before interpreter-local storage ends",
@@ -4334,7 +4334,8 @@
                 },
                 {
                   "text": "Synchronize error compatibility docs, machine ledger, generated roadmap and README under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40138337238: all five jobs successful for synchronized README, machine progress and generator-derived roadmap at ea54227dca60e30e504fdc37b9dc71424cff0370"
                 }
               ]
             },
@@ -4342,7 +4343,7 @@
               "id": "T443",
               "emoji": "♻️",
               "name": "Bounded root-frame cyclic Lua table reclamation",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Trace reachable tables, metatables, closures and root-frame values without crossing suspended nested call stacks",
@@ -4361,7 +4362,8 @@
                 },
                 {
                   "text": "Synchronize README, evidence docs, machine ledger and generator-derived roadmap under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40138337238: all five jobs successful for synchronized README, machine progress and generator-derived roadmap at ea54227dca60e30e504fdc37b9dc71424cff0370"
                 }
               ]
             }

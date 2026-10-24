@@ -776,16 +776,16 @@
   - [x] Compare 24 generated lexical environment closure scenarios against upstream Lua 5.4 — tests/owned_cli_differential.rs: generated_lexical_environment_closure_cases_match_lua54; FERRUA_COMPARE_OWNED_WITH_LUA=1
   - [x] Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer — GitHub Actions 40134992509: all five jobs passed on the accepted implementation
   - [x] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI — GitHub Actions 40135554634: all five jobs passed with synchronized docs/progress.json and generated docs/ROADMAP.md verified by tools/roadmap.lua --check
-- 🗣️ **T442** Preserve explicit Lua error values in the owned CLI — `████████░░ 75%`
+- 🗣️ **T442** Preserve explicit Lua error values in the owned CLI — `██████████ 100%`
   - [x] Capture explicit string, integer, nil and Boolean Lua error objects before interpreter-local storage ends — src/owned_flow.rs: FlowOutcome::error_text, execute_flow_capture_with_args; capture_preserves_explicit_lua_errors_and_prior_prints
   - [x] Render meaningful CLI error details without losing output preceding a failure — src/main.rs: run_owned_source; tests/cli.rs: owned_cli_reports_original_explicit_error_values
   - [x] Pass Linux formatting/lint/tests, upstream Lua 5.4 differential, Rust 1.96, Arch archive smoke and action consumer — GitHub Actions 40135554634: all five jobs passed on c0e6d9523e50e780d1d33f6864ab22f0ef21ffd1
-  - [ ] Synchronize error compatibility docs, machine ledger, generated roadmap and README under passing CI
-- ♻️ **T443** Bounded root-frame cyclic Lua table reclamation — `████████░░ 75%`
+  - [x] Synchronize error compatibility docs, machine ledger, generated roadmap and README under passing CI — GitHub Actions 40138337238: all five jobs successful for synchronized README, machine progress and generator-derived roadmap at ea54227dca60e30e504fdc37b9dc71424cff0370
+- ♻️ **T443** Bounded root-frame cyclic Lua table reclamation — `██████████ 100%`
   - [x] Trace reachable tables, metatables, closures and root-frame values without crossing suspended nested call stacks — src/owned_flow.rs: collect_root_tables and insert_table; root_table_collector_reuses_unreachable_cycles_and_keeps_live_tables
   - [x] Reclaim cyclic allocations across multiple sweeps while preserving captured closures and retaining strict reachable-heap limits — tests/owned_cli_differential.rs: owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure (40,000 tables); src/owned_flow.rs unit tests for live-table retention
   - [x] Pass Linux formatting/lint/tests, pinned upstream Lua 5.4 differentials, Rust 1.96, Arch userspace, and downstream action consumer — GitHub Actions 40138156924: all five acceptance jobs passed on fe227c107c0fe1c87cc5b2659d1d005348177480
-  - [ ] Synchronize README, evidence docs, machine ledger and generator-derived roadmap under passing CI
+  - [x] Synchronize README, evidence docs, machine ledger and generator-derived roadmap under passing CI — GitHub Actions 40138337238: all five jobs successful for synchronized README, machine progress and generator-derived roadmap at ea54227dca60e30e504fdc37b9dc71424cff0370
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -926,5 +926,5 @@
 - 🌍 Writable _G table and global-name coherency — `██████████ 100%`
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
-- 🗣️ Original Lua error object preservation in owned CLI diagnostics — `████████░░ 75%`
+- 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
 
