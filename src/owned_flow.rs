@@ -2103,11 +2103,16 @@ impl Execution<'_> {
                         return Err(FlowError::TypeError);
                     };
                     let returned = self.call_owned_function(callback, &[value])?;
-                    let text = returned.first().copied().unwrap_or(Value::Nil);
-                    if !matches!(text, Value::String(_)) {
-                        return Err(FlowError::TypeError);
+                    match returned.first().copied().unwrap_or(Value::Nil) {
+                        Value::String(index) => Value::String(index),
+                        Value::Integer(number) => {
+                            self.intern_string(number.to_string().into_bytes())?
+                        }
+                        Value::Float(bits) => self.intern_string(
+                            format!("{:?}", f64::from_bits(bits)).into_bytes(),
+                        )?,
+                        _ => return Err(FlowError::TypeError),
                     }
-                    text
                 } else {
                     self.intern_string(format!("table: 0x{handle:x}").into_bytes())?
                 }
@@ -3993,7 +3998,15 @@ mod tests {
                 1,
             ),
             (
-                "local t=setmetatable({}, {__tostring=function() return 1 end}); local ok,e=pcall(tostring,t); return not ok and type(e)=='string' and 1 or 0",
+                "local t=setmetatable({}, {__tostring=function() return 1 end}); local ok,e=pcall(tostring,t); return ok and e=='1' and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({}, {__tostring=function() return 2.5 end}); local ok,e=pcall(tostring,t); return ok and e=='2.5' and 1 or 0",
+                1,
+            ),
+            (
+                "local t=setmetatable({}, {__tostring=function() return false end}); local ok,e=pcall(tostring,t); return not ok and type(e)=='string' and 1 or 0",
                 1,
             ),
             (
