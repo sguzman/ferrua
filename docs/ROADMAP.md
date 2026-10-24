@@ -731,11 +731,11 @@
   - [x] Compare selected register-VM execution with production fer and pinned upstream Lua 5.4 under CI — tests/owned_vm_merge_edges.rs: executes fer for all cases; lua5.4 when FERRUA_COMPARE_OWNED_WITH_LUA=1
   - [x] Pass Linux formatting/lint/unit tests, Rust 1.96, upstream Lua 5.4 and production differential, Arch smoke and action consumer — GitHub Actions 40129671233: five successful jobs on 39419e7b8ec0b1c0667e278fd0f29a9d4c236953
   - [x] Synchronize generated corpus documentation, machine-readable ledger, README and roadmap under passing CI — GitHub Actions 40129834086: five jobs passed synchronized generated fixture documentation, machine progress ledger and roadmap
-- ⚠️ **T433** Deterministic Lua short-circuit branch error-path differential matrix — `████████░░ 75%`
+- ⚠️ **T433** Deterministic Lua short-circuit branch error-path differential matrix — `██████████ 100%`
   - [x] Generate 48 deterministic nested conditional scripts mixing evaluated/skipped division-by-zero, short-circuit and mutable registers — tests/owned_vm_merge_edges.rs: generated_nested_guard_failures_match_reference_interpreters, fixed seeds 0..47
   - [x] Check both clean output values and selected division-by-zero errors against production fer and pinned Lua 5.4 — tests/owned_vm_merge_edges.rs: explicit success and failure cases, reference stdout parsing and zero-division error attribution
   - [x] Pass five CI jobs: Rust 1.96, Linux quality/tests, upstream Lua differential, Arch installation smoke and downstream consumer — GitHub Actions 40130027003: all five jobs successful for de8ae68b17454f79fde42974d81928bd91b0312c
-  - [ ] Update README, owned-engine conformance documentation, machine ledger and derived roadmap under passing CI
+  - [x] Update README, owned-engine conformance documentation, machine ledger and derived roadmap under passing CI — GitHub Actions 40130258560: all five CI jobs passed updated README, docs/OWNED_ENGINE.md, machine progress and regenerated roadmap
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -867,5 +867,5 @@
 - 🛡️ Whole-program bytecode structural preflight — `██████████ 100%`
 - 🚧 Instruction-at-emission resource guarding — `██████████ 100%`
 - 🧪 Generated nested integer branch-path differential coverage — `██████████ 100%`
-- ⚠️ Generated selected/skipped branch error differential coverage — `████████░░ 75%`
+- ⚠️ Generated selected/skipped branch error differential coverage — `██████████ 100%`
 

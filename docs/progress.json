@@ -4063,7 +4063,7 @@
               "id": "T433",
               "emoji": "⚠️",
               "name": "Deterministic Lua short-circuit branch error-path differential matrix",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Generate 48 deterministic nested conditional scripts mixing evaluated/skipped division-by-zero, short-circuit and mutable registers",
@@ -4082,7 +4082,8 @@
                 },
                 {
                   "text": "Update README, owned-engine conformance documentation, machine ledger and derived roadmap under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40130258560: all five CI jobs passed updated README, docs/OWNED_ENGINE.md, machine progress and regenerated roadmap"
                 }
               ]
             }
