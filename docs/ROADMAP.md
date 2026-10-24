@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -606,11 +606,11 @@
   - [x] Validate argument syntax and runtime call chaining against upstream Lua 5.4, including method receiver and malformed forms — src/expr.rs: lua_table_and_string_shorthand_calls_parse_as_real_calls; tests/owned_syntax.rs: 18 grammar cases; tests/owned_flow.rs: 11 positive execution fixtures
   - [x] Pass Linux formatting/Clippy/tests, Rust 1.96, upstream Lua 5.4 and pinned production fer differential, Arch archive and consumer CI — GitHub Actions 40057286292: five successful jobs for 56037aaa1347eac3969abd52194ae210328ea4e5
   - [x] Synchronize machine ledger, generated roadmap, README and owned grammar documentation under passing CI — GitHub Actions 40057447101: all five jobs green for synchronized docs/ROADMAP.md, machine ledger, README and owned parser docs
-- 🔒 **T408** Lua local <const> attribute binding and captured assignment protection — `████████░░ 75%`
+- 🔒 **T408** Lua local <const> attribute binding and captured assignment protection — `██████████ 100%`
   - [x] Parse Lua 5.4 <const>/<close> attribute syntax with exact supported names and reject malformed attributes — src/expr.rs: LocalAttribute, Parser::statement; tests/owned_syntax.rs 11 upstream Lua 5.4 syntax cases
   - [x] Enforce immutable <const> bindings across local scopes and captured closures without prohibiting mutation of referenced tables; reject unimplemented <close> runtime semantics explicitly — src/owned_flow.rs: Compiler::statements and captured child.read_only; positive and failure unit regressions; src/owned_vm.rs explicit prototype guard
   - [x] Pass production fer/upstream Lua 5.4 conformance, Rust 1.96, Linux formatting/lint/tests, Arch archive and action consumer — GitHub Actions 40057835794: all five jobs succeeded for commit ded715d1f8045bf2a8f275f9b3260408a5725ca0; 7 positive and 5 negative flow fixtures
-  - [ ] Synchronize README, owned-engine limitations, machine ledger and generated roadmap under passing CI
+  - [x] Synchronize README, owned-engine limitations, machine ledger and generated roadmap under passing CI — GitHub Actions 40057998428: all five jobs passed synchronized T408 docs, README, machine ledger and generated roadmap
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -717,5 +717,5 @@
 - 📝 Semicolon-optional Lua statement boundaries — `██████████ 100%`
 - ↩️ Lua loop breaks with subsequent unreachable statements — `██████████ 100%`
 - 📞 Lua table/string shorthand call expression grammar — `██████████ 100%`
-- 🔒 Lua 5.4 const locals, capture protection and close attribute syntax — `████████░░ 75%`
+- 🔒 Lua 5.4 const locals, capture protection and close attribute syntax — `██████████ 100%`
 

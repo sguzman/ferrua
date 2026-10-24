@@ -3363,7 +3363,7 @@
               "id": "T408",
               "emoji": "🔒",
               "name": "Lua local <const> attribute binding and captured assignment protection",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Parse Lua 5.4 <const>/<close> attribute syntax with exact supported names and reject malformed attributes",
@@ -3382,7 +3382,8 @@
                 },
                 {
                   "text": "Synchronize README, owned-engine limitations, machine ledger and generated roadmap under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40057998428: all five jobs passed synchronized T408 docs, README, machine ledger and generated roadmap"
                 }
               ]
             }
