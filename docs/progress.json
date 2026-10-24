@@ -3783,7 +3783,7 @@
               "id": "T423",
               "emoji": "↪️",
               "name": "Register-VM conditional and/or guards with Lua short-circuit evaluation",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Lower and/or to bounded conditional register jumps so only the selected operand is evaluated",
@@ -3802,7 +3802,8 @@
                 },
                 {
                   "text": "Synchronize README, owned-engine documentation, machine ledger and generated roadmap in CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40123499126: all five CI jobs passed synchronized docs, ledger, README and generated roadmap"
                 }
               ]
             }
