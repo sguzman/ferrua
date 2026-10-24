@@ -506,7 +506,7 @@ The experimental owned VM's `pcall` can now invoke the existing first-party `typ
 
 Ten curated fixtures cover successful type and number conversion, invalid numeral returning nil, raw length, numeric raw equality, builtin error handlers and protected invalid arguments. [CI #40046376588](https://github.com/sguzman/ferrua/actions/runs/40046376588) passed Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential tests, Arch packaging, composite consumer and aggregate status.
 
-This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. `pairs`, `ipairs`, `pcall` and `xpcall` as nested builtin targets, arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.
+This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. `pcall` and `xpcall` as nested builtin targets, arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.
 
 ### Lua 5.4 numeric __tostring callback returns
 
@@ -526,6 +526,12 @@ Fourteen curated unit and reference fixtures cover raw access, mutation, missing
 
 ### Verified protected Lua select, next and ipairs iterator calls
 
-The bounded owned interpreter now accepts first-class `select`, `next` and the internal `ipairs` iterator as protected-call targets, retaining their ordinary Lua variable return lists. This includes `select('#', ...)` result counts, negative selectors, iterator key/value pairs, nil termination, invalid key rejection and `ipairs`' metatable-aware indexing. `pcall` still prepends its Boolean success result and the same VM scan/instruction budgets protect both normal and protected `next` calls. The public `ipairs(table)` constructor and public `pairs(table)` function are **not yet** callable targets in the protected-call subset, but their returned iterator functions can be.
+The bounded owned interpreter now accepts first-class `select`, `next` and the internal `ipairs` iterator as protected-call targets, retaining their ordinary Lua variable return lists. This includes `select('#', ...)` result counts, negative selectors, iterator key/value pairs, nil termination, invalid key rejection and `ipairs`' metatable-aware indexing. `pcall` still prepends its Boolean success result and the same VM scan/instruction budgets protect both normal and protected `next` calls. The public `ipairs(table)` constructor and `pairs(table)` function are now callable protected targets through the shared iterator triple logic; they retain the bounded VM's supported metamethod subset.
 
 Fourteen owned-VM unit and upstream Lua 5.4/production `fer` differential fixtures cover these cases, including native error paths and result adjustment. [CI #40051756734](https://github.com/sguzman/ferrua/actions/runs/40051756734) passed all five jobs for the implementation. This does not imply complete generic-for, iterator metatable or standard library parity, nor change the production backend.
+
+### Verified protected Lua pairs/ipairs iterator construction and deferred type errors
+
+Protected `pcall(pairs, value)` and `pcall(ipairs, value)` now use the same owned helper as ordinary calls. For tables, `pairs` executes function-valued `__pairs` exactly once and adjusts its returns to three iterator components; without a hook it returns `next, value, nil`. `ipairs` returns the first-party sequential iterator, original state and initial index zero, and deliberately ignores `__pairs`. The protected call prepends a successful Boolean without losing the three iterator positions. Both functions accept any **present** Lua value when producing their default iterator triple, including a number or nil; a non-table type error arises only when the default iterator is actually called. Omitted arguments remain an immediate error. Primitive host metatables and arbitrary callable `__pairs` values beyond owned closures are not implemented.
+
+The CI-accepted curated matrix includes 20 new positive/error fixtures, tests that defer non-table rejection until iterator invocation, callback errors, nil/extra result adjustment, ignored `__pairs` on `ipairs`, and recursion-aware native-safe callbacks. [CI #40052438402](https://github.com/sguzman/ferrua/actions/runs/40052438402) passed all five jobs, including upstream Lua 5.4 and pinned production `fer` differential parity. This does not graduate the owned interpreter into the production CLI.

@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 125 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 96%` across 126 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -551,6 +551,11 @@
   - [x] Preserve multiple return adjustment, nil termination, raw iteration and bounded __index behavior — src/owned_flow.rs: protected_multivalue_builtins_preserve_lua_result_adjustment; tests/owned_flow.rs 14 fixtures
   - [x] Pass Linux Rust tests/format/lint, Rust 1.96, production fer/upstream Lua 5.4 reference parity and action consumer — GitHub Actions 40051756734: all five jobs green on d6f2271e1dbff0deae096f38ae53ff5e7ffe267c
   - [x] Synchronize README, engine design, ledger and derived roadmap with passing CI — GitHub Actions 40051897178: all five CI jobs passed README, owned-engine docs, progress ledger/roadmap checks and differential fixtures
+- 🔄 **T397** Protected Lua pairs/ipairs iterator triples and deferred type checks — `████████░░ 75%`
+  - [x] Share ordinary and protected pairs/ipairs iterator construction and custom __pairs triple adjustment — src/owned_flow.rs: Execution::pairs_ipairs_builtin, shared by opcode and protected_target
+  - [x] Match Lua 5.4 deferred table validation, nil/present primitive arguments, callback errors and ipairs ignoring __pairs — src/owned_flow.rs: protected_pairs_and_ipairs_preserve_iterator_triples, first_class_next_pairs_and_ipairs_follow_bounded_lua_raw_iteration; tests/owned_flow.rs 20 new fixtures
+  - [x] Pass upstream Lua 5.4 and production fer parity, Linux formatter/lint/tests, Rust 1.96 and consumer CI — GitHub Actions 40052438402: five jobs successful on commit 3dd6100569024b53ce87954c205a67ff7b689392
+  - [ ] Synchronize corrected pairs/ipairs semantics, README, machine ledger and generated roadmap in passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -646,4 +651,5 @@
 - 📝 Shared protected tostring and numeric __tostring parity — `██████████ 100%`
 - 🔐 Protected raw table and metatable standard builtins — `██████████ 100%`
 - ↪️ Protected select/next/ipairs iterator result triples — `██████████ 100%`
+- 🔄 Protected pairs/ipairs triples with lazy validation — `████████░░ 75%`
 

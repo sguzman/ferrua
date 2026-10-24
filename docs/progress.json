@@ -3050,6 +3050,33 @@
                   "evidence": "GitHub Actions 40051897178: all five CI jobs passed README, owned-engine docs, progress ledger/roadmap checks and differential fixtures"
                 }
               ]
+            },
+            {
+              "id": "T397",
+              "emoji": "🔄",
+              "name": "Protected Lua pairs/ipairs iterator triples and deferred type checks",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Share ordinary and protected pairs/ipairs iterator construction and custom __pairs triple adjustment",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::pairs_ipairs_builtin, shared by opcode and protected_target"
+                },
+                {
+                  "text": "Match Lua 5.4 deferred table validation, nil/present primitive arguments, callback errors and ipairs ignoring __pairs",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: protected_pairs_and_ipairs_preserve_iterator_triples, first_class_next_pairs_and_ipairs_follow_bounded_lua_raw_iteration; tests/owned_flow.rs 20 new fixtures"
+                },
+                {
+                  "text": "Pass upstream Lua 5.4 and production fer parity, Linux formatter/lint/tests, Rust 1.96 and consumer CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40052438402: five jobs successful on commit 3dd6100569024b53ce87954c205a67ff7b689392"
+                },
+                {
+                  "text": "Synchronize corrected pairs/ipairs semantics, README, machine ledger and generated roadmap in passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3701,6 +3728,13 @@
           "name": "Protected select/next/ipairs iterator result triples",
           "task_ids": [
             "T396"
+          ]
+        },
+        {
+          "emoji": "🔄",
+          "name": "Protected pairs/ipairs triples with lazy validation",
+          "task_ids": [
+            "T397"
           ]
         }
       ]
