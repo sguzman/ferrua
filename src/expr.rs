@@ -88,6 +88,7 @@ struct Parser<'a> {
     tokens: Vec<Token<'a>>,
     index: usize,
     length: usize,
+    eof_line: usize,
     loop_depth: usize,
     function_depth: usize,
     vararg_allowed: bool,
@@ -124,7 +125,7 @@ impl<'a> Parser<'a> {
     fn error(&self, message: &'static str) -> ParseError {
         let next = self.peek();
         ParseError {
-            line: next.map_or(1, |t| t.line),
+            line: next.map_or(self.eof_line, |t| t.line),
             byte_offset: next.map_or(self.length, |t| t.byte_offset),
             message,
         }
@@ -346,12 +347,29 @@ impl<'a> Parser<'a> {
 /// Parse only a standalone Lua expression into a Ferrua-owned syntax tree.
 /// Statement grammar, method calls, table constructors, and lambda bodies
 /// are not implemented. The working fer interpreter is unaffected.
+/// Keep EOF diagnostics on the physical Lua source line, including
+/// trailing whitespace, short/long comments and CRLF or LFCR line endings.
+fn source_eof_line(source: &str) -> usize {
+    let mut line = 1;
+    let mut previous = None;
+    for byte in source.bytes() {
+        if (byte == b'\r' && previous != Some(b'\n'))
+            || (byte == b'\n' && previous != Some(b'\r'))
+        {
+            line += 1;
+        }
+        previous = Some(byte);
+    }
+    line
+}
+
 pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
     let tokens = tokenize(source)?;
     let mut parser = Parser {
         tokens,
         index: 0,
         length: source.len(),
+        eof_line: source_eof_line(source),
         loop_depth: 0,
         function_depth: 0,
         vararg_allowed: true,
@@ -851,6 +869,7 @@ pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
         tokens,
         index: 0,
         length: source.len(),
+        eof_line: source_eof_line(source),
         loop_depth: 0,
         function_depth: 0,
         vararg_allowed: true,
@@ -1316,6 +1335,30 @@ mod tests {
         }
         assert!(parse_chunk("return 1 return 2").is_err());
         assert!(parse_chunk("local x=1 42").is_err());
+    }
+
+    #[test]
+    fn eof_syntax_errors_report_real_lua_line_and_final_byte() {
+        for source in [
+            "do\n",
+            "do\r\nlocal x=1\r\n",
+            "while true do\n-- trailing comment\n",
+            "if true then\n--[=[ a\nlong comment ]=]\n",
+            "return (\n",
+        ] {
+            let error = parse_chunk(source).unwrap_err();
+            assert_eq!(
+                (error.line, error.byte_offset),
+                (source_eof_line(source), source.len()),
+                "{source:?}"
+            );
+        }
+        let error = parse_expression("(\r\n").unwrap_err();
+        assert_eq!((error.line, error.byte_offset), (2, 3));
+        let source = "local x=1\nlocal =";
+        let error = parse_chunk(source).unwrap_err();
+        assert_eq!(error.line, 2);
+        assert!(error.byte_offset < source.len());
     }
 
     #[test]
