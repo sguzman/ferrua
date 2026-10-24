@@ -3111,7 +3111,7 @@
               "id": "T399",
               "emoji": "🔁",
               "name": "Callable __pairs metamethod targets with shared bounded host frames",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Allow Lua __pairs callbacks to invoke first-party closures, builtin functions and chained callable tables through shared dispatch",
@@ -3130,7 +3130,8 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, README and owned-engine semantic limitations under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40053437772: all five CI jobs successful, including generated roadmap consistency, README and owned-engine documentation"
                 }
               ]
             }
