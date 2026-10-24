@@ -629,3 +629,11 @@ This does not implement scope-exit `__close` execution. The first-party flow com
 Lua 5.4 (§3.3.7) allows several local bindings with optional `<const>` and `<close>` attributes, but no more than one to-be-closed binding within a **single declaration**. The owned `src/expr.rs` parser now rejects a second `<close>` while keeping valid mixed `<const>`/`<close>` declarations; different local declarations may each contain a closer. Two valid and three invalid mixed-attribute parser regressions exercise this rule. [CI #40114100152](https://github.com/sguzman/ferrua/actions/runs/40114100152) passed all five jobs after rustfmt alignment.
 
 The grammar check does not implement resource finalizers: `<close>` remains syntax-only in the first-party parser and explicitly unsupported by the owned flow compiler. `<const>` assignment protection and scope metadata stay independent; production `fer` is unchanged.
+
+### Verified Lua 5.4 malformed numeral boundary checks
+
+The owned `src/lex.rs` scanner now rejects numeral tokens touching identifier characters, underscores or extra radix points. Cases such as `12abc`, `0x1g`, `1e3foo`, `3.4.5`, and unspaced `1..2` are malformed Lua numerals; the scanner must not silently split them into separate number, name, or concatenation tokens. The parser and flow compiler inherit those lexical rejections, and diagnostics retain the precise byte offset of the malformed suffix.
+
+Valid whitespace-separated `1 .. 2`, hexadecimal binary exponents, ordinary arithmetic after a numeral and decimal exponent signs remain accepted. The implementation has lexical and parser regressions plus six negative-path fixtures compared against production `fer` and the pinned Lua 5.4 reference. [CI #40116606712](https://github.com/sguzman/ferrua/actions/runs/40116606712) passed all five jobs, including Linux formatting/lint/tests, Rust 1.96, Lua differential smoke and the setup action consumer.
+
+This closes a specific T301 lexical gap, **not** the full grammar, source diagnostics or T301/T302 graduation gates. The production backend is unchanged.

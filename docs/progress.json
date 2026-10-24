@@ -3470,6 +3470,33 @@
                   "evidence": "GitHub Actions 40114267712: all five jobs passed synchronized parser semantic documentation, ledger, roadmap and README"
                 }
               ]
+            },
+            {
+              "id": "T412",
+              "emoji": "🔢",
+              "name": "Lua 5.4 malformed numeral adjacency rejection in owned lexer/parser",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Reject numeral-adjacent identifiers, Unicode name suffixes, underscores, extra radix points and unspaced concatenation in the owned scanner",
+                  "passed": true,
+                  "evidence": "src/lex.rs: Scanner::number suffix validation; lua_54_rejects_numbers_touching_names_or_extra_radix_points"
+                },
+                {
+                  "text": "Retain valid spaced concatenation and decimal/hexadecimal exponents with parser-layer rejection regressions and source offset checks",
+                  "passed": true,
+                  "evidence": "src/lex.rs: distinct_lua_numerals_and_spaced_concatenation_remain_valid; src/expr.rs: parser_rejects_lexically_malformed_adjacent_numerals"
+                },
+                {
+                  "text": "Pass pinned Lua 5.4 and production fer intentional syntax errors, Rust tests/lint/format, Rust 1.96 and downstream setup consumer",
+                  "passed": true,
+                  "evidence": "tests/owned_flow.rs six SYNTAX_ERROR_FIXTURES; GitHub Actions 40116606712 all five jobs passed commit e9086730501adf90958fd3937d017a6d597d8335"
+                },
+                {
+                  "text": "Synchronize language grammar documentation, machine ledger, generated roadmap and README with passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4226,6 +4253,13 @@
           "name": "Single <close> variable per Lua local declaration",
           "task_ids": [
             "T411"
+          ]
+        },
+        {
+          "emoji": "🔢",
+          "name": "Lua numeral lexical boundary and malformed literal conformance",
+          "task_ids": [
+            "T412"
           ]
         }
       ]

@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 140 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 141 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -626,6 +626,11 @@
   - [x] Retain valid mixed <const>/<close> bindings and reject duplicates in first, middle or final positions — src/expr.rs: parses_lua_local_attributes_without_accepting_unknown_names; two valid and three malformed regression cases
   - [x] Pass Rust format/Clippy/tests, Rust 1.96, Lua 5.4 differential suite and action consumer — GitHub Actions 40114100152: five successful jobs for commit 8750491cc29c5828e24e025323228c0e653e33e0
   - [x] Document precise Lua 5.4 single-closer grammar limit and update machine roadmap/README with verified CI — GitHub Actions 40114267712: all five jobs passed synchronized parser semantic documentation, ledger, roadmap and README
+- 🔢 **T412** Lua 5.4 malformed numeral adjacency rejection in owned lexer/parser — `████████░░ 75%`
+  - [x] Reject numeral-adjacent identifiers, Unicode name suffixes, underscores, extra radix points and unspaced concatenation in the owned scanner — src/lex.rs: Scanner::number suffix validation; lua_54_rejects_numbers_touching_names_or_extra_radix_points
+  - [x] Retain valid spaced concatenation and decimal/hexadecimal exponents with parser-layer rejection regressions and source offset checks — src/lex.rs: distinct_lua_numerals_and_spaced_concatenation_remain_valid; src/expr.rs: parser_rejects_lexically_malformed_adjacent_numerals
+  - [x] Pass pinned Lua 5.4 and production fer intentional syntax errors, Rust tests/lint/format, Rust 1.96 and downstream setup consumer — tests/owned_flow.rs six SYNTAX_ERROR_FIXTURES; GitHub Actions 40116606712 all five jobs passed commit e9086730501adf90958fd3937d017a6d597d8335
+  - [ ] Synchronize language grammar documentation, machine ledger, generated roadmap and README with passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -736,4 +741,5 @@
 - 🔎 Const capture/write metadata in lexical scope resolver — `██████████ 100%`
 - 🔒 Read-only <close> lexical assignment metadata — `██████████ 100%`
 - 📐 Single <close> variable per Lua local declaration — `██████████ 100%`
+- 🔢 Lua numeral lexical boundary and malformed literal conformance — `████████░░ 75%`
 
