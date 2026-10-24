@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 96%` across 129 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 129 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -566,11 +566,11 @@
   - [x] Maintain triple adjustment and hard noncatchable depth limits for self-recursive __pairs and __call callback chains — src/owned_flow.rs: callable_pairs_metamethods_preserve_triples_and_hard_limits; two explicit cycle-limit cases
   - [x] Pass Rust 1.96, Linux format/Clippy/tests, archive smoke, action consumer and Lua 5.4/fer differential references — GitHub Actions 40053300659: five passing CI jobs on commit d2a91b52c01695de4a0b2cfa93fb26cfeeca48d0, 12 reference fixtures
   - [x] Synchronize machine ledger, generated roadmap, README and owned-engine semantic limitations under passing CI — GitHub Actions 40053437772: all five CI jobs successful, including generated roadmap consistency, README and owned-engine documentation
-- 🗣️ **T400** Callable Lua __tostring tables and builtin metamethod callbacks — `████████░░ 75%`
+- 🗣️ **T400** Callable Lua __tostring tables and builtin metamethod callbacks — `██████████ 100%`
   - [x] Invoke __tostring callback through shared callable dispatch for owned closures, builtin functions and chained __call tables — src/owned_flow.rs: Execution::tostring_builtin via protected_target
   - [x] Preserve converted numeric/string returns, reject invalid callback results and enforce native-stack-safe hard recursion limits — src/owned_flow.rs: callable_tostring_metamethods_and_builtin_callbacks_are_bounded; two cyclic safety regressions
   - [x] Pass 12 Lua 5.4/production fer differential fixtures, full Linux quality/tests, Rust 1.96, and action consumer CI — GitHub Actions 40053556576: all five jobs green on 1b7d2607dd40c67891ecf8e670396b39447f788e
-  - [ ] Synchronize engine documentation, README, machine ledger and generated roadmap with successful CI
+  - [x] Synchronize engine documentation, README, machine ledger and generated roadmap with successful CI — GitHub Actions 40053772976: all five jobs passed synchronized owned-engine docs, README, machine progress and roadmap check
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -669,5 +669,5 @@
 - 🔄 Protected pairs/ipairs triples with lazy validation — `██████████ 100%`
 - 🪆 Nested bounded pcall/xpcall first-class targets — `██████████ 100%`
 - 🔁 Callable-table and builtin Lua __pairs callbacks — `██████████ 100%`
-- 🗣️ Lua callable __tostring tables and builtin callbacks — `████████░░ 75%`
+- 🗣️ Lua callable __tostring tables and builtin callbacks — `██████████ 100%`
 

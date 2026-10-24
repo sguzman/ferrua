@@ -3139,7 +3139,7 @@
               "id": "T400",
               "emoji": "🗣️",
               "name": "Callable Lua __tostring tables and builtin metamethod callbacks",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Invoke __tostring callback through shared callable dispatch for owned closures, builtin functions and chained __call tables",
@@ -3158,7 +3158,8 @@
                 },
                 {
                   "text": "Synchronize engine documentation, README, machine ledger and generated roadmap with successful CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40053772976: all five jobs passed synchronized owned-engine docs, README, machine progress and roadmap check"
                 }
               ]
             }
