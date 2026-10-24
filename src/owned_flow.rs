@@ -1743,9 +1743,7 @@ impl Execution<'_> {
             }
             Builtin::MathAbs => match self.arithmetic_operand(first)? {
                 Value::Integer(number) => Ok(Value::Integer(number.wrapping_abs())),
-                Value::Float(bits) => {
-                    Ok(Value::Float(f64::from_bits(bits).abs().to_bits()))
-                }
+                Value::Float(bits) => Ok(Value::Float(f64::from_bits(bits).abs().to_bits())),
                 _ => Err(FlowError::TypeError),
             },
             Builtin::MathFloor | Builtin::MathCeil => {
@@ -1772,8 +1770,10 @@ impl Execution<'_> {
                 let mut best = *args.first().ok_or(FlowError::TypeError)?;
                 for &value in &args[1..] {
                     let ordering = match (best, value) {
-                        (Value::Integer(_) | Value::Float(_),
-                         Value::Integer(_) | Value::Float(_)) => numeric_order(best, value),
+                        (
+                            Value::Integer(_) | Value::Float(_),
+                            Value::Integer(_) | Value::Float(_),
+                        ) => numeric_order(best, value),
                         (Value::String(a), Value::String(b)) => Some(
                             self.strings
                                 .get(a)
@@ -1817,7 +1817,10 @@ impl Execution<'_> {
             self.write_table(handle, TableKey::Hashed(key), Value::Builtin(builtin))?;
         }
         for (name, value) in [
-            (b"pi".as_slice(), Value::Float(std::f64::consts::PI.to_bits())),
+            (
+                b"pi".as_slice(),
+                Value::Float(std::f64::consts::PI.to_bits()),
+            ),
             (b"huge".as_slice(), Value::Float(f64::INFINITY.to_bits())),
             (b"maxinteger".as_slice(), Value::Integer(i64::MAX)),
             (b"mininteger".as_slice(), Value::Integer(i64::MIN)),
