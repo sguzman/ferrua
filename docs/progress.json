@@ -3083,7 +3083,7 @@
               "id": "T398",
               "emoji": "🪆",
               "name": "Bounded nested first-class pcall/xpcall calls with hard depth limits",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Invoke pcall and xpcall as first-class protected builtin targets with correct multiple return adjustment",
@@ -3102,7 +3102,8 @@
                 },
                 {
                   "text": "Synchronize README, owned-engine documentation, progress ledger and generated roadmap in successful CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40052902459: all five jobs successful with synchronized documentation, generated roadmap and reference tests"
                 }
               ]
             }

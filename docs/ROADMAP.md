@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 96%` across 127 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 127 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -556,11 +556,11 @@
   - [x] Match Lua 5.4 deferred table validation, nil/present primitive arguments, callback errors and ipairs ignoring __pairs — src/owned_flow.rs: protected_pairs_and_ipairs_preserve_iterator_triples, first_class_next_pairs_and_ipairs_follow_bounded_lua_raw_iteration; tests/owned_flow.rs 20 new fixtures
   - [x] Pass upstream Lua 5.4 and production fer parity, Linux formatter/lint/tests, Rust 1.96 and consumer CI — GitHub Actions 40052438402: five jobs successful on commit 3dd6100569024b53ce87954c205a67ff7b689392
   - [x] Synchronize corrected pairs/ipairs semantics, README, machine ledger and generated roadmap in passing CI — GitHub Actions 40052585700: all five acceptance jobs passed docs/ROADMAP, progress ledger, README, owned-engine docs and differential corpus
-- 🪆 **T398** Bounded nested first-class pcall/xpcall calls with hard depth limits — `████████░░ 75%`
+- 🪆 **T398** Bounded nested first-class pcall/xpcall calls with hard depth limits — `██████████ 100%`
   - [x] Invoke pcall and xpcall as first-class protected builtin targets with correct multiple return adjustment — src/owned_flow.rs: Execution::protected_target dispatch to nested_protected_builtin
   - [x] Share conservative MAX_CALL_DEPTH between nested builtin calls and closure frames; leave hard budget errors uncatchable — src/owned_flow.rs: nested_protected_builtin and nested_protected_call_builtins_preserve_values_and_bound_depth
   - [x] Pass 15 Lua 5.4/production fer differential fixtures, deterministic depth failure, Rust 1.96, Linux tests and consumer CI — GitHub Actions 40052701456: all five primary/reporter jobs green for 1fc94b87da2a53adcbaf7dd5d44ebda60fde231d
-  - [ ] Synchronize README, owned-engine documentation, progress ledger and generated roadmap in successful CI
+  - [x] Synchronize README, owned-engine documentation, progress ledger and generated roadmap in successful CI — GitHub Actions 40052902459: all five jobs successful with synchronized documentation, generated roadmap and reference tests
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -657,5 +657,5 @@
 - 🔐 Protected raw table and metatable standard builtins — `██████████ 100%`
 - ↪️ Protected select/next/ipairs iterator result triples — `██████████ 100%`
 - 🔄 Protected pairs/ipairs triples with lazy validation — `██████████ 100%`
-- 🪆 Nested bounded pcall/xpcall first-class targets — `████████░░ 75%`
+- 🪆 Nested bounded pcall/xpcall first-class targets — `██████████ 100%`
 
