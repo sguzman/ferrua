@@ -207,6 +207,55 @@ fn integer_conditional_branches_match_fer_and_upstream_lua() {
 }
 
 #[test]
+fn numeric_truthiness_guard_matrix_matches_production_and_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("if 0 then return 7 else return 11 end", 7),
+        ("if -1 then return 9 else return 3 end", 9),
+        ("local x=0; if x then return 5 else return 6 end", 5),
+        ("local x=9; if x-x then return 4 else return 8 end", 4),
+        ("if not 0 then return 4 else return 8 end", 8),
+        ("if not false then return 3 else return 6 end", 3),
+        ("if not true then return 3 else return 6 end", 6),
+        ("if not not 0 then return 15 else return 3 end", 15),
+        ("if not (2>1) then return 0 else return 11 end", 11),
+        ("if not (2<1) then return 9 else return 0 end", 9),
+        ("if (4-4) then return 22 else return 0 end", 22),
+        (
+            "if false then return 3 elseif not (5<=4) then return 13 else return 2 end",
+            13,
+        ),
+    ] {
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        let code = format!("print((function() {source} end)())");
+        for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if binary == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(binary);
+            if binary != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                expected.to_string(),
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
 fn static_integer_chunk_matches_upstream_lua_when_requested() {
     if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()

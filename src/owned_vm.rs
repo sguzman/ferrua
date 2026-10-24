@@ -85,6 +85,14 @@ pub enum Instruction {
     Return {
         source: usize,
     },
+    NumericTruthy {
+        dest: usize,
+        input: usize,
+    },
+    BooleanNot {
+        dest: usize,
+        input: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -219,9 +227,10 @@ fn emit<'a>(
     Ok(output)
 }
 
-/// Compile only integer comparisons and explicit Lua true/false literals as
-/// internal guards. Lua numeric values are truthy even when zero, so they are
-/// deliberately not represented by our comparison boolean registers.
+/// Compile Boolean literals, integer comparisons, unary not and pure integer
+/// expressions into internal guards. Unlike some host languages, every Lua
+/// integer, including zero, is truthy. These Boolean guard registers are never
+/// made available as general Lua integer expression values.
 fn emit_condition<'a>(
     program: &mut Program,
     expression: &Expr<'a>,
@@ -242,7 +251,22 @@ fn emit_condition<'a>(
             });
             Ok(dest)
         }
-        Expr::Binary { op, left, right } => {
+        Expr::Unary { op, right } if *op == "not" => {
+            let source = emit_condition(program, right, locals, depth + 1)?;
+            if program.registers >= MAX_REGISTERS {
+                return Err(Error::TooLarge);
+            }
+            let dest = program.registers;
+            program.registers += 1;
+            program.code.push(Instruction::BooleanNot {
+                dest,
+                input: source,
+            });
+            Ok(dest)
+        }
+        Expr::Binary { op, left, right }
+            if matches!(*op, "==" | "~=" | "<" | "<=" | ">" | ">=") =>
+        {
             let operation = match *op {
                 "==" => CompareOperation::Equal,
                 "~=" => CompareOperation::NotEqual,
@@ -271,9 +295,19 @@ fn emit_condition<'a>(
             });
             Ok(dest)
         }
-        _ => Err(Error::Unsupported(
-            "integer conditional needs a comparison or Boolean literal".into(),
-        )),
+        _ => {
+            // All currently lowerable arithmetic expressions yield integers.
+            // Evaluate them to retain runtime errors, then encode Lua's
+            // unconditional numeric truthiness in a separate guard.
+            let input = emit(program, expression, depth + 1, locals)?;
+            if program.registers >= MAX_REGISTERS {
+                return Err(Error::TooLarge);
+            }
+            let dest = program.registers;
+            program.registers += 1;
+            program.code.push(Instruction::NumericTruthy { dest, input });
+            Ok(dest)
+        }
     }
 }
 
@@ -294,8 +328,8 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 /// Compile a static subset of Lua chunks to Ferrua-owned register bytecode.
 ///
 /// Supports integer locals with initializers, parallel assignments to locals,
-/// nested do/end blocks, integer comparison if/elseif/else branches in which
-/// every path returns, and a single integer return from an active block.
+/// nested do/end blocks, bounded integer/Boolean if/elseif/else branches in
+/// which every path returns, and a single integer return from an active block.
 /// Calls, general truthiness, loops, globals, nil and closures remain unsupported.
 pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
@@ -530,6 +564,13 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
                 continue;
             }
             Instruction::Return { source } => return read(&registers, source),
+            Instruction::NumericTruthy { dest, input } => {
+                read(&registers, input)?;
+                (dest, 1)
+            }
+            Instruction::BooleanNot { dest, input } => {
+                (dest, i64::from(read(&registers, input)? == 0))
+            }
             Instruction::Compare {
                 dest,
                 lhs,
@@ -756,7 +797,7 @@ mod tests {
         for source in [
             "if true then return 1 end",
             "if true then local a=2 else return 3 end",
-            "if 0 then return 1 else return 2 end",
+            "if {} then return 1 else return 2 end",
             "if false then return 2 else local a=3 end",
             "if true then return nil else return 2 end",
         ] {
@@ -776,6 +817,38 @@ mod tests {
         assert_eq!(
             execute_integer_program(&invalid),
             Err(Error::InvalidBytecode)
+        );
+    }
+
+    #[test]
+    fn integer_guard_truthiness_and_boolean_not_match_lua() {
+        for (source, expected) in [
+            ("if 0 then return 7 else return 11 end", 7),
+            ("if -1 then return 9 else return 3 end", 9),
+            ("local x=0; if x then return 5 else return 6 end", 5),
+            ("local x=9; if x-x then return 4 else return 8 end", 4),
+            ("if not 0 then return 4 else return 8 end", 8),
+            ("if not false then return 3 else return 6 end", 3),
+            ("if not true then return 3 else return 6 end", 6),
+            ("if not not 0 then return 15 else return 3 end", 15),
+            ("if not (2>1) then return 0 else return 11 end", 11),
+            ("if not (2<1) then return 9 else return 0 end", 9),
+            ("if (4-4) then return 22 else return 0 end", 22),
+            (
+                "if false then return 3 elseif not (5<=4) then return 13 else return 2 end",
+                13,
+            ),
+        ] {
+            let bytecode = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_integer_program(&bytecode), Ok(expected), "{source}");
+        }
+        let program = compile_integer_chunk(
+            "if 1//0 then return 1 else return 2 end",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_integer_program(&program),
+            Err(Error::DivisionByZero)
         );
     }
 
