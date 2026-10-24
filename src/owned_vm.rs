@@ -968,8 +968,8 @@ mod tests {
         }
         for source in [
             "if true then return 7 end",
-            "if true then local x=2 end; return 5",
-            "if false then return 5 elseif true then local x=6 end; return 9",
+            "local x=1; if true then x=2 end; return x",
+            "local x=1; if false then return 5 elseif true then x=6 end; return x",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
