@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -601,11 +601,11 @@
   - [x] Preserve immediate runtime loop exit and ignore unreachable statements and labels after a break — src/owned_flow.rs: break_statements_can_precede_unreachable_lua_statements; tests/owned_flow.rs 10 curated fixtures
   - [x] Pass upstream Lua 5.4 and production fer reference comparisons, Rust 1.96, Linux format/lint/tests, Arch archive smoke and action consumer CI — GitHub Actions 40056833051: all five jobs successful for e80fe54fc417f74f739ee5e584d5a01511bea81a
   - [x] Synchronize machine ledger, roadmap, README and owned-engine docs after accepted CI — GitHub Actions 40056989358: all five jobs passed synchronized progress.json, generated roadmap, README and grammar documentation
-- 📞 **T407** Lua table and short/long-string shorthand function/method call grammar — `████████░░ 75%`
+- 📞 **T407** Lua table and short/long-string shorthand function/method call grammar — `██████████ 100%`
   - [x] Parse table-constructor and literal short/long-string arguments for first-party function and method calls without parentheses — src/expr.rs: Parser::call_arguments and postfix; commit 56037aaa1347eac3969abd52194ae210328ea4e5
   - [x] Validate argument syntax and runtime call chaining against upstream Lua 5.4, including method receiver and malformed forms — src/expr.rs: lua_table_and_string_shorthand_calls_parse_as_real_calls; tests/owned_syntax.rs: 18 grammar cases; tests/owned_flow.rs: 11 positive execution fixtures
   - [x] Pass Linux formatting/Clippy/tests, Rust 1.96, upstream Lua 5.4 and pinned production fer differential, Arch archive and consumer CI — GitHub Actions 40057286292: five successful jobs for 56037aaa1347eac3969abd52194ae210328ea4e5
-  - [ ] Synchronize machine ledger, generated roadmap, README and owned grammar documentation under passing CI
+  - [x] Synchronize machine ledger, generated roadmap, README and owned grammar documentation under passing CI — GitHub Actions 40057447101: all five jobs green for synchronized docs/ROADMAP.md, machine ledger, README and owned parser docs
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -711,5 +711,5 @@
 - 🏷️ Lexically scoped Lua goto across visible blocks — `██████████ 100%`
 - 📝 Semicolon-optional Lua statement boundaries — `██████████ 100%`
 - ↩️ Lua loop breaks with subsequent unreachable statements — `██████████ 100%`
-- 📞 Lua table/string shorthand call expression grammar — `████████░░ 75%`
+- 📞 Lua table/string shorthand call expression grammar — `██████████ 100%`
 

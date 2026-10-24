@@ -3335,7 +3335,7 @@
               "id": "T407",
               "emoji": "📞",
               "name": "Lua table and short/long-string shorthand function/method call grammar",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Parse table-constructor and literal short/long-string arguments for first-party function and method calls without parentheses",
@@ -3354,7 +3354,8 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, README and owned grammar documentation under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40057447101: all five jobs green for synchronized docs/ROADMAP.md, machine ledger, README and owned parser docs"
                 }
               ]
             }
