@@ -581,11 +581,11 @@
   - [x] Preserve arithmetic, bitwise, concatenation, equality and ordering operator semantics with bounded host frames and hard recursion failures — src/owned_flow.rs: callable_binary_metamethods_preserve_lua_dispatch_and_depth_limits; two cycle safety regressions
   - [x] Pass 16 Lua 5.4/production fer differential fixtures, Linux format/lint/tests/archive, Rust 1.96, action consumer and aggregate CI — GitHub Actions 40054377514: all five jobs passed on 4ee9449a9c88a791e55245fe9de810958fd4b9ea
   - [x] Synchronize README, engine docs, machine progress ledger and generated roadmap in successful CI — GitHub Actions 40054589028: all five jobs passed synchronized README, documentation, machine ledger and generated roadmap, with Lua 5.4 reference tests
-- 🧭 **T403** Lua builtin __index/__newindex metamethod dispatch with table redirect precedence — `████████░░ 75%`
+- 🧭 **T403** Lua builtin __index/__newindex metamethod dispatch with table redirect precedence — `██████████ 100%`
   - [x] Invoke function-valued Lua indexing and assignment metamethods through bounded protected callable dispatch — src/owned_flow.rs: Execution::lookup_with_metatable and assign_with_metatable delegate callable non-tables to protected_target; CI 40055237278
   - [x] Preserve table-valued redirect semantics even for tables with __call, including existing-key bypass, rawset and hard recursive depth limits — src/owned_flow.rs: callable_index_and_newindex_hooks_preserve_raw_redirection_and_hard_depth; 18 fixtures and 2 hard-limit cases
   - [x] Pass upstream Lua 5.4 and production fer differential parity, Linux tests, Rust 1.96, Arch archive and downstream consumer — GitHub Actions 40055237278 all five jobs successful on bf21dbd1b06d873b5cc5da35225346ae260891ab
-  - [ ] Synchronize owned-engine docs, README, ledger and roadmap after verified CI acceptance
+  - [x] Synchronize owned-engine docs, README, ledger and roadmap after verified CI acceptance — GitHub Actions 40055368051 passed all five jobs: documentation, machine ledger, roadmap generation and upstream Lua 5.4 parity
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -687,5 +687,5 @@
 - 🗣️ Lua callable __tostring tables and builtin callbacks — `██████████ 100%`
 - 📏 Callable Lua __len callbacks and error-level parity — `██████████ 100%`
 - 🎭 Callable binary and unary Lua metamethod targets — `██████████ 100%`
-- 🧭 Bounded builtin index/newindex metamethod callbacks — `████████░░ 75%`
+- 🧭 Bounded builtin index/newindex metamethod callbacks — `██████████ 100%`
 

@@ -3223,7 +3223,7 @@
               "id": "T403",
               "emoji": "🧭",
               "name": "Lua builtin __index/__newindex metamethod dispatch with table redirect precedence",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Invoke function-valued Lua indexing and assignment metamethods through bounded protected callable dispatch",
@@ -3242,7 +3242,8 @@
                 },
                 {
                   "text": "Synchronize owned-engine docs, README, ledger and roadmap after verified CI acceptance",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40055368051 passed all five jobs: documentation, machine ledger, roadmap generation and upstream Lua 5.4 parity"
                 }
               ]
             }
