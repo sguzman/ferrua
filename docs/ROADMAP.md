@@ -531,11 +531,11 @@
   - [x] Reject nil, missing and callable-table message handlers without running successful or failing targets — src/owned_flow.rs: xpcall_requires_function_handlers_before_invoking_target; tests/owned_flow.rs: five runtime-rejection cases
   - [x] Pass production fer and upstream Lua 5.4 positive/error differential matrix, Rust tests/lint, Rust 1.96 and downstream action — GitHub Actions 40045839543: five successful jobs, including strict negative-path Lua reference checks
   - [x] Synchronize machine ledger, generated roadmap, owned-engine documentation and README under verified CI — GitHub Actions 40046094740: all five jobs passed synchronized progress.json, roadmap generator check, README and owned-engine docs
-- 🧮 **T393** Selected standard Lua builtins in protected-call execution — `████████░░ 75%`
+- 🧮 **T393** Selected standard Lua builtins in protected-call execution — `██████████ 100%`
   - [x] Allow first-party type, tonumber, rawlen and rawequal functions as bounded protected targets — src/owned_flow.rs: Execution::protected_target handles four selected Builtin variants; GitHub Actions 40046376588 accepted
   - [x] Support numeric raw equality and selected builtin message handlers without relaxing xpcall handler typing — src/owned_flow.rs: selected_standard_builtins_work_inside_protected_calls; tests/owned_flow.rs
   - [x] Pass reference Lua 5.4 differential matrix, Linux tests/lint, Rust 1.96, action consumer and aggregate status — GitHub Actions 40046376588: five jobs successful including ten new positive/error fixtures
-  - [ ] Synchronize owned-engine documentation, README, ledger and generated roadmap under passing CI
+  - [x] Synchronize owned-engine documentation, README, ledger and generated roadmap under passing CI — GitHub Actions 40046538133: all five jobs passed synced README, docs/OWNED_ENGINE.md, progress ledger and roadmap check
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -627,5 +627,5 @@
 - 🛟 Lua xpcall bounded error handlers — `██████████ 100%`
 - 📞 Callable-table protected call targets — `██████████ 100%`
 - 🧪 Strict xpcall handler type parity — `██████████ 100%`
-- 🧮 Selected builtin protected calls — `████████░░ 75%`
+- 🧮 Selected builtin protected calls — `██████████ 100%`
 

@@ -2943,7 +2943,7 @@
               "id": "T393",
               "emoji": "🧮",
               "name": "Selected standard Lua builtins in protected-call execution",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Allow first-party type, tonumber, rawlen and rawequal functions as bounded protected targets",
@@ -2962,7 +2962,8 @@
                 },
                 {
                   "text": "Synchronize owned-engine documentation, README, ledger and generated roadmap under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40046538133: all five jobs passed synced README, docs/OWNED_ENGINE.md, progress ledger and roadmap check"
                 }
               ]
             }
