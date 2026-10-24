@@ -2841,7 +2841,7 @@
               "id": "T389",
               "emoji": "🗣️",
               "name": "Lua assert failure messages and explicit error-object identity",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Replace generic failed-assert type errors with explicit Lua thrown values and default assertion message",
@@ -2855,7 +2855,8 @@
                 },
                 {
                   "text": "Pass Linux fmt/lint/tests, Rust 1.96, composite action consumer and Lua 5.4 differential CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40043618093: four primary jobs and reporter successful, including Lua 5.4 assertion cases, no-argument panic guard, and full Rust tests"
                 }
               ]
             }
