@@ -2910,6 +2910,33 @@
                   "evidence": "GitHub Actions 40045174135: all five CI jobs succeeded for commit 13afe3046a6f2b4d67efd78de27e289bac663d42"
                 }
               ]
+            },
+            {
+              "id": "T392",
+              "emoji": "🧪",
+              "name": "Lua 5.4 xpcall function-only handler and early rejection parity",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Require an actual Lua function-valued message handler before executing xpcall target",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::xpcall_builtin early handler-type guard; GitHub Actions 40045839543"
+                },
+                {
+                  "text": "Reject nil, missing and callable-table message handlers without running successful or failing targets",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: xpcall_requires_function_handlers_before_invoking_target; tests/owned_flow.rs: five runtime-rejection cases"
+                },
+                {
+                  "text": "Pass production fer and upstream Lua 5.4 positive/error differential matrix, Rust tests/lint, Rust 1.96 and downstream action",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40045839543: five successful jobs, including strict negative-path Lua reference checks"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, owned-engine documentation and README under verified CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3526,6 +3553,13 @@
           "name": "Callable-table protected call targets",
           "task_ids": [
             "T391"
+          ]
+        },
+        {
+          "emoji": "🧪",
+          "name": "Strict xpcall handler type parity",
+          "task_ids": [
+            "T392"
           ]
         }
       ]
