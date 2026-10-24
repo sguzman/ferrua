@@ -1740,7 +1740,10 @@ impl Execution<'_> {
     /// Root-frame-only bounded mark-and-sweep for table cycles.
     /// Suspended nested Lua stacks are not available to the collector.
     fn collect_root_tables(
-        &mut self, stack: &[Value], slots: &[usize], prepared: &[PendingTarget],
+        &mut self,
+        stack: &[Value],
+        slots: &[usize],
+        prepared: &[PendingTarget],
     ) -> Result<(), FlowError> {
         if self.depth != 0 || self.frame_allocations.len() != 1 {
             return Ok(());
@@ -1757,11 +1760,14 @@ impl Execution<'_> {
         for target in prepared {
             if let PendingTarget::Indexed { table, key } = *target {
                 work.push(Value::Table(table));
-                if let TableKey::Hashed(key) = key { work.push(key); }
+                if let TableKey::Hashed(key) = key {
+                    work.push(key);
+                }
             }
         }
         for handle in [self.arg_handle, self.global_table, self.math_table]
-            .into_iter().flatten()
+            .into_iter()
+            .flatten()
         {
             work.push(Value::Table(handle));
         }
@@ -1772,8 +1778,12 @@ impl Execution<'_> {
             self.steps += 1;
             match value {
                 Value::Table(handle) => {
-                    let marked = marked_tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
-                    if *marked { continue; }
+                    let marked = marked_tables
+                        .get_mut(handle)
+                        .ok_or(FlowError::InvalidBytecode)?;
+                    if *marked {
+                        continue;
+                    }
                     if self.retired_tables.contains(&handle) {
                         return Err(FlowError::InvalidBytecode);
                     }
@@ -1789,10 +1799,17 @@ impl Execution<'_> {
                     }
                 }
                 Value::Function(handle) => {
-                    let marked = marked_closures.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
-                    if *marked { continue; }
+                    let marked = marked_closures
+                        .get_mut(handle)
+                        .ok_or(FlowError::InvalidBytecode)?;
+                    if *marked {
+                        continue;
+                    }
                     *marked = true;
-                    let closure = self.closures.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                    let closure = self
+                        .closures
+                        .get(handle)
+                        .ok_or(FlowError::InvalidBytecode)?;
                     for &(_, cell) in &closure.captures {
                         if let Some(Some(value)) = self.cells.get(cell) {
                             work.push(*value);
@@ -1808,7 +1825,9 @@ impl Execution<'_> {
                 let table = &mut self.tables[handle];
                 self.table_cells -= table.array.len() + table.hashed.len();
                 *table = TableStorage {
-                    array: Vec::new(), hashed: HashMap::new(), metatable: None,
+                    array: Vec::new(),
+                    hashed: HashMap::new(),
+                    metatable: None,
                 };
                 self.retired_tables.insert(handle);
                 self.free_tables.push(handle);
@@ -1822,10 +1841,15 @@ impl Execution<'_> {
             if !self.retired_tables.remove(&handle) {
                 return Err(FlowError::InvalidBytecode);
             }
-            *self.tables.get_mut(handle).ok_or(FlowError::InvalidBytecode)? = table;
+            *self
+                .tables
+                .get_mut(handle)
+                .ok_or(FlowError::InvalidBytecode)? = table;
             return Ok(handle);
         }
-        if self.tables.len() >= MAX_TABLES { return Err(FlowError::TooLarge); }
+        if self.tables.len() >= MAX_TABLES {
+            return Err(FlowError::TooLarge);
+        }
         let handle = self.tables.len();
         self.tables.push(table);
         Ok(handle)
