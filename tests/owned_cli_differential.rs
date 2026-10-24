@@ -15,8 +15,16 @@ fn run_fer(owned: bool, source: &str) -> Output {
 }
 
 fn reference_output(source: &str) -> Option<Output> {
-    (std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() == Some("1"))
-        .then(|| Command::new("lua5.4").args(["-e", source]).output().expect("lua5.4"))
+    (std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1"))
+    .then(|| {
+        Command::new("lua5.4")
+            .args(["-e", source])
+            .output()
+            .expect("lua5.4")
+    })
 }
 
 fn assert_parity(source: &str, should_succeed: bool) {
