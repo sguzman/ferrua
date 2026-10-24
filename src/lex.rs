@@ -422,7 +422,10 @@ mod tests {
                 "1",
             ]
         );
-        assert_eq!(spellings("return 1e-2+0xA.p+2"), ["return", "1e-2", "+", "0xA.p+2"]);
+        assert_eq!(
+            spellings("return 1e-2+0xA.p+2"),
+            ["return", "1e-2", "+", "0xA.p+2"]
+        );
     }
 
     #[test]
