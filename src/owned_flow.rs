@@ -1262,7 +1262,25 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
         } else if body.starts_with(b"\r") || body.starts_with(b"\n") {
             body = &body[1..];
         }
-        return Ok(body.to_vec());
+        // Lua 5.4 normalizes all four physical newline spellings inside
+        // long strings to LF. The optional first newline was already stripped.
+        let mut normalized = Vec::with_capacity(body.len());
+        let mut at = 0;
+        while at < body.len() {
+            let byte = body[at];
+            at += 1;
+            if byte == b'\r' || byte == b'\n' {
+                if body.get(at).is_some_and(|next| {
+                    (*next == b'\r' || *next == b'\n') && *next != byte
+                }) {
+                    at += 1;
+                }
+                normalized.push(b'\n');
+            } else {
+                normalized.push(byte);
+            }
+        }
+        return Ok(normalized);
     }
     let quote = bytes[0];
     if !matches!(quote, b'\'' | b'"') || bytes.last() != Some(&quote) {
@@ -6101,6 +6119,22 @@ mod tests {
             evaluate("local a='hello'; local b=\"hello\"; return (a==b) and #a or 0"),
             5
         );
+    }
+
+    #[test]
+    fn long_brackets_normalize_crlf_lfcr_and_single_cr_line_breaks() {
+        for (source, expected) in [
+            ("[[a\r\nb]]", b"a\nb".as_slice()),
+            ("[[a\n\rb]]", b"a\nb".as_slice()),
+            ("[[a\rb]]", b"a\nb".as_slice()),
+            ("[[a\nb]]", b"a\nb".as_slice()),
+            ("[[\r\nabc]]", b"abc".as_slice()),
+            ("[[\n\rabc]]", b"abc".as_slice()),
+            ("[=[\rhello\r\nworld]=]", b"hello\nworld".as_slice()),
+            ("[[a\r\rb]]", b"a\n\nb".as_slice()),
+        ] {
+            assert_eq!(decode_lua_string(source).unwrap(), expected, "{source:?}");
+        }
     }
 
     #[test]
