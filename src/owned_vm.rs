@@ -155,8 +155,8 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 /// Compile a static subset of Lua chunks to Ferrua-owned register bytecode.
 ///
 /// Supports integer locals with initializers, parallel assignments to locals,
-/// nested do/end blocks and a single final integer return. Calls, conditionals,
-/// loops, globals, nil and closures remain explicitly unsupported.
+/// nested do/end blocks and a single integer return from any active block.
+/// Calls, conditionals, loops, globals, nil and closures remain unsupported.
 pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
     let mut program = Program {
@@ -165,7 +165,7 @@ pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
         result: 0,
     };
     let mut scopes = vec![HashMap::new()];
-    let value = compile_statements(&statements, &mut program, &mut scopes, false, 0)?
+    let value = compile_statements(&statements, &mut program, &mut scopes, 0)?
         .ok_or_else(|| Error::Unsupported("chunk requires one final return value".into()))?;
     program.result = value;
     Ok(program)
@@ -175,7 +175,6 @@ fn compile_statements<'a>(
     statements: &[Statement<'a>],
     program: &mut Program,
     scopes: &mut Vec<HashMap<&'a str, usize>>,
-    nested: bool,
     depth: usize,
 ) -> Result<Option<usize>, Error> {
     if depth > 64 {
@@ -237,13 +236,17 @@ fn compile_statements<'a>(
             }
             Statement::Block(body) => {
                 scopes.push(HashMap::new());
-                let child = compile_statements(body, program, scopes, true, depth + 1)?;
+                let child = compile_statements(body, program, scopes, depth + 1)?;
                 scopes.pop();
-                if child.is_some() {
-                    return Err(Error::Unsupported("nested return is not supported".into()));
+                // A do/end block does not create a separate return context:
+                // returning inside it exits the entire integer chunk.
+                // Do not emit instructions for unreachable later statements.
+                if let Some(value) = child {
+                    result = Some(value);
+                    break;
                 }
             }
-            Statement::Return(values) if !nested && values.len() == 1 => {
+            Statement::Return(values) if values.len() == 1 => {
                 result = Some(emit(program, &values[0], 0, scopes)?);
             }
             _ => {
@@ -461,6 +464,33 @@ mod tests {
         }
     }
     #[test]
+    fn nested_do_blocks_propagate_integer_returns_and_skip_unreachable_code() {
+        for (source, expected) in [
+            ("do return 7 end", 7),
+            ("local x=3; do return x+4 end", 7),
+            ("do do return 11 end end", 11),
+            ("local a=2; do local b=a*3; return b+1 end", 7),
+            ("local n=1; do n=n+9; do return n end end", 10),
+            ("do return (7<<2)|3 end", 31),
+            ("do return 8 end; local unused=9; return unused", 8),
+            ("local x=5; do return x end; x=0; return x", 5),
+            ("do local x=4 end; return 6", 6),
+            ("do local x=3; do local x=x+9; return x end end", 12),
+            ("do do local x=2 end end; return 7", 7),
+        ] {
+            let bytecode = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_integer_program(&bytecode), Ok(expected), "{source}");
+        }
+        for source in [
+            "do return nil end",
+            "do return 1, 2 end",
+            "do return math.max(1,2) end",
+        ] {
+            assert!(compile_integer_chunk(source).is_err(), "{source}");
+        }
+    }
+
+    #[test]
     fn rejects_unsupported_dynamic_chunk_features() {
         for source in [
             "local x; return x",
@@ -470,7 +500,6 @@ mod tests {
             "local x=1; if x>0 then x=2 end; return x",
             "local x=1; while x<3 do x=x+1 end; return x",
             "local x=1; return 1.5",
-            "local x=1; do return x end",
             "local x=1; x.y=2; return x",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
