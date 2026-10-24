@@ -405,6 +405,9 @@ pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let mut scopes = vec![HashMap::new()];
     let value = compile_statements(&statements, &mut program, &mut scopes, 0)?
         .ok_or_else(|| Error::Unsupported("chunk requires one final return value".into()))?;
+    if program.code.len() > MAX_REGISTERS {
+        return Err(Error::TooLarge);
+    }
     program.result = value;
     Ok(program)
 }
@@ -1188,6 +1191,18 @@ mod tests {
         );
         let program = compile_integer_chunk("if false then local y=1//0 end; return 1").unwrap();
         assert_eq!(execute_integer_program(&program), Ok(1));
+    }
+
+    #[test]
+    fn integer_chunk_rejects_oversized_instruction_stream_before_execution() {
+        // A no-op conditional allocates only two registers but lowers to
+        // four instructions. Without a separate instruction budget, chunks
+        // like this compiled successfully and failed only during execution.
+        let source = format!(
+            "{}return 1",
+            "if false then local unused=1 end; ".repeat(MAX_REGISTERS / 4 + 8)
+        );
+        assert_eq!(compile_integer_chunk(&source), Err(Error::TooLarge));
     }
 
     #[test]
