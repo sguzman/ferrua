@@ -275,3 +275,23 @@ fn owned_engine_opt_in_executes_only_the_first_party_subset() {
         );
     }
 }
+
+#[test]
+fn owned_print_matches_production_cli_and_preserves_prior_output_on_error() {
+    let source = "print(6*7, 'hello', true, nil); print(); local f=print; f('last')";
+    let owned = fer(&["--engine=owned", "-e", source]);
+    let production = fer(&["--lua=5.4", "-e", source]);
+    assert!(owned.status.success(), "{}", String::from_utf8_lossy(&owned.stderr));
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\thello\ttrue\tnil\n\nlast\n");
+
+    let checked = fer(&["--engine=owned", "--check", "-e", source]);
+    assert!(checked.status.success());
+    assert!(checked.stdout.is_empty());
+
+    let failure = fer(&["--engine=owned", "-e", "print('before'); error('after')"]);
+    assert!(!failure.status.success());
+    assert_eq!(failure.stdout, b"before\n");
+    assert!(!failure.stderr.is_empty());
+}

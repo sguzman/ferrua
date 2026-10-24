@@ -21,6 +21,7 @@ const MAX_CLOSURES: usize = 16_384;
 const MAX_CALL_DEPTH: usize = 16;
 const MAX_CELLS_TOTAL: usize = 65_536;
 const MAX_STRING_POOL_BYTES: usize = 65_536;
+const MAX_PRINT_OUTPUT_BYTES: usize = 65_536;
 const MAX_STRINGS: usize = 16_384;
 pub const DEFAULT_STEP_BUDGET: usize = 100_000;
 
@@ -43,6 +44,7 @@ pub enum Value {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Builtin {
+    Print,
     Type,
     ToString,
     ToNumber,
@@ -480,6 +482,9 @@ impl<'a> Compiler<'a> {
                     match self.slot(text) {
                         Ok(slot) => {
                             self.push(Op::ReadLocal(slot))?;
+                        }
+                        Err(_) if *text == "print" => {
+                            self.push(Op::Constant(Value::Builtin(Builtin::Print)))?;
                         }
                         Err(_) if *text == "type" => {
                             self.push(Op::Constant(Value::Builtin(Builtin::Type)))?;
@@ -1595,6 +1600,7 @@ struct Execution<'a> {
     free_cells: Vec<usize>,
     frame_allocations: Vec<Vec<usize>>,
     strings: Vec<Vec<u8>>,
+    stdout: Vec<u8>,
 }
 
 impl Execution<'_> {
@@ -2281,6 +2287,32 @@ impl Execution<'_> {
         Ok(text)
     }
 
+    /// A bounded, host-independent implementation of Lua's print protocol.
+    /// Conversion can invoke __tostring and shares the engine's safety limits.
+    fn print_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let mut line = Vec::new();
+        for (index, &argument) in args.iter().enumerate() {
+            if index > 0 {
+                line.push(b'\t');
+            }
+            let converted = self.tostring_builtin(argument)?;
+            let Value::String(handle) = converted else {
+                return Err(FlowError::TypeError);
+            };
+            let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
+            if line.len().saturating_add(bytes.len()) >= MAX_PRINT_OUTPUT_BYTES {
+                return Err(FlowError::TooLarge);
+            }
+            line.extend_from_slice(bytes);
+        }
+        line.push(b'\n');
+        if self.stdout.len().saturating_add(line.len()) > MAX_PRINT_OUTPUT_BYTES {
+            return Err(FlowError::TooLarge);
+        }
+        self.stdout.extend_from_slice(&line);
+        Ok(Vec::new())
+    }
+
     /// Raw table builtins never consult __index or __newindex callbacks.
     /// The ordinary opcode path and protected-call path share these checks.
     fn rawget_builtin(&self, args: &[Value]) -> Result<Value, FlowError> {
@@ -2394,6 +2426,7 @@ impl Execution<'_> {
         match callable {
             Value::Function(handle) => self.call_owned_function(handle, &arguments),
             Value::Builtin(Builtin::Error) => Err(self.error_builtin(&arguments)),
+            Value::Builtin(Builtin::Print) => self.print_builtin(&arguments),
             Value::Builtin(Builtin::Assert) => {
                 if arguments.first().copied().unwrap_or(Value::Nil).truthy() {
                     Ok(arguments)
@@ -2847,7 +2880,11 @@ impl Execution<'_> {
                         if args.is_empty()
                             && !matches!(
                                 builtin,
-                                Builtin::Error | Builtin::Pcall | Builtin::Xpcall | Builtin::Assert
+                                Builtin::Error
+                                    | Builtin::Print
+                                    | Builtin::Pcall
+                                    | Builtin::Xpcall
+                                    | Builtin::Assert
                             )
                         {
                             return Err(FlowError::TypeError);
@@ -2857,7 +2894,8 @@ impl Execution<'_> {
                         }
                         if matches!(
                             builtin,
-                            Builtin::Select
+                            Builtin::Print
+                                | Builtin::Select
                                 | Builtin::Assert
                                 | Builtin::Next
                                 | Builtin::Pairs
@@ -2867,6 +2905,7 @@ impl Execution<'_> {
                                 | Builtin::Xpcall
                         ) {
                             let returned = match builtin {
+                                Builtin::Print => self.print_builtin(&args)?,
                                 Builtin::Select => self.select_builtin(&args)?,
                                 Builtin::Pcall => self.pcall_builtin(&args)?,
                                 Builtin::Xpcall => self.xpcall_builtin(&args)?,
@@ -2930,6 +2969,7 @@ impl Execution<'_> {
                             Builtin::GetMetatable => self.getmetatable_builtin(&args)?,
                             Builtin::SetMetatable => self.setmetatable_builtin(&args)?,
                             Builtin::Error
+                            | Builtin::Print
                             | Builtin::Pcall
                             | Builtin::Xpcall
                             | Builtin::Select
@@ -3474,9 +3514,17 @@ impl Execution<'_> {
     }
 }
 
-/// Run owned control-flow bytecode with one shared instruction budget across calls.
-/// No host callbacks, global environment, or I/O.
-pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<Value>, FlowError> {
+/// Result of an owned execution, retaining output even when a script errors.
+/// Output is a bounded byte stream; no host callbacks or filesystem I/O occur.
+#[derive(Debug)]
+pub struct FlowOutcome {
+    pub result: Result<Vec<Value>, FlowError>,
+    pub stdout: Vec<u8>,
+}
+
+/// Run bounded first-party Lua and capture the restricted print builtin.
+/// Errors retain output emitted before failure. No production VM fallback.
+pub fn execute_flow_capture(program: &FlowProgram, budget: usize) -> FlowOutcome {
     let mut execution = Execution {
         program,
         budget,
@@ -3490,8 +3538,18 @@ pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<V
         free_cells: Vec::new(),
         frame_allocations: Vec::new(),
         strings: program.strings.clone(),
+        stdout: Vec::new(),
     };
-    execution.run(&program.instructions, program.slots, &[], &[], &[])
+    let result = execution.run(&program.instructions, program.slots, &[], &[], &[]);
+    FlowOutcome {
+        result,
+        stdout: execution.stdout,
+    }
+}
+
+/// Keep the pure semantic API independent of CLI output capture.
+pub fn execute_flow_values(program: &FlowProgram, budget: usize) -> Result<Vec<Value>, FlowError> {
+    execute_flow_capture(program, budget).result
 }
 
 /// Preserve the single-value API for existing consumers. Zero or multiple
@@ -6724,6 +6782,33 @@ mod tests {
                 Ok(program) => assert!(execute_flow_chunk(&program, 100).is_err(), "{source}"),
             }
         }
+    }
+
+    #[test]
+    fn print_emits_bounded_lua_tab_delimited_output() {
+        let source = "print(6*7, 'hello', true, nil); print(); local f=print; f('last')";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 1000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"42\thello\ttrue\tnil\n\nlast\n");
+
+        let program = compile_flow_chunk("print('before'); error('after')").unwrap();
+        let outcome = execute_flow_capture(&program, 100);
+        assert!(matches!(outcome.result, Err(FlowError::Thrown(_))));
+        assert_eq!(outcome.stdout, b"before\n");
+
+        let program = compile_flow_chunk(
+            "local f=print; local ok=pcall(f, 'protected', 9); assert(ok)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 1000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"protected\t9\n");
+
+        let program = compile_flow_chunk("for i=1,40000 do print('x') end").unwrap();
+        let outcome = execute_flow_capture(&program, 1_000_000);
+        assert_eq!(outcome.result, Err(FlowError::TooLarge));
+        assert!(outcome.stdout.len() <= MAX_PRINT_OUTPUT_BYTES);
     }
 
     #[test]

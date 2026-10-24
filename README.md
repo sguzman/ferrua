@@ -6,7 +6,7 @@
 
 **Project color:** `#15B6A9` · `oklch(70% 0.12 186)` ([OKLCH decision](docs/COLOR.md)).
 
-> **CI-validated development preview, not a stable release.** The Rust `fer` CLI, Lua automation libraries, and release packaging are exercised by Linux CI. Ferrua still uses the independent [luna-core](https://crates.io/crates/luna-core) pure-Rust Lua compiler and VM by default. An explicit `--engine=owned` flag runs the bounded first-party Lua 5.4 subset for research and regression testing, without fallback; it does not provide the standard host libraries, script arguments, the REPL, or audited sandbox containment. Full graduation remains a future milestone.
+> **CI-validated development preview, not a stable release.** The Rust `fer` CLI, Lua automation libraries, and release packaging are exercised by Linux CI. Ferrua still uses the independent [luna-core](https://crates.io/crates/luna-core) pure-Rust Lua compiler and VM by default. An explicit `--engine=owned` flag runs the bounded first-party Lua 5.4 subset for research and regression testing, without fallback. It captures up to 64 KiB of standard `print(...)` output (tab-delimited, including output preceding runtime errors); it does not provide the full host libraries, script arguments, the REPL, or audited sandbox containment. Full graduation remains a future milestone.
 
 **Owned engine cutover:** the [graduation contract](docs/ENGINE_GRADUATION.md) defines the full implementation, conformance and native release gates. Roadmap percentages count accepted atomic tasks; they are **not** Lua compatibility percentages.
 

@@ -325,7 +325,7 @@ fn repl(vm: &mut Vm) -> Result<(), String> {
 }
 
 fn run_owned_source(options: &Options, source: &str, name: &str) -> Result<(), String> {
-    use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, compile_flow_chunk, execute_flow_values};
+    use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, compile_flow_chunk, execute_flow_capture};
 
     // Match the production CLI's Unix shebang handling without selecting its VM.
     let normalized = source
@@ -342,9 +342,11 @@ fn run_owned_source(options: &Options, source: &str, name: &str) -> Result<(), S
         .transpose()
         .map_err(|_| "owned engine instruction budget is too large")?
         .unwrap_or(DEFAULT_STEP_BUDGET);
-    execute_flow_values(&program, budget)
-        .map(|_| ())
-        .map_err(|err| format!("{name}: {err}"))
+    let outcome = execute_flow_capture(&program, budget);
+    io::stdout()
+        .write_all(&outcome.stdout)
+        .map_err(|err| format!("{name}: stdout write failed: {err}"))?;
+    outcome.result.map(|_| ()).map_err(|err| format!("{name}: {err}"))
 }
 
 fn execute_owned(options: &Options) -> Result<(), String> {
