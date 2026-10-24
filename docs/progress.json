@@ -3979,7 +3979,7 @@
               "id": "T430",
               "emoji": "🛡️",
               "name": "Preflight entire integer register bytecode before dispatch",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Reject invalid static register operands, result registers, and malformed forward-jump targets before executing instructions",
@@ -3998,7 +3998,8 @@
                 },
                 {
                   "text": "Synchronize README, owned VM documentation, machine progress ledger and regenerated roadmap under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40128948693: all five jobs passed synchronized README, docs/OWNED_ENGINE.md, progress ledger and derived roadmap"
                 }
               ]
             }
