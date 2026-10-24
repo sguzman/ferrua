@@ -2424,15 +2424,19 @@ impl Execution<'_> {
     /// Lua table length may be replaced by a first-party closure. The rawlen
     /// builtin continues to bypass __len and returns the bounded raw border.
     fn length_with_metatable(&mut self, value: Value) -> Result<Value, FlowError> {
-        if let Value::Table(handle) = value {
-            match self.metatable_field(handle, b"__len")? {
-                Some(Value::Function(callback)) => {
-                    let returned = self.call_owned_function(callback, &[value, value])?;
-                    return Ok(returned.first().copied().unwrap_or(Value::Nil));
-                }
-                Some(_) => return Err(FlowError::TypeError),
-                None => {}
+        if let Value::Table(handle) = value
+            && let Some(method) = self.metatable_field(handle, b"__len")?
+        {
+            // Length callbacks follow ordinary Lua callable rules.
+            // Charge a bounded host frame even for recursive builtins.
+            if self.depth >= MAX_CALL_DEPTH {
+                return Err(FlowError::CallDepthExceeded);
             }
+            self.depth += 1;
+            let result = self.protected_target(method, &[value, value]);
+            self.depth -= 1;
+            let returned = result?;
+            return Ok(returned.first().copied().unwrap_or(Value::Nil));
         }
         self.raw_len(value)
     }
@@ -4190,6 +4194,37 @@ mod tests {
         for source in [
             "local t={}; setmetatable(t,{__tostring=tostring}); return pcall(tostring,t)",
             "local method={}; setmetatable(method,{__call=method}); local t=setmetatable({}, {__tostring=method}); return pcall(tostring,t)",
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            assert_eq!(
+                execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+                Err(FlowError::CallDepthExceeded),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn callable_len_metamethods_preserve_lua_results_and_depth_safety() {
+        for source in [
+            "local h=setmetatable({n=7},{__call=function(self,t) return self.n end}); local t=setmetatable({},{__len=h}); return #t==7 and 1 or 0",
+            "local h=setmetatable({},{__call=function(_,a,b) return rawequal(a,b) and 8 or 0 end}); local t=setmetatable({},{__len=h}); return #t==8 and 1 or 0",
+            "local inner=setmetatable({},{__call=function(_,h,t) return h.n end}); local h=setmetatable({n=9},{__call=inner}); local t=setmetatable({},{__len=h}); return #t==9 and 1 or 0",
+            "local t=setmetatable({7,8},{__len=rawlen}); return #t==2 and 1 or 0",
+            "local t=setmetatable({},{__len=type}); return #t=='table' and 1 or 0",
+            "local h=setmetatable({},{__call=function() return 6,7 end}); local t=setmetatable({},{__len=h}); return #t==6 and 1 or 0",
+            "local h=setmetatable({},{__call=function() error(14) end}); local t=setmetatable({},{__len=h}); local ok,e=pcall(function() return #t end); return not ok and e==14 and 1 or 0",
+            "local t=setmetatable({},{__len=error}); local ok,e=pcall(function() return #t end); return not ok and rawequal(e,t) and 1 or 0",
+            "local t=setmetatable({},{__len=3}); local ok,e=pcall(function() return #t end); return not ok and type(e)=='string' and 1 or 0",
+            "local t=setmetatable({},{__len=function() return 'ok' end}); return #t=='ok' and 1 or 0",
+            "local t=setmetatable({},{__len=function() return nil end}); return #t==nil and 1 or 0",
+            "local t=setmetatable({5,6},{__len=function() return 1 end}); return #t==1 and rawlen(t)==2 and 1 or 0",
+        ] {
+            assert_eq!(evaluate(source), 1, "{source}");
+        }
+        for source in [
+            "local t={}; setmetatable(t,{__len=function(x) return #x end}); return pcall(function() return #t end)",
+            "local h={}; setmetatable(h,{__call=h}); local t=setmetatable({}, {__len=h}); return pcall(function() return #t end)",
         ] {
             let program = compile_flow_chunk(source).unwrap();
             assert_eq!(
