@@ -773,6 +773,57 @@ fn generated_numeric_fixtures() -> Vec<String> {
     fixtures
 }
 
+/// Deterministic valid/invalid grammar cross-products, not additional
+/// random arithmetic. These combine already-accepted syntax features so CI
+/// compares interaction semantics across both Lua 5.4 reference engines.
+fn generated_grammar_fixtures() -> Vec<String> {
+    const PATTERNS: &[&str] = &[
+        "local x=$N; do local x=$M end; return x",
+        "local f=function(t) return t[1] end; return f {$N}",
+        "local f=function(s) return #s end; return f 'abc'",
+        "local t={[1]=$N,tag=$M}; return t[1]+t.tag",
+        "local f=function(...) return select('#',...) end; return f($N,$M)",
+        "local function f(y) return y+$N end; return f($M)",
+        "local x=$N; if x==$N then return $M else return 0 end",
+        "local x=$N; for i=1,$M do x=x+i end; return x",
+        "local x=$N; repeat x=x+1 until x>$M; return x",
+        "local x=$N; while x<$M do x=x+1 end; return x",
+        "local x=$N; do goto skip; x=x+1; ::skip:: end; return x",
+        "local t={v=$N}; function t:add(y) return self.v+y end; return t:add($M)",
+        "local x=$N; local function f() return x end; x=x+1; return f()",
+        "local x <const> = $N; return x+$M",
+        "local x=$N; local t={x=x}; return t.x+$M",
+        "local x=$N; local y=$M; x,y=y,x; return x*10+y",
+    ];
+    let mut fixtures = Vec::with_capacity(PATTERNS.len() * 2);
+    for number in [1, 3] {
+        for pattern in PATTERNS {
+            fixtures.push(pattern.replace("$N", &number.to_string()).replace("$M", "2"));
+        }
+    }
+    fixtures
+}
+
+fn generated_invalid_grammar_fixtures() -> Vec<String> {
+    const PATTERNS: &[&str] = &[
+        "local x <const> = $N; x=$M; return x",
+        "local x <const> = $N; local function f() x=$M end; return f()",
+        "goto L; local x=$N; ::L:: return x",
+        "::same:: local x=$N; ::same:: return x",
+        "if true then local x=$N",
+        "return {[$N]=}",
+        "local x <close>, y <close> = nil,nil",
+        "local x=$N; break",
+    ];
+    let mut fixtures = Vec::with_capacity(PATTERNS.len() * 2);
+    for number in [1, 3] {
+        for pattern in PATTERNS {
+            fixtures.push(pattern.replace("$N", &number.to_string()).replace("$M", "2"));
+        }
+    }
+    fixtures
+}
+
 /// Intentional failures are compared by stage and exit outcome, not by
 /// unstable VM-specific diagnostic text or source paths.
 const RUNTIME_ERROR_FIXTURES: &[&str] = &[
@@ -878,6 +929,12 @@ fn check(reference: &str, prefix: &[&str]) {
     for source in generated_numeric_fixtures() {
         check_source(reference, prefix, &source);
     }
+    for source in generated_grammar_fixtures() {
+        check_source(reference, prefix, &source);
+    }
+    for source in generated_invalid_grammar_fixtures() {
+        check_rejected_source(reference, prefix, &source, true);
+    }
     for source in RUNTIME_ERROR_FIXTURES {
         check_rejected_source(reference, prefix, source, false);
     }
@@ -891,6 +948,16 @@ fn generated_numeric_inputs_are_deterministic() {
     let inputs = generated_numeric_fixtures();
     assert_eq!(inputs.len(), 128);
     assert_eq!(inputs, generated_numeric_fixtures());
+}
+
+#[test]
+fn generated_grammar_inputs_are_deterministic() {
+    let valid = generated_grammar_fixtures();
+    let invalid = generated_invalid_grammar_fixtures();
+    assert_eq!(valid.len(), 32);
+    assert_eq!(invalid.len(), 16);
+    assert_eq!(valid, generated_grammar_fixtures());
+    assert_eq!(invalid, generated_invalid_grammar_fixtures());
 }
 
 #[test]
