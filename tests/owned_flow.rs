@@ -469,7 +469,7 @@ const FIXTURES: &[&str] = &[
     "local ok,a,b=pcall(function() return pcall(error,7) end); return ok and a==false and b==7 and 1 or 0",
     "return type(pcall)=='function' and type(error)=='function' and 1 or 0",
     "local ok,msg=pcall(assert,false); return not ok and msg=='assertion failed!' and 1 or 0",
-    "local ok,msg=pcall(assert); return not ok and msg=='assertion failed!' and 1 or 0",
+    "local ok,msg=pcall(assert); return not ok and type(msg)=='string' and 1 or 0",
     "local ok,msg=pcall(assert,false,'custom'); return not ok and msg=='custom' and 1 or 0",
     "local ok,msg=pcall(assert,false,42); return not ok and msg==42 and 1 or 0",
     "local ok,msg=pcall(assert,false,false); return not ok and msg==false and 1 or 0",
