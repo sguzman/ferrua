@@ -3951,7 +3951,7 @@
               "id": "T429",
               "emoji": "🧱",
               "name": "Bound compiled integer-VM instruction-stream size",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Reject integer chunk compilation if the emitted bytecode exceeds the interpreter's instruction-count ceiling",
@@ -3970,7 +3970,8 @@
                 },
                 {
                   "text": "Synchronize bytecode limit documentation, machine ledger and generated roadmap under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40128103663: all five CI jobs succeeded for synchronized docs/ROADMAP, README, owned-engine documentation and machine progress ledger"
                 }
               ]
             }
