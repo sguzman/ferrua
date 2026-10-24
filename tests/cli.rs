@@ -267,7 +267,7 @@ fn owned_engine_opt_in_executes_only_the_first_party_subset() {
     for flags in [
         &["--engine=owned", "--lua=5.5", "-e", "return 1"][..],
         &["--engine=owned", "--sandbox", "-e", "return 1"][..],
-     ] {
+    ] {
         assert!(
             !fer(flags).status.success(),
             "unsupported owned flags: {flags:?}"
@@ -313,10 +313,7 @@ fn owned_arg_table_matches_production_cli_and_script_name() {
     assert_eq!(owned.stdout, reference.stdout);
     assert_eq!(owned.stdout, b"-e\tone\ttwo\nchanged\n");
 
-    let path = std::env::temp_dir().join(format!(
-        "ferrua-owned-arg-{}.lua",
-        std::process::id()
-    ));
+    let path = std::env::temp_dir().join(format!("ferrua-owned-arg-{}.lua", std::process::id()));
     std::fs::write(&path, "print(arg[0], arg[1])").unwrap();
     let script_path = path.to_str().unwrap();
     let owned_file = fer(&["--engine=owned", script_path, "filearg"]);

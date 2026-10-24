@@ -331,7 +331,9 @@ fn run_owned_source(
     arg0: &str,
     arguments: &[String],
 ) -> Result<(), String> {
-    use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, compile_flow_chunk, execute_flow_capture_with_args};
+    use ferrua::owned_flow::{
+        DEFAULT_STEP_BUDGET, compile_flow_chunk, execute_flow_capture_with_args,
+    };
 
     // Match the production CLI's Unix shebang handling without selecting its VM.
     let normalized = source
