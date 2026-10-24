@@ -499,3 +499,11 @@ Upstream Lua 5.4 requires the `xpcall` message handler to be a **function value*
 Owned Lua closures and function-valued builtins remain acceptable handler types, with successful target execution and error transformation subject to the documented `protected_target` subset. Five intentional runtime rejection cases exercise both upstream Lua 5.4 and production `fer`, accompanied by positive fixtures for valid closure and selected builtin handlers. [CI #40045839543](https://github.com/sguzman/ferrua/actions/runs/40045839543) passed all five jobs including reference-differential success and failure cases.
 
 This is a verified semantic correction, not support for arbitrary callable handlers. It does not widen the VM's native recursion safety limits, complete Lua's error traceback behavior or authorize production-engine graduation.
+
+### Verified selected Lua core builtins in protected calls
+
+The experimental owned VM's `pcall` can now invoke the existing first-party `type`, `tonumber`, `rawlen` and `rawequal` functions through its bounded protected-target dispatcher. The same selection is usable as `xpcall` message handlers because those builtin values are actual function values. Ordinary Lua numeric raw equality continues to compare integer/float values with numeric semantics; `rawlen` bypasses metatable hooks. Protected invalid-arity or operand failures produce `false, error` for `pcall`; exhausted budgets remain uncatchable.
+
+Ten curated fixtures cover successful type and number conversion, invalid numeral returning nil, raw length, numeric raw equality, builtin error handlers and protected invalid arguments. [CI #40046376588](https://github.com/sguzman/ferrua/actions/runs/40046376588) passed Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential tests, Arch packaging, composite consumer and aggregate status.
+
+This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. `tostring` (including `__tostring`), `rawget`, `rawset`, `next`, `pairs`, `ipairs`, `pcall` and `xpcall` as nested builtin targets, arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.

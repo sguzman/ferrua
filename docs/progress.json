@@ -2938,6 +2938,33 @@
                   "evidence": "GitHub Actions 40046094740: all five jobs passed synchronized progress.json, roadmap generator check, README and owned-engine docs"
                 }
               ]
+            },
+            {
+              "id": "T393",
+              "emoji": "🧮",
+              "name": "Selected standard Lua builtins in protected-call execution",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Allow first-party type, tonumber, rawlen and rawequal functions as bounded protected targets",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::protected_target handles four selected Builtin variants; GitHub Actions 40046376588 accepted"
+                },
+                {
+                  "text": "Support numeric raw equality and selected builtin message handlers without relaxing xpcall handler typing",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: selected_standard_builtins_work_inside_protected_calls; tests/owned_flow.rs"
+                },
+                {
+                  "text": "Pass reference Lua 5.4 differential matrix, Linux tests/lint, Rust 1.96, action consumer and aggregate status",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40046376588: five jobs successful including ten new positive/error fixtures"
+                },
+                {
+                  "text": "Synchronize owned-engine documentation, README, ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3561,6 +3588,13 @@
           "name": "Strict xpcall handler type parity",
           "task_ids": [
             "T392"
+          ]
+        },
+        {
+          "emoji": "🧮",
+          "name": "Selected builtin protected calls",
+          "task_ids": [
+            "T393"
           ]
         }
       ]
