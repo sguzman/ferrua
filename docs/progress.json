@@ -3615,7 +3615,7 @@
               "id": "T417",
               "emoji": "🛡️",
               "name": "Bound deeply recursive Lua expression parsing before Rust host stack exhaustion",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Enforce a conservative 64-level expression parser recursion cap with an error and decrement depth on all parse exit paths",
@@ -3634,7 +3634,8 @@
                 },
                 {
                   "text": "Synchronize parser safety documentation, machine ledger and generated roadmap under CI acceptance",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40119577761: five jobs passed README, OWNED_ENGINE, roadmap generator and machine-ledger acceptance"
                 }
               ]
             }

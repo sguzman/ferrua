@@ -651,11 +651,11 @@
   - [x] Generate and reject invalid combinations of captured const writes, goto scope violations, duplicate labels, malformed fields, block errors and close declarations — tests/owned_flow.rs: generated_invalid_grammar_fixtures yields 16 invalid examples; generated_grammar_inputs_are_deterministic asserts sizes/stability
   - [x] Compare all 48 generated cases with production fer and upstream Lua 5.4, with Rust 1.96 and full Linux/action acceptance — GitHub Actions 40118756930: all five CI jobs passed compiled positive cases and syntax-failure matrix
   - [x] Synchronize README, first-party grammar coverage documentation, machine ledger and generated roadmap under CI — GitHub Actions 40118930822: all five jobs passed synchronized README, first-party engine documentation, progress ledger and generated roadmap
-- 🛡️ **T417** Bound deeply recursive Lua expression parsing before Rust host stack exhaustion — `████████░░ 75%`
+- 🛡️ **T417** Bound deeply recursive Lua expression parsing before Rust host stack exhaustion — `██████████ 100%`
   - [x] Enforce a conservative 64-level expression parser recursion cap with an error and decrement depth on all parse exit paths — src/expr.rs: MAX_EXPRESSION_DEPTH and expression/expression_inner with depth guard
   - [x] Reject deeply nested parentheses, unary operators, right-associative powers and table constructors in expressions and chunks, while retaining shallow expressions — src/expr.rs: deeply_nested_expressions_fail_without_exhausting_host_stack
   - [x] Pass Rust 1.96, Linux lint/tests, Lua differential, isolated Arch smoke and consumer CI — GitHub Actions 40119363138: all five jobs successful for ffcf2d6ab160393d81874dc59c64f0d9bc8b7cc0
-  - [ ] Synchronize parser safety documentation, machine ledger and generated roadmap under CI acceptance
+  - [x] Synchronize parser safety documentation, machine ledger and generated roadmap under CI acceptance — GitHub Actions 40119577761: five jobs passed README, OWNED_ENGINE, roadmap generator and machine-ledger acceptance
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -771,5 +771,5 @@
 - ↵ Long-bracket string line-break normalization — `██████████ 100%`
 - 🌐 Original six-byte Lua UTF-8 escape semantics — `██████████ 100%`
 - 🧪 Generated Lua grammar acceptance combinations — `██████████ 100%`
-- 🛡️ Expression parser host-stack safety — `████████░░ 75%`
+- 🛡️ Expression parser host-stack safety — `██████████ 100%`
 
