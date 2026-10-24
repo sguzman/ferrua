@@ -3984,10 +3984,7 @@ mod tests {
                 "local ok,v=pcall(tonumber,'bad'); return ok and v==nil and 1 or 0",
                 1,
             ),
-            (
-                "local ok,v=pcall(rawlen,{1,2,3}); return ok and v or 0",
-                3,
-            ),
+            ("local ok,v=pcall(rawlen,{1,2,3}); return ok and v or 0", 3),
             (
                 "local ok,v=pcall(rawequal,7,7.0); return ok and v and 1 or 0",
                 1,
