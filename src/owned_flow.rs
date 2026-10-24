@@ -2093,7 +2093,11 @@ impl Execution<'_> {
                 values.append(&mut results);
                 Ok(values)
             }
-            Err(error @ (FlowError::StepBudgetExceeded | FlowError::TooLarge | FlowError::CallDepthExceeded)) => Err(error),
+            Err(
+                error @ (FlowError::StepBudgetExceeded
+                | FlowError::TooLarge
+                | FlowError::CallDepthExceeded),
+            ) => Err(error),
             Err(FlowError::Thrown(value)) => Ok(vec![Value::Boolean(false), value]),
             Err(other) => {
                 let message = self.intern_string(other.to_string().into_bytes())?;
@@ -2398,9 +2402,7 @@ impl Execution<'_> {
                         redirects += 1;
                     }
                     if let Value::Builtin(builtin) = callable {
-                        if args.is_empty()
-                            && !matches!(builtin, Builtin::Error | Builtin::Pcall)
-                        {
+                        if args.is_empty() && !matches!(builtin, Builtin::Error | Builtin::Pcall) {
                             return Err(FlowError::TypeError);
                         }
                         if builtin == Builtin::Error {
@@ -3782,22 +3784,61 @@ mod tests {
     #[test]
     fn bounded_lua_error_and_protected_closure_calls_preserve_values() {
         for (source, expected) in [
-            ("local ok,a,b=pcall(function() return 5,6 end); return ok and a*10+b or 0", 56),
+            (
+                "local ok,a,b=pcall(function() return 5,6 end); return ok and a*10+b or 0",
+                56,
+            ),
             ("local ok=pcall(function() end); return ok and 1 or 0", 1),
-            ("local ok,e=pcall(function() error(42) end); return not ok and e==42 and 1 or 0", 1),
-            ("local ok,e=pcall(error,false); return not ok and e==false and 1 or 0", 1),
-            ("local ok,e=pcall(error); return not ok and e==nil and 1 or 0", 1),
-            ("local ok,e=pcall(function() error('bad') end); return not ok and type(e)=='string' and 1 or 0", 1),
-            ("local ok,e=pcall(function() return nil+1 end); return not ok and type(e)=='string' and 1 or 0", 1),
-            ("local ok,e=pcall(function() return 1//0 end); return not ok and type(e)=='string' and 1 or 0", 1),
-            ("local ok,v=pcall(function(a,b) return a+b end,3,4); return ok and v or 0", 7),
-            ("local call=pcall; local ok,v=call(function() return 8 end); return ok and v or 0", 8),
-            ("local x=0; pcall(function() x=9; error('stop') end); return x", 9),
-            ("local ok,e=pcall(nil); return not ok and type(e)=='string' and 1 or 0", 1),
+            (
+                "local ok,e=pcall(function() error(42) end); return not ok and e==42 and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,e=pcall(error,false); return not ok and e==false and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,e=pcall(error); return not ok and e==nil and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,e=pcall(function() error('bad') end); return not ok and type(e)=='string' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,e=pcall(function() return nil+1 end); return not ok and type(e)=='string' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,e=pcall(function() return 1//0 end); return not ok and type(e)=='string' and 1 or 0",
+                1,
+            ),
+            (
+                "local ok,v=pcall(function(a,b) return a+b end,3,4); return ok and v or 0",
+                7,
+            ),
+            (
+                "local call=pcall; local ok,v=call(function() return 8 end); return ok and v or 0",
+                8,
+            ),
+            (
+                "local x=0; pcall(function() x=9; error('stop') end); return x",
+                9,
+            ),
+            (
+                "local ok,e=pcall(nil); return not ok and type(e)=='string' and 1 or 0",
+                1,
+            ),
             ("return select('#',pcall(function() end))", 1),
             ("return select('#',pcall(function() error() end))", 2),
-            ("local ok,a,b=pcall(function() return pcall(error,7) end); return ok and a==false and b==7 and 1 or 0", 1),
-            ("return type(pcall)=='function' and type(error)=='function' and 1 or 0", 1),
+            (
+                "local ok,a,b=pcall(function() return pcall(error,7) end); return ok and a==false and b==7 and 1 or 0",
+                1,
+            ),
+            (
+                "return type(pcall)=='function' and type(error)=='function' and 1 or 0",
+                1,
+            ),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
@@ -3812,10 +3853,8 @@ mod tests {
                 "{source}"
             );
         }
-        let program = compile_flow_chunk(
-            "local f; f=function() return pcall(f) end; return f()"
-        )
-        .unwrap();
+        let program =
+            compile_flow_chunk("local f; f=function() return pcall(f) end; return f()").unwrap();
         assert_eq!(
             execute_flow_values(&program, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
