@@ -1270,9 +1270,10 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
             let byte = body[at];
             at += 1;
             if byte == b'\r' || byte == b'\n' {
-                if body.get(at).is_some_and(|next| {
-                    (*next == b'\r' || *next == b'\n') && *next != byte
-                }) {
+                if body
+                    .get(at)
+                    .is_some_and(|next| (*next == b'\r' || *next == b'\n') && *next != byte)
+                {
                     at += 1;
                 }
                 normalized.push(b'\n');
