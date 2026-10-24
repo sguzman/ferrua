@@ -286,10 +286,9 @@ fn emit_condition<'a>(
             if *op == "and" {
                 // False lhs skips evaluation of the rhs completely.
                 let rhs = emit_condition(program, right, locals, depth + 1)?;
-                program.code.push(Instruction::BooleanCopy {
-                    dest,
-                    input: rhs,
-                });
+                program
+                    .code
+                    .push(Instruction::BooleanCopy { dest, input: rhs });
                 let jump_at = program.code.len();
                 program.code.push(Instruction::Jump { target: usize::MAX });
                 let false_at = program.code.len();
@@ -307,10 +306,9 @@ fn emit_condition<'a>(
                 program.code.push(Instruction::Jump { target: usize::MAX });
                 let rhs_at = program.code.len();
                 let rhs = emit_condition(program, right, locals, depth + 1)?;
-                program.code.push(Instruction::BooleanCopy {
-                    dest,
-                    input: rhs,
-                });
+                program
+                    .code
+                    .push(Instruction::BooleanCopy { dest, input: rhs });
                 let after = program.code.len();
                 program.code[branch_at] = Instruction::BranchIfFalse {
                     condition: lhs,
@@ -629,9 +627,7 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
                 pc = target;
                 continue;
             }
-            Instruction::BooleanCopy { dest, input } => {
-                (dest, read(&registers, input)?)
-            }
+            Instruction::BooleanCopy { dest, input } => (dest, read(&registers, input)?),
             Instruction::NumericTruthy { dest, input } => {
                 read(&registers, input)?;
                 (dest, 1)
@@ -926,17 +922,32 @@ mod tests {
             ("if false or 0 then return 7 else return 9 end", 7),
             ("if false or false then return 7 else return 9 end", 9),
             ("if true and false then return 7 else return 9 end", 9),
-            ("if false or true and true then return 8 else return 0 end", 8),
-            ("if true and false or true then return 13 else return 0 end", 13),
+            (
+                "if false or true and true then return 8 else return 0 end",
+                8,
+            ),
+            (
+                "if true and false or true then return 13 else return 0 end",
+                13,
+            ),
             ("if (1<2) and (3>2) then return 12 else return 0 end", 12),
             ("if (1>2) or (3<2) then return 12 else return 2 end", 2),
-            ("if not (false or false) then return 15 else return 0 end", 15),
+            (
+                "if not (false or false) then return 15 else return 0 end",
+                15,
+            ),
             (
                 "local x=0; if (x or false) and not false then return 22 else return 0 end",
                 22,
             ),
-            ("if (false and (1//0>0)) or true then return 17 else return 0 end", 17),
-            ("if true or false and false then return 19 else return 0 end", 19),
+            (
+                "if (false and (1//0>0)) or true then return 17 else return 0 end",
+                17,
+            ),
+            (
+                "if true or false and false then return 19 else return 0 end",
+                19,
+            ),
         ] {
             let program = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");

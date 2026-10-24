@@ -268,17 +268,32 @@ fn register_short_circuit_conditions_match_lua_reference() {
         ("if false or 0 then return 7 else return 9 end", 7),
         ("if false or false then return 7 else return 9 end", 9),
         ("if true and false then return 7 else return 9 end", 9),
-        ("if false or true and true then return 8 else return 0 end", 8),
-        ("if true and false or true then return 13 else return 0 end", 13),
+        (
+            "if false or true and true then return 8 else return 0 end",
+            8,
+        ),
+        (
+            "if true and false or true then return 13 else return 0 end",
+            13,
+        ),
         ("if (1<2) and (3>2) then return 12 else return 0 end", 12),
         ("if (1>2) or (3<2) then return 12 else return 2 end", 2),
-        ("if not (false or false) then return 15 else return 0 end", 15),
+        (
+            "if not (false or false) then return 15 else return 0 end",
+            15,
+        ),
         (
             "local x=0; if (x or false) and not false then return 22 else return 0 end",
             22,
         ),
-        ("if (false and (1//0>0)) or true then return 17 else return 0 end", 17),
-        ("if true or false and false then return 19 else return 0 end", 19),
+        (
+            "if (false and (1//0>0)) or true then return 17 else return 0 end",
+            17,
+        ),
+        (
+            "if true or false and false then return 19 else return 0 end",
+            19,
+        ),
     ] {
         let program = compile_integer_chunk(source).unwrap();
         assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
