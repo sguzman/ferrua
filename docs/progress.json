@@ -3027,7 +3027,7 @@
               "id": "T396",
               "emoji": "↪️",
               "name": "Protected Lua select/next/ipairs iterator multi-result parity",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Expose first-party select, next and ipairs-iterator builtin values through protected target dispatch",
@@ -3046,7 +3046,8 @@
                 },
                 {
                   "text": "Synchronize README, engine design, ledger and derived roadmap with passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40051897178: all five CI jobs passed README, owned-engine docs, progress ledger/roadmap checks and differential fixtures"
                 }
               ]
             }
