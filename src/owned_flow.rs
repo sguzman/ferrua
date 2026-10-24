@@ -2070,6 +2070,11 @@ impl Execution<'_> {
     /// An assertion raises the supplied Lua error value, or the default
     /// assertion message when no custom second argument is given.
     fn assertion_failure(&mut self, args: &[Value]) -> Result<FlowError, FlowError> {
+        // Lua treats a missing first argument as a bad argument, not a false
+        // assertion with the usual default message.
+        if args.is_empty() {
+            return Ok(FlowError::TypeError);
+        }
         let message = match args.get(1).copied() {
             Some(value) => value,
             None => self.intern_string(b"assertion failed!".to_vec())?,
@@ -3899,11 +3904,7 @@ mod tests {
                 Value::Integer(9)
             ])
         );
-        for source in [
-            "return assert()",
-            "return assert(false)",
-            "return assert(nil,'bad')",
-        ] {
+        for source in ["return assert(false)", "return assert(nil,'bad')"] {
             let program = compile_flow_chunk(source).unwrap();
             assert!(
                 matches!(
@@ -3913,6 +3914,11 @@ mod tests {
                 "{source}"
             );
         }
+        let program = compile_flow_chunk("return assert()").unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::TypeError)
+        );
         let program = compile_flow_chunk("return assert(false,42)").unwrap();
         assert_eq!(
             execute_flow_values(&program, DEFAULT_STEP_BUDGET),
@@ -3924,7 +3930,7 @@ mod tests {
     fn assertion_failures_preserve_custom_error_values_in_pcall() {
         for (source, expected) in [
             ("local ok,msg=pcall(assert,false); return not ok and msg=='assertion failed!' and 1 or 0", 1),
-            ("local ok,msg=pcall(assert); return not ok and msg=='assertion failed!' and 1 or 0", 1),
+            ("local ok,msg=pcall(assert); return not ok and type(msg)=='string' and 1 or 0", 1),
             ("local ok,msg=pcall(assert,false,'custom'); return not ok and msg=='custom' and 1 or 0", 1),
             ("local ok,msg=pcall(assert,false,42); return not ok and msg==42 and 1 or 0", 1),
             ("local ok,msg=pcall(assert,false,false); return not ok and msg==false and 1 or 0", 1),
