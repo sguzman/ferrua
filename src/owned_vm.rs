@@ -1,7 +1,7 @@
 //! Experimental Ferrua-owned register bytecode for integer expressions.
 //! Not used by production fer; not a full Lua VM.
 
-use crate::expr::{Expr, Statement, parse_chunk, parse_expression};
+use crate::expr::{Expr, LocalAttribute, Statement, parse_chunk, parse_expression};
 use std::collections::HashMap;
 use std::fmt;
 const MAX_REGISTERS: usize = 16384;
@@ -55,11 +55,17 @@ impl fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
+#[derive(Clone, Copy)]
+struct RegisterBinding {
+    register: usize,
+    constant: bool,
+}
+
 fn emit<'a>(
     program: &mut Program,
     expression: &Expr<'a>,
     depth: usize,
-    locals: &[HashMap<&'a str, usize>],
+    locals: &[HashMap<&'a str, RegisterBinding>],
 ) -> Result<usize, Error> {
     if depth > 128 || program.registers >= MAX_REGISTERS {
         return Err(Error::TooLarge);
@@ -82,7 +88,7 @@ fn emit<'a>(
                     return locals
                         .iter()
                         .rev()
-                        .find_map(|scope| scope.get(*text).copied())
+                        .find_map(|scope| scope.get(*text).map(|binding| binding.register))
                         .ok_or_else(|| {
                             Error::Unsupported(format!("unbound or noninteger name: {text}"))
                         });
@@ -174,7 +180,7 @@ pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
 fn compile_statements<'a>(
     statements: &[Statement<'a>],
     program: &mut Program,
-    scopes: &mut Vec<HashMap<&'a str, usize>>,
+    scopes: &mut Vec<HashMap<&'a str, RegisterBinding>>,
     depth: usize,
 ) -> Result<Option<usize>, Error> {
     if depth > 64 {
@@ -191,14 +197,20 @@ fn compile_statements<'a>(
                 attributes,
                 initializers,
             } => {
-                if attributes.iter().any(Option::is_some) {
+                if attributes
+                    .iter()
+                    .any(|attribute| matches!(attribute, Some(LocalAttribute::Close)))
+                {
                     return Err(Error::Unsupported(
-                        "Lua local attributes are not supported by register prototype".into(),
+                        "to-be-closed local variables require unavailable finalizers".into(),
                     ));
                 }
-                if names.is_empty() || names.len() != initializers.len() {
+                if names.is_empty()
+                    || names.len() != initializers.len()
+                    || names.len() != attributes.len()
+                {
                     return Err(Error::Unsupported(
-                        "all locals need one integer initializer".into(),
+                        "all integer locals need one initializer".into(),
                     ));
                 }
                 // Evaluate RHS before adding newly declared bindings.
@@ -206,11 +218,14 @@ fn compile_statements<'a>(
                     .iter()
                     .map(|e| emit(program, e, 0, scopes))
                     .collect::<Result<Vec<_>, _>>()?;
-                for (name, register) in names.iter().zip(rhs) {
-                    scopes
-                        .last_mut()
-                        .expect("root scope")
-                        .insert(*name, register);
+                for ((name, attribute), register) in names.iter().zip(attributes).zip(rhs) {
+                    scopes.last_mut().expect("root scope").insert(
+                        *name,
+                        RegisterBinding {
+                            register,
+                            constant: *attribute == Some(LocalAttribute::Const),
+                        },
+                    );
                 }
             }
             Statement::Assign { targets, values } => {
@@ -226,12 +241,17 @@ fn compile_statements<'a>(
                     let Expr::Atom(name) = target else {
                         return Err(Error::Unsupported("only local variable targets".into()));
                     };
-                    let slot = scopes
+                    let binding = scopes
                         .iter_mut()
                         .rev()
                         .find_map(|scope| scope.get_mut(*name))
                         .ok_or_else(|| Error::Unsupported(format!("global assignment: {name}")))?;
-                    *slot = register;
+                    if binding.constant {
+                        return Err(Error::Unsupported(format!(
+                            "cannot assign to constant local: {name}"
+                        )));
+                    }
+                    binding.register = register;
                 }
             }
             Statement::Block(body) => {
@@ -485,6 +505,34 @@ mod tests {
             "do return nil end",
             "do return 1, 2 end",
             "do return math.max(1,2) end",
+        ] {
+            assert!(compile_integer_chunk(source).is_err(), "{source}");
+        }
+    }
+
+    #[test]
+    fn integer_register_locals_track_lua_const_attributes_and_shadowing() {
+        for (source, expected) in [
+            ("local x<const>=3; return x+4", 7),
+            ("local a<const>,b=3,4; b=7; return a+b", 10),
+            ("local a,b<const>=1,2; a=7; return a+b", 9),
+            ("local x<const>=3; local x=x+2; x=9; return x", 9),
+            ("local x<const>=3; do local x=5; x=6 end; return x", 3),
+            ("local x<const>=3; do local x=4; return x end", 4),
+            ("local x=2; do local x<const>=x*3; return x+1 end", 7),
+            ("local x<const>=3; local y=x+4; return y", 7),
+            ("local x<const>=3; do local y=x+5; return y end", 8),
+            ("local x<const>=3; local y=2; y=x+y; return y", 5),
+        ] {
+            let bytecode = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_integer_program(&bytecode), Ok(expected), "{source}");
+        }
+        for source in [
+            "local x<const>=3; x=4; return x",
+            "local x<const>=3; do x=4 end; return x",
+            "local a,b<const>=1,2; b=4; return a+b",
+            "local x<close>=3; return x",
+            "local x<const>; return 1",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
