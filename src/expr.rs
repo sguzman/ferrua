@@ -764,7 +764,6 @@ impl<'a> Parser<'a> {
             }
             let statement = self.statement(depth)?;
             let terminal = matches!(statement, Statement::Return(_) | Statement::Break);
-            let label = matches!(statement, Statement::Label(_));
             let duplicate = match &statement {
                 Statement::Label(name) => result
                     .iter()
@@ -775,33 +774,11 @@ impl<'a> Parser<'a> {
                 return Err(self.error("duplicate label in lexical block"));
             }
             result.push(statement);
-            let ending_line = self
-                .tokens
-                .get(self.index.saturating_sub(1))
-                .map_or(0, |token| {
-                    let mut line = token.line;
-                    let mut cr = false;
-                    for byte in token.spelling.bytes() {
-                        if byte == b'\r' || (byte == b'\n' && !cr) {
-                            line += 1;
-                        }
-                        cr = byte == b'\r';
-                    }
-                    line
-                });
+            // Lua permits adjacent statements without semicolons or
+            // newlines. Token structure, not source line breaks, delimits
+            // individual statements; explicit separators are still accepted.
             if self.peek().is_some_and(|token| token.spelling == ";") {
                 self.pop();
-            } else if self
-                .peek()
-                .is_some_and(|token| terminators.contains(&token.spelling))
-            {
-                // A block's closing token is a natural terminator.
-            } else if self.peek().is_some_and(|token| token.spelling == "::") || label {
-                // Lua labels are self-delimiting statements.
-            } else if self.peek().is_some_and(|token| token.line > ending_line) {
-                // A newline may separate statements in this grammar subset.
-            } else if self.peek().is_some() {
-                return Err(self.error("expected statement separator"));
             }
             if terminal
                 && self
@@ -815,11 +792,11 @@ impl<'a> Parser<'a> {
     }
 }
 
-/// Parse a deliberately limited Lua chunk: semicolon-separated locals,
+/// Parse a deliberately limited Lua chunk: locals with optional statement separators,
 /// assignments, call statements and final returns, plus nested do/end
 /// lexical blocks, conditionals, while/repeat loops and numeric/generic for loops.
 /// The AST also represents label/goto syntax without claiming bytecode support.
-/// Newline boundaries can separate supported statements. Other Lua constructs
+/// Lexical boundaries separate statements without mandatory semicolons. Other Lua constructs
 /// remain unsupported.
 pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
     let tokens = tokenize(source)?;
@@ -1128,7 +1105,6 @@ mod tests {
             "a",
             "1+2",
             "return 1; print(2)",
-            "local a=1 print(a)",
             "if true return 1 end",
             "local x=1; local y=",
         ] {
@@ -1242,12 +1218,31 @@ mod tests {
         for source in [
             "repeat local x=1 end",
             "repeat local x=1 until",
-            "local a=1 print(a)",
             "return 1\nprint(2)",
             "repeat local x=1; return 2; print(x) until true",
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
         }
+    }
+
+    #[test]
+    fn parses_adjacent_lua_statements_without_required_semicolons() {
+        for script in [
+            "local a=1 local b=2 return a+b",
+            "local x=0 x=x+1 return x",
+            "local t={} t.x=4 return t.x",
+            "local x=0 if true then x=2 x=x+1 end return x",
+            "local n=0 for i=1,3 do n=n+i end return n",
+            "local n=0 while n<3 do n=n+1 end return n",
+            "local x=1 do goto done end ::done:: return x",
+            "local function f() return 8 end return f()",
+            "repeat local x=1 until true return 2",
+            "local a=1 print(a)",
+        ] {
+            assert!(parse_chunk(script).is_ok(), "{script}");
+        }
+        assert!(parse_chunk("return 1 return 2").is_err());
+        assert!(parse_chunk("local x=1 42").is_err());
     }
 
     #[test]

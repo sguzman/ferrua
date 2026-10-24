@@ -6456,6 +6456,31 @@ mod tests {
     }
 
     #[test]
+    fn adjacent_statement_parsing_matches_lua_without_semicolons() {
+        for (script, expected) in [
+            ("local x=1 local y=2 return x+y", 3),
+            ("local x=1 x=x+2 return x", 3),
+            ("local n=0 if true then n=3 n=n+4 end return n", 7),
+            ("local n=0 while n<3 do n=n+1 end return n", 3),
+            ("local n=0 for i=1,3 do n=n+i end return n", 6),
+            ("local n=0 do local x=4 n=n+x end return n", 4),
+            ("local n=0 repeat n=n+1 until n==3 return n", 3),
+            ("local function add(x) return x+2 end return add(4)", 6),
+            ("local t={} t.x=5 return t.x", 5),
+            ("local x=1 if false then x=2 else x=3 end return x", 3),
+            ("local x=1 do goto done end ::done:: return x", 1),
+            ("local x=1 x=x+1 x=x*3 return x", 6),
+            ("local t={1} t[1]=2 return t[1]", 2),
+            (
+                "local x=0; ::again:: x=x+1 if x<3 then goto again end return x",
+                3,
+            ),
+        ] {
+            assert_eq!(evaluate(script), expected, "{script}");
+        }
+    }
+
+    #[test]
     fn visible_enclosing_goto_labels_preserve_lexical_local_lifetimes() {
         for (script, expected) in [
             ("do goto out end; ::out:: return 7", 7),
