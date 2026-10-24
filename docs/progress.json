@@ -3307,7 +3307,7 @@
               "id": "T406",
               "emoji": "↩️",
               "name": "Lua nonterminal break statements and unreachable loop-body syntax",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Accept Lua break followed by additional statements in valid while, repeat, numeric/generic loop blocks while rejecting out-of-loop breaks",
@@ -3326,6 +3326,34 @@
                 },
                 {
                   "text": "Synchronize machine ledger, roadmap, README and owned-engine docs after accepted CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40056989358: all five jobs passed synchronized progress.json, generated roadmap, README and grammar documentation"
+                }
+              ]
+            },
+            {
+              "id": "T407",
+              "emoji": "📞",
+              "name": "Lua table and short/long-string shorthand function/method call grammar",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Parse table-constructor and literal short/long-string arguments for first-party function and method calls without parentheses",
+                  "passed": true,
+                  "evidence": "src/expr.rs: Parser::call_arguments and postfix; commit 56037aaa1347eac3969abd52194ae210328ea4e5"
+                },
+                {
+                  "text": "Validate argument syntax and runtime call chaining against upstream Lua 5.4, including method receiver and malformed forms",
+                  "passed": true,
+                  "evidence": "src/expr.rs: lua_table_and_string_shorthand_calls_parse_as_real_calls; tests/owned_syntax.rs: 18 grammar cases; tests/owned_flow.rs: 11 positive execution fixtures"
+                },
+                {
+                  "text": "Pass Linux formatting/Clippy/tests, Rust 1.96, upstream Lua 5.4 and pinned production fer differential, Arch archive and consumer CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40057286292: five successful jobs for 56037aaa1347eac3969abd52194ae210328ea4e5"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned grammar documentation under passing CI",
                   "passed": false
                 }
               ]
@@ -4050,6 +4078,13 @@
           "name": "Lua loop breaks with subsequent unreachable statements",
           "task_ids": [
             "T406"
+          ]
+        },
+        {
+          "emoji": "📞",
+          "name": "Lua table/string shorthand call expression grammar",
+          "task_ids": [
+            "T407"
           ]
         }
       ]
