@@ -3587,7 +3587,7 @@
               "id": "T416",
               "emoji": "🧪",
               "name": "Deterministic valid/invalid Lua 5.4 grammar cross-feature differential corpus",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Generate deterministic combinations of accepted Lua grammar including local scopes, functions, varargs, methods, goto, loops, attributes and table constructors",
@@ -3606,7 +3606,8 @@
                 },
                 {
                   "text": "Synchronize README, first-party grammar coverage documentation, machine ledger and generated roadmap under CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40118930822: all five jobs passed synchronized README, first-party engine documentation, progress ledger and generated roadmap"
                 }
               ]
             }
