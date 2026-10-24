@@ -787,3 +787,7 @@ The opt-in owned engine creates its writable `arg` table lazily on first referen
 ### Shared execution-local globals (experimental)
 
 The opt-in compiler now emits runtime reads for unbound identifiers and prepared writes for nonlocal assignments, rather than embedding immutable function constants in bytecode. Missing globals evaluate to nil; available first-party core functions resolve lazily; user assignments can replace them, including with nil. Nested calls share the same per-execution overrides. The Lua 5.4 `_VERSION` string and the bounded `arg` table resolve through that same environment. The complete `_G` table, module-loading environment model and broader standard library are still unimplemented. Production `fer` remains on luna-core.
+
+### Global function declaration compatibility (experimental)
+
+The owned compiler now lowers ordinary `function name(...) ... end` definitions to the same execution-local global environment as assignments, preserving recursion and forward global references. Dotted definitions and colon methods can target global or lexical table roots, and colon method bodies receive the explicit `self` parameter. This supports only the existing bounded Lua 5.4 subset: full `_ENV`, `_G`, module loading, stack unwinding and coroutine semantics are not implied. Production `fer` is unchanged.

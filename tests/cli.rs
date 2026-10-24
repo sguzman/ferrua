@@ -349,3 +349,22 @@ fn owned_global_mutation_and_late_binding_match_production_lua() {
     assert_eq!(owned.stdout, reference.stdout);
     assert_eq!(owned.stdout, b"2\t3\ntrue\nLua 5.4\n");
 }
+
+#[test]
+fn owned_named_global_and_method_declarations_match_production() {
+    let source = "function factorial(n) if n<=1 then return 1 end return n*factorial(n-1) end; print(factorial(5)); local t={base=40}; function t:add(n) return self.base+n end; print(t:add(2))";
+    let owned = fer(&["--engine=owned", "-e", source]);
+    let reference = fer(&["--lua=5.4", "-e", source]);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(
+        reference.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reference.stderr)
+    );
+    assert_eq!(owned.stdout, reference.stdout);
+    assert_eq!(owned.stdout, b"120\n42\n");
+}

@@ -810,8 +810,12 @@ impl<'a> Compiler<'a> {
                                 "local dotted function declaration".into(),
                             ));
                         }
-                        let slot = self.slot(name)?;
-                        self.push(Op::ReadLocal(slot))?;
+                        if let Ok(slot) = self.slot(name) {
+                            self.push(Op::ReadLocal(slot))?;
+                        } else {
+                            let key = self.intern_bytes(name.as_bytes().to_vec())?;
+                            self.push(Op::ReadGlobal(key))?;
+                        }
                         let mut path = fields.clone();
                         if let Some(method) = method {
                             path.push(method);
@@ -848,18 +852,26 @@ impl<'a> Compiler<'a> {
                                 .expect("root scope")
                                 .insert(*name, slot);
                             self.active_locals.push(slot);
-                            slot
+                            Some(slot)
                         } else {
-                            self.slot(name)?
+                            self.slot(name).ok()
                         };
+                        if slot.is_none() {
+                            let key = self.intern_bytes(name.as_bytes().to_vec())?;
+                            self.push(Op::PrepareGlobal(key))?;
+                        }
                         let function = self.compile_function(parameters, *vararg, body)?;
                         if *local {
                             // A locally recursive function must capture this
                             // iteration's cell, not an earlier loop visit.
-                            self.push(Op::RenewLocal(slot))?;
+                            self.push(Op::RenewLocal(slot.ok_or(FlowError::InvalidBytecode)?))?;
                         }
                         self.push(Op::NewFunction(function))?;
-                        self.push(Op::AssignLocals(vec![slot]))?;
+                        if let Some(slot) = slot {
+                            self.push(Op::AssignLocals(vec![slot]))?;
+                        } else {
+                            self.push(Op::AssignPrepared(1))?;
+                        }
                     }
                 }
                 Statement::Call(call) => {
@@ -6834,6 +6846,21 @@ mod tests {
                 Ok(program) => assert!(execute_flow_chunk(&program, 100).is_err(), "{source}"),
             }
         }
+    }
+
+    #[test]
+    fn global_and_dotted_function_declarations_share_late_bound_environment() {
+        let source = "function fact(n) if n<=1 then return 1 end return n*fact(n-1) end; print(fact(5)); box={base=40}; function box:add(n) return self.base+n end; print(box:add(2)); function box.twice(n) return n*2 end; print(box.twice(9))";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 20_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"120\n42\n18\n");
+
+        let source = "function first() return second() end; function second() return 11 end; print(first())";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 1000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"11\n");
     }
 
     #[test]
