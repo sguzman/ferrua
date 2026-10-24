@@ -637,3 +637,9 @@ The owned `src/lex.rs` scanner now rejects numeral tokens touching identifier ch
 Valid whitespace-separated `1 .. 2`, hexadecimal binary exponents, ordinary arithmetic after a numeral and decimal exponent signs remain accepted. The implementation has lexical and parser regressions plus six negative-path fixtures compared against production `fer` and the pinned Lua 5.4 reference. [CI #40116606712](https://github.com/sguzman/ferrua/actions/runs/40116606712) passed all five jobs, including Linux formatting/lint/tests, Rust 1.96, Lua differential smoke and the setup action consumer.
 
 This closes a specific T301 lexical gap, **not** the full grammar, source diagnostics or T301/T302 graduation gates. The production backend is unchanged.
+
+### Parser end-of-file diagnostics use source positions
+
+The first-party `src/expr.rs` parser now tracks the actual physical EOF line rather than reporting line 1 whenever a closing token is missing after the last available token. A source-only pass counts CRLF and LFCR as one newline, along with standalone CR/LF; token-level failures still report the offending token's original source byte offset and line. Missing `end`, unterminated expressions, and EOF following trailing comments now produce meaningful source ending positions. The `eof_syntax_errors_report_real_lua_line_and_final_byte` regression covers multiline constructs, comments, CRLF, non-EOF failures and both expression/chunk parser entry points.
+
+[CI #40117211253](https://github.com/sguzman/ferrua/actions/runs/40117211253) passed Linux format/lint/unit tests, Lua 5.4 differential smoke, Rust 1.96 and downstream action acceptance. This is a precise T301 diagnostic improvement, not comprehensive syntax-diagnostic parity or full first-party runtime graduation.

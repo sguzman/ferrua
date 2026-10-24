@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 141 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 142 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -631,6 +631,11 @@
   - [x] Retain valid spaced concatenation and decimal/hexadecimal exponents with parser-layer rejection regressions and source offset checks — src/lex.rs: distinct_lua_numerals_and_spaced_concatenation_remain_valid; src/expr.rs: parser_rejects_lexically_malformed_adjacent_numerals
   - [x] Pass pinned Lua 5.4 and production fer intentional syntax errors, Rust tests/lint/format, Rust 1.96 and downstream setup consumer — tests/owned_flow.rs six SYNTAX_ERROR_FIXTURES; GitHub Actions 40116606712 all five jobs passed commit e9086730501adf90958fd3937d017a6d597d8335
   - [x] Synchronize language grammar documentation, machine ledger, generated roadmap and README with passing CI — GitHub Actions 40116809191: all five jobs green for synchronized README, progress ledger, generated roadmap and owned-engine docs
+- 📍 **T413** Accurate end-of-file Lua parser line and byte diagnostics — `████████░░ 75%`
+  - [x] Track physical Lua source ending line in parser, respecting CRLF/LFCR and trailing source comments — src/expr.rs: source_eof_line, Parser.eof_line and corrected Parser::error EOF fallback
+  - [x] Exercise trailing comments, nested blocks, dangling expressions, CRLF endings and non-EOF diagnostic preservation — src/expr.rs: eof_syntax_errors_report_real_lua_line_and_final_byte
+  - [x] Pass Rust 1.96, Lua differential smoke, Linux fmt/Clippy/unit and Arch archive, downstream setup consumer — GitHub Actions 40117211253: all five CI jobs green for 0dfc066ce9d81545f1de00c8af9dcd7b9f718547
+  - [ ] Synchronize machine progress, generated roadmap, README and first-party diagnostic documentation under CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -742,4 +747,5 @@
 - 🔒 Read-only <close> lexical assignment metadata — `██████████ 100%`
 - 📐 Single <close> variable per Lua local declaration — `██████████ 100%`
 - 🔢 Lua numeral lexical boundary and malformed literal conformance — `██████████ 100%`
+- 📍 Parser EOF diagnostics retain Lua physical line and byte position — `████████░░ 75%`
 

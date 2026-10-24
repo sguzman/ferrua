@@ -3498,6 +3498,33 @@
                   "evidence": "GitHub Actions 40116809191: all five jobs green for synchronized README, progress ledger, generated roadmap and owned-engine docs"
                 }
               ]
+            },
+            {
+              "id": "T413",
+              "emoji": "📍",
+              "name": "Accurate end-of-file Lua parser line and byte diagnostics",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Track physical Lua source ending line in parser, respecting CRLF/LFCR and trailing source comments",
+                  "passed": true,
+                  "evidence": "src/expr.rs: source_eof_line, Parser.eof_line and corrected Parser::error EOF fallback"
+                },
+                {
+                  "text": "Exercise trailing comments, nested blocks, dangling expressions, CRLF endings and non-EOF diagnostic preservation",
+                  "passed": true,
+                  "evidence": "src/expr.rs: eof_syntax_errors_report_real_lua_line_and_final_byte"
+                },
+                {
+                  "text": "Pass Rust 1.96, Lua differential smoke, Linux fmt/Clippy/unit and Arch archive, downstream setup consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40117211253: all five CI jobs green for 0dfc066ce9d81545f1de00c8af9dcd7b9f718547"
+                },
+                {
+                  "text": "Synchronize machine progress, generated roadmap, README and first-party diagnostic documentation under CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4261,6 +4288,13 @@
           "name": "Lua numeral lexical boundary and malformed literal conformance",
           "task_ids": [
             "T412"
+          ]
+        },
+        {
+          "emoji": "📍",
+          "name": "Parser EOF diagnostics retain Lua physical line and byte position",
+          "task_ids": [
+            "T413"
           ]
         }
       ]
