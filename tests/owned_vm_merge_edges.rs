@@ -35,7 +35,10 @@ fn nested_mutable_register_merges_match_lua54_and_production() {
             "local x=1; if true then x=3; if x==3 then x=x+4 end end; return x",
             7,
         ),
-        ("local x=1; if false then x=9 elseif x==1 then x=4 end; return x", 4),
+        (
+            "local x=1; if false then x=9 elseif x==1 then x=4 end; return x",
+            4,
+        ),
         (
             "local x=1; if true then x=9 elseif (1//0>0) then x=3 end; return x",
             9,
@@ -44,7 +47,10 @@ fn nested_mutable_register_merges_match_lua54_and_production() {
             "local x=1; do local x=10; if false then x=19 else x=x+2 end end; return x",
             1,
         ),
-        ("local x=1; do local x=10; if true then x=19 end end; return x", 1),
+        (
+            "local x=1; do local x=10; if true then x=19 end end; return x",
+            1,
+        ),
         (
             "local x=1; if true then x=2; if false then return 99 end else return 7 end; return x",
             2,
@@ -57,18 +63,27 @@ fn nested_mutable_register_merges_match_lua54_and_production() {
             "local x=1; if true then if false then return 9 else x=8 end else x=7 end; return x",
             8,
         ),
-        ("local x=1; if not false then if 0 then x=x+4 end end; return x", 5),
+        (
+            "local x=1; if not false then if 0 then x=x+4 end end; return x",
+            5,
+        ),
         (
             "local x=1; if false then x=9 else if true then x=x+2 else x=8 end end; return x",
             3,
         ),
-        ("local x=1; if false then x=4 elseif false then x=5 end; return x", 1),
+        (
+            "local x=1; if false then x=4 elseif false then x=5 end; return x",
+            1,
+        ),
         (
             "local x=1; if true then x=2 elseif true then x=3 else x=4 end; return x",
             2,
         ),
         ("local x=1; do if true then x=5 end end; return x", 5),
-        ("local a,b=1,2; if true then local a=9; b=a+b end; return a*10+b", 21),
+        (
+            "local a,b=1,2; if true then local a=9; b=a+b end; return a*10+b",
+            21,
+        ),
         (
             "local a,b=2,3; if false then a,b=b,a else a=a+b; b=a-b end; return a*10+b",
             52,
@@ -77,7 +92,10 @@ fn nested_mutable_register_merges_match_lua54_and_production() {
             "local x=1; if true then local x=5; if false then x=9 end end; return x",
             1,
         ),
-        ("local x=2; if true and not false then x=x*4 end; return x", 8),
+        (
+            "local x=2; if true and not false then x=x*4 end; return x",
+            8,
+        ),
         ("local x=2; if false or (3<4) then x=x+6 end; return x", 8),
         (
             "local x=5; if true then x=6 end; if false then x=8 elseif x==6 then x=x+2 end; return x",
