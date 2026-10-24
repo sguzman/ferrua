@@ -268,7 +268,21 @@ impl<'a> Parser<'a> {
     }
 
     fn postfix(&mut self, mut left: Expr<'a>) -> Result<Expr<'a>, ParseError> {
+        let mut chain_depth = self.expression_depth;
         loop {
+            // Iterative postfix lowering still nests Box<Expr> nodes. Limit
+            // these chains as well as explicit recursive parser calls.
+            let suffix = self.peek().is_some_and(|token| {
+                matches!(token.spelling, "(" | "{" | ":" | "." | "[")
+                    || matches!(token.kind, Kind::ShortString | Kind::LongString)
+            });
+            if !suffix {
+                break;
+            }
+            if chain_depth >= MAX_EXPRESSION_DEPTH {
+                return Err(self.error("Lua expression nesting limit exceeded"));
+            }
+            chain_depth += 1;
             if self.peek().is_some_and(|token| {
                 matches!(token.spelling, "(" | "{")
                     || matches!(token.kind, Kind::ShortString | Kind::LongString)
@@ -340,6 +354,7 @@ impl<'a> Parser<'a> {
     fn expression_inner(&mut self, min_bp: u8) -> Result<Expr<'a>, ParseError> {
         let mut left = self.prefix()?;
         left = self.postfix(left)?;
+        let mut chain_depth = self.expression_depth;
         while let Some(op) = self.peek().map(|t| t.spelling) {
             let Some((l_bp, r_bp)) = binding_power(op) else {
                 break;
@@ -347,6 +362,12 @@ impl<'a> Parser<'a> {
             if l_bp < min_bp {
                 break;
             }
+            // Left-associative operator chains grow nested ASTs without
+            // recursive Pratt calls; they need an independent depth cap.
+            if chain_depth >= MAX_EXPRESSION_DEPTH {
+                return Err(self.error("Lua expression nesting limit exceeded"));
+            }
+            chain_depth += 1;
             self.pop();
             let right = self.expression(r_bp)?;
             left = Expr::Binary {
@@ -958,6 +979,36 @@ mod tests {
             assert!(parse_expression(&source).is_ok(), "{count}");
         }
         let source = format!("return {}1{}", "(".repeat(200), ")".repeat(200));
+        assert_eq!(
+            parse_chunk(&source).unwrap_err().message,
+            "Lua expression nesting limit exceeded"
+        );
+    }
+
+    #[test]
+    fn long_left_associative_and_postfix_chains_are_bounded() {
+        for source in [
+            format!("1{}", "+1".repeat(200)),
+            format!("a{}", ".field".repeat(200)),
+            format!("a{}", "[1]".repeat(200)),
+            format!("f{}", "(1)".repeat(200)),
+            format!("a{}", ":call()".repeat(200)),
+        ] {
+            assert_eq!(
+                parse_expression(&source).unwrap_err().message,
+                "Lua expression nesting limit exceeded",
+                "{source}"
+            );
+        }
+        for source in [
+            format!("1{}", "+1".repeat(12)),
+            format!("a{}", ".field".repeat(12)),
+            format!("a{}", "[1]".repeat(12)),
+            format!("f{}", "(1)".repeat(12)),
+        ] {
+            assert!(parse_expression(&source).is_ok(), "{source}");
+        }
+        let source = format!("return 1{}", "+1".repeat(200));
         assert_eq!(
             parse_chunk(&source).unwrap_err().message,
             "Lua expression nesting limit exceeded"
