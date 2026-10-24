@@ -4086,6 +4086,222 @@
                   "evidence": "GitHub Actions 40130258560: all five CI jobs passed updated README, docs/OWNED_ENGINE.md, machine progress and regenerated roadmap"
                 }
               ]
+            },
+            {
+              "id": "T434",
+              "emoji": "🚀",
+              "name": "Strict opt-in first-party Lua CLI execution",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Run owned Lua 5.4 chunks, stdin, syntax checks and bounded budgets without falling back to luna-core",
+                  "passed": true,
+                  "evidence": "src/main.rs: --engine=owned, run_owned_source, execute_owned; tests/cli.rs: owned_engine_opt_in_executes_only_the_first_party_subset"
+                },
+                {
+                  "text": "Reject unsupported dialect/sandbox combinations and preserve production default",
+                  "passed": true,
+                  "evidence": "tests/cli.rs and src/main.rs: parse_explicit_first_party_engine_without_changing_default"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40132402892: all five jobs passed on the accepted implementation"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T435",
+              "emoji": "🖨️",
+              "name": "Bounded first-party Lua print output",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Execute first-class print with Lua tab/newline formatting and captured output before errors",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Builtin::Print, print_builtin, FlowOutcome; tests/cli.rs: owned_print_matches_production_cli_and_preserves_prior_output_on_error"
+                },
+                {
+                  "text": "Limit captured output to 64 KiB and preserve resource budgets inside protected calls",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: print_emits_bounded_lua_tab_delimited_output; explicit TooLarge cap"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40133022798: all five jobs passed on the accepted implementation"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T436",
+              "emoji": "🧳",
+              "name": "Mutable bounded Lua command-line arg table",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Provide lazily initialized shared writable arg[0..n] with -e and script path identity",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: argument_table and execute_flow_capture_with_args; tests/cli.rs: owned_arg_table_matches_production_cli_and_script_name"
+                },
+                {
+                  "text": "Reject excess argv slots and oversized argument strings",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: argument_table_is_lazy_shared_mutable_and_resource_bounded"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40133328233: all five jobs passed on the accepted implementation"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T437",
+              "emoji": "🌐",
+              "name": "Late-bound shared mutable Lua globals",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Read missing globals as nil and let nested Lua calls observe runtime global writes",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: ReadGlobal, PrepareGlobal and Execution::globals; tests/cli.rs: owned_global_mutation_and_late_binding_match_production_lua"
+                },
+                {
+                  "text": "Allow replacing and restoring builtin globals without mutating production fer",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: ordinary_globals_are_shared_across_calls_and_overrides_are_writable"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40133684877: all five jobs passed on the accepted implementation"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T438",
+              "emoji": "📜",
+              "name": "Global function definitions and Lua colon methods",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Lower named and dotted global function declarations into shared globals with method receiver forwarding",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Statement::Function global branch; tests/cli.rs: owned_named_global_and_method_declarations_match_production"
+                },
+                {
+                  "text": "Preserve recursive and forward global function lookup under the shared runtime environment",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: global_and_dotted_function_declarations_share_late_bound_environment"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40133912837: all five jobs passed on the accepted implementation"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T439",
+              "emoji": "🌍",
+              "name": "Writable _G table and global-name coherency",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Expose _G._G and shared mutable table and direct identifier values",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: materialize_global_table and read_global; tests/cli.rs: owned_g_table_writes_and_metatable_reads_match_production"
+                },
+                {
+                  "text": "Check global deletion, builtin override and bounded metatable reads",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: global_environment_table_and_globals_share_mutable_identity"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40134287690: all five jobs passed on the accepted implementation"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T440",
+              "emoji": "🧪",
+              "name": "End-to-end owned CLI versus Lua 5.4 differential matrix",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Exercise curated CLI success/error parity plus 48 deterministic combined global/branch cases",
+                  "passed": true,
+                  "evidence": "tests/owned_cli_differential.rs: curated_global_function_print_and_error_semantics_match_lua54 and generated_branch_and_environment_interactions_match_lua54"
+                },
+                {
+                  "text": "Run real production fer and pinned upstream Lua from dedicated reference CI",
+                  "passed": true,
+                  "evidence": ".github/workflows/ci.yml: Compare owned CLI interactions with upstream Lua; FERRUA_COMPARE_OWNED_WITH_LUA=1"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40134491004: all five jobs passed on the accepted implementation"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T441",
+              "emoji": "🔐",
+              "name": "Lexical _ENV redirection and captured environment parity",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Compile unresolved lexical identifiers and assignments through the visible _ENV table",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: emit_global_read and emit_global_target; tests/cli.rs: owned_lexical_env_rebinding_matches_production_lua"
+                },
+                {
+                  "text": "Compare 24 generated lexical environment closure scenarios against upstream Lua 5.4",
+                  "passed": true,
+                  "evidence": "tests/owned_cli_differential.rs: generated_lexical_environment_closure_cases_match_lua54; FERRUA_COMPARE_OWNED_WITH_LUA=1"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential, Arch archive smoke, and downstream action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40134992509: all five jobs passed on the accepted implementation"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4996,6 +5212,62 @@
           "name": "Generated selected/skipped branch error differential coverage",
           "task_ids": [
             "T433"
+          ]
+        },
+        {
+          "emoji": "🚀",
+          "name": "Strict opt-in first-party Lua CLI execution",
+          "task_ids": [
+            "T434"
+          ]
+        },
+        {
+          "emoji": "🖨️",
+          "name": "Bounded first-party Lua print output",
+          "task_ids": [
+            "T435"
+          ]
+        },
+        {
+          "emoji": "🧳",
+          "name": "Mutable bounded Lua command-line arg table",
+          "task_ids": [
+            "T436"
+          ]
+        },
+        {
+          "emoji": "🌐",
+          "name": "Late-bound shared mutable Lua globals",
+          "task_ids": [
+            "T437"
+          ]
+        },
+        {
+          "emoji": "📜",
+          "name": "Global function definitions and Lua colon methods",
+          "task_ids": [
+            "T438"
+          ]
+        },
+        {
+          "emoji": "🌍",
+          "name": "Writable _G table and global-name coherency",
+          "task_ids": [
+            "T439"
+          ]
+        },
+        {
+          "emoji": "🧪",
+          "name": "End-to-end owned CLI versus Lua 5.4 differential matrix",
+          "task_ids": [
+            "T440"
+          ]
+        },
+        {
+          "emoji": "🔐",
+          "name": "Lexical _ENV redirection and captured environment parity",
+          "task_ids": [
+            "T441"
           ]
         }
       ]

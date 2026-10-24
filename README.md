@@ -6,7 +6,7 @@
 
 **Project color:** `#15B6A9` · `oklch(70% 0.12 186)` ([OKLCH decision](docs/COLOR.md)).
 
-> **CI-validated development preview, not a stable release.** The Rust `fer` CLI, Lua automation libraries, and release packaging are exercised by Linux CI. Ferrua still uses the independent [luna-core](https://crates.io/crates/luna-core) pure-Rust Lua compiler and VM by default. An explicit `--engine=owned` flag runs the bounded first-party Lua 5.4 subset for research and regression testing, without fallback. It captures up to 64 KiB of standard `print(...)` output (tab-delimited, including output preceding runtime errors); it provides bounded `print` output, a writable `arg[0..n]` table and shared mutable Lua globals (including late-bound built-ins), but not the full host libraries, the REPL, or audited sandbox containment. Full graduation remains a future milestone.
+> **CI-validated development preview, not a stable release.** The default `fer` interpreter still uses pinned pure-Rust `luna-core`. `--engine=owned` explicitly opts into Ferrua's bounded first-party Lua 5.4 subset without fallback. It supports captured `print`, CLI `arg`, mutable globals, `_G`, lexical `_ENV`, and named functions; full standard libraries, REPL, coroutines, garbage collection, and complete conformance remain unfinished. This is not an audited sandbox.
 
 **Owned engine cutover:** the [graduation contract](docs/ENGINE_GRADUATION.md) defines the full implementation, conformance and native release gates. Roadmap percentages count accepted atomic tasks; they are **not** Lua compatibility percentages.
 
@@ -14,6 +14,7 @@
 
 ```sh
 cargo run --locked -- -e 'print(6 * 7)'
+cargo run --locked -- --engine=owned -e 'print(6 * 7)'
 cargo run --locked -- examples/hello.lua
 cargo run --locked -- examples/count.lua
 printf 'print(6 * 7)\n' | cargo run --locked -- -
@@ -39,7 +40,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [five jobs green; 96 generated branch-join and selected-error differentials, bounded bytecode emission and structural preflight, upstream Lua 5.4 and production differentials, Rust 1.96, lint/tests, Arch archive smoke and action consumer](https://github.com/sguzman/ferrua/actions/runs/40130027003). Pinned Arch container verification is not native EndeavourOS/Hyprland QA; native acceptance, a published stable release and complete Ferrua-owned VM remain pending.
+**Latest verified CI:** [all five jobs passed on `788c55a`, including 72 generated global/environment CLI cases versus pinned upstream Lua 5.4, full Linux tests, Rust 1.96, Arch packaging and downstream action consumer](https://github.com/sguzman/ferrua/actions/runs/40135287744). Arch container tests do not establish native EndeavourOS/Hyprland QA. Complete owned-engine parity, a published stable release and native runtime graduation remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
