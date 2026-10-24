@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 155 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 157 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -701,6 +701,16 @@
   - [x] Reject nonreturning paths mutating enclosing local register bindings and preserve selected runtime arithmetic errors — src/owned_vm.rs: enclosing_bindings_changed, integer_nonreturning_conditional_arms_merge_only_unmodified_bindings
   - [x] Pass 14 upstream Lua 5.4/production fer comparison cases, unit/lint/format, Rust 1.96 and Arch/action consumer — GitHub Actions 40125718824 all five jobs successful for commit 4e38f2e15c37fc9481be7d6edf0ce88ff6791adb
   - [x] Synchronize documented join limitation, README, machine ledger and generated roadmap under passing CI — GitHub Actions 40125903144 all five CI jobs passed synced README, OWNED_ENGINE.md, machine ledger and generated roadmap
+- 🔀 **T427** Merge integer local register state across conditional paths — `████████░░ 75%`
+  - [x] Compile mutable enclosing locals through SSA-like MergeCopy destinations on continuing if/elseif/else paths — src/owned_vm.rs: Instruction::MergeCopy, emit_merge_copies and compile_statements; CI 40127305435
+  - [x] Preserve per-path values, lexical shadowing, parallel assignment, nested blocks, early returns and guarded arithmetic errors — src/owned_vm.rs: merged_integer_conditional_locals_preserve_selected_path_values; tests/owned_vm.rs and 24 additional nested fixtures in tests/owned_vm_merge_edges.rs
+  - [x] Pass production fer and upstream Lua 5.4 differential checks, Linux format/lint/tests, Rust 1.96, Arch preview and action consumer — GitHub Actions 40127120133: five green jobs on nested merge regression and outdated-unit-test correction
+  - [ ] Synchronize corrected engine limitations, README, machine ledger and derived roadmap under successful CI
+- 🧵 **T428** Sparse assignment-aware conditional merge register allocation — `████████░░ 75%`
+  - [x] Reserve join destinations only for mutable enclosing names statically assigned in a conditional branch — src/owned_vm.rs: assigned_names and filtered conditional merge reservation; commit db6e1c78af7a93970127a633701127e3ed5f283f
+  - [x] Prevent register exhaustion under hundreds of local-only and sparsely updating conditional arms — tests/owned_vm_merge_edges.rs: sparse_conditional_updates_do_not_exhaust_registers, 70 live locals and 300 branches
+  - [x] Pass Rust 1.96, Linux quality/tests, Lua 5.4 plus production fer differential reference and action consumer — GitHub Actions 40127305435: all five jobs passed on db6e1c78af7a93970127a633701127e3ed5f283f
+  - [ ] Synchronize current performance/semantics docs and acceptance ledger in passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -826,4 +836,6 @@
 - 🚦 Returning guard clause fallthrough in bounded register VM — `██████████ 100%`
 - 🌿 Lexically isolated register-VM conditional return paths — `██████████ 100%`
 - 🌱 Nonreturning local-only register conditional fallthrough — `██████████ 100%`
+- 🔀 Mutable conditional-local register path merges — `████████░░ 75%`
+- 🧵 Assignment-aware sparse merge allocation — `████████░░ 75%`
 

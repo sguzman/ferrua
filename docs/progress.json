@@ -3890,6 +3890,60 @@
                   "evidence": "GitHub Actions 40125903144 all five CI jobs passed synced README, OWNED_ENGINE.md, machine ledger and generated roadmap"
                 }
               ]
+            },
+            {
+              "id": "T427",
+              "emoji": "🔀",
+              "name": "Merge integer local register state across conditional paths",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Compile mutable enclosing locals through SSA-like MergeCopy destinations on continuing if/elseif/else paths",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: Instruction::MergeCopy, emit_merge_copies and compile_statements; CI 40127305435"
+                },
+                {
+                  "text": "Preserve per-path values, lexical shadowing, parallel assignment, nested blocks, early returns and guarded arithmetic errors",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: merged_integer_conditional_locals_preserve_selected_path_values; tests/owned_vm.rs and 24 additional nested fixtures in tests/owned_vm_merge_edges.rs"
+                },
+                {
+                  "text": "Pass production fer and upstream Lua 5.4 differential checks, Linux format/lint/tests, Rust 1.96, Arch preview and action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40127120133: five green jobs on nested merge regression and outdated-unit-test correction"
+                },
+                {
+                  "text": "Synchronize corrected engine limitations, README, machine ledger and derived roadmap under successful CI",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T428",
+              "emoji": "🧵",
+              "name": "Sparse assignment-aware conditional merge register allocation",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Reserve join destinations only for mutable enclosing names statically assigned in a conditional branch",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: assigned_names and filtered conditional merge reservation; commit db6e1c78af7a93970127a633701127e3ed5f283f"
+                },
+                {
+                  "text": "Prevent register exhaustion under hundreds of local-only and sparsely updating conditional arms",
+                  "passed": true,
+                  "evidence": "tests/owned_vm_merge_edges.rs: sparse_conditional_updates_do_not_exhaust_registers, 70 live locals and 300 branches"
+                },
+                {
+                  "text": "Pass Rust 1.96, Linux quality/tests, Lua 5.4 plus production fer differential reference and action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40127305435: all five jobs passed on db6e1c78af7a93970127a633701127e3ed5f283f"
+                },
+                {
+                  "text": "Synchronize current performance/semantics docs and acceptance ledger in passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4751,6 +4805,20 @@
           "name": "Nonreturning local-only register conditional fallthrough",
           "task_ids": [
             "T426"
+          ]
+        },
+        {
+          "emoji": "🔀",
+          "name": "Mutable conditional-local register path merges",
+          "task_ids": [
+            "T427"
+          ]
+        },
+        {
+          "emoji": "🧵",
+          "name": "Assignment-aware sparse merge allocation",
+          "task_ids": [
+            "T428"
           ]
         }
       ]
