@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 97%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 97%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -621,11 +621,11 @@
   - [x] Exercise capture, readable references, const-table field mutation and writable shadowed bindings — src/scope.rs: to_be_closed_bindings_are_readonly_even_through_captures; fixed Lua attribute test whitespace
   - [x] Pass Rust tests/Clippy/format, Rust 1.96, Lua 5.4 differential and composite consumer acceptance — GitHub Actions 40113575729: all five jobs green for 44b372447e4c7810a38ec6555ae91d73fe0ccfe0
   - [x] Synchronize analyzer docs, README, progress ledger and generated roadmap under passing CI — GitHub Actions 40114100152 passed five jobs with T410 docs and updated parser implementation on main (the original documentation-only run was superseded)
-- 📐 **T411** Lua local declarations permit at most one to-be-closed variable — `████████░░ 75%`
+- 📐 **T411** Lua local declarations permit at most one to-be-closed variable — `██████████ 100%`
   - [x] Reject multiple <close> attributes in a single Lua local declaration at parse time — src/expr.rs: parse local declaration tracks has_close and rejects duplicate close attributes
   - [x] Retain valid mixed <const>/<close> bindings and reject duplicates in first, middle or final positions — src/expr.rs: parses_lua_local_attributes_without_accepting_unknown_names; two valid and three malformed regression cases
   - [x] Pass Rust format/Clippy/tests, Rust 1.96, Lua 5.4 differential suite and action consumer — GitHub Actions 40114100152: five successful jobs for commit 8750491cc29c5828e24e025323228c0e653e33e0
-  - [ ] Document precise Lua 5.4 single-closer grammar limit and update machine roadmap/README with verified CI
+  - [x] Document precise Lua 5.4 single-closer grammar limit and update machine roadmap/README with verified CI — GitHub Actions 40114267712: all five jobs passed synchronized parser semantic documentation, ledger, roadmap and README
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -735,5 +735,5 @@
 - 🔒 Lua 5.4 const locals, capture protection and close attribute syntax — `██████████ 100%`
 - 🔎 Const capture/write metadata in lexical scope resolver — `██████████ 100%`
 - 🔒 Read-only <close> lexical assignment metadata — `██████████ 100%`
-- 📐 Single <close> variable per Lua local declaration — `████████░░ 75%`
+- 📐 Single <close> variable per Lua local declaration — `██████████ 100%`
 

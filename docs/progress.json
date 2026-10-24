@@ -3447,7 +3447,7 @@
               "id": "T411",
               "emoji": "📐",
               "name": "Lua local declarations permit at most one to-be-closed variable",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Reject multiple <close> attributes in a single Lua local declaration at parse time",
@@ -3466,7 +3466,8 @@
                 },
                 {
                   "text": "Document precise Lua 5.4 single-closer grammar limit and update machine roadmap/README with verified CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40114267712: all five jobs passed synchronized parser semantic documentation, ledger, roadmap and README"
                 }
               ]
             }
