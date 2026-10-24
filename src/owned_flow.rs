@@ -215,6 +215,23 @@ impl fmt::Display for FlowError {
 }
 impl std::error::Error for FlowError {}
 
+/// A Lua label and goto carry their lexical block and active local slots.
+#[derive(Clone)]
+struct LabelSite<'a> {
+    name: &'a str,
+    block: usize,
+    address: usize,
+    locals: Vec<usize>,
+}
+
+#[derive(Clone)]
+struct GotoSite<'a> {
+    name: &'a str,
+    block: usize,
+    address: usize,
+    locals: Vec<usize>,
+}
+
 struct Compiler<'a> {
     code: Vec<Op>,
     frames: Vec<HashMap<&'a str, usize>>,
@@ -222,6 +239,11 @@ struct Compiler<'a> {
     depth: usize,
     read_only: HashSet<usize>,
     loop_breaks: Vec<Vec<usize>>,
+    block_parents: Vec<Option<usize>>,
+    block_stack: Vec<usize>,
+    active_locals: Vec<usize>,
+    labels: Vec<LabelSite<'a>>,
+    pending_gotos: Vec<GotoSite<'a>>,
     functions: Rc<RefCell<Vec<FunctionProgram>>>,
     strings: Rc<RefCell<Vec<Vec<u8>>>>,
     vararg: bool,
@@ -269,6 +291,11 @@ impl<'a> Compiler<'a> {
             depth: 0,
             read_only: HashSet::new(),
             loop_breaks: Vec::new(),
+            block_parents: Vec::new(),
+            block_stack: Vec::new(),
+            active_locals: Vec::new(),
+            labels: Vec::new(),
+            pending_gotos: Vec::new(),
             functions: Rc::clone(&self.functions),
             strings: Rc::clone(&self.strings),
             vararg,
@@ -302,6 +329,7 @@ impl<'a> Compiler<'a> {
             formal_slots.push(slot);
         }
         child.statements(body)?;
+        child.resolve_gotos()?;
         // A return inside one branch does not guarantee every path returns.
         // An unconditional fallthrough must yield an empty Lua result list.
         child.push(Op::ReturnMany(0))?;
@@ -714,12 +742,44 @@ impl<'a> Compiler<'a> {
         if self.depth >= 64 {
             return Err(FlowError::TooLarge);
         }
+        let active = self.active_locals.len();
         self.frames.push(HashMap::new());
         self.depth += 1;
         let result = self.statements(body);
         self.depth -= 1;
         self.frames.pop();
+        self.active_locals.truncate(active);
         result
+    }
+
+    fn resolve_gotos(&mut self) -> Result<(), FlowError> {
+        // Resolve only labels in this block or a lexical ancestor. A label's
+        // active locals must already exist at the jump site; leaving scopes
+        // and jumping backward across declarations is permitted.
+        let pending = std::mem::take(&mut self.pending_gotos);
+        for jump in pending {
+            let mut block = Some(jump.block);
+            let mut destination = None;
+            while let Some(id) = block {
+                if let Some(label) = self.labels.iter().find(|site| {
+                    site.block == id && site.name == jump.name
+                }) {
+                    destination = Some((label.address, label.locals.clone()));
+                    break;
+                }
+                block = *self.block_parents.get(id).ok_or(FlowError::InvalidBytecode)?;
+            }
+            let (address, locals) = destination.ok_or_else(|| {
+                FlowError::Unsupported("goto label is not visible from this scope".into())
+            })?;
+            if locals.iter().any(|slot| !jump.locals.contains(slot)) {
+                return Err(FlowError::Unsupported(
+                    "goto enters a new local variable lifetime".into(),
+                ));
+            }
+            self.patch(jump.address, address)?;
+        }
+        Ok(())
     }
 
     fn patch(&mut self, address: usize, target: usize) -> Result<(), FlowError> {
@@ -740,45 +800,30 @@ impl<'a> Compiler<'a> {
     }
 
     fn statements(&mut self, nodes: &[Statement<'a>]) -> Result<(), FlowError> {
-        // Only jumps between positions with identical active local bindings
-        // inside the *same* lexical block can be lowered safely. Cross-block
-        // goto, jumps into local scope and reentering local lifetimes remain
-        // unsupported until the full Lua scope model is implemented.
-        let mut target_locals = HashMap::new();
-        let mut declared = 0usize;
-        for node in nodes {
-            match node {
-                Statement::Label(name) => {
-                    if target_locals.insert(*name, declared).is_some() {
-                        return Err(FlowError::Unsupported("duplicate goto label".into()));
-                    }
-                }
-                Statement::Local { names, .. } => declared = declared.saturating_add(names.len()),
-                Statement::Function { local: true, .. } => declared = declared.saturating_add(1),
-                _ => {}
-            }
-        }
-        let mut visible_locals = 0usize;
-        let mut label_offsets = HashMap::new();
-        let mut pending_jumps = Vec::new();
+        let block = self.block_parents.len();
+        self.block_parents.push(self.block_stack.last().copied());
+        self.block_stack.push(block);
         for statement in nodes {
             match statement {
                 Statement::Label(name) => {
-                    label_offsets.insert(*name, self.code.len());
+                    if self.labels.iter().any(|site| site.block == block && site.name == *name) {
+                        return Err(FlowError::Unsupported("duplicate goto label".into()));
+                    }
+                    self.labels.push(LabelSite {
+                        name: *name,
+                        block,
+                        address: self.code.len(),
+                        locals: self.active_locals.clone(),
+                    });
                 }
                 Statement::Goto(name) => {
-                    let Some(target_count) = target_locals.get(name) else {
-                        return Err(FlowError::Unsupported(
-                            "goto target must be in the same lexical block".into(),
-                        ));
-                    };
-                    if *target_count != visible_locals {
-                        return Err(FlowError::Unsupported(
-                            "goto crosses a local variable lifetime".into(),
-                        ));
-                    }
                     let address = self.push(Op::Jump(usize::MAX))?;
-                    pending_jumps.push((address, *name));
+                    self.pending_gotos.push(GotoSite {
+                        name: *name,
+                        block,
+                        address,
+                        locals: self.active_locals.clone(),
+                    });
                 }
                 Statement::Function {
                     name,
@@ -832,6 +877,7 @@ impl<'a> Compiler<'a> {
                                 .last_mut()
                                 .expect("root scope")
                                 .insert(*name, slot);
+                            self.active_locals.push(slot);
                             slot
                         } else {
                             self.slot(name)?
@@ -869,6 +915,7 @@ impl<'a> Compiler<'a> {
                             .last_mut()
                             .expect("root scope")
                             .insert(*name, slot);
+                        self.active_locals.push(slot);
                     }
                     self.push(Op::DeclareLocals(targets))?;
                 }
@@ -1087,6 +1134,7 @@ impl<'a> Compiler<'a> {
                         return Err(FlowError::TooLarge);
                     }
                     let begin = self.code.len();
+                    let active = self.active_locals.len();
                     self.frames.push(HashMap::new());
                     self.depth += 1;
                     self.loop_breaks.push(Vec::new());
@@ -1098,6 +1146,7 @@ impl<'a> Compiler<'a> {
                     let breaks = self.loop_breaks.pop().expect("repeat break scope");
                     self.depth -= 1;
                     self.frames.pop();
+                    self.active_locals.truncate(active);
                     result?;
                     self.push(Op::JumpIfFalse(begin))?;
                     let end = self.code.len();
@@ -1116,20 +1165,8 @@ impl<'a> Compiler<'a> {
                         .push(address);
                 }
             }
-            match statement {
-                Statement::Local { names, .. } => {
-                    visible_locals = visible_locals.saturating_add(names.len());
-                }
-                Statement::Function { local: true, .. } => {
-                    visible_locals = visible_locals.saturating_add(1);
-                }
-                _ => {}
-            }
         }
-        for (address, name) in pending_jumps {
-            let target = *label_offsets.get(name).ok_or(FlowError::InvalidBytecode)?;
-            self.patch(address, target)?;
-        }
+        self.block_stack.pop();
         Ok(())
     }
 }
@@ -1147,11 +1184,17 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
         depth: 0,
         read_only: HashSet::new(),
         loop_breaks: Vec::new(),
+        block_parents: Vec::new(),
+        block_stack: Vec::new(),
+        active_locals: Vec::new(),
+        labels: Vec::new(),
+        pending_gotos: Vec::new(),
         functions: Rc::clone(&functions),
         strings: Rc::clone(&strings),
         vararg: false,
     };
     compiler.statements(&statements)?;
+    compiler.resolve_gotos()?;
     if !compiler
         .code
         .iter()
@@ -6404,7 +6447,39 @@ mod tests {
     }
 
     #[test]
-    fn same_block_goto_executes_but_cross_scope_jumps_are_rejected() {
+    fn visible_enclosing_goto_labels_preserve_lexical_local_lifetimes() {
+        for (script, expected) in [
+            ("do goto out end ::out:: return 7", 7),
+            ("if true then goto done end ::done:: return 8", 8),
+            ("local x=1; do goto done end; x=4; ::done:: return x", 1),
+            ("local x=1; ::again:: x=x+1; if x<4 then do goto again end end; return x", 4),
+            ("while true do goto out end ::out:: return 5", 5),
+            ("local x=1; do local x=7; goto out end ::out:: return x", 1),
+            ("local x=1; goto out; do local x=9 end ::out:: return x", 1),
+            ("local x=0; do if true then goto out end x=5 end ::out:: return x", 0),
+            ("local x=0; for i=1,3 do if i==2 then goto done end; x=x+1 end ::done:: return x", 1),
+            ("local x=0; for _,v in ipairs({4,5}) do if v==5 then goto done end x=x+v end ::done:: return x", 4),
+            ("local x=0; ::top:: x=x+1; local temp=x; if x<4 then do goto top end end return x", 4),
+            ("do goto finish; local x=8 end ::finish:: return 11", 11),
+            ("local x=0; do goto mark; ::mark:: x=x+1 end ::mark:: return x", 1),
+        ] {
+            assert_eq!(evaluate(script), expected, "{script}");
+        }
+        for script in [
+            "do goto outer end; local x=3; ::outer:: return x",
+            "do ::inner:: end goto inner; return 1",
+            "goto missing; return 1",
+            "do goto a end; do ::a:: end; return 1",
+            "goto done; local x=2; ::done:: return x",
+            "do ::a:: ::a:: end; return 1",
+            "local function f() goto outside end ::outside:: return f()",
+        ] {
+            assert!(compile_flow_chunk(script).is_err(), "{script}");
+        }
+    }
+
+    #[test]
+    fn same_block_goto_respects_scope_and_local_lifetimes() {
         for (source, expected) in [
             ("::start:: goto done; ::done:: return 4", 4),
             ("goto done ::done:: return 4", 4),
@@ -6418,9 +6493,6 @@ mod tests {
         for source in [
             "goto missing; return 1",
             "goto done; local x=1; ::done:: return x",
-            "local x=1; ::again:: local y=2; goto again; return x",
-            "if true then goto done end; ::done:: return 4",
-            "do ::inside:: end; goto inside; return 4",
         ] {
             let result = compile_flow_chunk(source);
             assert!(
