@@ -3727,7 +3727,7 @@
               "id": "T421",
               "emoji": "🌿",
               "name": "Conditional integer return branches in independent register VM",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Compile bounded if/elseif/else return paths with Boolean literal and integer comparison conditions",
@@ -3746,7 +3746,8 @@
                 },
                 {
                   "text": "Synchronize README, owned-engine documentation, machine ledger and generated roadmap under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40122149293: all five acceptance jobs green for synchronized roadmap, ledger, README and owned-engine docs"
                 }
               ]
             }

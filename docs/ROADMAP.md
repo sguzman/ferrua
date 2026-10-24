@@ -671,11 +671,11 @@
   - [x] Cover nested scopes, shadowed integer locals, early returns, bitwise expressions and rejection of unsupported noninteger return values — src/owned_vm.rs: nested_do_blocks_propagate_integer_returns_and_skip_unreachable_code
   - [x] Compare nested returns with pinned production fer and upstream Lua 5.4 and pass Rust 1.96, Linux, consumer CI — tests/owned_vm.rs: nested_integer_returns_match_production_and_upstream_lua; GitHub Actions 40120936256 five jobs green
   - [x] Synchronize documentation, machine ledger and derived roadmap under CI acceptance — GitHub Actions 40121153222: five successful acceptance jobs for README, OWNED_ENGINE, roadmap, ledger and reference tests
-- 🌿 **T421** Conditional integer return branches in independent register VM — `████████░░ 75%`
+- 🌿 **T421** Conditional integer return branches in independent register VM — `██████████ 100%`
   - [x] Compile bounded if/elseif/else return paths with Boolean literal and integer comparison conditions — src/owned_vm.rs: Compare, BranchIfFalse, Return opcodes; emit_condition and compile_statements exhaustive branch lowering
   - [x] Reject unsupported truthiness/fallthrough and invalid jump targets; restore lexically valid const-local regression inputs — src/owned_vm.rs: register_integer_conditional_return_arms_and_comparisons and integer_register_locals_track_lua_const_attributes_and_shadowing
   - [x] Pass 15 production fer and upstream Lua 5.4 conditional fixtures plus Rust 1.96, Linux quality/tests and action consumer — GitHub Actions 40121950453: all five CI jobs successful for commit 14bd11327f338c2e0560d7574c6556a058d2d2c7
-  - [ ] Synchronize README, owned-engine documentation, machine ledger and generated roadmap under passing CI
+  - [x] Synchronize README, owned-engine documentation, machine ledger and generated roadmap under passing CI — GitHub Actions 40122149293: all five acceptance jobs green for synchronized roadmap, ledger, README and owned-engine docs
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -795,5 +795,5 @@
 - 🔗 Iterative expression AST chain safety — `██████████ 100%`
 - 🏗️ Cross-function Lua parser block recursion safety — `██████████ 100%`
 - 📜 Register-VM nested integer return propagation — `██████████ 100%`
-- 🌿 Register-VM exhaustive integer conditional returns — `████████░░ 75%`
+- 🌿 Register-VM exhaustive integer conditional returns — `██████████ 100%`
 
