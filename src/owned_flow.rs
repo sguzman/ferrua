@@ -4481,7 +4481,7 @@ mod tests {
     }
 
     #[test]
-    fn tostring_metatable_hook_requires_string_and_bounds_recursive_calls() {
+    fn tostring_metatable_hook_coerces_numeric_and_bounds_recursive_calls() {
         for (source, expected) in [
             (
                 "local t=setmetatable({}, {__tostring=function() return 'hello' end}); return tostring(t)=='hello' and 1 or 0",
@@ -4512,11 +4512,14 @@ mod tests {
                 1,
             ),
             ("return tostring(7)=='7' and 1 or 0", 1),
+            (
+                "local t=setmetatable({}, {__tostring=function() return 7 end}); return tostring(t)=='7' and 1 or 0",
+                1,
+            ),
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
         for source in [
-            "local t=setmetatable({}, {__tostring=function() return 7 end}); return tostring(t)",
             "local t=setmetatable({}, {__tostring=function() end}); return tostring(t)",
             "local t=setmetatable({}, {__tostring=9}); return tostring(t)",
         ] {
