@@ -3967,10 +3967,9 @@ mod tests {
         ] {
             assert_eq!(evaluate(source), expected, "{source}");
         }
-        let cyclic = compile_flow_chunk(
-            "local h={}; setmetatable(h,{__call=h}); return xpcall(error,h,5)",
-        )
-        .unwrap();
+        let cyclic =
+            compile_flow_chunk("local h={}; setmetatable(h,{__call=h}); return xpcall(error,h,5)")
+                .unwrap();
         assert_eq!(
             execute_flow_values(&cyclic, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
