@@ -140,3 +140,25 @@ fn generated_numeric_math_cases_match_lua54() {
         assert_parity(source, false);
     }
 }
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
