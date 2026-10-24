@@ -3671,7 +3671,7 @@
               "id": "T419",
               "emoji": "🏗️",
               "name": "Bound nested function-body parser blocks across function boundaries",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Account for every parser block recursively, including function bodies that reset lexical block depth",
@@ -3690,7 +3690,8 @@
                 },
                 {
                   "text": "Synchronize documentation, machine ledger and generated roadmap with passing CI evidence",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40120416624: all five jobs passed documentation, machine ledger and generated roadmap"
                 }
               ]
             }
