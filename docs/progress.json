@@ -4002,6 +4002,33 @@
                   "evidence": "GitHub Actions 40128948693: all five jobs passed synchronized README, docs/OWNED_ENGINE.md, progress ledger and derived roadmap"
                 }
               ]
+            },
+            {
+              "id": "T431",
+              "emoji": "🚧",
+              "name": "Cap emitted integer bytecode while constructing each instruction",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Centralize all register-compiler instruction appends through a bounded emit_instruction guard",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: emit_instruction applied to all sixteen production bytecode appends in expression, guard and statement lowering"
+                },
+                {
+                  "text": "Reject emission at the exact instruction ceiling without increasing the temporary code vector",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: integer_emission_rejects_overflow_without_growing_the_code_vector"
+                },
+                {
+                  "text": "Pass Rust 1.96, Linux formatting/lint/tests, Lua 5.4 and production fer differential corpus, Arch smoke and action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40129324922: all five CI jobs successful for commit 6c1ed620fc07a38b95175342f78af634f6065da1"
+                },
+                {
+                  "text": "Synchronize code-limit documentation, README, machine ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4891,6 +4918,13 @@
           "name": "Whole-program bytecode structural preflight",
           "task_ids": [
             "T430"
+          ]
+        },
+        {
+          "emoji": "🚧",
+          "name": "Instruction-at-emission resource guarding",
+          "task_ids": [
+            "T431"
           ]
         }
       ]

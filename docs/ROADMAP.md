@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 159 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 160 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -721,6 +721,11 @@
   - [x] Test malformed instructions hidden behind early returns and validate correct bytecode still executes — src/owned_vm.rs: validates_unreachable_integer_bytecode_and_register_bounds, six negative cases and one valid case
   - [x] Pass Linux Rust unit/integration tests, formatting, lint, Rust 1.96, upstream Lua differential, Arch smoke and action consumer — GitHub Actions 40128785174: all five jobs passed on commit 303b791dfe95a5473ea3107b41b012e156179c00
   - [x] Synchronize README, owned VM documentation, machine progress ledger and regenerated roadmap under passing CI — GitHub Actions 40128948693: all five jobs passed synchronized README, docs/OWNED_ENGINE.md, progress ledger and derived roadmap
+- 🚧 **T431** Cap emitted integer bytecode while constructing each instruction — `████████░░ 75%`
+  - [x] Centralize all register-compiler instruction appends through a bounded emit_instruction guard — src/owned_vm.rs: emit_instruction applied to all sixteen production bytecode appends in expression, guard and statement lowering
+  - [x] Reject emission at the exact instruction ceiling without increasing the temporary code vector — src/owned_vm.rs: integer_emission_rejects_overflow_without_growing_the_code_vector
+  - [x] Pass Rust 1.96, Linux formatting/lint/tests, Lua 5.4 and production fer differential corpus, Arch smoke and action consumer — GitHub Actions 40129324922: all five CI jobs successful for commit 6c1ed620fc07a38b95175342f78af634f6065da1
+  - [ ] Synchronize code-limit documentation, README, machine ledger and generated roadmap under passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -850,4 +855,5 @@
 - 🧵 Assignment-aware sparse merge allocation — `██████████ 100%`
 - 🧱 Bounded bytecode emission before interpreter dispatch — `██████████ 100%`
 - 🛡️ Whole-program bytecode structural preflight — `██████████ 100%`
+- 🚧 Instruction-at-emission resource guarding — `████████░░ 75%`
 
