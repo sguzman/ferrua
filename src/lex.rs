@@ -236,6 +236,15 @@ impl Scanner<'_> {
                 return Err(self.error("malformed exponent"));
             }
         }
+        // Lua 5.4 does not split an adjacent identifier or extra radix
+        // point from a numeral: 12abc, 0x1g and 1..2 are malformed.
+        // Preserve the separate concatenation operator after whitespace.
+        if self
+            .peek(0)
+            .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'.' || b >= 128)
+        {
+            return Err(self.error("malformed number"));
+        }
         Ok(())
     }
 }
@@ -269,7 +278,7 @@ fn keyword(s: &str) -> bool {
 }
 
 /// Tokenize a documented Lua lexical subset, preserving raw spelling and offsets.
-/// This does not parse grammar, validate string escapes, or run Lua bytecode.
+/// Escape syntax is checked, but this scanner does not parse grammar or run bytecode.
 pub fn tokenize(source: &str) -> Result<Vec<Token<'_>>, LexError> {
     let mut scan = Scanner {
         src: source,
@@ -377,12 +386,45 @@ mod tests {
     #[test]
     fn recognizes_keywords_hex_literals_and_concat() {
         assert_eq!(
-            spellings("local x=0x1.fp+2+42.5e-1 ... 1..2"),
+            spellings("local x=0x1.fp+2+42.5e-1 ... 1 .. 2"),
             [
                 "local", "x", "=", "0x1.fp+2", "+", "42.5e-1", "...", "1", "..", "2"
             ]
         );
     }
+    #[test]
+    fn lua_54_rejects_numbers_touching_names_or_extra_radix_points() {
+        for source in [
+            "return 12abc",
+            "return 0x1g",
+            "return 1e3foo",
+            "return 0x1p2stuff",
+            "return 9_000",
+            "return 1..2",
+            "return 1...2",
+            "return 3.4.5",
+            "return .5abc",
+            "return 7é",
+        ] {
+            let error = tokenize(source).unwrap_err();
+            assert_eq!(error.message, "malformed number", "{source}");
+        }
+        let error = tokenize("local x=12abc").unwrap_err();
+        assert_eq!((error.line, error.byte_offset), (1, 10));
+    }
+
+    #[test]
+    fn distinct_lua_numerals_and_spaced_concatenation_remain_valid() {
+        assert_eq!(
+            spellings("return 1 .. 2, 0x1.fp+2 + 3.e1 - .5, 0xe+1"),
+            [
+                "return", "1", "..", "2", ",", "0x1.fp+2", "+",
+                "3.e1", "-", ".5", ",", "0xe", "+", "1",
+            ]
+        );
+        assert_eq!(spellings("return 1e-2+0xA.p+2"), ["return", "1e-2", "+", "0xA.p+2"]);
+    }
+
     #[test]
     fn long_brackets_and_comments_preserve_string_text() {
         assert_eq!(

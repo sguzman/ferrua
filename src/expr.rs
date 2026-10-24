@@ -1319,6 +1319,20 @@ mod tests {
     }
 
     #[test]
+    fn parser_rejects_lexically_malformed_adjacent_numerals() {
+        for source in [
+            "return 12abc",
+            "return 0x1g",
+            "return 1..2",
+            "local x=3.4.5",
+            "return .5abc",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
+        assert!(parse_chunk("return 1 .. 2").is_ok());
+    }
+
+    #[test]
     fn parses_numeric_for_with_optional_step() {
         let parsed =
             parse_chunk("local total=0\nfor i=1,10,2 do\ntotal=total+i\nend\nreturn total")
