@@ -6175,7 +6175,10 @@ mod tests {
             (r#""\u{110000}""#, vec![0xf4, 0x90, 0x80, 0x80]),
             (r#""\u{200000}""#, vec![0xf8, 0x88, 0x80, 0x80, 0x80]),
             (r#""\u{4000000}""#, vec![0xfc, 0x84, 0x80, 0x80, 0x80, 0x80]),
-            (r#""\u{7FFFFFFF}""#, vec![0xfd, 0xbf, 0xbf, 0xbf, 0xbf, 0xbf]),
+            (
+                r#""\u{7FFFFFFF}""#,
+                vec![0xfd, 0xbf, 0xbf, 0xbf, 0xbf, 0xbf],
+            ),
         ] {
             assert_eq!(decode_lua_string(source).unwrap(), expected, "{source}");
         }
