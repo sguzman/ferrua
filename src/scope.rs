@@ -742,15 +742,15 @@ mod tests {
         assert!(!shadowed.close_reassignment);
         assert!(!shadowed.const_reassignment);
         assert!(summary.references.iter().any(|r| {
-            r.name == "t"
-                && r.access == Access::Read
-                && r.resolution == Resolution::Local(2)
+            r.name == "t" && r.access == Access::Read && r.resolution == Resolution::Local(2)
         }));
-        assert!(summary
-            .references
-            .iter()
-            .filter(|r| r.access == Access::Read)
-            .all(|r| !r.const_reassignment && !r.close_reassignment));
+        assert!(
+            summary
+                .references
+                .iter()
+                .filter(|r| r.access == Access::Read)
+                .all(|r| !r.const_reassignment && !r.close_reassignment)
+        );
     }
 
     #[test]
