@@ -191,7 +191,10 @@ fn nested_integer_returns_match_production_and_upstream_lua() {
         assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
         let lua = format!("print((function() {source} end)())");
         for (interpreter, args) in [
-            (env!("CARGO_BIN_EXE_fer"), vec!["--lua=5.4", "-e", lua.as_str()]),
+            (
+                env!("CARGO_BIN_EXE_fer"),
+                vec!["--lua=5.4", "-e", lua.as_str()],
+            ),
             ("lua5.4", vec!["-e", lua.as_str()]),
         ] {
             if interpreter == "lua5.4" && !compare_lua {
