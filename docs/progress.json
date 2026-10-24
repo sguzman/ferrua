@@ -3190,6 +3190,33 @@
                   "evidence": "GitHub Actions 40054258283: all five jobs green including updated Lua error-level docs, generated roadmap and machine progress integrity"
                 }
               ]
+            },
+            {
+              "id": "T402",
+              "emoji": "🎭",
+              "name": "Lua binary and unary metamethods accept bounded callable values",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Resolve first available binary metamethod as a Lua value, then invoke callable closures, builtin functions and tables with __call",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: binary_metamethod_callback returns Option<Value>, invoke_binary_metamethod routes via protected_target"
+                },
+                {
+                  "text": "Preserve arithmetic, bitwise, concatenation, equality and ordering operator semantics with bounded host frames and hard recursion failures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: callable_binary_metamethods_preserve_lua_dispatch_and_depth_limits; two cycle safety regressions"
+                },
+                {
+                  "text": "Pass 16 Lua 5.4/production fer differential fixtures, Linux format/lint/tests/archive, Rust 1.96, action consumer and aggregate CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40054377514: all five jobs passed on 4ee9449a9c88a791e55245fe9de810958fd4b9ea"
+                },
+                {
+                  "text": "Synchronize README, engine docs, machine progress ledger and generated roadmap in successful CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3876,6 +3903,13 @@
           "name": "Callable Lua __len callbacks and error-level parity",
           "task_ids": [
             "T401"
+          ]
+        },
+        {
+          "emoji": "🎭",
+          "name": "Callable binary and unary Lua metamethod targets",
+          "task_ids": [
+            "T402"
           ]
         }
       ]
