@@ -3419,7 +3419,7 @@
               "id": "T410",
               "emoji": "🔒",
               "name": "Lexically distinguish Lua <close> read-only reassignments without implementing finalizers",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Classify writes to captured or local to-be-closed bindings distinctly from <const> writes",
@@ -3438,6 +3438,34 @@
                 },
                 {
                   "text": "Synchronize analyzer docs, README, progress ledger and generated roadmap under passing CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40114100152 passed five jobs with T410 docs and updated parser implementation on main (the original documentation-only run was superseded)"
+                }
+              ]
+            },
+            {
+              "id": "T411",
+              "emoji": "📐",
+              "name": "Lua local declarations permit at most one to-be-closed variable",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Reject multiple <close> attributes in a single Lua local declaration at parse time",
+                  "passed": true,
+                  "evidence": "src/expr.rs: parse local declaration tracks has_close and rejects duplicate close attributes"
+                },
+                {
+                  "text": "Retain valid mixed <const>/<close> bindings and reject duplicates in first, middle or final positions",
+                  "passed": true,
+                  "evidence": "src/expr.rs: parses_lua_local_attributes_without_accepting_unknown_names; two valid and three malformed regression cases"
+                },
+                {
+                  "text": "Pass Rust format/Clippy/tests, Rust 1.96, Lua 5.4 differential suite and action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40114100152: five successful jobs for commit 8750491cc29c5828e24e025323228c0e653e33e0"
+                },
+                {
+                  "text": "Document precise Lua 5.4 single-closer grammar limit and update machine roadmap/README with verified CI",
                   "passed": false
                 }
               ]
@@ -4190,6 +4218,13 @@
           "name": "Read-only <close> lexical assignment metadata",
           "task_ids": [
             "T410"
+          ]
+        },
+        {
+          "emoji": "📐",
+          "name": "Single <close> variable per Lua local declaration",
+          "task_ids": [
+            "T411"
           ]
         }
       ]

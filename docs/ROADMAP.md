@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 139 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 140 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -616,11 +616,16 @@
   - [x] Report const reassignment for captured upvalues but not writable shadowed locals or reads — src/scope.rs: Reference.const_reassignment and constant_local_attributes_follow_capture_and_shadowing_resolution
   - [x] Pass Linux Rust formatting, lint and tests; Rust 1.96; action consumer; Lua 5.4 differential CI — GitHub Actions 40112914625: all five jobs passed commit b76abff4643e0f2848b75b03bc53fd27f334af6d
   - [x] Synchronize machine-readable ledger, generated roadmap, README and documented analyzer limits under passing CI — GitHub Actions 40113187574: five successful jobs for synchronized README, scope metadata documentation and roadmap
-- 🔒 **T410** Lexically distinguish Lua <close> read-only reassignments without implementing finalizers — `████████░░ 75%`
+- 🔒 **T410** Lexically distinguish Lua <close> read-only reassignments without implementing finalizers — `██████████ 100%`
   - [x] Classify writes to captured or local to-be-closed bindings distinctly from <const> writes — src/scope.rs: Reference.close_reassignment and Resolver::record; Lua 5.4 §3.3.8 defines <close> as const-like
   - [x] Exercise capture, readable references, const-table field mutation and writable shadowed bindings — src/scope.rs: to_be_closed_bindings_are_readonly_even_through_captures; fixed Lua attribute test whitespace
   - [x] Pass Rust tests/Clippy/format, Rust 1.96, Lua 5.4 differential and composite consumer acceptance — GitHub Actions 40113575729: all five jobs green for 44b372447e4c7810a38ec6555ae91d73fe0ccfe0
-  - [ ] Synchronize analyzer docs, README, progress ledger and generated roadmap under passing CI
+  - [x] Synchronize analyzer docs, README, progress ledger and generated roadmap under passing CI — GitHub Actions 40114100152 passed five jobs with T410 docs and updated parser implementation on main (the original documentation-only run was superseded)
+- 📐 **T411** Lua local declarations permit at most one to-be-closed variable — `████████░░ 75%`
+  - [x] Reject multiple <close> attributes in a single Lua local declaration at parse time — src/expr.rs: parse local declaration tracks has_close and rejects duplicate close attributes
+  - [x] Retain valid mixed <const>/<close> bindings and reject duplicates in first, middle or final positions — src/expr.rs: parses_lua_local_attributes_without_accepting_unknown_names; two valid and three malformed regression cases
+  - [x] Pass Rust format/Clippy/tests, Rust 1.96, Lua 5.4 differential suite and action consumer — GitHub Actions 40114100152: five successful jobs for commit 8750491cc29c5828e24e025323228c0e653e33e0
+  - [ ] Document precise Lua 5.4 single-closer grammar limit and update machine roadmap/README with verified CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -729,5 +734,6 @@
 - 📞 Lua table/string shorthand call expression grammar — `██████████ 100%`
 - 🔒 Lua 5.4 const locals, capture protection and close attribute syntax — `██████████ 100%`
 - 🔎 Const capture/write metadata in lexical scope resolver — `██████████ 100%`
-- 🔒 Read-only <close> lexical assignment metadata — `████████░░ 75%`
+- 🔒 Read-only <close> lexical assignment metadata — `██████████ 100%`
+- 📐 Single <close> variable per Lua local declaration — `████████░░ 75%`
 
