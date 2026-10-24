@@ -3638,6 +3638,33 @@
                   "evidence": "GitHub Actions 40119577761: five jobs passed README, OWNED_ENGINE, roadmap generator and machine-ledger acceptance"
                 }
               ]
+            },
+            {
+              "id": "T418",
+              "emoji": "🔗",
+              "name": "Bound iterative left-associative and postfix Lua AST nesting",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Limit iterative Pratt operator chains and postfix field/index/call/method lowering before nested ASTs exhaust the Rust stack",
+                  "passed": true,
+                  "evidence": "src/expr.rs: Parser::expression_inner and Parser::postfix track chained AST nodes against MAX_EXPRESSION_DEPTH"
+                },
+                {
+                  "text": "Reject excessively deep left-associative and suffix chains while preserving shallower Lua expressions in both standalone expressions and chunks",
+                  "passed": true,
+                  "evidence": "src/expr.rs: long_left_associative_and_postfix_chains_are_bounded"
+                },
+                {
+                  "text": "Pass Linux format/Clippy/tests, Rust 1.96, production/differential and composite-action CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40119727210: all five jobs passed on 25e027af5fef5c71db9165bae0835cf5eae08fff"
+                },
+                {
+                  "text": "Synchronize README, parser depth documentation, ledger and generated roadmap with CI evidence",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4436,6 +4463,13 @@
           "name": "Expression parser host-stack safety",
           "task_ids": [
             "T417"
+          ]
+        },
+        {
+          "emoji": "🔗",
+          "name": "Iterative expression AST chain safety",
+          "task_ids": [
+            "T418"
           ]
         }
       ]

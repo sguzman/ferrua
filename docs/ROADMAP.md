@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 146 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 147 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -656,6 +656,11 @@
   - [x] Reject deeply nested parentheses, unary operators, right-associative powers and table constructors in expressions and chunks, while retaining shallow expressions — src/expr.rs: deeply_nested_expressions_fail_without_exhausting_host_stack
   - [x] Pass Rust 1.96, Linux lint/tests, Lua differential, isolated Arch smoke and consumer CI — GitHub Actions 40119363138: all five jobs successful for ffcf2d6ab160393d81874dc59c64f0d9bc8b7cc0
   - [x] Synchronize parser safety documentation, machine ledger and generated roadmap under CI acceptance — GitHub Actions 40119577761: five jobs passed README, OWNED_ENGINE, roadmap generator and machine-ledger acceptance
+- 🔗 **T418** Bound iterative left-associative and postfix Lua AST nesting — `████████░░ 75%`
+  - [x] Limit iterative Pratt operator chains and postfix field/index/call/method lowering before nested ASTs exhaust the Rust stack — src/expr.rs: Parser::expression_inner and Parser::postfix track chained AST nodes against MAX_EXPRESSION_DEPTH
+  - [x] Reject excessively deep left-associative and suffix chains while preserving shallower Lua expressions in both standalone expressions and chunks — src/expr.rs: long_left_associative_and_postfix_chains_are_bounded
+  - [x] Pass Linux format/Clippy/tests, Rust 1.96, production/differential and composite-action CI — GitHub Actions 40119727210: all five jobs passed on 25e027af5fef5c71db9165bae0835cf5eae08fff
+  - [ ] Synchronize README, parser depth documentation, ledger and generated roadmap with CI evidence
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -772,4 +777,5 @@
 - 🌐 Original six-byte Lua UTF-8 escape semantics — `██████████ 100%`
 - 🧪 Generated Lua grammar acceptance combinations — `██████████ 100%`
 - 🛡️ Expression parser host-stack safety — `██████████ 100%`
+- 🔗 Iterative expression AST chain safety — `████████░░ 75%`
 
