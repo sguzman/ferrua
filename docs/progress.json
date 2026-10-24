@@ -3531,7 +3531,7 @@
               "id": "T414",
               "emoji": "↵",
               "name": "Lua 5.4 long-bracket string physical newline normalization",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Normalize CRLF, LFCR, lone CR and LF to single LF bytes inside Lua long-bracket literal strings",
@@ -3550,6 +3550,34 @@
                 },
                 {
                   "text": "Synchronize engine documentation, README, machine ledger and generated roadmap in passing CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40118094275: all five jobs passed synchronized long-string documentation and extended Unicode escape implementation"
+                }
+              ]
+            },
+            {
+              "id": "T415",
+              "emoji": "🌐",
+              "name": "Lua 5.4 full 31-bit UTF-8 string escape encoding",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Encode \\u{...} Lua escapes using one to six original UTF-8 bytes without relying on Rust Unicode scalar validation",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: append_lua_utf8_escape, code points 0..0x7FFFFFFF and direct byte-vector comparison"
+                },
+                {
+                  "text": "Preserve invalid scalar byte encodings and six-byte values, while rejecting UTF-8 escape values beyond the Lua 5.4 limit",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: lua_54_utf8_escapes_support_full_thirty_one_bit_byte_range, unicode_scalar_escapes_encode_utf8_bytes; lexical overflow rejected"
+                },
+                {
+                  "text": "Pass pinned production fer and upstream Lua 5.4 differential reference cases, Linux tests/lint, MSRV and composite consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40118094275: five green jobs including seven new extended UTF-8 fixtures"
+                },
+                {
+                  "text": "Synchronize README, detailed independent-engine documentation, machine ledger and generated roadmap with passing CI",
                   "passed": false
                 }
               ]
@@ -4330,6 +4358,13 @@
           "name": "Long-bracket string line-break normalization",
           "task_ids": [
             "T414"
+          ]
+        },
+        {
+          "emoji": "🌐",
+          "name": "Original six-byte Lua UTF-8 escape semantics",
+          "task_ids": [
+            "T415"
           ]
         }
       ]

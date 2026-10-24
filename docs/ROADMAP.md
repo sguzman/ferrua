@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 143 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 144 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -636,11 +636,16 @@
   - [x] Exercise trailing comments, nested blocks, dangling expressions, CRLF endings and non-EOF diagnostic preservation — src/expr.rs: eof_syntax_errors_report_real_lua_line_and_final_byte
   - [x] Pass Rust 1.96, Lua differential smoke, Linux fmt/Clippy/unit and Arch archive, downstream setup consumer — GitHub Actions 40117211253: all five CI jobs green for 0dfc066ce9d81545f1de00c8af9dcd7b9f718547
   - [x] Synchronize machine progress, generated roadmap, README and first-party diagnostic documentation under CI — GitHub Actions 40117631335: all five jobs passed EOF diagnostic documentation, synchronized roadmap and long-string implementation
-- ↵ **T414** Lua 5.4 long-bracket string physical newline normalization — `████████░░ 75%`
+- ↵ **T414** Lua 5.4 long-bracket string physical newline normalization — `██████████ 100%`
   - [x] Normalize CRLF, LFCR, lone CR and LF to single LF bytes inside Lua long-bracket literal strings — src/owned_flow.rs: decode_lua_string long-bracket body normalization with no raw byte widening
   - [x] Preserve leading long-bracket newline removal, UTF-8 bytes and repeated-linebreak semantics — src/owned_flow.rs: long_brackets_normalize_crlf_lfcr_and_single_cr_line_breaks; tests/owned_flow.rs eight new differential cases
   - [x] Pass pinned upstream Lua 5.4 and production fer differential results, Rust unit/lint/format, MSRV and downstream GitHub consumer — GitHub Actions 40117631335: all five jobs green after rustfmt on 093e13bc3c67532215f6e7249dbe0b8f849c19e4
-  - [ ] Synchronize engine documentation, README, machine ledger and generated roadmap in passing CI
+  - [x] Synchronize engine documentation, README, machine ledger and generated roadmap in passing CI — GitHub Actions 40118094275: all five jobs passed synchronized long-string documentation and extended Unicode escape implementation
+- 🌐 **T415** Lua 5.4 full 31-bit UTF-8 string escape encoding — `████████░░ 75%`
+  - [x] Encode \u{...} Lua escapes using one to six original UTF-8 bytes without relying on Rust Unicode scalar validation — src/owned_flow.rs: append_lua_utf8_escape, code points 0..0x7FFFFFFF and direct byte-vector comparison
+  - [x] Preserve invalid scalar byte encodings and six-byte values, while rejecting UTF-8 escape values beyond the Lua 5.4 limit — src/owned_flow.rs: lua_54_utf8_escapes_support_full_thirty_one_bit_byte_range, unicode_scalar_escapes_encode_utf8_bytes; lexical overflow rejected
+  - [x] Pass pinned production fer and upstream Lua 5.4 differential reference cases, Linux tests/lint, MSRV and composite consumer — GitHub Actions 40118094275: five green jobs including seven new extended UTF-8 fixtures
+  - [ ] Synchronize README, detailed independent-engine documentation, machine ledger and generated roadmap with passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -753,5 +758,6 @@
 - 📐 Single <close> variable per Lua local declaration — `██████████ 100%`
 - 🔢 Lua numeral lexical boundary and malformed literal conformance — `██████████ 100%`
 - 📍 Parser EOF diagnostics retain Lua physical line and byte position — `██████████ 100%`
-- ↵ Long-bracket string line-break normalization — `████████░░ 75%`
+- ↵ Long-bracket string line-break normalization — `██████████ 100%`
+- 🌐 Original six-byte Lua UTF-8 escape semantics — `████████░░ 75%`
 
