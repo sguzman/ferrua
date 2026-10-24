@@ -19,11 +19,7 @@ fn implicit_chunk_returns_match_production_and_upstream_lua() {
         "goto finish; ::finish::",
     ] {
         let compiled = compile_flow_chunk(source).unwrap();
-        assert_eq!(
-            execute_flow_values(&compiled, 1000),
-            Ok(vec![]),
-            "{source}"
-        );
+        assert_eq!(execute_flow_values(&compiled, 1000), Ok(vec![]), "{source}");
         let lua = format!("print(select('#', (function() {source} end)()))");
         for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
             if binary == "lua5.4" && !compare_upstream {
@@ -48,5 +44,8 @@ fn implicit_chunk_returns_match_production_and_upstream_lua() {
     }
     let source = "if true then return 9 end";
     let compiled = compile_flow_chunk(source).unwrap();
-    assert_eq!(execute_flow_values(&compiled, 100), Ok(vec![Value::Integer(9)]));
+    assert_eq!(
+        execute_flow_values(&compiled, 100),
+        Ok(vec![Value::Integer(9)])
+    );
 }
