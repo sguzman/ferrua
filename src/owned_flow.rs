@@ -2258,9 +2258,7 @@ impl Execution<'_> {
                 };
                 Ok(vec![Value::Boolean(equal)])
             }
-            Value::Builtin(Builtin::Pairs) => {
-                self.pairs_ipairs_builtin(Builtin::Pairs, &arguments)
-            }
+            Value::Builtin(Builtin::Pairs) => self.pairs_ipairs_builtin(Builtin::Pairs, &arguments),
             Value::Builtin(Builtin::Ipairs) => {
                 self.pairs_ipairs_builtin(Builtin::Ipairs, &arguments)
             }
