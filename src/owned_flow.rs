@@ -2390,16 +2390,31 @@ impl Execution<'_> {
         Ok(text)
     }
 
-    /// A bounded, host-independent implementation of Lua's print protocol.
-    /// Conversion can invoke __tostring and shares the engine's safety limits.
+    /// Lua's print resolves the current global tostring instead of bypassing
+    /// overrides. Limit nested conversions so tostring=print cannot exhaust
+    /// the native Rust stack.
     fn print_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        if self.depth >= MAX_CALL_DEPTH {
+            return Err(FlowError::CallDepthExceeded);
+        }
+        self.depth += 1;
+        let result = self.print_builtin_inner(args);
+        self.depth -= 1;
+        result
+    }
+
+    fn print_builtin_inner(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let Value::String(key) = self.intern_string(b"tostring".to_vec())? else {
+            return Err(FlowError::InvalidBytecode);
+        };
+        let converter = self.read_global(key)?;
         let mut line = Vec::new();
         for (index, &argument) in args.iter().enumerate() {
             if index > 0 {
                 line.push(b'\t');
             }
-            let converted = self.tostring_builtin(argument)?;
-            let Value::String(handle) = converted else {
+            let converted = self.protected_target(converter, &[argument])?;
+            let Value::String(handle) = converted.first().copied().unwrap_or(Value::Nil) else {
                 return Err(FlowError::TypeError);
             };
             let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
@@ -7010,6 +7025,36 @@ mod tests {
         let huge = vec!["x".repeat(MAX_STRING_POOL_BYTES + 1)];
         let outcome = execute_flow_capture_with_args(&program, 1000, "script.lua", &huge);
         assert_eq!(outcome.result, Err(FlowError::TooLarge));
+    }
+
+    #[test]
+    fn print_uses_mutable_tostring_and_bounds_recursive_conversions() {
+        let program = compile_flow_chunk(
+            "local base=tostring; tostring=function(v) return '['..base(v)..']' end; print(6,true,'x')",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 2000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"[6]\t[true]\t[x]\n");
+
+        let program = compile_flow_chunk(
+            "local base=tostring; _G.tostring=function() return 'wrapped' end; print(7); _G.tostring=base; print(8)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 2000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"wrapped\n8\n");
+
+        let program = compile_flow_chunk("tostring=function() return 7 end; print(1)").unwrap();
+        assert_eq!(
+            execute_flow_capture(&program, 300).result,
+            Err(FlowError::TypeError)
+        );
+        let program = compile_flow_chunk("tostring=print; print(1)").unwrap();
+        assert_eq!(
+            execute_flow_capture(&program, 300).result,
+            Err(FlowError::CallDepthExceeded)
+        );
     }
 
     #[test]
