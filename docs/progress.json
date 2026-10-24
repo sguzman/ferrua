@@ -3862,6 +3862,33 @@
                   "evidence": "GitHub Actions 40125247612: five CI jobs green including documentation, roadmap source integrity and Lua 5.4 differential"
                 }
               ]
+            },
+            {
+              "id": "T426",
+              "emoji": "🌱",
+              "name": "Safe nonreturning integer conditional arm fallthrough without register joins",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Compile nonreturning local-only conditional branches and jump past sibling arms to an enclosing later return",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: compile_statements uses exit_jumps and patches branch fallthrough after full if/elseif/else"
+                },
+                {
+                  "text": "Reject nonreturning paths mutating enclosing local register bindings and preserve selected runtime arithmetic errors",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: enclosing_bindings_changed, integer_nonreturning_conditional_arms_merge_only_unmodified_bindings"
+                },
+                {
+                  "text": "Pass 14 upstream Lua 5.4/production fer comparison cases, unit/lint/format, Rust 1.96 and Arch/action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40125718824 all five jobs successful for commit 4e38f2e15c37fc9481be7d6edf0ce88ff6791adb"
+                },
+                {
+                  "text": "Synchronize documented join limitation, README, machine ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4716,6 +4743,13 @@
           "name": "Lexically isolated register-VM conditional return paths",
           "task_ids": [
             "T425"
+          ]
+        },
+        {
+          "emoji": "🌱",
+          "name": "Nonreturning local-only register conditional fallthrough",
+          "task_ids": [
+            "T426"
           ]
         }
       ]
