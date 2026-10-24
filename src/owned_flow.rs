@@ -3677,24 +3677,16 @@ pub fn execute_flow_capture_with_args<'a>(
     };
     let result = execution.run(&program.instructions, program.slots, &[], &[], &[]);
     let error_text = match &result {
-        Err(FlowError::Thrown(Value::String(handle))) => {
-            execution.strings.get(*handle).cloned()
-        }
-        Err(FlowError::Thrown(Value::Integer(value))) => {
-            Some(value.to_string().into_bytes())
-        }
+        Err(FlowError::Thrown(Value::String(handle))) => execution.strings.get(*handle).cloned(),
+        Err(FlowError::Thrown(Value::Integer(value))) => Some(value.to_string().into_bytes()),
         Err(FlowError::Thrown(Value::Float(bits))) => {
             Some(format!("{:?}", f64::from_bits(*bits)).into_bytes())
         }
         Err(FlowError::Thrown(Value::Boolean(_))) => {
             Some(b"error object is a boolean value".to_vec())
         }
-        Err(FlowError::Thrown(Value::Nil)) => {
-            Some(b"error object is a nil value".to_vec())
-        }
-        Err(FlowError::Thrown(Value::Table(_))) => {
-            Some(b"error object is a table value".to_vec())
-        }
+        Err(FlowError::Thrown(Value::Nil)) => Some(b"error object is a nil value".to_vec()),
+        Err(FlowError::Thrown(Value::Table(_))) => Some(b"error object is a table value".to_vec()),
         Err(FlowError::Thrown(Value::Function(_) | Value::Builtin(_))) => {
             Some(b"error object is a function value".to_vec())
         }
@@ -7043,14 +7035,21 @@ mod tests {
     #[test]
     fn capture_preserves_explicit_lua_errors_and_prior_prints() {
         for (source, expected, prior_stdout) in [
-            ("print('before'); error('failure detail')", "failure detail", "before\n"),
+            (
+                "print('before'); error('failure detail')",
+                "failure detail",
+                "before\n",
+            ),
             ("assert(false, 'assertion detail')", "assertion detail", ""),
             ("error(42)", "42", ""),
             ("error(nil)", "error object is a nil value", ""),
         ] {
             let program = compile_flow_chunk(source).unwrap();
             let outcome = execute_flow_capture(&program, 1000);
-            assert!(matches!(outcome.result, Err(FlowError::Thrown(_))), "{source}");
+            assert!(
+                matches!(outcome.result, Err(FlowError::Thrown(_))),
+                "{source}"
+            );
             assert_eq!(outcome.error_text.as_deref(), Some(expected.as_bytes()));
             assert_eq!(outcome.stdout, prior_stdout.as_bytes());
         }

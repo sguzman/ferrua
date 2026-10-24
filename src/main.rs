@@ -356,7 +356,10 @@ fn run_owned_source(
         .map_err(|err| format!("{name}: stdout write failed: {err}"))?;
     outcome.result.map(|_| ()).map_err(|err| match err {
         ferrua::owned_flow::FlowError::Thrown(_) => {
-            let detail = outcome.error_text.as_deref().unwrap_or(b"explicit Lua error");
+            let detail = outcome
+                .error_text
+                .as_deref()
+                .unwrap_or(b"explicit Lua error");
             format!("{name}: {}", String::from_utf8_lossy(detail))
         }
         other => format!("{name}: {other}"),

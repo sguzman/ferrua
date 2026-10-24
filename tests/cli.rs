@@ -425,7 +425,11 @@ fn owned_lexical_env_rebinding_matches_production_lua() {
 #[test]
 fn owned_cli_reports_original_explicit_error_values() {
     for (source, marker, prior_stdout) in [
-        ("print('before'); error('failure detail')", "failure detail", "before\n"),
+        (
+            "print('before'); error('failure detail')",
+            "failure detail",
+            "before\n",
+        ),
         ("assert(false, 'assertion detail')", "assertion detail", ""),
         ("error(42)", "42", ""),
         ("error(nil)", "error object is a nil value", ""),
@@ -437,4 +441,3 @@ fn owned_cli_reports_original_explicit_error_values() {
         assert!(stderr.contains(marker), "{source}: {stderr}");
     }
 }
-
