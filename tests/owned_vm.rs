@@ -418,6 +418,79 @@ fn integer_nonreturning_conditional_arms_match_lua_references() {
 }
 
 #[test]
+fn register_merged_conditional_locals_match_fer_and_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("local x=1; if true then x=2 end; return x", 2),
+        ("local x=1; if false then x=2 end; return x", 1),
+        ("local x=1; if true then x=2 else x=3 end; return x", 2),
+        ("local x=1; if false then x=2 else x=3 end; return x", 3),
+        (
+            "local x=1; if false then x=2 elseif true then x=7 end; return x",
+            7,
+        ),
+        (
+            "local x=1; if false then x=2 elseif false then x=7 end; return x",
+            1,
+        ),
+        (
+            "local x=1; if true then x=2 elseif true then x=7 end; return x",
+            2,
+        ),
+        (
+            "local x=1; if false then return 5 else x=2 end; return x",
+            2,
+        ),
+        ("local x=1; if true then return 5 else x=2 end; return x", 5),
+        ("local x=1; if true then x=2; do x=x+3 end end; return x", 5),
+        ("local a,b=1,2; if true then a,b=b,a end; return a*10+b", 21),
+        ("local a,b=1,2; if false then a,b=b,a end; return a*10+b", 12),
+        ("local x=1; if true then local x=5; x=6 end; return x", 1),
+        ("local x=1; if false then x=2 else x=x+3 end; return x", 4),
+        (
+            "local x=1; if true then x=2 end; if false then x=4 end; return x",
+            2,
+        ),
+        (
+            "local x=1; if true then x=2 end; if true then x=x+5 end; return x",
+            7,
+        ),
+        (
+            "local x=1; if false then x=2 end; if true then x=x+5 end; return x",
+            6,
+        ),
+        ("local x=1; if false then x=1//0 end; return x", 1),
+    ] {
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        let code = format!("print((function() {source} end)())");
+        for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if binary == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(binary);
+            if binary != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                expected.to_string(),
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
 fn numeric_truthiness_guard_matrix_matches_production_and_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()

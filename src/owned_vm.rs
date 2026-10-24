@@ -97,6 +97,12 @@ pub enum Instruction {
         dest: usize,
         input: usize,
     },
+    /// Copy the selected predecessor's integer into one merge register.
+    /// Exactly one predecessor executes on a valid forward-only path.
+    MergeCopy {
+        dest: usize,
+        input: usize,
+    },
     Jump {
         target: usize,
     },
@@ -385,9 +391,9 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 ///
 /// Supports integer locals with initializers, parallel assignments to locals,
 /// nested do/end blocks, bounded integer/Boolean if/elseif/else branches
-/// with return-only and local-only branches, guard-clause fallthrough,
-/// rejection of parent-binding updates across joins, and a single integer
-/// return from an active block.
+/// with returning or continuing branches, SSA-like single-assignment
+/// integer merge copies for enclosing locals, and a single integer return
+/// from an active block.
 /// Calls, general truthiness, loops, globals, nil and closures remain unsupported.
 pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
@@ -403,19 +409,48 @@ pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     Ok(program)
 }
 
-/// A non-returning conditional path can only rejoin the enclosing block
-/// if it does not change a parent local's static register binding.
-fn enclosing_bindings_changed<'a>(
-    before: &[HashMap<&'a str, RegisterBinding>],
-    branch: &[HashMap<&'a str, RegisterBinding>],
-) -> bool {
-    before.iter().zip(branch).any(|(original, updated)| {
-        original.iter().any(|(name, binding)| {
-            updated
-                .get(name)
-                .is_none_or(|other| other.register != binding.register)
-        })
-    })
+/// Conservatively prove a block always returns; false only causes
+/// extra merge-register reservation, never a missing register assignment.
+fn statements_definitely_return(statements: &[Statement<'_>]) -> bool {
+    for statement in statements {
+        match statement {
+            Statement::Return(values) if values.len() == 1 => return true,
+            Statement::Block(body) if statements_definitely_return(body) => return true,
+            Statement::If {
+                branches,
+                else_branch: Some(else_body),
+            } if branches
+                .iter()
+                .all(|(_, body)| statements_definitely_return(body))
+                && statements_definitely_return(else_body) =>
+            {
+                return true;
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Emit one unique integer-register definition on the selected predecessor.
+/// Parent scopes are identified by lexical depth, so shadowing is preserved.
+fn emit_merge_copies<'a>(
+    program: &mut Program,
+    merge: &[(usize, &'a str, usize)],
+    path: &[HashMap<&'a str, RegisterBinding>],
+) -> Result<(), Error> {
+    for &(level, name, dest) in merge {
+        let source = path
+            .get(level)
+            .and_then(|scope| scope.get(name))
+            .ok_or(Error::InvalidBytecode)?
+            .register;
+        program.code.push(Instruction::MergeCopy {
+            dest,
+            input: source,
+        });
+    }
+    Ok(())
 }
 
 fn compile_statements<'a>(
@@ -511,10 +546,35 @@ fn compile_statements<'a>(
                 branches,
                 else_branch,
             } => {
-                // Branches compile against independent binding snapshots.
-                // Non-returning arms may rejoin only when they leave every
-                // enclosing local binding unchanged; mutable joins require
-                // real register phi/merge instructions.
+                // Reserve shared destinations only when an arm might
+                // continue. Each branch computes its own predecessor
+                // values; the executed path defines each merge once.
+                let may_fall_through = branches
+                    .iter()
+                    .any(|(_, body)| !statements_definitely_return(body))
+                    || else_branch
+                        .as_ref()
+                        .is_none_or(|body| !statements_definitely_return(body));
+                let mut merge = Vec::new();
+                if may_fall_through {
+                    let mut live = scopes
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(level, scope)| {
+                            scope.keys().copied().map(move |name| (level, name))
+                        })
+                        .collect::<Vec<_>>();
+                    live.sort_unstable();
+                    for (level, name) in live {
+                        if program.registers >= MAX_REGISTERS {
+                            return Err(Error::TooLarge);
+                        }
+                        let dest = program.registers;
+                        program.registers += 1;
+                        merge.push((level, name, dest));
+                    }
+                }
+
                 let mut exit_jumps = Vec::new();
                 let mut every_arm_returns = true;
                 for (condition, body) in branches {
@@ -529,12 +589,11 @@ fn compile_statements<'a>(
                     let returned =
                         compile_statements(body, program, &mut branch_scopes, depth + 1)?;
                     if returned.is_none() {
-                        if enclosing_bindings_changed(scopes, &branch_scopes) {
-                            return Err(Error::Unsupported(
-                                "conditional local updates need register-state joins".into(),
-                            ));
+                        if !may_fall_through {
+                            return Err(Error::InvalidBytecode);
                         }
                         every_arm_returns = false;
+                        emit_merge_copies(program, &merge, &branch_scopes)?;
                         exit_jumps.push(program.code.len());
                         program.code.push(Instruction::Jump { target: usize::MAX });
                     }
@@ -549,13 +608,15 @@ fn compile_statements<'a>(
                     branch_scopes.push(HashMap::new());
                     let returned =
                         compile_statements(else_body, program, &mut branch_scopes, depth + 1)?;
-                    if returned.is_none() && enclosing_bindings_changed(scopes, &branch_scopes) {
-                        return Err(Error::Unsupported(
-                            "conditional local updates need register-state joins".into(),
-                        ));
+                    if returned.is_none() {
+                        if !may_fall_through {
+                            return Err(Error::InvalidBytecode);
+                        }
+                        emit_merge_copies(program, &merge, &branch_scopes)?;
                     }
                     returned.is_some()
                 } else {
+                    emit_merge_copies(program, &merge, scopes)?;
                     false
                 };
                 let after = program.code.len();
@@ -565,6 +626,15 @@ fn compile_statements<'a>(
                 if every_arm_returns && else_returns {
                     result = Some(0);
                     break;
+                }
+                // All continuing predecessors have initialized their merge
+                // destinations. Later statements read only those registers.
+                for (level, name, dest) in merge {
+                    let binding = scopes
+                        .get_mut(level)
+                        .and_then(|scope| scope.get_mut(name))
+                        .ok_or(Error::InvalidBytecode)?;
+                    binding.register = dest;
                 }
             }
             Statement::Return(values) if values.len() == 1 => {
@@ -666,7 +736,8 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
                 pc = target;
                 continue;
             }
-            Instruction::BooleanCopy { dest, input } => (dest, read(&registers, input)?),
+            Instruction::BooleanCopy { dest, input }
+            | Instruction::MergeCopy { dest, input } => (dest, read(&registers, input)?),
             Instruction::NumericTruthy { dest, input } => {
                 read(&registers, input)?;
                 (dest, 1)
@@ -968,8 +1039,6 @@ mod tests {
         }
         for source in [
             "if true then return 7 end",
-            "local x=1; if true then x=2 end; return x",
-            "local x=1; if false then return 5 elseif true then x=6 end; return x",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
@@ -1066,8 +1135,6 @@ mod tests {
         }
         for source in [
             "local x=1; if true then x=2 end; return x",
-            "local x=1; if false then x=2 else return 7 end; return x",
-            "local x=1; if false then return 7 else x=2 end; return x",
             "if true then local a=1 end",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
@@ -1079,6 +1146,60 @@ mod tests {
         );
         let program = compile_integer_chunk("if false then local y=1//0 end; return 1").unwrap();
         assert_eq!(execute_integer_program(&program), Ok(1));
+    }
+
+    #[test]
+    fn merged_integer_conditional_locals_preserve_selected_path_values() {
+        for (source, expected) in [
+            ("local x=1; if true then x=2 end; return x", 2),
+            ("local x=1; if false then x=2 end; return x", 1),
+            ("local x=1; if true then x=2 else x=3 end; return x", 2),
+            ("local x=1; if false then x=2 else x=3 end; return x", 3),
+            (
+                "local x=1; if false then x=2 elseif true then x=7 end; return x",
+                7,
+            ),
+            (
+                "local x=1; if false then x=2 elseif false then x=7 end; return x",
+                1,
+            ),
+            (
+                "local x=1; if true then x=2 elseif true then x=7 end; return x",
+                2,
+            ),
+            (
+                "local x=1; if false then return 5 else x=2 end; return x",
+                2,
+            ),
+            ("local x=1; if true then return 5 else x=2 end; return x", 5),
+            ("local x=1; if true then x=2; do x=x+3 end end; return x", 5),
+            ("local a,b=1,2; if true then a,b=b,a end; return a*10+b", 21),
+            ("local a,b=1,2; if false then a,b=b,a end; return a*10+b", 12),
+            ("local x=1; if true then local x=5; x=6 end; return x", 1),
+            ("local x=1; if false then x=2 else x=x+3 end; return x", 4),
+            (
+                "local x=1; if true then x=2 end; if false then x=4 end; return x",
+                2,
+            ),
+            (
+                "local x=1; if true then x=2 end; if true then x=x+5 end; return x",
+                7,
+            ),
+            (
+                "local x=1; if false then x=2 end; if true then x=x+5 end; return x",
+                6,
+            ),
+            ("local x=1; if false then x=1//0 end; return x", 1),
+        ] {
+            let program = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        }
+        let program =
+            compile_integer_chunk("local x=1; if true then x=1//0 end; return x").unwrap();
+        assert_eq!(
+            execute_integer_program(&program),
+            Err(Error::DivisionByZero)
+        );
     }
 
     #[test]
@@ -1196,7 +1317,6 @@ mod tests {
             "return x",
             "x=1; return x",
             "local x=1; print(x); return x",
-            "local x=1; if x>0 then x=2 end; return x",
             "local x=1; while x<3 do x=x+1 end; return x",
             "local x=1; return 1.5",
             "local x=1; x.y=2; return x",
