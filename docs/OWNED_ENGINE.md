@@ -506,7 +506,7 @@ The experimental owned VM's `pcall` can now invoke the existing first-party `typ
 
 Ten curated fixtures cover successful type and number conversion, invalid numeral returning nil, raw length, numeric raw equality, builtin error handlers and protected invalid arguments. [CI #40046376588](https://github.com/sguzman/ferrua/actions/runs/40046376588) passed Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential tests, Arch packaging, composite consumer and aggregate status.
 
-This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. `rawget`, `rawset`, `next`, `pairs`, `ipairs`, `pcall` and `xpcall` as nested builtin targets, arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.
+This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. `next`, `pairs`, `ipairs`, `pcall` and `xpcall` as nested builtin targets, arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.
 
 ### Lua 5.4 numeric __tostring callback returns
 
@@ -517,3 +517,9 @@ The initial incorrect discrepancy classification was superseded by actual Lua re
 ### Verified shared protected Lua tostring execution
 
 Ordinary `tostring` and protected `pcall(tostring, ...)` or `xpcall(error, tostring, ...)` use the same `Execution::tostring_builtin` dispatch. The first-party `__tostring` callback is evaluated once, with only its first result used. The bounded VM follows Lua 5.4 by allowing byte strings and numeric callback results converted to Lua byte strings, while rejecting nil and Boolean results. Metamethod recursion still respects the native-stack call-depth safeguard. [CI #40047343376](https://github.com/sguzman/ferrua/actions/runs/40047343376) passed all five acceptance jobs after correction of an earlier incorrect interpretation of the reference oracle. The production `fer` backend is unchanged.
+
+### Verified protected Lua raw table and metatable builtins
+
+The experimental owned interpreter routes `pcall(rawget, ...)` and `pcall(rawset, ...)` through the same first-party raw table helpers as ordinary bytecode calls, bypassing `__index` and `__newindex` metamethod callbacks. `getmetatable` and `setmetatable` work as protected callable builtin values, preserving the existing `__metatable` protection checks and table-return conventions. `xpcall` may invoke a function-valued builtin such as `getmetatable` as its message handler, but the handler still receives only the error object, per Lua 5.4.
+
+Fourteen curated unit and reference fixtures cover raw access, mutation, missing keys, invalid raw keys and arities, locked and unlocked metatables, protected updates, and a builtin `xpcall` handler. [CI #40051457030](https://github.com/sguzman/ferrua/actions/runs/40051457030) passed all five jobs including Lua 5.4 differential parity, Linux tests/lint and pinned Arch packaging. Capacity failures remain noncatchable VM guard conditions. Complete builtin call semantics, garbage collection and production cutover remain outside the accepted subset.

@@ -2994,6 +2994,33 @@
                   "evidence": "GitHub Actions 40051235510: five successful jobs including regenerated roadmap integrity, README, owned-engine docs and Lua 5.4 differential"
                 }
               ]
+            },
+            {
+              "id": "T395",
+              "emoji": "🔐",
+              "name": "Protected Lua raw table and metatable builtin parity",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Share rawget and rawset behavior across ordinary and protected calls, without consulting __index/__newindex",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::rawget_builtin and rawset_builtin; GitHub Actions 40051457030 accepted"
+                },
+                {
+                  "text": "Protect getmetatable and setmetatable semantics, including __metatable locks and observable table mutation",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::protected_target delegates to existing getmetatable_builtin/setmetatable_builtin; 14 differential cases"
+                },
+                {
+                  "text": "Pass Rust quality/tests, upstream Lua 5.4 and production fer reference corpus, Rust 1.96 and action consumer CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40051457030: all five primary/reporting jobs successful for 84452bc5be6453da7f4e76cbe194f29046f03e47"
+                },
+                {
+                  "text": "Synchronize documentation and machine-readable progress ledger under CI acceptance",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3631,6 +3658,13 @@
           "name": "Shared protected tostring and numeric __tostring parity",
           "task_ids": [
             "T394"
+          ]
+        },
+        {
+          "emoji": "🔐",
+          "name": "Protected raw table and metatable standard builtins",
+          "task_ids": [
+            "T395"
           ]
         }
       ]
