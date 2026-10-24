@@ -3167,7 +3167,7 @@
               "id": "T401",
               "emoji": "📏",
               "name": "Callable __len metamethods with Lua error-level validation",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Execute first-party __len callback values as ordinary bounded Lua callables, including tables with __call and builtin functions",
@@ -3186,7 +3186,8 @@
                 },
                 {
                   "text": "Synchronize README, engine design, machine progress and generated roadmap after passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40054258283: all five jobs green including updated Lua error-level docs, generated roadmap and machine progress integrity"
                 }
               ]
             }
