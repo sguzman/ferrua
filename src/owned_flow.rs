@@ -6189,7 +6189,8 @@ mod tests {
         assert_eq!(evaluate(r#"return #"\u{1F600}""#), 4);
         assert_eq!(evaluate(r#"return #"\u{E9}""#), 2);
         assert_eq!(evaluate(r#"return ("\u{E9}" == "é") and 1 or 0"#), 1);
-        assert!(compile_flow_chunk(r#"return "\u{D800}""#).is_err());
+        assert_eq!(evaluate(r#"return #"\u{D800}""#), 3);
+        assert!(compile_flow_chunk(r#"return "\u{80000000}""#).is_err());
     }
 
     #[test]
