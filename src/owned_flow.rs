@@ -6470,7 +6470,10 @@ mod tests {
                 0,
             ),
             ("local x=0 while true do break; local y=2 end return x", 0),
-            ("local x=0 while true do break; ::mark:: x=2 end return x", 0),
+            (
+                "local x=0 while true do break; ::mark:: x=2 end return x",
+                0,
+            ),
             ("local x=0 while true do break break end return x", 0),
             (
                 "local x=0 repeat if true then break end x=2 until false return x",

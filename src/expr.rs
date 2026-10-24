@@ -1161,11 +1161,7 @@ mod tests {
         ] {
             assert!(parse_chunk(source).is_ok(), "{source}");
         }
-        for source in [
-            "break",
-            "do break end",
-            "if true then break end",
-        ] {
+        for source in ["break", "do break end", "if true then break end"] {
             assert!(parse_chunk(source).is_err(), "{source}");
         }
     }
