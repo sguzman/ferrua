@@ -3722,6 +3722,33 @@
                   "evidence": "GitHub Actions 40121153222: five successful acceptance jobs for README, OWNED_ENGINE, roadmap, ledger and reference tests"
                 }
               ]
+            },
+            {
+              "id": "T421",
+              "emoji": "🌿",
+              "name": "Conditional integer return branches in independent register VM",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Compile bounded if/elseif/else return paths with Boolean literal and integer comparison conditions",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: Compare, BranchIfFalse, Return opcodes; emit_condition and compile_statements exhaustive branch lowering"
+                },
+                {
+                  "text": "Reject unsupported truthiness/fallthrough and invalid jump targets; restore lexically valid const-local regression inputs",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: register_integer_conditional_return_arms_and_comparisons and integer_register_locals_track_lua_const_attributes_and_shadowing"
+                },
+                {
+                  "text": "Pass 15 production fer and upstream Lua 5.4 conditional fixtures plus Rust 1.96, Linux quality/tests and action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40121950453: all five CI jobs successful for commit 14bd11327f338c2e0560d7574c6556a058d2d2c7"
+                },
+                {
+                  "text": "Synchronize README, owned-engine documentation, machine ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4541,6 +4568,13 @@
           "name": "Register-VM nested integer return propagation",
           "task_ids": [
             "T420"
+          ]
+        },
+        {
+          "emoji": "🌿",
+          "name": "Register-VM exhaustive integer conditional returns",
+          "task_ids": [
+            "T421"
           ]
         }
       ]
