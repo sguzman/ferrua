@@ -712,7 +712,7 @@ mod tests {
 
     #[test]
     fn to_be_closed_bindings_are_readonly_even_through_captures() {
-        let source = "local closer<close>=nil; local f=function() closer=nil end; local t<const>={}; t.key=1; local a=closer; do local closer=0; closer=1 end";
+        let source = "local closer<close> =nil; local f=function() closer=nil end; local t<const> ={}; t.key=1; local a=closer; do local closer=0; closer=1 end";
         let summary = analyze(source).unwrap();
         assert_eq!(summary.bindings[0].attribute, Some(LocalAttribute::Close));
         assert_eq!(summary.bindings[2].attribute, Some(LocalAttribute::Const));
