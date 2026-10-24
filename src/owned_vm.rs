@@ -2,7 +2,7 @@
 //! Not used by production fer; not a full Lua VM.
 
 use crate::expr::{Expr, LocalAttribute, Statement, parse_chunk, parse_expression};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 const MAX_REGISTERS: usize = 16384;
 
@@ -453,6 +453,39 @@ fn emit_merge_copies<'a>(
     Ok(())
 }
 
+/// Conservative set of names assigned by this branch, including nested
+/// blocks. Shadowed names may cause a harmless extra join, but missing a
+/// mutated enclosing binding would create an uninitialized merge register.
+fn assigned_names<'a>(body: &[Statement<'a>], names: &mut HashSet<&'a str>) {
+    let mut pending = vec![body];
+    while let Some(statements) = pending.pop() {
+        for node in statements {
+            match node {
+                Statement::Assign { targets, .. } => {
+                    for target in targets {
+                        if let Expr::Atom(name) = target {
+                            names.insert(*name);
+                        }
+                    }
+                }
+                Statement::Block(inner) => pending.push(inner),
+                Statement::If {
+                    branches,
+                    else_branch,
+                } => {
+                    for (_, inner) in branches {
+                        pending.push(inner);
+                    }
+                    if let Some(inner) = else_branch {
+                        pending.push(inner);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 fn compile_statements<'a>(
     statements: &[Statement<'a>],
     program: &mut Program,
@@ -555,13 +588,28 @@ fn compile_statements<'a>(
                     || else_branch
                         .as_ref()
                         .is_none_or(|body| !statements_definitely_return(body));
+                let mut assigned = HashSet::new();
+                for (_, body) in branches {
+                    assigned_names(body, &mut assigned);
+                }
+                if let Some(body) = else_branch {
+                    assigned_names(body, &mut assigned);
+                }
                 let mut merge = Vec::new();
                 if may_fall_through {
+                    // Only names a reachable arm might write need phi-like
+                    // destination registers; read-only and const locals keep
+                    // their original registers across the join.
                     let mut live = scopes
                         .iter()
                         .enumerate()
                         .flat_map(|(level, scope)| {
-                            scope.keys().copied().map(move |name| (level, name))
+                            scope
+                                .iter()
+                                .filter(|(name, binding)| {
+                                    !binding.constant && assigned.contains(*name)
+                                })
+                                .map(move |(name, _)| (level, *name))
                         })
                         .collect::<Vec<_>>();
                     live.sort_unstable();

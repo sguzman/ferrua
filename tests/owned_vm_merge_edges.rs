@@ -129,6 +129,26 @@ fn nested_mutable_register_merges_match_lua54_and_production() {
 }
 
 #[test]
+fn sparse_conditional_updates_do_not_exhaust_registers() {
+    let declarations = (0..70)
+        .map(|index| format!("local v{index}=1; "))
+        .collect::<String>();
+    let no_updates = format!(
+        "{declarations}{}return v0",
+        "if true then local temporary=2 end; ".repeat(300)
+    );
+    let program = compile_integer_chunk(&no_updates).unwrap();
+    assert_eq!(execute_integer_program(&program), Ok(1));
+
+    let sparse_updates = format!(
+        "{declarations}{}return v0",
+        "if false then v0=3 end; ".repeat(300)
+    );
+    let program = compile_integer_chunk(&sparse_updates).unwrap();
+    assert_eq!(execute_integer_program(&program), Ok(1));
+}
+
+#[test]
 fn branch_merges_preserve_errors_and_constant_local_restrictions() {
     for source in [
         "local x<const>=2; if true then x=3 end; return x",
