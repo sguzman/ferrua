@@ -68,6 +68,9 @@ fn curated_global_function_print_and_error_semantics_match_lua54() {
         "setmetatable(_G,{__index=function(_,key) if key=='missing' then return 17 end end}); print(missing)",
         "local f=print; local ok=pcall(f,'protected',9); assert(ok)",
         "print(); print('hello',true,nil); print(6*7)",
+        "local outer=_ENV; local box={print=print,base=40}; do local _ENV=box; answer=base+2; function double(x) return x*2 end; print(double(answer)) end; assert(box.answer==42); print(box.double(3))",
+        "local env={print=print,n=3}; do local _ENV=env; function read() return n end; n=9; print(read()) end; print(env.n)",
+        "local env={print=print}; do local _ENV=env; print('first'); do local _ENV={print=print}; print('nested') end; print('last') end",
     ] {
         assert_parity(source, true);
     }
@@ -89,6 +92,21 @@ fn generated_branch_and_environment_interactions_match_lua54() {
              local box={{base={base}}}; function box:plus(x) return self.base+x end; \
              if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
              print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
         );
         assert_parity(&source, true);
     }
