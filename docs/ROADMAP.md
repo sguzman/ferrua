@@ -676,11 +676,11 @@
   - [x] Reject unsupported truthiness/fallthrough and invalid jump targets; restore lexically valid const-local regression inputs — src/owned_vm.rs: register_integer_conditional_return_arms_and_comparisons and integer_register_locals_track_lua_const_attributes_and_shadowing
   - [x] Pass 15 production fer and upstream Lua 5.4 conditional fixtures plus Rust 1.96, Linux quality/tests and action consumer — GitHub Actions 40121950453: all five CI jobs successful for commit 14bd11327f338c2e0560d7574c6556a058d2d2c7
   - [x] Synchronize README, owned-engine documentation, machine ledger and generated roadmap under passing CI — GitHub Actions 40122149293: all five acceptance jobs green for synchronized roadmap, ledger, README and owned-engine docs
-- 🔎 **T422** Lua numeric truthiness and unary not in register-VM conditional guards — `████████░░ 75%`
+- 🔎 **T422** Lua numeric truthiness and unary not in register-VM conditional guards — `██████████ 100%`
   - [x] Compile bare integer expressions as Lua-truthy guards, including integer zero; support Boolean unary not without exposing Boolean as integer result — src/owned_vm.rs: emit_condition, NumericTruthy and BooleanNot instruction dispatch
   - [x] Preserve evaluation errors, nested negated comparisons and lexical integer conditions; reject unsupported nonnumeric values — src/owned_vm.rs: integer_guard_truthiness_and_boolean_not_match_lua; explicit division by zero and unsupported guard regression
   - [x] Pass 12 production fer/upstream Lua 5.4 differential cases plus Rust 1.96, Linux tests/Clippy and consumer acceptance — GitHub Actions 40122551608: five jobs passed for 01f76bedf4bfdc14550f9727e8bb7b3a3efb4721
-  - [ ] Synchronize README, owned-engine docs, machine progress ledger and generated roadmap under passing CI
+  - [x] Synchronize README, owned-engine docs, machine progress ledger and generated roadmap under passing CI — GitHub Actions 40122748958: all five CI jobs succeeded for synchronized README, owned-engine documentation and generated roadmap
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -801,5 +801,5 @@
 - 🏗️ Cross-function Lua parser block recursion safety — `██████████ 100%`
 - 📜 Register-VM nested integer return propagation — `██████████ 100%`
 - 🌿 Register-VM exhaustive integer conditional returns — `██████████ 100%`
-- 🔎 Register-VM Lua numeric truthiness and negated guards — `████████░░ 75%`
+- 🔎 Register-VM Lua numeric truthiness and negated guards — `██████████ 100%`
 
