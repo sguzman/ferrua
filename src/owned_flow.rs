@@ -2067,6 +2067,16 @@ impl Execution<'_> {
         }
     }
 
+    /// An assertion raises the supplied Lua error value, or the default
+    /// assertion message when no custom second argument is given.
+    fn assertion_failure(&mut self, args: &[Value]) -> Result<FlowError, FlowError> {
+        let message = match args.get(1).copied() {
+            Some(value) => value,
+            None => self.intern_string(b"assertion failed!".to_vec())?,
+        };
+        Ok(FlowError::Thrown(message))
+    }
+
     /// Bounded protected Lua closure calls preserve explicit error values.
     /// Resource exhaustion remains fatal to prevent protected calls from
     /// defeating the VM's global instruction and allocation budgets.
@@ -2082,7 +2092,7 @@ impl Execution<'_> {
                 if parameters.first().copied().unwrap_or(Value::Nil).truthy() {
                     Ok(parameters.to_vec())
                 } else {
-                    Err(FlowError::TypeError)
+                    Err(self.assertion_failure(parameters)?)
                 }
             }
             _ => Err(FlowError::TypeError),
@@ -2402,7 +2412,7 @@ impl Execution<'_> {
                         redirects += 1;
                     }
                     if let Value::Builtin(builtin) = callable {
-                        if args.is_empty() && !matches!(builtin, Builtin::Error | Builtin::Pcall) {
+                        if args.is_empty() && !matches!(builtin, Builtin::Error | Builtin::Pcall | Builtin::Assert) {
                             return Err(FlowError::TypeError);
                         }
                         if builtin == Builtin::Error {
@@ -2424,7 +2434,7 @@ impl Execution<'_> {
                                 Builtin::Select => self.select_builtin(&args)?,
                                 Builtin::Pcall => self.pcall_builtin(&args)?,
                                 Builtin::Assert if args[0].truthy() => args,
-                                Builtin::Assert => return Err(FlowError::TypeError),
+                                Builtin::Assert => return Err(self.assertion_failure(&args)?),
                                 Builtin::Next => self.next_builtin(&args)?,
                                 Builtin::Pairs | Builtin::Ipairs => {
                                     let Value::Table(handle) = args[0] else {
@@ -3895,11 +3905,19 @@ mod tests {
             "return assert(nil,'bad')",
         ] {
             let program = compile_flow_chunk(source).unwrap();
-            assert_eq!(
-                execute_flow_value(&program, DEFAULT_STEP_BUDGET),
-                Err(FlowError::TypeError)
+            assert!(
+                matches!(
+                    execute_flow_value(&program, DEFAULT_STEP_BUDGET),
+                    Err(FlowError::Thrown(Value::String(_)))
+                ),
+                "{source}"
             );
         }
+        let program = compile_flow_chunk("return assert(false,42)").unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Err(FlowError::Thrown(Value::Integer(42)))
+        );
     }
 
     #[test]
