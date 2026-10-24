@@ -2181,6 +2181,26 @@ impl Execution<'_> {
         }
     }
 
+    /// Nested protected builtin invocations share the conservative host-stack
+    /// depth limit with first-party Lua closure calls.
+    fn nested_protected_builtin(
+        &mut self,
+        builtin: Builtin,
+        args: &[Value],
+    ) -> Result<Vec<Value>, FlowError> {
+        if self.depth >= MAX_CALL_DEPTH {
+            return Err(FlowError::CallDepthExceeded);
+        }
+        self.depth += 1;
+        let result = match builtin {
+            Builtin::Pcall => self.pcall_builtin(args),
+            Builtin::Xpcall => self.xpcall_builtin(args),
+            _ => Err(FlowError::TypeError),
+        };
+        self.depth -= 1;
+        result
+    }
+
     /// Protected calls share Lua's bounded callable-table redirects with
     /// ordinary bytecode calls. General builtins remain an incomplete subset.
     fn protected_target(
@@ -2262,6 +2282,12 @@ impl Execution<'_> {
             Value::Builtin(Builtin::Pairs) => self.pairs_ipairs_builtin(Builtin::Pairs, &arguments),
             Value::Builtin(Builtin::Ipairs) => {
                 self.pairs_ipairs_builtin(Builtin::Ipairs, &arguments)
+            }
+            Value::Builtin(Builtin::Pcall) => {
+                self.nested_protected_builtin(Builtin::Pcall, &arguments)
+            }
+            Value::Builtin(Builtin::Xpcall) => {
+                self.nested_protected_builtin(Builtin::Xpcall, &arguments)
             }
             Value::Builtin(Builtin::Select) => self.select_builtin(&arguments),
             Value::Builtin(Builtin::Next) => self.next_builtin(&arguments),
@@ -3995,6 +4021,36 @@ mod tests {
             compile_flow_chunk("local t={}; setmetatable(t,{__call=t}); return pcall(t)").unwrap();
         assert_eq!(
             execute_flow_values(&cyclic, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+    }
+
+    #[test]
+    fn nested_protected_call_builtins_preserve_values_and_bound_depth() {
+        for source in [
+            "local ok,inner,v=pcall(pcall,function() return 7 end); return ok and inner and v==7 and 1 or 0",
+            "local ok,inner,e=pcall(pcall,error,9); return ok and not inner and e==9 and 1 or 0",
+            "local ok,inner,v=pcall(xpcall,error,function(e) return e*2 end,4); return ok and not inner and v==8 and 1 or 0",
+            "local ok,inner,v=pcall(xpcall,function() return 6 end,function(e) return 0 end); return ok and inner and v==6 and 1 or 0",
+            "local ok,inner=xpcall(error,pcall,9); return not ok and inner==false and 1 or 0",
+            "local ok,inner,v=pcall(pcall,tonumber,'8'); return ok and inner and v==8 and 1 or 0",
+            "local ok,inner,v=pcall(pcall,rawlen,{1,2}); return ok and inner and v==2 and 1 or 0",
+            "local ok,inner,v=pcall(pcall,assert,false,'bad'); return ok and not inner and v=='bad' and 1 or 0",
+            "local ok,inner,v=pcall(xpcall,error,function(e) return false end,4); return ok and inner==false and v==false and 1 or 0",
+            "return select('#',pcall(pcall,function() end))==2 and 1 or 0",
+            "local ok,inner=pcall(xpcall,error,nil,5); return not ok and type(inner)=='string' and 1 or 0",
+            "local n=0; local ok,inner,v=pcall(pcall,function() n=n+1; return n end); return ok and inner and v==1 and n==1 and 1 or 0",
+            "local ok,inner,again,v=pcall(pcall,pcall,error,7); return ok and inner and again==false and v==7 and 1 or 0",
+            "local inner=function() return 8,9 end; local ok,a,b,c=pcall(pcall,inner); return ok and a and b==8 and c==9 and 1 or 0",
+            "local ok,a,b=pcall(xpcall,error,function(e) return e+1 end,9); return ok and a==false and b==10 and 1 or 0",
+        ] {
+            assert_eq!(evaluate(source), 1, "{source}");
+        }
+        let nested = vec!["pcall"; MAX_CALL_DEPTH + 4].join(",");
+        let source = format!("return pcall({nested})");
+        let program = compile_flow_chunk(&source).unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
             Err(FlowError::CallDepthExceeded)
         );
     }
