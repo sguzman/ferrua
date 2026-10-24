@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 158 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 159 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -716,6 +716,11 @@
   - [x] Exercise more than 4,000 no-op conditional arms that consume more instructions than registers — src/owned_vm.rs: integer_chunk_rejects_oversized_instruction_stream_before_execution
   - [x] Pass Linux formatting/lint/tests, Rust 1.96, Lua 5.4/production regression matrix, Arch smoke and action consumer — GitHub Actions 40127939465: all five jobs succeeded for c7300fee0e1c38a9f906c96779092e266b871a8f
   - [x] Synchronize bytecode limit documentation, machine ledger and generated roadmap under passing CI — GitHub Actions 40128103663: all five CI jobs succeeded for synchronized docs/ROADMAP, README, owned-engine documentation and machine progress ledger
+- 🛡️ **T430** Preflight entire integer register bytecode before dispatch — `████████░░ 75%`
+  - [x] Reject invalid static register operands, result registers, and malformed forward-jump targets before executing instructions — src/owned_vm.rs: validate_integer_program checks every Instruction variant and Program metadata; commit 303b791dfe95a5473ea3107b41b012e156179c00
+  - [x] Test malformed instructions hidden behind early returns and validate correct bytecode still executes — src/owned_vm.rs: validates_unreachable_integer_bytecode_and_register_bounds, six negative cases and one valid case
+  - [x] Pass Linux Rust unit/integration tests, formatting, lint, Rust 1.96, upstream Lua differential, Arch smoke and action consumer — GitHub Actions 40128785174: all five jobs passed on commit 303b791dfe95a5473ea3107b41b012e156179c00
+  - [ ] Synchronize README, owned VM documentation, machine progress ledger and regenerated roadmap under passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -844,4 +849,5 @@
 - 🔀 Mutable conditional-local register path merges — `██████████ 100%`
 - 🧵 Assignment-aware sparse merge allocation — `██████████ 100%`
 - 🧱 Bounded bytecode emission before interpreter dispatch — `██████████ 100%`
+- 🛡️ Whole-program bytecode structural preflight — `████████░░ 75%`
 

@@ -3974,6 +3974,33 @@
                   "evidence": "GitHub Actions 40128103663: all five CI jobs succeeded for synchronized docs/ROADMAP, README, owned-engine documentation and machine progress ledger"
                 }
               ]
+            },
+            {
+              "id": "T430",
+              "emoji": "🛡️",
+              "name": "Preflight entire integer register bytecode before dispatch",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Reject invalid static register operands, result registers, and malformed forward-jump targets before executing instructions",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: validate_integer_program checks every Instruction variant and Program metadata; commit 303b791dfe95a5473ea3107b41b012e156179c00"
+                },
+                {
+                  "text": "Test malformed instructions hidden behind early returns and validate correct bytecode still executes",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: validates_unreachable_integer_bytecode_and_register_bounds, six negative cases and one valid case"
+                },
+                {
+                  "text": "Pass Linux Rust unit/integration tests, formatting, lint, Rust 1.96, upstream Lua differential, Arch smoke and action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40128785174: all five jobs passed on commit 303b791dfe95a5473ea3107b41b012e156179c00"
+                },
+                {
+                  "text": "Synchronize README, owned VM documentation, machine progress ledger and regenerated roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4856,6 +4883,13 @@
           "name": "Bounded bytecode emission before interpreter dispatch",
           "task_ids": [
             "T429"
+          ]
+        },
+        {
+          "emoji": "🛡️",
+          "name": "Whole-program bytecode structural preflight",
+          "task_ids": [
+            "T430"
           ]
         }
       ]
