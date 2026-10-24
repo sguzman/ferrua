@@ -242,6 +242,51 @@ fn owned_method_call_syntax_matches_lua_54_when_requested() {
 }
 
 #[test]
+fn lua_shorthand_call_argument_grammar_matches_lua_54() {
+    let cases = [
+        ("f'abc'", true),
+        ("f\"abc\"", true),
+        ("f[[abc]]", true),
+        ("f[=[abc]=]", true),
+        ("f{n=3}", true),
+        ("f{}", true),
+        ("obj:run'abc'", true),
+        ("obj:run[[abc]]", true),
+        ("obj:run{n=3}", true),
+        ("obj.child:run{n=3}.value", true),
+        ("f{}'more'", true),
+        ("f'first'{n=3}", true),
+        ("obj:run", false),
+        ("obj:run{n=}", false),
+        ("obj:run(1,)", false),
+        ("obj:run + 2", false),
+        ("f'broken", false),
+        ("f{n=}", false),
+    ];
+    for (source, expected_ok) in cases {
+        let owned = ferrua::expr::parse_expression(source).is_ok();
+        assert_eq!(owned, expected_ok, "owned shorthand call: {source}");
+        if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
+            let reference = format!("assert(load([====[return {source}]====]))");
+            let output = std::process::Command::new("lua5.4")
+                .args(["-e", &reference])
+                .output()
+                .unwrap();
+            assert_eq!(
+                owned,
+                output.status.success(),
+                "Lua 5.4 shorthand differs: {source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+}
+
+#[test]
 fn owned_function_syntax_matches_lua_54_when_requested() {
     if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()

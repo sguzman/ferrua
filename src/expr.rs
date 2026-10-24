@@ -218,51 +218,62 @@ impl<'a> Parser<'a> {
         Ok(Expr::Table(fields))
     }
 
+    /// Lua call arguments can be parentheses, a table literal, or a short/long
+    /// string literal. Method calls accept exactly the same argument grammar.
+    fn call_arguments(&mut self) -> Result<Vec<Expr<'a>>, ParseError> {
+        match self.peek().map(|token| token.spelling) {
+            Some("(") => {
+                self.pop();
+                let mut arguments = Vec::new();
+                if self.peek().map(|token| token.spelling) != Some(")") {
+                    loop {
+                        arguments.push(self.expression(0)?);
+                        if self.peek().map(|token| token.spelling) != Some(",") {
+                            break;
+                        }
+                        self.pop();
+                    }
+                }
+                if self.peek().map(|token| token.spelling) != Some(")") {
+                    return Err(self.error("expected closing parenthesis in call"));
+                }
+                self.pop();
+                Ok(arguments)
+            }
+            Some("{") => {
+                self.pop();
+                Ok(vec![self.table()?])
+            }
+            _ if self.peek().is_some_and(|token| {
+                matches!(token.kind, Kind::ShortString | Kind::LongString)
+            }) => {
+                let token = self
+                    .pop()
+                    .ok_or_else(|| self.error("expected call arguments"))?;
+                Ok(vec![Expr::Atom(token.spelling)])
+            }
+            _ => Err(self.error("expected Lua call arguments")),
+        }
+    }
+
     fn postfix(&mut self, mut left: Expr<'a>) -> Result<Expr<'a>, ParseError> {
         loop {
+            if self.peek().is_some_and(|token| {
+                matches!(token.spelling, "(" | "{")
+                    || matches!(token.kind, Kind::ShortString | Kind::LongString)
+            }) {
+                let arguments = self.call_arguments()?;
+                left = Expr::Call {
+                    callee: Box::new(left),
+                    arguments,
+                };
+                continue;
+            }
             match self.peek().map(|token| token.spelling) {
-                Some("(") => {
-                    self.pop();
-                    let mut arguments = Vec::new();
-                    if self.peek().map(|token| token.spelling) != Some(")") {
-                        loop {
-                            arguments.push(self.expression(0)?);
-                            if self.peek().map(|token| token.spelling) != Some(",") {
-                                break;
-                            }
-                            self.pop();
-                        }
-                    }
-                    if self.peek().map(|token| token.spelling) != Some(")") {
-                        return Err(self.error("expected closing parenthesis in call"));
-                    }
-                    self.pop();
-                    left = Expr::Call {
-                        callee: Box::new(left),
-                        arguments,
-                    };
-                }
                 Some(":") => {
                     self.pop();
                     let method = self.name()?;
-                    if self.peek().map(|token| token.spelling) != Some("(") {
-                        return Err(self.error("expected parenthesized method arguments"));
-                    }
-                    self.pop();
-                    let mut arguments = Vec::new();
-                    if self.peek().map(|token| token.spelling) != Some(")") {
-                        loop {
-                            arguments.push(self.expression(0)?);
-                            if self.peek().map(|token| token.spelling) != Some(",") {
-                                break;
-                            }
-                            self.pop();
-                        }
-                    }
-                    if self.peek().map(|token| token.spelling) != Some(")") {
-                        return Err(self.error("expected closing parenthesis in method call"));
-                    }
-                    self.pop();
+                    let arguments = self.call_arguments()?;
                     left = Expr::MethodCall {
                         object: Box::new(left),
                         method,
@@ -1293,6 +1304,47 @@ mod tests {
         ] {
             assert!(parse_chunk(source).is_err(), "{source}");
         }
+    }
+
+    #[test]
+    fn lua_table_and_string_shorthand_calls_parse_as_real_calls() {
+        for source in [
+            "f'abc'",
+            "f\"abc\"",
+            "f[[long text]]",
+            "f[=[long text]=]",
+            "f{a=1}",
+            "f{}",
+            "obj:run'abc'",
+            "obj:run[[long text]]",
+            "obj:run{a=1}",
+            "obj.child:run{x=1}.value",
+            "f{}'next'",
+            "f'first'{x=1}",
+        ] {
+            let parsed = parse_expression(source).unwrap();
+            assert!(
+                matches!(
+                    parsed,
+                    Expr::Call { .. } | Expr::MethodCall { .. } | Expr::Field { .. }
+                ),
+                "{source}"
+            );
+        }
+        for source in [
+            "f'broken",
+            "f{x=}",
+            "obj:run",
+            "obj:run{x=}",
+            "obj:run(1,)",
+            "obj:run + 2",
+        ] {
+            assert!(parse_expression(source).is_err(), "{source}");
+        }
+        assert!(matches!(
+            parse_chunk("local f=function(t) return t.n end; return f{n=7}").unwrap()[1],
+            Statement::Return(_)
+        ));
     }
 
     #[test]
