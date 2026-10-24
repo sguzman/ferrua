@@ -3839,7 +3839,7 @@
               "id": "T425",
               "emoji": "🌿",
               "name": "Isolate register-VM returning branch lexical environments",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Compile each returning if/elseif/else arm against an independent lexical-binding snapshot",
@@ -3858,7 +3858,8 @@
                 },
                 {
                   "text": "Synchronize README, engine documentation, machine ledger and generated roadmap under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40125247612: five CI jobs green including documentation, roadmap source integrity and Lua 5.4 differential"
                 }
               ]
             }
