@@ -3750,6 +3750,33 @@
                   "evidence": "GitHub Actions 40122149293: all five acceptance jobs green for synchronized roadmap, ledger, README and owned-engine docs"
                 }
               ]
+            },
+            {
+              "id": "T422",
+              "emoji": "🔎",
+              "name": "Lua numeric truthiness and unary not in register-VM conditional guards",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Compile bare integer expressions as Lua-truthy guards, including integer zero; support Boolean unary not without exposing Boolean as integer result",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: emit_condition, NumericTruthy and BooleanNot instruction dispatch"
+                },
+                {
+                  "text": "Preserve evaluation errors, nested negated comparisons and lexical integer conditions; reject unsupported nonnumeric values",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: integer_guard_truthiness_and_boolean_not_match_lua; explicit division by zero and unsupported guard regression"
+                },
+                {
+                  "text": "Pass 12 production fer/upstream Lua 5.4 differential cases plus Rust 1.96, Linux tests/Clippy and consumer acceptance",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40122551608: five jobs passed for 01f76bedf4bfdc14550f9727e8bb7b3a3efb4721"
+                },
+                {
+                  "text": "Synchronize README, owned-engine docs, machine progress ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4576,6 +4603,13 @@
           "name": "Register-VM exhaustive integer conditional returns",
           "task_ids": [
             "T421"
+          ]
+        },
+        {
+          "emoji": "🔎",
+          "name": "Register-VM Lua numeric truthiness and negated guards",
+          "task_ids": [
+            "T422"
           ]
         }
       ]
