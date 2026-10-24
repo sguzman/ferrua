@@ -368,3 +368,30 @@ fn owned_named_global_and_method_declarations_match_production() {
     assert_eq!(owned.stdout, reference.stdout);
     assert_eq!(owned.stdout, b"120\n42\n");
 }
+
+#[test]
+fn owned_g_table_writes_and_metatable_reads_match_production() {
+    let source = "counter=1; assert(_G._G==_G); _G.counter=4; assert(counter==4); counter=9; assert(_G.counter==9); local f=print; _G.print=nil; assert(print==nil); print=f; print(counter)";
+    let owned = fer(&["--engine=owned", "-e", source]);
+    let reference = fer(&["--lua=5.4", "-e", source]);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(
+        reference.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reference.stderr)
+    );
+    assert_eq!(owned.stdout, reference.stdout);
+    assert_eq!(owned.stdout, b"9\n");
+
+    let source = "setmetatable(_G,{__index=function(_,key) if key=='unknown' then return 17 end end}); print(unknown)";
+    let owned = fer(&["--engine=owned", "-e", source]);
+    let reference = fer(&["--lua=5.4", "-e", source]);
+    assert!(owned.status.success(), "{}", String::from_utf8_lossy(&owned.stderr));
+    assert!(reference.status.success());
+    assert_eq!(owned.stdout, reference.stdout);
+    assert_eq!(owned.stdout, b"17\n");
+}

@@ -65,6 +65,27 @@ pub enum Builtin {
     Xpcall,
 }
 
+const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
+    (b"print", Builtin::Print),
+    (b"type", Builtin::Type),
+    (b"tostring", Builtin::ToString),
+    (b"tonumber", Builtin::ToNumber),
+    (b"rawequal", Builtin::RawEqual),
+    (b"rawget", Builtin::RawGet),
+    (b"rawset", Builtin::RawSet),
+    (b"rawlen", Builtin::RawLen),
+    (b"select", Builtin::Select),
+    (b"assert", Builtin::Assert),
+    (b"error", Builtin::Error),
+    (b"pcall", Builtin::Pcall),
+    (b"xpcall", Builtin::Xpcall),
+    (b"next", Builtin::Next),
+    (b"pairs", Builtin::Pairs),
+    (b"ipairs", Builtin::Ipairs),
+    (b"getmetatable", Builtin::GetMetatable),
+    (b"setmetatable", Builtin::SetMetatable),
+];
+
 impl Value {
     fn truthy(self) -> bool {
         !matches!(self, Value::Boolean(false) | Value::Nil)
@@ -1575,6 +1596,7 @@ struct Execution<'a> {
     script_args: &'a [String],
     arg_handle: Option<usize>,
     globals: HashMap<usize, Value>,
+    global_table: Option<usize>,
 }
 
 impl Execution<'_> {
@@ -1664,35 +1686,72 @@ impl Execution<'_> {
         Ok(())
     }
 
-    /// Global reads share one execution-local environment across call frames.
-    /// Named core functions are lazily provided unless explicitly overwritten,
-    /// including by nil. Other missing globals read as nil, as in Lua.
+    /// Lazily expose the real global environment as a writable Lua table.
+    /// Prior global overrides are folded in before the table becomes visible.
+    fn materialize_global_table(&mut self) -> Result<usize, FlowError> {
+        if let Some(handle) = self.global_table {
+            return Ok(handle);
+        }
+        if self.tables.len() >= MAX_TABLES {
+            return Err(FlowError::TooLarge);
+        }
+        let handle = self.tables.len();
+        self.tables.push(TableStorage {
+            array: Vec::new(),
+            hashed: HashMap::new(),
+            metatable: None,
+        });
+        self.global_table = Some(handle);
+        for &(name, builtin) in BUILTIN_GLOBALS {
+            let key = self.intern_string(name.to_vec())?;
+            self.write_table(
+                handle,
+                TableKey::Hashed(Value::String(key)),
+                Value::Builtin(builtin),
+            )?;
+        }
+        let version = self.intern_string(b"_VERSION".to_vec())?;
+        let number = self.intern_string(b"Lua 5.4".to_vec())?;
+        self.write_table(
+            handle,
+            TableKey::Hashed(Value::String(version)),
+            Value::String(number),
+        )?;
+        let self_key = self.intern_string(b"_G".to_vec())?;
+        self.write_table(
+            handle,
+            TableKey::Hashed(Value::String(self_key)),
+            Value::Table(handle),
+        )?;
+        let arg_key = self.intern_string(b"arg".to_vec())?;
+        let arguments = self.argument_table()?;
+        self.write_table(handle, TableKey::Hashed(Value::String(arg_key)), arguments)?;
+        for (key, value) in std::mem::take(&mut self.globals) {
+            self.write_table(handle, TableKey::Hashed(Value::String(key)), value)?;
+        }
+        Ok(handle)
+    }
+
+    /// Global reads and writes share the same environment even when Lua code
+    /// accesses it through _G. Prior to _G materialization, values are lazy.
     fn read_global(&mut self, key: usize) -> Result<Value, FlowError> {
+        let name = self.strings.get(key).ok_or(FlowError::InvalidBytecode)?;
+        if let Some(handle) = self.global_table {
+            return self.lookup_with_metatable(
+                handle,
+                TableKey::Hashed(Value::String(key)),
+            );
+        }
         if let Some(&value) = self.globals.get(&key) {
             return Ok(value);
         }
-        let name = self.strings.get(key).ok_or(FlowError::InvalidBytecode)?;
-        let builtin = match name.as_slice() {
-            b"print" => Some(Builtin::Print),
-            b"type" => Some(Builtin::Type),
-            b"tostring" => Some(Builtin::ToString),
-            b"tonumber" => Some(Builtin::ToNumber),
-            b"rawequal" => Some(Builtin::RawEqual),
-            b"rawget" => Some(Builtin::RawGet),
-            b"rawset" => Some(Builtin::RawSet),
-            b"rawlen" => Some(Builtin::RawLen),
-            b"select" => Some(Builtin::Select),
-            b"assert" => Some(Builtin::Assert),
-            b"error" => Some(Builtin::Error),
-            b"pcall" => Some(Builtin::Pcall),
-            b"xpcall" => Some(Builtin::Xpcall),
-            b"next" => Some(Builtin::Next),
-            b"pairs" => Some(Builtin::Pairs),
-            b"ipairs" => Some(Builtin::Ipairs),
-            b"getmetatable" => Some(Builtin::GetMetatable),
-            b"setmetatable" => Some(Builtin::SetMetatable),
-            _ => None,
-        };
+        if name == b"_G" {
+            let handle = self.materialize_global_table()?;
+            return Ok(Value::Table(handle));
+        }
+        let builtin = BUILTIN_GLOBALS
+            .iter()
+            .find_map(|&(builtin_name, builtin)| (builtin_name == name).then_some(builtin));
         if let Some(builtin) = builtin {
             return Ok(Value::Builtin(builtin));
         }
@@ -3151,7 +3210,15 @@ impl Execution<'_> {
                                     Some(value);
                             }
                             PendingTarget::Global(key) => {
-                                self.globals.insert(key, value);
+                                if let Some(handle) = self.global_table {
+                                    self.assign_with_metatable(
+                                        handle,
+                                        TableKey::Hashed(Value::String(key)),
+                                        value,
+                                    )?;
+                                } else {
+                                    self.globals.insert(key, value);
+                                }
                             }
                             PendingTarget::Indexed { table, key } => {
                                 self.assign_with_metatable(table, key, value)?;
@@ -3599,6 +3666,7 @@ pub fn execute_flow_capture_with_args<'a>(
         script_args,
         arg_handle: None,
         globals: HashMap::new(),
+        global_table: None,
     };
     let result = execution.run(&program.instructions, program.slots, &[], &[], &[]);
     FlowOutcome {
@@ -6846,6 +6914,25 @@ mod tests {
                 Ok(program) => assert!(execute_flow_chunk(&program, 100).is_err(), "{source}"),
             }
         }
+    }
+
+    #[test]
+    fn global_environment_table_and_globals_share_mutable_identity() {
+        let program = compile_flow_chunk(
+            "counter=1; assert(_G.counter==1); assert(_G._G==_G); _G.counter=3; assert(counter==3); counter=4; assert(_G.counter==4); local saved=print; _G.print=nil; assert(print==nil); print=saved; print(counter)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 2000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"4\n");
+
+        let program = compile_flow_chunk(
+            "setmetatable(_G,{__index=function(_,key) if key=='missing' then return 14 end end}); print(missing)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 1000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"14\n");
     }
 
     #[test]

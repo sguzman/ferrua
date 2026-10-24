@@ -791,3 +791,7 @@ The opt-in compiler now emits runtime reads for unbound identifiers and prepared
 ### Global function declaration compatibility (experimental)
 
 The owned compiler now lowers ordinary `function name(...) ... end` definitions to the same execution-local global environment as assignments, preserving recursion and forward global references. Dotted definitions and colon methods can target global or lexical table roots, and colon method bodies receive the explicit `self` parameter. This supports only the existing bounded Lua 5.4 subset: full `_ENV`, `_G`, module loading, stack unwinding and coroutine semantics are not implied. Production `fer` is unchanged.
+
+### Materialized global environment table (experimental)
+
+On first access to `_G`, the owned VM constructs a bounded Lua table containing the available core functions, `arg`, `_VERSION`, and a self-reference. Earlier global assignments are applied to that same table. Once materialized, direct global lookups and assignments share table storage with `_G.key` indexing, using the supported `__index` and `__newindex` hooks. Assigning nil removes global fields, including first-party builtins. This is progress toward Lua's environment model but does not implement complete `_ENV` lexical rebinding, library loading or garbage collection.
