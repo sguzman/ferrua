@@ -23,6 +23,7 @@ Options (before script or -e):\n\
   --sandbox              Safe libraries only; no OS, file or package access\n\
   --check                Compile source without executing it\n\
   --budget=N             Instruction budget (positive integer)\n\
+  --engine=owned          Experimental first-party Lua 5.4 subset; no fallback\n\
   -h, --help             Show help\n\
   -v, --version          Show version\n\
 \n\
@@ -41,6 +42,7 @@ enum Action {
 #[derive(Debug)]
 struct Options {
     lua: LuaVersion,
+    owned: bool,
     sandbox: bool,
     check_only: bool,
     budget: Option<i64>,
@@ -49,6 +51,8 @@ struct Options {
 
 fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
     let mut lua = LuaVersion::Lua55;
+    let mut lua_selected = false;
+    let mut owned = false;
     let mut sandbox = false;
     let mut check_only = false;
     let mut budget = None;
@@ -66,6 +70,13 @@ fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
                 check_only = true;
                 None
             }
+            "--engine=owned" => {
+                owned = true;
+                if !lua_selected {
+                    lua = LuaVersion::Lua54;
+                }
+                None
+            }
             "-e" => {
                 i += 1;
                 let code = args.get(i).ok_or("missing Lua source after -e")?.clone();
@@ -78,6 +89,7 @@ fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
                 Some(Action::Script(path.clone(), args[i + 1..].to_vec()))
             }
             s if s.starts_with("--lua=") => {
+                lua_selected = true;
                 lua = match &s[6..] {
                     "5.1" => LuaVersion::Lua51,
                     "5.2" => LuaVersion::Lua52,
@@ -102,8 +114,9 @@ fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
             _ => Some(Action::Script(arg.clone(), args[i + 1..].to_vec())),
         };
         if let Some(action) = action {
-            return Ok(Options {
+            return validate_options(Options {
                 lua,
+                owned,
                 sandbox,
                 check_only,
                 budget,
@@ -112,8 +125,9 @@ fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
         }
         i += 1;
     }
-    Ok(Options {
+    validate_options(Options {
         lua,
+        owned,
         sandbox,
         check_only,
         budget,
@@ -123,6 +137,16 @@ fn parse(args: &[String], interactive_stdin: bool) -> Result<Options, String> {
             Action::Stdin
         },
     })
+}
+
+fn validate_options(options: Options) -> Result<Options, String> {
+    if options.owned && options.lua != LuaVersion::Lua54 {
+        return Err("experimental owned engine supports only --lua=5.4".into());
+    }
+    if options.owned && options.sandbox {
+        return Err("experimental owned engine cannot be combined with --sandbox".into());
+    }
+    Ok(options)
 }
 
 fn vm_for(options: &Options) -> Vm {
@@ -300,7 +324,58 @@ fn repl(vm: &mut Vm) -> Result<(), String> {
     }
 }
 
+fn run_owned_source(options: &Options, source: &str, name: &str) -> Result<(), String> {
+    use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, compile_flow_chunk, execute_flow_values};
+
+    // Match the production CLI's Unix shebang handling without selecting its VM.
+    let normalized = source.starts_with("#!").then(|| format!("--{}", &source[2..]));
+    let program = compile_flow_chunk(normalized.as_deref().unwrap_or(source))
+        .map_err(|err| format!("{name}: {err}"))?;
+    if options.check_only {
+        return Ok(());
+    }
+    let budget = options
+        .budget
+        .map(usize::try_from)
+        .transpose()
+        .map_err(|_| "owned engine instruction budget is too large")?
+        .unwrap_or(DEFAULT_STEP_BUDGET);
+    execute_flow_values(&program, budget)
+        .map(|_| ())
+        .map_err(|err| format!("{name}: {err}"))
+}
+
+fn execute_owned(options: &Options) -> Result<(), String> {
+    match &options.action {
+        Action::Eval(source, arguments) => {
+            if !arguments.is_empty() {
+                return Err("owned engine preview does not support script arguments".into());
+            }
+            run_owned_source(options, source, "=-e")
+        }
+        Action::Script(path, arguments) => {
+            if !arguments.is_empty() {
+                return Err("owned engine preview does not support script arguments".into());
+            }
+            let source = std::fs::read_to_string(path).map_err(|err| format!("{path}: {err}"))?;
+            run_owned_source(options, &source, path)
+        }
+        Action::Stdin => {
+            let mut source = String::new();
+            io::stdin()
+                .read_to_string(&mut source)
+                .map_err(|err| err.to_string())?;
+            run_owned_source(options, &source, "=stdin")
+        }
+        Action::Repl => Err("owned engine preview does not support the REPL".into()),
+        Action::Help | Action::Version => Ok(()),
+    }
+}
+
 fn execute(options: Options) -> Result<(), String> {
+    if options.owned && !matches!(&options.action, Action::Help | Action::Version) {
+        return execute_owned(&options);
+    }
     match options.action {
         Action::Help => {
             print!("{HELP}");
@@ -380,7 +455,20 @@ mod tests {
             Action::Eval("print(arg[1])".into(), vec!["hello".into()])
         );
         assert_eq!(opt.lua, LuaVersion::Lua54);
+        assert!(!opt.owned);
     }
+
+    #[test]
+    fn parse_explicit_first_party_engine_without_changing_default() {
+        let owned = parse(&argv(&["--engine=owned", "-e", "return 42"]), false).unwrap();
+        assert!(owned.owned);
+        assert_eq!(owned.lua, LuaVersion::Lua54);
+        assert!(!parse(&[], false).unwrap().owned);
+        assert!(parse(&argv(&["--lua=5.5", "--engine=owned"]), false).is_err());
+        assert!(parse(&argv(&["--engine=owned", "--lua=5.3"]), false).is_err());
+        assert!(parse(&argv(&["--engine=owned", "--sandbox"]), false).is_err());
+    }
+
     #[test]
     fn reject_broken_flags() {
         assert!(parse(&argv(&["--budget=0"]), false).is_err());

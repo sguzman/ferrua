@@ -228,3 +228,36 @@ fn syntax_check_compiles_without_running_and_reports_invalid_code() {
     assert!(!invalid.status.success());
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("-e"));
 }
+
+#[test]
+fn owned_engine_opt_in_executes_only_the_first_party_subset() {
+    let valid = fer(&[
+        "--engine=owned",
+        "-e",
+        "local x=6*7; assert(x==42); while x<45 do x=x+1 end; assert(x==45)",
+    ]);
+    assert!(valid.status.success(), "{}", String::from_utf8_lossy(&valid.stderr));
+    assert!(valid.stdout.is_empty());
+    let check = fer(&["--engine=owned", "--check", "-e", "local x=1"]);
+    assert!(check.status.success(), "{}", String::from_utf8_lossy(&check.stderr));
+    let invalid = fer(&["--engine=owned", "--check", "-e", "local ="]);
+    assert!(!invalid.status.success());
+    let missing_global = fer(&["--engine=owned", "-e", "print(42)"]);
+    assert!(!missing_global.status.success(), "no fallback to production VM");
+    let error = String::from_utf8_lossy(&missing_global.stderr);
+    assert!(error.contains("owned flow"), "{error}");
+    let budget = fer(&["--engine=owned", "--budget=10", "-e", "while true do end"]);
+    assert!(!budget.status.success());
+    assert!(
+        String::from_utf8_lossy(&budget.stderr).contains("budget"),
+        "{}",
+        String::from_utf8_lossy(&budget.stderr)
+    );
+    for flags in [
+        &["--engine=owned", "--lua=5.5", "-e", "return 1"][..],
+        &["--engine=owned", "--sandbox", "-e", "return 1"][..],
+        &["--engine=owned", "-e", "return 1", "extra"][..],
+    ] {
+        assert!(!fer(flags).status.success(), "unsupported owned flags: {flags:?}");
+    }
+}

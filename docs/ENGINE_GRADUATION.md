@@ -42,6 +42,7 @@ A failure cannot be masked by deleting a difficult fixture, weakening assertions
 
 - Publish an evidence table (test suite/version/commit/run ID/result/open deviations), a compatibility matrix, and a written decision record with an exact source commit before any backend switch.
 - Exercise the owned engine through an explicit **opt-in** mode first. Keep the production default intact while the candidate runs the full matrix; an opt-in mode is not permission to ship it as stable.
+- The `--engine=owned` preview selector is deliberately limited to Lua 5.4 chunks with no script arguments or REPL, uses shared instruction budgets, supports syntax checking, and fails explicitly on unsupported globals or syntax. It does not fall back to the pinned production engine or imply completed T301/T302 acceptance.
 - Compare regression and performance behavior over representative small scripts and long-running automation. Record real measurements and conditions; do not invent benchmarks.
 - Switch the default `fer` interpreter only after **all** T301/T302 implementation and required acceptance tests pass. Record the cutover in `progress.json`, provide a tested rollback path, and avoid stealth fallback to the old backend.
 - Stable `v1.0.0` or another major release additionally needs native EndeavourOS QA, checksum-verified tagged Linux artifacts, pinned downstream consumer validation, release notes and explicit completion of the separate distribution gates (T107/T204/T208). Do not publish stable tags just to improve milestone percentages.

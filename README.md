@@ -6,7 +6,7 @@
 
 **Project color:** `#15B6A9` · `oklch(70% 0.12 186)` ([OKLCH decision](docs/COLOR.md)).
 
-> **CI-validated development preview, not a stable release.** The Rust `fer` CLI, Lua automation libraries, and release packaging are exercised by Linux CI. Ferrua still embeds the independent [luna-core](https://crates.io/crates/luna-core) pure-Rust Lua compiler and VM; the fully owned VM is a future milestone.
+> **CI-validated development preview, not a stable release.** The Rust `fer` CLI, Lua automation libraries, and release packaging are exercised by Linux CI. Ferrua still uses the independent [luna-core](https://crates.io/crates/luna-core) pure-Rust Lua compiler and VM by default. An explicit `--engine=owned` flag runs the bounded first-party Lua 5.4 subset for research and regression testing, without fallback; it does not provide the standard host libraries, script arguments, the REPL, or audited sandbox containment. Full graduation remains a future milestone.
 
 **Owned engine cutover:** the [graduation contract](docs/ENGINE_GRADUATION.md) defines the full implementation, conformance and native release gates. Roadmap percentages count accepted atomic tasks; they are **not** Lua compatibility percentages.
 
@@ -20,7 +20,7 @@ printf 'print(6 * 7)\n' | cargo run --locked -- -
 cargo run --locked -- --sandbox -e 'assert(os == nil and io == nil)'
 ```
 
-After building or installing, run `fer` in place of `cargo run --`. On each successful CI run for `main`, GitHub Actions uploads a Linux x86-64 preview binary and its SHA-256 checksum; this is not yet a stable release. After extracting the artifact ZIP, verify `sha256sum -c fer.sha256` and make the binary executable with `chmod +x fer`. Without input, `fer` opens a simple REPL if standard input is a terminal; use `=expression` to display a value. Script parameters are available as `arg[1]`, `arg[2]`, etc., with the script path at `arg[0]`. `--lua=5.4` selects a Lua dialect, `--budget=N` limits executed VM instructions, and `--check` compiles Lua source without executing it (useful for CI syntax validation).
+After building or installing, run `fer` in place of `cargo run --`. On each successful CI run for `main`, GitHub Actions uploads a Linux x86-64 preview binary and its SHA-256 checksum; this is not yet a stable release. After extracting the artifact ZIP, verify `sha256sum -c fer.sha256` and make the binary executable with `chmod +x fer`. Without input, `fer` opens a simple REPL if standard input is a terminal; use `=expression` to display a value. Script parameters are available as `arg[1]`, `arg[2]`, etc., with the script path at `arg[0]`. `--engine=owned` explicitly selects the experimental first-party Lua 5.4 subset (other dialects and `--sandbox` are rejected); `--lua=5.4` selects a Lua dialect, `--budget=N` limits executed VM instructions, and `--check` compiles Lua source without executing it (useful for CI syntax validation).
 
 Ferrua also installs a first-party Lua `json` global in every session, with `json.decode(text)` and `json.encode(value)`; no third-party Lua package is required. The JSON implementation preserves empty arrays versus objects after decoding, provides `json.null` for null values, and supports `json.array()` / `json.object()` to construct empty collections. It rejects cycles, invalid input and unsupported types. Its full compatibility matrix is still under development.
 
