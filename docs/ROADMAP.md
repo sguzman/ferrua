@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 157 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 158 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -711,6 +711,11 @@
   - [x] Prevent register exhaustion under hundreds of local-only and sparsely updating conditional arms — tests/owned_vm_merge_edges.rs: sparse_conditional_updates_do_not_exhaust_registers, 70 live locals and 300 branches
   - [x] Pass Rust 1.96, Linux quality/tests, Lua 5.4 plus production fer differential reference and action consumer — GitHub Actions 40127305435: all five jobs passed on db6e1c78af7a93970127a633701127e3ed5f283f
   - [x] Synchronize current performance/semantics docs and acceptance ledger in passing CI — GitHub Actions 40127520366: all five jobs accepted synchronized README, owned-engine docs, machine-readable checks and generated roadmap
+- 🧱 **T429** Bound compiled integer-VM instruction-stream size — `████████░░ 75%`
+  - [x] Reject integer chunk compilation if the emitted bytecode exceeds the interpreter's instruction-count ceiling — src/owned_vm.rs: compile_integer_chunk checks program.code.len() against MAX_REGISTERS and returns Error::TooLarge
+  - [x] Exercise more than 4,000 no-op conditional arms that consume more instructions than registers — src/owned_vm.rs: integer_chunk_rejects_oversized_instruction_stream_before_execution
+  - [x] Pass Linux formatting/lint/tests, Rust 1.96, Lua 5.4/production regression matrix, Arch smoke and action consumer — GitHub Actions 40127939465: all five jobs succeeded for c7300fee0e1c38a9f906c96779092e266b871a8f
+  - [ ] Synchronize bytecode limit documentation, machine ledger and generated roadmap under passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -838,4 +843,5 @@
 - 🌱 Nonreturning local-only register conditional fallthrough — `██████████ 100%`
 - 🔀 Mutable conditional-local register path merges — `██████████ 100%`
 - 🧵 Assignment-aware sparse merge allocation — `██████████ 100%`
+- 🧱 Bounded bytecode emission before interpreter dispatch — `████████░░ 75%`
 

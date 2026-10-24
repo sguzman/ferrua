@@ -3946,6 +3946,33 @@
                   "evidence": "GitHub Actions 40127520366: all five jobs accepted synchronized README, owned-engine docs, machine-readable checks and generated roadmap"
                 }
               ]
+            },
+            {
+              "id": "T429",
+              "emoji": "🧱",
+              "name": "Bound compiled integer-VM instruction-stream size",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Reject integer chunk compilation if the emitted bytecode exceeds the interpreter's instruction-count ceiling",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: compile_integer_chunk checks program.code.len() against MAX_REGISTERS and returns Error::TooLarge"
+                },
+                {
+                  "text": "Exercise more than 4,000 no-op conditional arms that consume more instructions than registers",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: integer_chunk_rejects_oversized_instruction_stream_before_execution"
+                },
+                {
+                  "text": "Pass Linux formatting/lint/tests, Rust 1.96, Lua 5.4/production regression matrix, Arch smoke and action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40127939465: all five jobs succeeded for c7300fee0e1c38a9f906c96779092e266b871a8f"
+                },
+                {
+                  "text": "Synchronize bytecode limit documentation, machine ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4821,6 +4848,13 @@
           "name": "Assignment-aware sparse merge allocation",
           "task_ids": [
             "T428"
+          ]
+        },
+        {
+          "emoji": "🧱",
+          "name": "Bounded bytecode emission before interpreter dispatch",
+          "task_ids": [
+            "T429"
           ]
         }
       ]

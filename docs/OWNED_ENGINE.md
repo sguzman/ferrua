@@ -743,3 +743,11 @@ The runtime and reference matrix covers multiple mutable locals, nested `do` and
 The compiler now uses an iterative scan of assignments in each branch, including nested `do` and `if` blocks, and reserves merge registers **only** for mutable enclosing names that might be assigned. Read-only and constant locals keep their original registers across joins; conservative over-approximation of a shadowed name can waste one merge register but cannot silently drop an enclosing assignment. This preserves the `MAX_REGISTERS` boundary under long sequences of independent conditionals, rather than reserving every live local for every branch.
 
 Stress regressions compile 300 conditionals with 70 simultaneously live integer locals, both with no enclosing assignments and with a sparse assignment to only one outer variable. [CI #40127305435](https://github.com/sguzman/ferrua/actions/runs/40127305435) passed all five jobs. This remains a bounded, integer-only prototype, without general typed Lua values, loops, closures, arbitrary stack frames or permission to switch production `fer` to the experimental engine.
+
+### Verified integer register bytecode emission cap (T429)
+
+The experimental `compile_integer_chunk` now checks the length of its emitted instruction stream before returning a `Program`. This makes the compiler and `execute_integer_program` agree on the shared `MAX_REGISTERS` instruction-count ceiling: bytecode too large for bounded dispatch returns `Error::TooLarge` during compilation, rather than being accepted as an unusable program that subsequently fails with `InvalidBytecode`.
+
+A deterministic regression constructs 4,104 sequential no-op conditional statements, where each arm emits multiple bytecode instructions while using relatively few registers. This crosses the instruction-count ceiling without first exhausting the register count and confirms the distinction. [CI #40127939465](https://github.com/sguzman/ferrua/actions/runs/40127939465) passed Rust 1.96, Linux lint/format/unit tests, production `fer` and upstream Lua 5.4 differentials, Arch preview smoke and the downstream action consumer.
+
+This is a compile-time guard for the bounded integer prototype, not a general whole-Lua resource quota or evidence that the owned engine can replace the production interpreter.
