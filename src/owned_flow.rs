@@ -4,7 +4,7 @@
 
 use crate::expr::{Expr, LocalAttribute, Statement, TableField, parse_chunk};
 use crate::owned_vm::{floor_div, lua_mod, shift};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::rc::Rc;
@@ -288,6 +288,8 @@ struct Compiler<'a> {
     pending_gotos: Vec<GotoSite<'a>>,
     functions: Rc<RefCell<Vec<FunctionProgram>>>,
     strings: Rc<RefCell<Vec<Vec<u8>>>>,
+    string_index: Rc<RefCell<HashMap<Vec<u8>, usize>>>,
+    string_bytes: Rc<Cell<usize>>,
     vararg: bool,
 }
 
@@ -367,6 +369,8 @@ impl<'a> Compiler<'a> {
             pending_gotos: Vec::new(),
             functions: Rc::clone(&self.functions),
             strings: Rc::clone(&self.strings),
+            string_index: Rc::clone(&self.string_index),
+            string_bytes: Rc::clone(&self.string_bytes),
             vararg,
         };
         // Eagerly and deterministically capture visible locals; shadowing
@@ -491,19 +495,21 @@ impl<'a> Compiler<'a> {
     }
 
     fn intern_bytes(&mut self, bytes: Vec<u8>) -> Result<usize, FlowError> {
-        let mut strings = self.strings.borrow_mut();
-        if let Some(index) = strings.iter().position(|item| item == &bytes) {
+        if let Some(&index) = self.string_index.borrow().get(bytes.as_slice()) {
             return Ok(index);
         }
+        let mut strings = self.strings.borrow_mut();
+        let used = self.string_bytes.get();
         if strings.len() >= MAX_STRINGS
             || bytes.len() > MAX_STRING_POOL_BYTES
-            || strings.iter().map(Vec::len).sum::<usize>()
-                > MAX_STRING_POOL_BYTES.saturating_sub(bytes.len())
+            || used > MAX_STRING_POOL_BYTES.saturating_sub(bytes.len())
         {
             return Err(FlowError::TooLarge);
         }
         let index = strings.len();
-        strings.push(bytes);
+        self.string_bytes.set(used + bytes.len());
+        strings.push(bytes.clone());
+        self.string_index.borrow_mut().insert(bytes, index);
         Ok(index)
     }
 
@@ -1232,6 +1238,8 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
     let statements = parse_chunk(source).map_err(|err| FlowError::Unsupported(err.to_string()))?;
     let functions = Rc::new(RefCell::new(Vec::new()));
     let strings = Rc::new(RefCell::new(Vec::new()));
+    let string_index = Rc::new(RefCell::new(HashMap::new()));
+    let string_bytes = Rc::new(Cell::new(0));
     let mut compiler = Compiler {
         code: Vec::new(),
         frames: vec![HashMap::new()],
@@ -1246,6 +1254,8 @@ pub fn compile_flow_chunk(source: &str) -> Result<FlowProgram, FlowError> {
         pending_gotos: Vec::new(),
         functions: Rc::clone(&functions),
         strings: Rc::clone(&strings),
+        string_index: Rc::clone(&string_index),
+        string_bytes: Rc::clone(&string_bytes),
         vararg: false,
     };
     compiler.statements(&statements)?;
@@ -1627,6 +1637,8 @@ struct Execution<'a> {
     free_cells: Vec<usize>,
     frame_allocations: Vec<Vec<usize>>,
     strings: Vec<Vec<u8>>,
+    string_index: HashMap<Vec<u8>, usize>,
+    string_bytes: usize,
     stdout: Vec<u8>,
     script_name: &'a str,
     script_args: &'a [String],
@@ -2900,17 +2912,18 @@ impl Execution<'_> {
     }
 
     fn intern_string(&mut self, bytes: Vec<u8>) -> Result<Value, FlowError> {
-        if let Some(handle) = self.strings.iter().position(|item| item == &bytes) {
+        if let Some(&handle) = self.string_index.get(bytes.as_slice()) {
             return Ok(Value::String(handle));
         }
         if self.strings.len() >= MAX_STRINGS
             || bytes.len() > MAX_STRING_POOL_BYTES
-            || self.strings.iter().map(Vec::len).sum::<usize>()
-                > MAX_STRING_POOL_BYTES.saturating_sub(bytes.len())
+            || self.string_bytes > MAX_STRING_POOL_BYTES.saturating_sub(bytes.len())
         {
             return Err(FlowError::TooLarge);
         }
         let handle = self.strings.len();
+        self.string_bytes += bytes.len();
+        self.string_index.insert(bytes.clone(), handle);
         self.strings.push(bytes);
         Ok(Value::String(handle))
     }
@@ -3799,6 +3812,14 @@ pub fn execute_flow_capture_with_args<'a>(
     script_name: &'a str,
     script_args: &'a [String],
 ) -> FlowOutcome {
+    let string_index = program
+        .strings
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(index, value)| (value, index))
+        .collect();
+    let string_bytes = program.strings.iter().map(Vec::len).sum();
     let mut execution = Execution {
         program,
         budget,
@@ -3812,6 +3833,8 @@ pub fn execute_flow_capture_with_args<'a>(
         free_cells: Vec::new(),
         frame_allocations: Vec::new(),
         strings: program.strings.clone(),
+        string_index,
+        string_bytes,
         stdout: Vec::new(),
         script_name,
         script_args,
@@ -7175,6 +7198,37 @@ mod tests {
         let huge = vec!["x".repeat(MAX_STRING_POOL_BYTES + 1)];
         let outcome = execute_flow_capture_with_args(&program, 1000, "script.lua", &huge);
         assert_eq!(outcome.result, Err(FlowError::TooLarge));
+    }
+
+    #[test]
+    fn indexed_string_interning_reuses_compiler_literals_across_functions() {
+        let mut source = String::from("local t={}; ");
+        for index in 1..=640 {
+            source.push_str(&format!("t[{index}]='v{:02}';", index % 64));
+        }
+        source.push_str("print(t[1],t[640])");
+        let program = compile_flow_chunk(&source).unwrap();
+        assert!(
+            program.strings.len() < 80,
+            "identical literals must share stable interned indices"
+        );
+        let outcome = execute_flow_capture(&program, 20_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"v01\tv00\n");
+    }
+
+    #[test]
+    fn indexed_runtime_strings_preserve_lua_values_and_limits() {
+        let program = compile_flow_chunk(
+            "local last=''; for i=1,1500 do last=tostring(i) end; print(last)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 100_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"1500\n");
+
+        let source = format!("print('{}'); print('{}')", "z".repeat(33_000), "q".repeat(33_000));
+        assert!(matches!(compile_flow_chunk(&source), Err(FlowError::TooLarge)));
     }
 
     #[test]
