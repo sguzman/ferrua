@@ -938,7 +938,7 @@ mod tests {
     fn deeply_nested_expressions_fail_without_exhausting_host_stack() {
         for source in [
             format!("{}1{}", "(".repeat(200), ")".repeat(200)),
-            format!("{}1", "-".repeat(200)),
+            format!("{}1", "- ".repeat(200)),
             format!("{}1", "not ".repeat(200)),
             "1^".repeat(200) + "1",
             format!("return {}1{}", "{".repeat(200), "}".repeat(200)),
