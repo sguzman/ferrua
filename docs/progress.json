@@ -4035,7 +4035,7 @@
               "id": "T432",
               "emoji": "🧪",
               "name": "Deterministic cross-branch register merge differential matrix",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Generate 48 reproducible nested integer branch, elseif, shadowing, mutable-local and short-circuit cases",
@@ -4054,7 +4054,8 @@
                 },
                 {
                   "text": "Synchronize generated corpus documentation, machine-readable ledger, README and roadmap under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40129834086: five jobs passed synchronized generated fixture documentation, machine progress ledger and roadmap"
                 }
               ]
             }

@@ -726,11 +726,11 @@
   - [x] Reject emission at the exact instruction ceiling without increasing the temporary code vector — src/owned_vm.rs: integer_emission_rejects_overflow_without_growing_the_code_vector
   - [x] Pass Rust 1.96, Linux formatting/lint/tests, Lua 5.4 and production fer differential corpus, Arch smoke and action consumer — GitHub Actions 40129324922: all five CI jobs successful for commit 6c1ed620fc07a38b95175342f78af634f6065da1
   - [x] Synchronize code-limit documentation, README, machine ledger and generated roadmap under passing CI — GitHub Actions 40129500224: five CI jobs passed synchronized README, owned-engine docs, progress ledger and derived roadmap
-- 🧪 **T432** Deterministic cross-branch register merge differential matrix — `████████░░ 75%`
+- 🧪 **T432** Deterministic cross-branch register merge differential matrix — `██████████ 100%`
   - [x] Generate 48 reproducible nested integer branch, elseif, shadowing, mutable-local and short-circuit cases — tests/owned_vm_merge_edges.rs: generated_nested_branch_joins_match_reference_interpreters, seeds 0..47
   - [x] Compare selected register-VM execution with production fer and pinned upstream Lua 5.4 under CI — tests/owned_vm_merge_edges.rs: executes fer for all cases; lua5.4 when FERRUA_COMPARE_OWNED_WITH_LUA=1
   - [x] Pass Linux formatting/lint/unit tests, Rust 1.96, upstream Lua 5.4 and production differential, Arch smoke and action consumer — GitHub Actions 40129671233: five successful jobs on 39419e7b8ec0b1c0667e278fd0f29a9d4c236953
-  - [ ] Synchronize generated corpus documentation, machine-readable ledger, README and roadmap under passing CI
+  - [x] Synchronize generated corpus documentation, machine-readable ledger, README and roadmap under passing CI — GitHub Actions 40129834086: five jobs passed synchronized generated fixture documentation, machine progress ledger and roadmap
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -861,5 +861,5 @@
 - 🧱 Bounded bytecode emission before interpreter dispatch — `██████████ 100%`
 - 🛡️ Whole-program bytecode structural preflight — `██████████ 100%`
 - 🚧 Instruction-at-emission resource guarding — `██████████ 100%`
-- 🧪 Generated nested integer branch-path differential coverage — `████████░░ 75%`
+- 🧪 Generated nested integer branch-path differential coverage — `██████████ 100%`
 
