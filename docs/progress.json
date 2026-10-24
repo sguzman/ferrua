@@ -2818,7 +2818,7 @@
               "id": "T388",
               "emoji": "🧯",
               "name": "Bounded Lua error values and protected closure calls",
-              "progress": 67,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Represent explicit Lua error values and expose lexically shadowable error/pcall builtins without production-engine changes",
@@ -2832,7 +2832,8 @@
                 },
                 {
                   "text": "Pass Linux formatting/lint/full tests, Rust 1.96 and Lua 5.4 differential CI including protected errors and reference outcomes",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40042884149: Linux format/lint/full tests, Rust 1.96, Lua 5.4 differential including error/pcall cases and composite consumer passed"
                 }
               ]
             }
