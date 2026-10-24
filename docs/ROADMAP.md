@@ -591,11 +591,11 @@
   - [x] Accept visible ancestor goto labels and backward local exits while rejecting invisible sibling targets or jumps into new locals — src/owned_flow.rs: visible_enclosing_goto_labels_preserve_lexical_local_lifetimes; 13 reference fixtures, seven invalid-scope cases
   - [x] Pass upstream Lua 5.4 plus pinned production fer differential checks, Rust 1.96, Linux unit/lint/format, Arch and action consumer CI — GitHub Actions 40055943072: five successful jobs for e75ed225f7ba514ce4dd69de0f256466c76febfe
   - [x] Synchronize owned grammar limitations, README, machine ledger and generated roadmap under successful CI — GitHub Actions 40056084746: all five jobs passed synced README, owned engine docs, progress ledger and generated roadmap
-- 📝 **T405** Lua same-line adjacent statement parsing without mandatory semicolons — `████████░░ 75%`
+- 📝 **T405** Lua same-line adjacent statement parsing without mandatory semicolons — `██████████ 100%`
   - [x] Remove artificial statement separator/newline constraint while keeping Lua lexical statement and terminal-return validation — src/expr.rs: Parser::block permits adjacent statements and optional ';'; CI 40056402369
   - [x] Preserve syntax errors for invalid statements while accepting adjacent locals, assignments, loop/conditional blocks, functions and labels — src/expr.rs: parses_adjacent_lua_statements_without_required_semicolons; src/owned_flow.rs 14 runtime regressions
   - [x] Pass upstream Lua 5.4 and production fer differential fixtures, Rust 1.96, Linux formatter/lint/tests, Arch archive and composite action consumer — GitHub Actions 40056402369: all five successful jobs on 594ff74f5b5c081fb12cb689adba6f5fe8bfa8c1
-  - [ ] Synchronize parser scope and remaining dialect limits in README/owned-engine docs, machine ledger and generated roadmap
+  - [x] Synchronize parser scope and remaining dialect limits in README/owned-engine docs, machine ledger and generated roadmap — GitHub Actions 40056530163: all five jobs passed synchronized documentation and machine ledger after grammar acceptance
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -699,5 +699,5 @@
 - 🎭 Callable binary and unary Lua metamethod targets — `██████████ 100%`
 - 🧭 Bounded builtin index/newindex metamethod callbacks — `██████████ 100%`
 - 🏷️ Lexically scoped Lua goto across visible blocks — `██████████ 100%`
-- 📝 Semicolon-optional Lua statement boundaries — `████████░░ 75%`
+- 📝 Semicolon-optional Lua statement boundaries — `██████████ 100%`
 

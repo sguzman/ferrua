@@ -3279,7 +3279,7 @@
               "id": "T405",
               "emoji": "📝",
               "name": "Lua same-line adjacent statement parsing without mandatory semicolons",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Remove artificial statement separator/newline constraint while keeping Lua lexical statement and terminal-return validation",
@@ -3298,7 +3298,8 @@
                 },
                 {
                   "text": "Synchronize parser scope and remaining dialect limits in README/owned-engine docs, machine ledger and generated roadmap",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40056530163: all five jobs passed synchronized documentation and machine ledger after grammar acceptance"
                 }
               ]
             }
