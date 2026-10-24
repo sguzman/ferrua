@@ -3274,6 +3274,33 @@
                   "evidence": "GitHub Actions 40056084746: all five jobs passed synced README, owned engine docs, progress ledger and generated roadmap"
                 }
               ]
+            },
+            {
+              "id": "T405",
+              "emoji": "📝",
+              "name": "Lua same-line adjacent statement parsing without mandatory semicolons",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Remove artificial statement separator/newline constraint while keeping Lua lexical statement and terminal-return validation",
+                  "passed": true,
+                  "evidence": "src/expr.rs: Parser::block permits adjacent statements and optional ';'; CI 40056402369"
+                },
+                {
+                  "text": "Preserve syntax errors for invalid statements while accepting adjacent locals, assignments, loop/conditional blocks, functions and labels",
+                  "passed": true,
+                  "evidence": "src/expr.rs: parses_adjacent_lua_statements_without_required_semicolons; src/owned_flow.rs 14 runtime regressions"
+                },
+                {
+                  "text": "Pass upstream Lua 5.4 and production fer differential fixtures, Rust 1.96, Linux formatter/lint/tests, Arch archive and composite action consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40056402369: all five successful jobs on 594ff74f5b5c081fb12cb689adba6f5fe8bfa8c1"
+                },
+                {
+                  "text": "Synchronize parser scope and remaining dialect limits in README/owned-engine docs, machine ledger and generated roadmap",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -3981,6 +4008,13 @@
           "name": "Lexically scoped Lua goto across visible blocks",
           "task_ids": [
             "T404"
+          ]
+        },
+        {
+          "emoji": "📝",
+          "name": "Semicolon-optional Lua statement boundaries",
+          "task_ids": [
+            "T405"
           ]
         }
       ]
