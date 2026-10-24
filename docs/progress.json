@@ -3834,6 +3834,33 @@
                   "evidence": "GitHub Actions 40124637352: all five jobs passed synchronized docs/progress.json, derived roadmap, owned-engine documentation and README"
                 }
               ]
+            },
+            {
+              "id": "T425",
+              "emoji": "🌿",
+              "name": "Isolate register-VM returning branch lexical environments",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Compile each returning if/elseif/else arm against an independent lexical-binding snapshot",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: Statement::If uses branch_scopes clones instead of mutating sibling-visible binding maps"
+                },
+                {
+                  "text": "Prevent skipped branch assignments from poisoning sibling/fallback return registers and preserve selected-branch assignments",
+                  "passed": true,
+                  "evidence": "src/owned_vm.rs: register_returning_branches_do_not_leak_bindings_into_other_paths; tests/owned_vm.rs 14 cross-branch cases"
+                },
+                {
+                  "text": "Pass unit/lint/formatter, Rust 1.96, upstream Lua 5.4 and fer differential suite, Arch smoke and consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40124937687 all five jobs successful on commit 01cc1de79eb880d2d3ca17f0603bd614d36b4d72"
+                },
+                {
+                  "text": "Synchronize README, engine documentation, machine ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -4681,6 +4708,13 @@
           "name": "Returning guard clause fallthrough in bounded register VM",
           "task_ids": [
             "T424"
+          ]
+        },
+        {
+          "emoji": "🌿",
+          "name": "Lexically isolated register-VM conditional return paths",
+          "task_ids": [
+            "T425"
           ]
         }
       ]

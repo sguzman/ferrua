@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 153 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 154 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -691,6 +691,11 @@
   - [x] Retain short-circuit and lexical locals while rejecting missing final returns and nonreturning conditional bodies — src/owned_vm.rs: integer_guard_clauses_fall_through_to_a_later_return; three explicit unsupported cases
   - [x] Pass native Rust tests, Rust 1.96, Arch package/consumer and reference Lua 5.4 differential corpus — GitHub Actions 40124323318 all five jobs green on 0fac6838732ec636595401ea64f3276583858883; 18 comparison fixtures
   - [x] Synchronize README, owned-engine design note, evidence ledger and generated roadmap under successful CI — GitHub Actions 40124637352: all five jobs passed synchronized docs/progress.json, derived roadmap, owned-engine documentation and README
+- 🌿 **T425** Isolate register-VM returning branch lexical environments — `████████░░ 75%`
+  - [x] Compile each returning if/elseif/else arm against an independent lexical-binding snapshot — src/owned_vm.rs: Statement::If uses branch_scopes clones instead of mutating sibling-visible binding maps
+  - [x] Prevent skipped branch assignments from poisoning sibling/fallback return registers and preserve selected-branch assignments — src/owned_vm.rs: register_returning_branches_do_not_leak_bindings_into_other_paths; tests/owned_vm.rs 14 cross-branch cases
+  - [x] Pass unit/lint/formatter, Rust 1.96, upstream Lua 5.4 and fer differential suite, Arch smoke and consumer — GitHub Actions 40124937687 all five jobs successful on commit 01cc1de79eb880d2d3ca17f0603bd614d36b4d72
+  - [ ] Synchronize README, engine documentation, machine ledger and generated roadmap under passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -814,4 +819,5 @@
 - 🔎 Register-VM Lua numeric truthiness and negated guards — `██████████ 100%`
 - ↪️ Bounded Lua short-circuit conditional register guards — `██████████ 100%`
 - 🚦 Returning guard clause fallthrough in bounded register VM — `██████████ 100%`
+- 🌿 Lexically isolated register-VM conditional return paths — `████████░░ 75%`
 
