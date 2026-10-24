@@ -328,7 +328,9 @@ fn run_owned_source(options: &Options, source: &str, name: &str) -> Result<(), S
     use ferrua::owned_flow::{DEFAULT_STEP_BUDGET, compile_flow_chunk, execute_flow_values};
 
     // Match the production CLI's Unix shebang handling without selecting its VM.
-    let normalized = source.starts_with("#!").then(|| format!("--{}", &source[2..]));
+    let normalized = source
+        .starts_with("#!")
+        .then(|| format!("--{}", &source[2..]));
     let program = compile_flow_chunk(normalized.as_deref().unwrap_or(source))
         .map_err(|err| format!("{name}: {err}"))?;
     if options.check_only {
