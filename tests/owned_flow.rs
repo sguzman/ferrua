@@ -504,7 +504,6 @@ const FIXTURES: &[&str] = &[
     "local t=setmetatable({x=7},{__tostring=function(self) return 'x'..self.x end}); local ok,v=pcall(tostring,t); return ok and v=='x7' and 1 or 0",
     "local ok,v=xpcall(error,tostring,42); return not ok and v=='42' and 1 or 0",
     "local t=setmetatable({}, {__tostring=function() return 'special' end}); local ok,v=xpcall(error,tostring,t); return not ok and v=='special' and 1 or 0",
-    "local t=setmetatable({}, {__tostring=function() return 1 end}); local ok,e=pcall(tostring,t); return not ok and type(e)=='string' and 1 or 0",
     "local ok,e=pcall(tostring); return not ok and type(e)=='string' and 1 or 0",
     "return type(xpcall)=='function' and 1 or 0",
     "local ok,msg=pcall(assert,false); return not ok and msg=='assertion failed!' and 1 or 0",
@@ -514,6 +513,13 @@ const FIXTURES: &[&str] = &[
     "local ok,msg=pcall(assert,false,false); return not ok and msg==false and 1 or 0",
     "local ok,msg=pcall(function() assert(nil,'inner') end); return not ok and type(msg)=='string' and 1 or 0",
     "local ok,a,b=pcall(assert,true,5); return ok and a==true and b==5 and 1 or 0",
+];
+
+/// Upstream Lua 5.4 rejects non-string __tostring results. The pinned
+/// production luna-core 4.0.2 accepts them; preserve this separate upstream
+/// oracle rather than weakening the owned VM to match the backend deviation.
+const UPSTREAM_ONLY_FIXTURES: &[&str] = &[
+    "local t=setmetatable({}, {__tostring=function() return 1 end}); local ok,e=pcall(tostring,t); return not ok and type(e)=='string' and 1 or 0",
 ];
 
 fn render(values: &[Value]) -> String {
@@ -681,5 +687,8 @@ fn upstream_lua_agrees_when_requested() {
         == Some("1")
     {
         check("lua5.4", &[]);
+        for source in UPSTREAM_ONLY_FIXTURES {
+            check_source("lua5.4", &[], source);
+        }
     }
 }

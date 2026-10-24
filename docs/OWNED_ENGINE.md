@@ -507,3 +507,9 @@ The experimental owned VM's `pcall` can now invoke the existing first-party `typ
 Ten curated fixtures cover successful type and number conversion, invalid numeral returning nil, raw length, numeric raw equality, builtin error handlers and protected invalid arguments. [CI #40046376588](https://github.com/sguzman/ferrua/actions/runs/40046376588) passed Linux formatting/lint/tests, Rust 1.96, upstream Lua 5.4 differential tests, Arch packaging, composite consumer and aggregate status.
 
 This is a deliberately enumerated subset, **not** general protected invocation of all Lua builtins. `tostring` (including `__tostring`), `rawget`, `rawset`, `next`, `pairs`, `ipairs`, `pcall` and `xpcall` as nested builtin targets, arbitrary standard-library calls, error stack traces, coroutines and release cutover remain future conformance gates.
+
+### Known production-backend deviation: non-string __tostring
+
+Upstream Lua 5.4 requires a `__tostring` metamethod to return a Lua string. The Ferrua-owned bounded VM raises a recoverable type error when the callback returns a number. The pinned production `luna-core` 4.0.2 backend instead accepts the numeric return. This divergence was observed in the `tostring` protected-call differential matrix during CI #40046805540, where owned behavior matched the upstream reference but not production `fer`.
+
+The invalid-return fixture is retained in `tests/owned_flow.rs` as `UPSTREAM_ONLY_FIXTURES`, executed against upstream Lua 5.4 with the same owned VM oracle. It is excluded from direct production-backend equality assertions **only because the backend deviation has been identified and documented**, not because the owned runtime accepted incorrect behavior. Resolution of this backend discrepancy is a separate compatibility decision and does not authorize weakening the first-party runtime or claiming full parity. The production interpreter remains unchanged.
