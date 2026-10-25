@@ -162,3 +162,47 @@ fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
         assert_eq!(owned.stdout, upstream.stdout);
     }
 }
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
