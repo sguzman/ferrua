@@ -4842,6 +4842,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T461",
+              "emoji": "🔁",
+              "name": "Allow Lua __gc re-registration following prior finalization",
+              "checks": [
+                {
+                  "text": "Recognize assigning a finalizing or resurrected table a valid __gc metatable as a new registration, after its first completed finalization",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: setmetatable_builtin removes gc_finalized and repositions the table in gc_registrations"
+                },
+                {
+                  "text": "Ensure that re-registration cannot cause duplicate callbacks within the current collection or shutdown snapshot and that ordinary one-time finalization is unchanged",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: finalized_tables_may_be_registered_again_for_a_later_collection; frozen pending callback list"
+                },
+                {
+                  "text": "Pass upstream Lua 5.4 differential coverage for re-registration inside a finalizer and after resurrection, with five-job green CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40218621025 five jobs passed on 525848cc64dcd9051b56054a885818e261f9b640; tests/owned_cli_differential.rs: owned_reregistered_finalizers_match_lua54_on_later_gc_cycles"
+                },
+                {
+                  "text": "Synchronize README, engine docs, machine ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5838,7 +5865,8 @@
             "T457",
             "T458",
             "T459",
-            "T460"
+            "T460",
+            "T461"
           ]
         }
       ]

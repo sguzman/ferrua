@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 189 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 190 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -871,6 +871,11 @@
   - [x] Finalize all remaining registered tables, including reachable ones, at state shutdown in reverse registration order without repeating earlier finalization or scheduling new registrations — src/owned_flow.rs: finalize_on_shutdown; execute_flow_capture_with_args; closing_owned_state_finalizes_live_tables_in_reverse_order
   - [x] Require official Lua 5.4 output parity for shutdown and explicit-GC lifecycle, recording pinned production backend's observed different shutdown ordering instead of hiding it — tests/owned_cli_differential.rs: owned_lua_state_shutdown_finalizers_match_lua54, owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases; five-job CI 40216318382 on b64c506ad894aad85b5658a8ab92a6eac7969021
   - [x] Synchronize README, owned-engine docs, machine ledger and generated roadmap with all-green CI — GitHub Actions 40216560547: all five jobs passed on 5e2750525962a9e112f4be75247ba5c221ec06fa; README, owned-engine docs, evidence ledger and generated roadmap accepted
+- 🔁 **T461** Allow Lua __gc re-registration following prior finalization — `████████░░ 75%`
+  - [x] Recognize assigning a finalizing or resurrected table a valid __gc metatable as a new registration, after its first completed finalization — src/owned_flow.rs: setmetatable_builtin removes gc_finalized and repositions the table in gc_registrations
+  - [x] Ensure that re-registration cannot cause duplicate callbacks within the current collection or shutdown snapshot and that ordinary one-time finalization is unchanged — src/owned_flow.rs: finalized_tables_may_be_registered_again_for_a_later_collection; frozen pending callback list
+  - [x] Pass upstream Lua 5.4 differential coverage for re-registration inside a finalizer and after resurrection, with five-job green CI — GitHub Actions 40218621025 five jobs passed on 525848cc64dcd9051b56054a885818e261f9b640; tests/owned_cli_differential.rs: owned_reregistered_finalizers_match_lua54_on_later_gc_cycles
+  - [ ] Synchronize README, engine docs, machine ledger and generated roadmap under passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1012,5 +1017,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 99%`
 
