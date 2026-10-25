@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 180 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 180 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -821,11 +821,11 @@
   - [x] Reclaim unreachable table slots automatically and accept manually recycled slots while stopped without releasing reachable tables — src/owned_flow.rs: gc_reuses_full_table_pool_for_lazy_global_math_and_argument_tables; includes retained-table quota rejection
   - [x] Compare observable Lua table initialization after exhausted-slot pressure with production fer and Lua 5.4 under five-job CI — GitHub Actions 40202985644: five jobs passed on 634ce9bd7f2de4d1e6ff5b4e9cb662c04c3e6616; tests/owned_cli_differential.rs: owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure
   - [x] Synchronize README, engine documentation, evidence ledger and generated roadmap under all-green CI — GitHub Actions 40203151735: five jobs passed on 7c34f5c50a12212ddb9c068dd864d475cca4d4c3; README, owned-engine docs, ledger and generator-derived roadmap accepted
-- ⏱️ **T451** Charge bounded collector sweep traversal to the VM instruction budget — `████████░░ 75%`
+- ⏱️ **T451** Charge bounded collector sweep traversal to the VM instruction budget — `██████████ 100%`
   - [x] Reserve sweep cost for table slots, closure slots, capture bookkeeping and frame allocations before heap mutation — src/owned_flow.rs: collect_root_tables bounded sweep_cost preflight
   - [x] Verify quota rejection when a full sweep exceeds the remaining budget and successful collection with sufficient budget — src/owned_flow.rs: collector_charges_sweeps_against_execution_budget adaptive baseline regression
   - [x] Pass Linux formatting/clippy/tests, Rust 1.96, Lua 5.4 reference checks, Arch packaging and downstream consumer — GitHub Actions 40203647611: all five jobs passed on e19a977561b40a126f41e70e25975a29338a2143
-  - [ ] Synchronize README, owned-engine docs, evidence ledger and generated roadmap under passing CI
+  - [x] Synchronize README, owned-engine docs, evidence ledger and generated roadmap under passing CI — GitHub Actions 40203824158: five jobs passed on 599f26f45b145a9ffe44d6cfdae348e892c3e57e; README, owned-engine docs, ledger and generator-derived roadmap accepted
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -967,5 +967,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 97%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 
