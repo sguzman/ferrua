@@ -4898,6 +4898,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T463",
+              "emoji": "🪧",
+              "name": "Report noncallable Lua __gc finalizers with reference-compatible warning context",
+              "checks": [
+                {
+                  "text": "Produce method-type-specific diagnostics for noncallable __gc values instead of the generic nonstring error fallback",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: warn_finalizer_error(error,method), including number/boolean/string/table call-type labeling"
+                },
+                {
+                  "text": "Preserve nonfatal script execution and bounded warning output when invalid __gc methods are collected",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: invalid_lua_gc_methods_warn_with_call_type_diagnostics"
+                },
+                {
+                  "text": "Require exact Lua 5.4 stdout/stderr parity including the metamethod __gc context suffix and five-job green CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40220339912: five jobs passed on ce0b79fe93bf1d7184c49b014489dfbcd18f6a21; tests/owned_cli_differential.rs: owned_noncallable_finalizer_warnings_match_lua54"
+                },
+                {
+                  "text": "Synchronize README, engine docs, machine-readable ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5896,7 +5923,8 @@
             "T459",
             "T460",
             "T461",
-            "T462"
+            "T462",
+            "T463"
           ]
         }
       ]
