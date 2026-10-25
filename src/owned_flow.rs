@@ -4845,10 +4845,7 @@ impl Execution<'_> {
                 index += 1;
                 (value, false)
             };
-            let repetition = if !plain
-                && index < body.len()
-                && b"*+?-".contains(&body[index])
-            {
+            let repetition = if !plain && index < body.len() && b"*+?-".contains(&body[index]) {
                 let operator = body[index];
                 index += 1;
                 operator
