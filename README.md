@@ -40,7 +40,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified implementation CI:** [all five jobs green on `daa9f42`, including Lua 5.4 trigonometry and degree/radian conversion parity](https://github.com/sguzman/ferrua/actions/runs/40233132487). Native EndeavourOS/Hyprland QA and stable owned-engine graduation remain pending.
+**Latest verified implementation and documentation CI:** [all five jobs green at `22b4188`, covering trigonometry and angle conversion, with evidence-ledger and generated roadmap consistency](https://github.com/sguzman/ferrua/actions/runs/40233353603). Native EndeavourOS/Hyprland QA and stable owned-engine graduation remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 

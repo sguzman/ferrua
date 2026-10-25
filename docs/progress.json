@@ -5295,7 +5295,7 @@
               "id": "T477",
               "emoji": "📐",
               "name": "Lua 5.4 trigonometry and radian-degree conversion parity",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Expose math.sin, math.cos, math.tan, math.rad and math.deg through mutable first-party math table and direct/protected dispatch",
@@ -5314,7 +5314,8 @@
                 },
                 {
                   "text": "Synchronize README, owned-engine documentation, machine ledger and generated roadmap under all-green CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40233353603: all five jobs passed at 22b41882cac8e21287723346d790cd2e70eb385e; README, machine evidence ledger, generated roadmap, and owned engine documentation synchronized"
                 }
               ]
             }
