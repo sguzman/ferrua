@@ -294,6 +294,16 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_finalizer_collectgarbage_zero_result_arity_matches_lua54() {
+    for source in [
+        "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+        "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_finalizer_suppresses_nested_collection_like_lua54() {
     let cases: [(&str, &[u8], &[u8]); 2] = [
         (
