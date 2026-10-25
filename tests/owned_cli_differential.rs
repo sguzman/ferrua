@@ -146,6 +146,18 @@ fn owned_table_concat_unpack_sequence_results_match_lua54() {
 }
 
 #[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn generated_branch_and_environment_interactions_match_lua54() {
     for seed in 0_i64..48 {
         let base = (seed * 11) % 23 - 8;

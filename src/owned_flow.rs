@@ -83,6 +83,7 @@ pub enum Builtin {
     StringRep,
     TableConcat,
     TableUnpack,
+    TablePack,
 }
 
 const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -109,6 +110,7 @@ const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
 const TABLE_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"concat", Builtin::TableConcat),
     (b"unpack", Builtin::TableUnpack),
+    (b"pack", Builtin::TablePack),
 ];
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -3633,6 +3635,9 @@ impl Execution<'_> {
             }
             Value::Builtin(Builtin::StringByte) => self.string_byte_builtin(&arguments),
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
+            Value::Builtin(Builtin::TablePack) => {
+                Ok(vec![self.table_pack_builtin(&arguments)?])
+            }
             Value::Builtin(Builtin::TableConcat) => {
                 Ok(vec![self.table_concat_builtin(&arguments)?])
             }
@@ -3842,6 +3847,39 @@ impl Execution<'_> {
             return Err(FlowError::TooLarge);
         }
         Ok((target, start, size))
+    }
+
+    /// table.pack stores the argument count in n so nil holes and trailing
+    /// nils remain observable even when the raw sequence border is shorter.
+    /// The partially populated result is pinned during new string interning.
+    fn table_pack_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        if args.len() > MAX_TABLE_FIELDS {
+            return Err(FlowError::TooLarge);
+        }
+        if self.steps.saturating_add(args.len()) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += args.len();
+        self.reserve_lazy_table_slot(args)?;
+        let handle = self.insert_table(TableStorage {
+            array: Vec::new(),
+            hashed: HashMap::new(),
+            metatable: None,
+        })?;
+        let mut roots = args.to_vec();
+        roots.push(Value::Table(handle));
+        let name = self.intern_rooted_string(b"n".to_vec(), &roots)?;
+        self.write_table(
+            handle,
+            TableKey::Hashed(name),
+            Value::Integer(args.len() as i64),
+        )?;
+        for (index, &value) in args.iter().enumerate() {
+            if value != Value::Nil {
+                self.write_table(handle, TableKey::Positive(index + 1), value)?;
+            }
+        }
+        Ok(Value::Table(handle))
     }
 
     /// table.unpack exposes genuine zero-or-more results from raw table
@@ -4385,6 +4423,7 @@ impl Execution<'_> {
                                     | Builtin::MathType
                                     | Builtin::MathToInteger
                                     | Builtin::StringChar
+                                    | Builtin::TablePack
                                     | Builtin::CollectGarbage
                             )
                         {
@@ -4509,6 +4548,7 @@ impl Execution<'_> {
                             | Builtin::StringReverse
                             | Builtin::StringRep => self.string_builtin(builtin, &args)?,
                             Builtin::TableConcat => self.table_concat_builtin(&args)?,
+                            Builtin::TablePack => self.table_pack_builtin(&args)?,
                         };
                         if matches!(
                             instructions[pc],
@@ -9077,6 +9117,33 @@ mod tests {
             (
                 "local t={string.char(65,0,66)}; for i=1,19000 do local s=tostring(i) end; print(table.concat(t)==string.char(65,0,66))",
                 b"true\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 3_000_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+    }
+
+    #[test]
+    fn table_pack_preserves_nil_holes_and_explicit_argument_count() {
+        for (source, expected) in [
+            (
+                "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+                b"3\t1\tnil\t3\t3\n".as_slice(),
+            ),
+            (
+                "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+                b"0\t2\ttrue\ttrue\t2\n".as_slice(),
+            ),
+            (
+                "local saved=table.pack('kept'..42,nil,17); for i=1,19000 do local s=tostring(i) end; print(saved.n,saved[1],saved[2]==nil,saved[3])",
+                b"3\tkept42\ttrue\t17\n".as_slice(),
+            ),
+            (
+                "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+                b"99\n1\n".as_slice(),
             ),
         ] {
             let program = compile_flow_chunk(source).unwrap();
