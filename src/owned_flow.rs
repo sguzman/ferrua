@@ -1800,15 +1800,15 @@ impl Execution<'_> {
         Ok(())
     }
 
-    /// Lua's __mode="v" makes table/function values weak, but retains keys
-    /// and value-like primitives. Weak-key and ephemeron semantics remain
-    /// outside the owned engine's accepted subset.
-    fn table_uses_weak_values(&self, table: &TableStorage) -> Result<bool, FlowError> {
+    /// Resolve the table's current Lua weak-reference mode from its raw
+    /// metatable. String and number keys and values are never collectible
+    /// weak references, even when the mode includes their side.
+    fn table_weakness(&self, table: &TableStorage) -> Result<(bool, bool), FlowError> {
         let Some(meta_handle) = table.metatable else {
-            return Ok(false);
+            return Ok((false, false));
         };
         let Some(&name) = self.string_index.get(b"__mode".as_slice()) else {
-            return Ok(false);
+            return Ok((false, false));
         };
         if self.retired_tables.contains(&meta_handle) {
             return Err(FlowError::InvalidBytecode);
@@ -1818,10 +1818,15 @@ impl Execution<'_> {
             .get(meta_handle)
             .ok_or(FlowError::InvalidBytecode)?;
         let Some(Value::String(value)) = meta.hashed.get(&Value::String(name)) else {
-            return Ok(false);
+            return Ok((false, false));
         };
         let mode = self.strings.get(*value).ok_or(FlowError::InvalidBytecode)?;
-        Ok(mode == b"v")
+        Ok(match mode.as_slice() {
+            b"k" => (true, false),
+            b"v" => (false, true),
+            b"kv" | b"vk" => (true, true),
+            _ => (false, false),
+        })
     }
 
     /// Bounded mark-and-sweep across active Lua call frames. Each suspended
@@ -1884,63 +1889,97 @@ impl Execution<'_> {
         {
             work.push(Value::Table(handle));
         }
-        while let Some(value) = work.pop() {
-            if self.steps >= self.budget {
-                return Err(FlowError::StepBudgetExceeded);
-            }
-            self.steps += 1;
-            match value {
-                Value::Table(handle) => {
-                    let marked = marked_tables
-                        .get_mut(handle)
-                        .ok_or(FlowError::InvalidBytecode)?;
-                    if *marked {
-                        continue;
-                    }
-                    if self.retired_tables.contains(&handle) {
-                        return Err(FlowError::InvalidBytecode);
-                    }
-                    let table = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
-                    *marked = true;
-                    if let Some(meta) = table.metatable {
-                        work.push(Value::Table(meta));
-                    }
-                    let weak_values = self.table_uses_weak_values(table)?;
-                    if !weak_values {
-                        work.extend(table.array.iter().flatten().copied());
-                    }
-                    for (&key, &value) in &table.hashed {
-                        work.push(key);
+        // Weak-key/strong-value tables are ephemerons: a value is traversed
+        // only after its key is marked from some other strong path. A value's
+        // own reference back to its key cannot make the key reachable.
+        let mut ephemerons = Vec::new();
+        let mut activated = Vec::new();
+        loop {
+            while let Some(value) = work.pop() {
+                if self.steps >= self.budget {
+                    return Err(FlowError::StepBudgetExceeded);
+                }
+                self.steps += 1;
+                match value {
+                    Value::Table(handle) => {
+                        let marked = marked_tables
+                            .get_mut(handle)
+                            .ok_or(FlowError::InvalidBytecode)?;
+                        if *marked {
+                            continue;
+                        }
+                        if self.retired_tables.contains(&handle) {
+                            return Err(FlowError::InvalidBytecode);
+                        }
+                        let table = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+                        *marked = true;
+                        if let Some(meta) = table.metatable {
+                            work.push(Value::Table(meta));
+                        }
+                        let (weak_keys, weak_values) = self.table_weakness(table)?;
+                        // Array indices are always primitive numeric keys.
                         if !weak_values {
-                            work.push(value);
+                            work.extend(table.array.iter().flatten().copied());
+                        }
+                        for (&key, &value) in &table.hashed {
+                            if !weak_keys {
+                                work.push(key);
+                                if !weak_values {
+                                    work.push(value);
+                                }
+                            } else if !weak_values {
+                                if matches!(key, Value::Table(_) | Value::Function(_)) {
+                                    ephemerons.push((key, value));
+                                    activated.push(false);
+                                } else {
+                                    // Uncollectible keys retain their values.
+                                    work.push(value);
+                                }
+                            }
                         }
                     }
-                }
-                Value::Function(handle) => {
-                    let marked = marked_closures
-                        .get_mut(handle)
-                        .ok_or(FlowError::InvalidBytecode)?;
-                    if *marked {
-                        continue;
-                    }
-                    *marked = true;
-                    let closure = self
-                        .closures
-                        .get(handle)
-                        .and_then(Option::as_ref)
-                        .ok_or(FlowError::InvalidBytecode)?;
-                    for &(_, cell) in &closure.captures {
-                        if let Some(Some(value)) = self.cells.get(cell) {
-                            work.push(*value);
+                    Value::Function(handle) => {
+                        let marked = marked_closures
+                            .get_mut(handle)
+                            .ok_or(FlowError::InvalidBytecode)?;
+                        if *marked {
+                            continue;
+                        }
+                        *marked = true;
+                        let closure = self
+                            .closures
+                            .get(handle)
+                            .and_then(Option::as_ref)
+                            .ok_or(FlowError::InvalidBytecode)?;
+                        for &(_, cell) in &closure.captures {
+                            if let Some(Some(value)) = self.cells.get(cell) {
+                                work.push(*value);
+                            }
                         }
                     }
+                    _ => {}
                 }
-                _ => {}
+            }
+
+            let mut changed = false;
+            for (&(key, value), active) in ephemerons.iter().zip(activated.iter_mut()) {
+                if self.steps >= self.budget {
+                    return Err(FlowError::StepBudgetExceeded);
+                }
+                self.steps += 1;
+                if !*active && !weak_value_unreachable(key, &marked_tables, &marked_closures)? {
+                    *active = true;
+                    work.push(value);
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
             }
         }
-        // Prepare weak-value removal without changing the heap. All values
-        // and keys are validated before the budget gate, so a failed pass
-        // cannot leave half-cleared weak tables.
+        // Prepare weak-reference removal without changing the heap. All
+        // candidate handles are validated before the budget gate, so even a
+        // failed ephemeron cycle leaves the original table entries intact.
         let mut weak_clears = Vec::new();
         let mut weak_scan_cost = 0_usize;
         for (handle, &live) in marked_tables.iter().enumerate() {
@@ -1948,7 +1987,8 @@ impl Execution<'_> {
                 continue;
             }
             let table = &self.tables[handle];
-            if !self.table_uses_weak_values(table)? {
+            let (weak_keys, weak_values) = self.table_weakness(table)?;
+            if !weak_keys && !weak_values {
                 continue;
             }
             weak_scan_cost = weak_scan_cost
@@ -1956,7 +1996,8 @@ impl Execution<'_> {
                 .saturating_add(table.hashed.len());
             let mut array_positions = Vec::new();
             for (index, &value) in table.array.iter().enumerate() {
-                if let Some(value) = value
+                if weak_values
+                    && let Some(value) = value
                     && weak_value_unreachable(value, &marked_tables, &marked_closures)?
                 {
                     array_positions.push(index);
@@ -1964,7 +2005,11 @@ impl Execution<'_> {
             }
             let mut hash_keys = Vec::new();
             for (&key, &value) in &table.hashed {
-                if weak_value_unreachable(value, &marked_tables, &marked_closures)? {
+                let dead_key = weak_keys
+                    && weak_value_unreachable(key, &marked_tables, &marked_closures)?;
+                let dead_value = weak_values
+                    && weak_value_unreachable(value, &marked_tables, &marked_closures)?;
+                if dead_key || dead_value {
                     hash_keys.push(key);
                 }
             }
@@ -7762,6 +7807,38 @@ mod tests {
         for (source, expected) in cases {
             let program = compile_flow_chunk(source).unwrap();
             let outcome = execute_flow_capture(&program, 20_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+    }
+
+    #[test]
+    fn owned_gc_weak_keys_and_ephemeron_fixpoint_preserve_lua_reachability() {
+        let cases = [
+            (
+                "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+                b"true\n".as_slice(),
+            ),
+            (
+                "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+                b"42\ntrue\n".as_slice(),
+            ),
+            (
+                "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+                b"42\n".as_slice(),
+            ),
+            (
+                "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+                b"42\ntrue\n".as_slice(),
+            ),
+            (
+                "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+                b"true\tstill\ttrue\n".as_slice(),
+            ),
+        ];
+        for (source, expected) in cases {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 30_000);
             assert_eq!(outcome.result, Ok(vec![]), "{source}");
             assert_eq!(outcome.stdout, expected, "{source}");
         }
