@@ -409,6 +409,25 @@ fn owned_pattern_unsupported_structural_escapes_never_silently_match() {
 }
 
 #[test]
+fn owned_lua_pattern_bracket_ranges_sets_and_negation_match_lua54() {
+    for source in [
+        "print(string.match('aBc','[a-z]+'),string.match('aBc','[A-Z]'))",
+        "print(string.find('aBc','[a-z]+'),string.match('aBc','[^a-z]+'))",
+        "print(string.match('x12y','[%d]+')=='12',string.match('aa3','[^%d]+')=='aa')",
+        "print(string.match('HELLO','[A-Z]+')=='HELLO',string.match('hello','[aeiou]+')=='e')",
+        "print(string.match('1234','[1-3]+')=='123',string.match('ABCD','[B-D]+')=='BCD')",
+        "print(string.match('a-b','[%-]')=='-',string.match('a]b','[]]')==']')",
+        "print(string.match('a%b','[%%]')=='%',string.match('a.b','[%.]')=='.')",
+        "print(string.match('123','[^%a]+')=='123',string.find('a1b','[a-z]%d[a-z]'))",
+        "print(string.find('abc','[ab]',1,true)==nil,string.match('abc','[^x]*')=='abc')",
+        "print(string.match('a\\0b','[%z]')=='\\0',string.find('a\\0b','[^%z]+'))",
+        "local ok=pcall(string.find,'abc','['); local yes=pcall(string.match,'abc','[abc'); print(ok,yes)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",

@@ -4826,16 +4826,44 @@ impl Execution<'_> {
                 }
             }
         }
-        // Atom: byte, escaped flag, repetition operator (0 = exactly one).
-        // The parser never creates captures or bracket classes silently.
+        // A bracket class is stored as its bounded source-byte contents.
+        // It may contain ranges, escaped classes, and an initial negation.
+        // Backtracking is still iterative and shared across all atom kinds.
+        enum Atom {
+            Byte(u8, bool),
+            Bracket(Vec<u8>),
+        }
+        if self.steps.saturating_add(body.len()) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += body.len();
         let mut atoms = Vec::with_capacity(body.len());
         let mut index = 0;
         while index < body.len() {
-            let (byte, escaped) = if !plain && body[index] == b'%' {
+            let atom = if !plain && body[index] == b'[' {
+                let start = index + 1;
+                let mut cursor = start;
+                if body.get(cursor) == Some(&b'^') {
+                    cursor += 1;
+                }
+                // Lua permits a literal ']' as the first class member.
+                if body.get(cursor) == Some(&b']') {
+                    cursor += 1;
+                }
+                loop {
+                    match body.get(cursor) {
+                        None => return Err(FlowError::TypeError),
+                        Some(b'%') if cursor + 1 < body.len() => cursor += 2,
+                        Some(b']') => {
+                            let inside = body[start..cursor].to_vec();
+                            index = cursor + 1;
+                            break Atom::Bracket(inside);
+                        }
+                        Some(_) => cursor += 1,
+                    }
+                }
+            } else if !plain && body[index] == b'%' {
                 let quoted = *body.get(index + 1).ok_or(FlowError::TypeError)?;
-                // Lua gives %b and %f special structural meanings and %1
-                // through %9 are capture backreferences. Treating them as
-                // quoted literal bytes would silently report false matches.
                 if matches!(quoted, b'b' | b'f' | b'0'..=b'9') {
                     return Err(FlowError::Unsupported(
                         "Lua balanced, frontier and backreference patterns are not implemented"
@@ -4843,16 +4871,16 @@ impl Execution<'_> {
                     ));
                 }
                 index += 2;
-                (quoted, true)
+                Atom::Byte(quoted, true)
             } else {
                 let value = body[index];
-                if !plain && b"()[]*+-?".contains(&value) {
+                if !plain && b"()*+-?]".contains(&value) {
                     return Err(FlowError::Unsupported(
-                        "Lua bracket classes or captures are not implemented".into(),
+                        "Lua captures and malformed repetition are not implemented".into(),
                     ));
                 }
                 index += 1;
-                (value, false)
+                Atom::Byte(value, false)
             };
             let repetition = if !plain && index < body.len() && b"*+?-".contains(&body[index]) {
                 let operator = body[index];
@@ -4861,7 +4889,7 @@ impl Execution<'_> {
             } else {
                 0
             };
-            atoms.push((byte, escaped, repetition));
+            atoms.push((atom, repetition));
         }
         let start = Self::string_offset(initial, source.len() as i64).max(1);
         if start > source.len() as i64 + 1 {
@@ -4887,16 +4915,22 @@ impl Execution<'_> {
                     }
                     continue;
                 }
-                let (atom, escaped, repetition) = atoms[atom_index];
+                let (atom, repetition) = &atoms[atom_index];
                 let matches = |at: usize| {
                     at < source.len()
-                        && if escaped {
-                            Self::simple_pattern_escape_matches(atom, source[at])
-                        } else {
-                            source[at] == atom || (!plain && atom == b'.')
+                        && match atom {
+                            Atom::Byte(byte, true) => {
+                                Self::simple_pattern_escape_matches(*byte, source[at])
+                            }
+                            Atom::Byte(byte, false) => {
+                                source[at] == *byte || (!plain && *byte == b'.')
+                            }
+                            Atom::Bracket(contents) => {
+                                Self::simple_pattern_bracket_matches(contents, source[at])
+                            }
                         }
                 };
-                match repetition {
+                match *repetition {
                     0 => {
                         if matches(position) {
                             states.push((atom_index + 1, position + 1));
@@ -4949,6 +4983,35 @@ impl Execution<'_> {
             }
         }
         Ok(None)
+    }
+
+    /// Lua bracket-class membership: negation, %-classes, inclusive byte
+    /// ranges, and literal punctuation. The surrounding parser already
+    /// identified the closing bracket, including an initial literal ']'.
+    fn simple_pattern_bracket_matches(contents: &[u8], actual: u8) -> bool {
+        let negated = contents.first() == Some(&b'^');
+        let mut index = usize::from(negated);
+        let mut found = false;
+        while index < contents.len() {
+            let byte = contents[index];
+            if byte == b'%' && index + 1 < contents.len() {
+                if Self::simple_pattern_escape_matches(contents[index + 1], actual) {
+                    found = true;
+                }
+                index += 2;
+            } else if index + 2 < contents.len() && contents[index + 1] == b'-' {
+                if byte <= actual && actual <= contents[index + 2] {
+                    found = true;
+                }
+                index += 3;
+            } else {
+                if byte == actual {
+                    found = true;
+                }
+                index += 1;
+            }
+        }
+        found != negated
     }
 
     /// Lua 5.4's %character classes under the project's C/ASCII locale.
