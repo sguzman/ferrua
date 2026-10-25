@@ -5435,7 +5435,7 @@
               "id": "T482",
               "emoji": "🔤",
               "name": "Lua 5.4.6 utf8.codes strict/lax generic iteration and error parity",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Expose utf8.codes returning Lua iterator/string/control triple using existing GenericForCheck runtime and two internal iterator flavors",
@@ -5454,7 +5454,8 @@
                 },
                 {
                   "text": "Synchronize progress ledger, generated roadmap, README and owned-engine compatibility notes under passing documentation CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40238074999: all five jobs green on 7d1f25b7e978b4964879e50692dcc9bacdb4ee28; README, documentation, progress ledger and generated roadmap accepted"
                 }
               ]
             }
