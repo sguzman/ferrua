@@ -5318,6 +5318,33 @@
                   "evidence": "GitHub Actions 40233353603: all five jobs passed at 22b41882cac8e21287723346d790cd2e70eb385e; README, machine evidence ledger, generated roadmap, and owned engine documentation synchronized"
                 }
               ]
+            },
+            {
+              "id": "T478",
+              "emoji": "🧮",
+              "name": "Lua 5.4 inverse trigonometry, exponentials and logarithms",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Implement math.exp, math.log (with optional base), math.asin, math.acos and two-argument math.atan with mutable library exports",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: MathExp/MathLog/MathAsin/MathAcos/MathAtan, math_builtin, MATH_GLOBALS, direct/protected calls"
+                },
+                {
+                  "text": "Test numeric-string conversion, optional nil/base behavior, NaN/infinity, float return types, invalid argument error objects and production atan2-label divergence without weakening assertions",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: math_inverse_trig_exponents_and_optional_base_log_obey_lua_values; tests/owned_cli_differential.rs: owned_inverse_trig_exp_and_optional_log_base_match_lua54 and owned_math_atan_argument_label_matches_lua54_not_production_alias"
+                },
+                {
+                  "text": "Pass upstream Lua 5.4 differential, ordinary Rust tests, Rust 1.96 and downstream consumer CI, retaining explicit implementation/production divergence",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40233937548: all five jobs passed at 3846b423787c36efd1689119e6fb79c762746c0e"
+                },
+                {
+                  "text": "Synchronize evidence ledger, generated roadmap, README and owned-engine limitations with all-green documentation CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -6349,7 +6376,8 @@
           "task_ids": [
             "T475",
             "T476",
-            "T477"
+            "T477",
+            "T478"
           ]
         }
       ]

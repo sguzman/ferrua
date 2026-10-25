@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 206 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 207 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -956,6 +956,11 @@
   - [x] Test float return types, angle identities, numeric strings, infinity NaNs, Lua argument errors and writable library identity using bounded numeric comparisons — src/owned_flow.rs: math_trigonometry_and_unit_conversions_are_float_and_protected; tests/owned_cli_differential.rs: owned_math_trigonometry_and_angle_conversions_match_lua54
   - [x] Verify Rust lint/tests and differential parity with pinned Lua 5.4, Rust 1.96, downstream action and aggregate five-job CI — GitHub Actions 40233132487: all five CI jobs passed on daa9f42c6ff46d9c211e2fd3a3bb87902e6b5f5e
   - [x] Synchronize README, owned-engine documentation, machine ledger and generated roadmap under all-green CI — GitHub Actions 40233353603: all five jobs passed at 22b41882cac8e21287723346d790cd2e70eb385e; README, machine evidence ledger, generated roadmap, and owned engine documentation synchronized
+- 🧮 **T478** Lua 5.4 inverse trigonometry, exponentials and logarithms — `████████░░ 75%`
+  - [x] Implement math.exp, math.log (with optional base), math.asin, math.acos and two-argument math.atan with mutable library exports — src/owned_flow.rs: MathExp/MathLog/MathAsin/MathAcos/MathAtan, math_builtin, MATH_GLOBALS, direct/protected calls
+  - [x] Test numeric-string conversion, optional nil/base behavior, NaN/infinity, float return types, invalid argument error objects and production atan2-label divergence without weakening assertions — src/owned_flow.rs: math_inverse_trig_exponents_and_optional_base_log_obey_lua_values; tests/owned_cli_differential.rs: owned_inverse_trig_exp_and_optional_log_base_match_lua54 and owned_math_atan_argument_label_matches_lua54_not_production_alias
+  - [x] Pass upstream Lua 5.4 differential, ordinary Rust tests, Rust 1.96 and downstream consumer CI, retaining explicit implementation/production divergence — GitHub Actions 40233937548: all five jobs passed at 3846b423787c36efd1689119e6fb79c762746c0e
+  - [ ] Synchronize evidence ledger, generated roadmap, README and owned-engine limitations with all-green documentation CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1100,5 +1105,5 @@
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
 - 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
-- 🧮 Bounded first-party Lua numeric math extensions — `██████████ 100%`
+- 🧮 Bounded first-party Lua numeric math extensions — `█████████░ 94%`
 
