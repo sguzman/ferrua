@@ -5379,7 +5379,7 @@
               "id": "T480",
               "emoji": "🔤",
               "name": "Lua 5.4.6 utf8.char, utf8.len and utf8.codepoint strict/lax byte parity",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Implement byte-preserving Lua 5.4.6 utf8 char/len/codepoint and charpattern including extended lax 1..6-byte sequences",
@@ -5398,7 +5398,8 @@
                 },
                 {
                   "text": "Synchronize evidence ledger, generated roadmap, README and owned-engine scope under a green documentation CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40236693747: all five jobs passed on e8ae997805094d4c1a0a40474cc88624e7327b61, including README, owned-engine docs, machine ledger and regenerated roadmap"
                 }
               ]
             }
