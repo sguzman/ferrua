@@ -4832,6 +4832,7 @@ impl Execution<'_> {
         enum Atom {
             Byte(u8, bool),
             Bracket(Vec<u8>),
+            Frontier(Vec<u8>),
         }
         if self.steps.saturating_add(body.len()) > self.budget {
             return Err(FlowError::StepBudgetExceeded);
@@ -4864,14 +4865,42 @@ impl Execution<'_> {
                 }
             } else if !plain && body[index] == b'%' {
                 let quoted = *body.get(index + 1).ok_or(FlowError::TypeError)?;
-                if matches!(quoted, b'b' | b'f' | b'0'..=b'9') {
-                    return Err(FlowError::Unsupported(
-                        "Lua balanced, frontier and backreference patterns are not implemented"
-                            .into(),
-                    ));
+                if quoted == b'f' {
+                    // %f[set] asserts a transition from outside to inside
+                    // the set, without consuming any source byte.
+                    let bracket = index + 2;
+                    if body.get(bracket) != Some(&b'[') {
+                        return Err(FlowError::TypeError);
+                    }
+                    let start = bracket + 1;
+                    let mut cursor = start;
+                    if body.get(cursor) == Some(&b'^') {
+                        cursor += 1;
+                    }
+                    if body.get(cursor) == Some(&b']') {
+                        cursor += 1;
+                    }
+                    loop {
+                        match body.get(cursor) {
+                            None => return Err(FlowError::TypeError),
+                            Some(b'%') if cursor + 1 < body.len() => cursor += 2,
+                            Some(b']') => {
+                                let inside = body[start..cursor].to_vec();
+                                index = cursor + 1;
+                                break Atom::Frontier(inside);
+                            }
+                            Some(_) => cursor += 1,
+                        }
+                    }
+                } else {
+                    if matches!(quoted, b'b' | b'0'..=b'9') {
+                        return Err(FlowError::Unsupported(
+                            "Lua balanced and backreference patterns are not implemented".into(),
+                        ));
+                    }
+                    index += 2;
+                    Atom::Byte(quoted, true)
                 }
-                index += 2;
-                Atom::Byte(quoted, true)
             } else {
                 let value = body[index];
                 if !plain && b"()*+-?]".contains(&value) {
@@ -4889,6 +4918,11 @@ impl Execution<'_> {
             } else {
                 0
             };
+            if repetition != 0 && matches!(&atom, Atom::Frontier(_)) {
+                return Err(FlowError::Unsupported(
+                    "Lua frontier repetition is not implemented".into(),
+                ));
+            }
             atoms.push((atom, repetition));
         }
         let start = Self::string_offset(initial, source.len() as i64).max(1);
@@ -4916,6 +4950,16 @@ impl Execution<'_> {
                     continue;
                 }
                 let (atom, repetition) = &atoms[atom_index];
+                if let Atom::Frontier(contents) = atom {
+                    let previous = if position == 0 { 0 } else { source[position - 1] };
+                    let next = source.get(position).copied().unwrap_or(0);
+                    if !Self::simple_pattern_bracket_matches(contents, previous)
+                        && Self::simple_pattern_bracket_matches(contents, next)
+                    {
+                        states.push((atom_index + 1, position));
+                    }
+                    continue;
+                }
                 let matches = |at: usize| {
                     at < source.len()
                         && match atom {
@@ -4928,6 +4972,7 @@ impl Execution<'_> {
                             Atom::Bracket(contents) => {
                                 Self::simple_pattern_bracket_matches(contents, source[at])
                             }
+                            Atom::Frontier(_) => false,
                         }
                 };
                 match *repetition {
