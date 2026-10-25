@@ -297,18 +297,16 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 fn owned_finalizer_suppresses_nested_collection_like_lua54() {
     let cases: [(&str, &[u8], &[u8]); 2] = [
         (
-            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==0 end}) end; collectgarbage('collect'); print(called)",
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
             b"true\n",
-            // Pinned production luna-core rejects a nested collector request,
-            // returning false from pcall. Lua 5.4 suppresses the nested
-            // request and returns 0 without a reentrant GC cycle.
+            // Pinned production returns false from pcall. Lua 5.4
+            // suppresses the collector request and returns no values,
+            // so pcall succeeds with a nil second result.
             b"false\n",
         ),
         (
             "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
-            b"body\nclosing\ttrue\t0\n",
-            // At state close, production returns nil from the suppressed
-            // request; this differs from the owned integer return.
+            b"body\nclosing\ttrue\tnil\n",
             b"body\nclosing\ttrue\tnil\n",
         ),
     ];

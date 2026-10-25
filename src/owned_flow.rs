@@ -2414,7 +2414,10 @@ impl Execution<'_> {
                 // finalizer. Suppress the request without revisiting heap
                 // objects while their finalizer callbacks are executing.
                 if self.running_finalizers {
-                    return Ok(Value::Integer(0));
+                    // lua_gc refuses to recurse from a finalizer. Lua's
+                    // collectgarbage wrapper then produces no results;
+                    // this scalar builtin path represents that as nil.
+                    return Ok(Value::Nil);
                 }
                 // Explicit full passes run even while automatic GC is
                 // stopped; snapshots preserve roots of suspended callers.
@@ -8097,12 +8100,12 @@ mod tests {
     fn nested_collectgarbage_requests_inside_finalizers_do_not_reenter_heap_sweep() {
         for (source, expected) in [
             (
-                "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==0 end}) end; collectgarbage('collect'); print(called)",
+                "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
                 b"true\n".as_slice(),
             ),
             (
                 "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
-                b"body\nclosing\ttrue\t0\n".as_slice(),
+                b"body\nclosing\ttrue\tnil\n".as_slice(),
             ),
         ] {
             let program = compile_flow_chunk(source).unwrap();
