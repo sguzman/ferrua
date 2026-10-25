@@ -5215,17 +5215,17 @@
                 {
                   "text": "Provide Lua table.sort with zero return values, numeric and byte-string ordering, and table __lt metamethod comparison",
                   "passed": true,
-                  "evidence": "src/owned_flow.rs: Builtin::TableSort, table_sort_less and table_sort_builtin; Rust unit table_sort_orders_numbers_strings_callbacks_and_table_metamethods; CI 40229910177"
+                  "evidence": "src/owned_flow.rs: table_sort_less, table_sort_builtin, direct/protected dispatch; Rust unit table_sort_orders_numbers_strings_callbacks_and_table_metamethods; CI 40230426019"
                 },
                 {
                   "text": "Support Lua function comparators, protected invalid-argument behavior, and bounded sorting work without mutating the source before successful comparisons",
                   "passed": true,
-                  "evidence": "src/owned_flow.rs: table_sort_less callback dispatch; insertion-sort snapshot and shared step budget; Rust unit tests; CI 40229910177"
+                  "evidence": "src/owned_flow.rs: bounded insertion sort, callback comparison, shared instruction budget and commit-on-success; Rust unit and differential tests; CI 40230426019"
                 },
                 {
                   "text": "Root all intermediate sort values during callback GC, and prove real CLI parity with pinned production and upstream Lua 5.4 across supported sorting scenarios",
                   "passed": true,
-                  "evidence": "src/owned_flow.rs: GcFrameRoots snapshot push/pop, protected_target; tests/owned_cli_differential.rs: owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54; GitHub Actions 40229910177 five green jobs on b2aa3f67f4c1266aed4d024fa49d6ff2a0c68787"
+                  "evidence": "src/owned_flow.rs: gc_temporary_roots traced independently of Lua frames, table_sort_builtin snapshot roots and comparator callback; owned-only regression table_sort_snapshot_roots_values_during_comparator_gc_and_mutation; tests/owned_cli_differential.rs: owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54; GitHub Actions 40230426019 all five jobs passed on 49f63695ee7eb1e126b0e72bdcb17be7bd1d4f99"
                 },
                 {
                   "text": "Synchronize README, owned-engine limitations, machine ledger and generated roadmap under five successful CI jobs",
