@@ -92,6 +92,7 @@ pub enum Builtin {
     Utf8Char,
     Utf8Len,
     Utf8Codepoint,
+    Utf8Offset,
     StringLen,
     StringSub,
     StringByte,
@@ -139,6 +140,7 @@ const UTF8_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"char", Builtin::Utf8Char),
     (b"len", Builtin::Utf8Len),
     (b"codepoint", Builtin::Utf8Codepoint),
+    (b"offset", Builtin::Utf8Offset),
 ];
 
 const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -4123,6 +4125,7 @@ impl Execution<'_> {
             Value::Builtin(Builtin::Utf8Char) => Ok(vec![self.utf8_char_builtin(&arguments)?]),
             Value::Builtin(Builtin::Utf8Len) => self.utf8_len_builtin(&arguments),
             Value::Builtin(Builtin::Utf8Codepoint) => self.utf8_codepoint_builtin(&arguments),
+            Value::Builtin(Builtin::Utf8Offset) => Ok(vec![self.utf8_offset_builtin(&arguments)?]),
             Value::Builtin(Builtin::StringByte) => self.string_byte_builtin(&arguments),
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
             Value::Builtin(Builtin::TablePack) => Ok(vec![self.table_pack_builtin(&arguments)?]),
@@ -4752,6 +4755,85 @@ impl Execution<'_> {
             }
         }
         self.intern_rooted_string(output, args)
+    }
+
+    /// Byte-oriented Lua 5.4 offset counts lead bytes rather than validating
+    /// sequences, and allows the position immediately after the last byte.
+    fn utf8_offset_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        let bytes = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
+        let Value::Integer(mut remaining) =
+            self.checked_math_number("utf8.offset", args, 1, true)?
+        else {
+            return Err(FlowError::InvalidBytecode);
+        };
+        let length = bytes.len();
+        let default = if remaining >= 0 { 1 } else { length as i64 + 1 };
+        let position = self.utf8_optional_integer(args, 2, default, "utf8.offset")?;
+        let position = lua_utf8_pos(position, length);
+        if !(1..=length as i64 + 1).contains(&position) {
+            return Err(self.utf8_argument_error(
+                args,
+                "utf8.offset",
+                2,
+                "position out of bounds",
+            )?);
+        }
+        let mut cursor = (position - 1) as usize;
+        let is_continuation = |index: usize| {
+            bytes.get(index).is_some_and(|byte| byte & 0xC0 == 0x80)
+        };
+        if remaining == 0 {
+            while cursor > 0 && is_continuation(cursor) {
+                if self.steps >= self.budget {
+                    return Err(FlowError::StepBudgetExceeded);
+                }
+                self.steps += 1;
+                cursor -= 1;
+            }
+            return Ok(Value::Integer(cursor as i64 + 1));
+        }
+        if is_continuation(cursor) {
+            let value = self.intern_rooted_string(
+                b"initial position is a continuation byte".to_vec(),
+                args,
+            )?;
+            return Err(FlowError::Thrown(value));
+        }
+        if remaining < 0 {
+            while remaining < 0 && cursor > 0 {
+                loop {
+                    if self.steps >= self.budget {
+                        return Err(FlowError::StepBudgetExceeded);
+                    }
+                    self.steps += 1;
+                    cursor -= 1;
+                    if cursor == 0 || !is_continuation(cursor) {
+                        break;
+                    }
+                }
+                remaining += 1;
+            }
+        } else {
+            remaining -= 1;
+            while remaining > 0 && cursor < length {
+                loop {
+                    if self.steps >= self.budget {
+                        return Err(FlowError::StepBudgetExceeded);
+                    }
+                    self.steps += 1;
+                    cursor += 1;
+                    if !is_continuation(cursor) {
+                        break;
+                    }
+                }
+                remaining -= 1;
+            }
+        }
+        if remaining == 0 {
+            Ok(Value::Integer(cursor as i64 + 1))
+        } else {
+            Ok(Value::Nil)
+        }
     }
 
     fn utf8_len_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
@@ -5436,6 +5518,7 @@ impl Execution<'_> {
                             | Builtin::StringReverse
                             | Builtin::StringRep => self.string_builtin(builtin, &args)?,
                             Builtin::Utf8Char => self.utf8_char_builtin(&args)?,
+                            Builtin::Utf8Offset => self.utf8_offset_builtin(&args)?,
                             Builtin::TableConcat => self.table_concat_builtin(&args)?,
                             Builtin::TablePack => self.table_pack_builtin(&args)?,
                             Builtin::TableRemove => self.table_remove_builtin(&args)?,
@@ -10594,6 +10677,20 @@ mod tests {
         assert_eq!(
             outcome.stdout,
             b"123\t-456\t2\ninteger\ttrue\tfloat\ttrue\ntrue\ttrue\ttrue\n1\t0\n1\tinteger\nfalse\n"
+        );
+    }
+
+    #[test]
+    fn utf8_offset_counts_byte_beginnings_and_reports_continuation_errors() {
+        let program = compile_flow_chunk(
+            "local s='Aé💩Z'; print(utf8.offset(s,1),utf8.offset(s,2),utf8.offset(s,3),utf8.offset(s,4),utf8.offset(s,5),utf8.offset(s,6)==nil); print(utf8.offset(s,-1),utf8.offset(s,-2),utf8.offset(s,0,5),utf8.offset(s,1,-1)); print(utf8.offset(s,-4),utf8.offset(s,-5)==nil,utf8.offset(s,0,9),utf8.offset(s,2,9)==nil); local ok,msg=pcall(utf8.offset,s,1,5); print(ok,msg); print(utf8.offset(s,0,5),utf8.offset(s,-1,1)==nil)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 10000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(
+            outcome.stdout,
+            b"1\t2\t4\t8\t9\ttrue\n8\t4\t4\t8\n1\ttrue\t9\ttrue\nfalse\tinitial position is a continuation byte\n4\ttrue\n"
         );
     }
 

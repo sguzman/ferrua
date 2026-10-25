@@ -120,6 +120,22 @@ fn owned_math_atan_argument_label_matches_lua54_with_backend_alias_variation() {
 }
 
 #[test]
+fn owned_utf8_offset_byte_boundaries_and_continuations_match_lua54() {
+    for source in [
+        "local s='Aé💩Z'; print(utf8.offset(s,1),utf8.offset(s,2),utf8.offset(s,3),utf8.offset(s,4),utf8.offset(s,5),utf8.offset(s,6)==nil)",
+        "local s='Aé💩Z'; print(utf8.offset(s,-1),utf8.offset(s,-2),utf8.offset(s,-3),utf8.offset(s,-4),utf8.offset(s,-5)==nil)",
+        "local s='Aé💩Z'; print(utf8.offset(s,0,5),utf8.offset(s,1,-1),utf8.offset(s,0,9),utf8.offset(s,2,9)==nil)",
+        "local s='Aé💩Z'; local ok,msg=pcall(utf8.offset,s,1,5); print(ok,msg); print(utf8.offset(s,0,5))",
+        "print(utf8.offset('',1),utf8.offset('',2)==nil,utf8.offset('',-1)==nil,utf8.offset('',0))",
+        "local s=string.char(0xC0,0x80,65); print(utf8.offset(s,1),utf8.offset(s,2),utf8.offset(s,0,2),utf8.offset(s,-1))",
+        "local s='abc'; print(utf8.offset(s,1,1.0),utf8.offset(s,'2'),utf8.offset(s,0,-1)); local ok=pcall(utf8.offset,s,1,0); print(ok)",
+        "local f=utf8.offset; utf8.offset=function() return 42 end; print(utf8.offset()); utf8.offset=f; print(utf8.offset('a',1))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_utf8_char_len_codepoint_and_lax_modes_match_lua54() {
     for source in [
         "local u=utf8; print(_G.utf8==u,type(u.char),type(u.len),type(u.codepoint),type(u.charpattern)); local old=u.char; u.char=function() return 'override' end; print(utf8.char()); u.char=old",
