@@ -5066,6 +5066,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T469",
+              "emoji": "🔁",
+              "name": "Bounded Lua string case conversion, byte reversal and repetition",
+              "checks": [
+                {
+                  "text": "Implement C-locale ASCII byte case transforms and binary-preserving reverse with explicit GC roots and instruction-budget charges",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: StringLower, StringUpper, StringReverse through string_builtin; Rust unit byte_string_case_reverse_and_repeat_follow_lua54; CI 40225752837"
+                },
+                {
+                  "text": "Implement optional-separator string.rep, zero/negative repetition, overflow-safe length preflight and strict managed-string quotas",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: StringRep with checked_mul/checked_add, hard MAX_STRING_POOL_BYTES limit and bounded work; Rust unit verifies oversized repetition refusal; CI 40225752837"
+                },
+                {
+                  "text": "Require exact stdout and exit-status parity between owned fer, production fer and upstream Lua 5.4 for transformations and repetition",
+                  "passed": true,
+                  "evidence": "tests/owned_cli_differential.rs: owned_string_case_reverse_and_repeat_match_lua54; GitHub Actions 40225752837 all five jobs successful on c713b38a7445059d87373b50978ae24efb803443"
+                },
+                {
+                  "text": "Synchronize machine ledger, README, generated roadmap and owned-engine documentation under all-green CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -6076,7 +6103,8 @@
           "emoji": "🧵",
           "name": "Bounded first-party Lua byte-string standard library subset",
           "task_ids": [
-            "T468"
+            "T468",
+            "T469"
           ]
         }
       ]

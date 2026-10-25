@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 197 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 198 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -911,6 +911,11 @@
   - [x] Implement Lua byte-length and substring index conventions, including negative/extreme offsets and binary/UTF-8 byte semantics — src/owned_flow.rs: string_builtin, string_offset, byte_string_len_and_sub_match_lua_positions_and_library_identity; upstream CI 40224576646 passed
   - [x] Implement byte extraction with Lua multiple-result adjustment and bounded char construction, and verify via owned CLI versus production and Lua 5.4 — src/owned_flow.rs: string_byte_builtin, string_builtin; tests/owned_cli_differential.rs: owned_string_byte_char_binary_and_return_arity_match_lua54; five-job CI 40225092377 on 5a7e286 passed
   - [x] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under five-job CI — GitHub Actions 40225338176: all five jobs successful on d34762f280973d706fa4b72d7f057d7a0b243054; docs, README, evidence ledger and generated roadmap synchronized
+- 🔁 **T469** Bounded Lua string case conversion, byte reversal and repetition — `████████░░ 75%`
+  - [x] Implement C-locale ASCII byte case transforms and binary-preserving reverse with explicit GC roots and instruction-budget charges — src/owned_flow.rs: StringLower, StringUpper, StringReverse through string_builtin; Rust unit byte_string_case_reverse_and_repeat_follow_lua54; CI 40225752837
+  - [x] Implement optional-separator string.rep, zero/negative repetition, overflow-safe length preflight and strict managed-string quotas — src/owned_flow.rs: StringRep with checked_mul/checked_add, hard MAX_STRING_POOL_BYTES limit and bounded work; Rust unit verifies oversized repetition refusal; CI 40225752837
+  - [x] Require exact stdout and exit-status parity between owned fer, production fer and upstream Lua 5.4 for transformations and repetition — tests/owned_cli_differential.rs: owned_string_case_reverse_and_repeat_match_lua54; GitHub Actions 40225752837 all five jobs successful on c713b38a7445059d87373b50978ae24efb803443
+  - [ ] Synchronize machine ledger, README, generated roadmap and owned-engine documentation under all-green CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1053,5 +1058,5 @@
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
-- 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
+- 🧵 Bounded first-party Lua byte-string standard library subset — `█████████░ 88%`
 
