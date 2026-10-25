@@ -381,6 +381,21 @@ fn owned_table_move_overlap_and_destination_match_lua54() {
 }
 
 #[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
     for source in [
         "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",

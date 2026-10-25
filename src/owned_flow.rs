@@ -4559,9 +4559,14 @@ impl Execution<'_> {
         let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
             return Err(FlowError::TypeError);
         };
-        let Value::Integer(length) = self.raw_len(Value::Table(handle))? else {
-            return Err(FlowError::InvalidBytecode);
-        };
+        // Lua 5.4 table.sort uses luaL_len, which observes __len and
+        // converts an integral numeric result to the sequence boundary.
+        // This must run before the trivial-list shortcut and comparator
+        // validation, and uses the same bounded metamethod dispatcher as #t.
+        let reported_length = self.length_with_metatable(Value::Table(handle))?;
+        let length = self
+            .exact_integer_operand(reported_length)
+            .or_else(|_| self.integer_operand(reported_length))?;
         let length = usize::try_from(length).map_err(|_| FlowError::TooLarge)?;
         if length > MAX_TABLE_FIELDS {
             return Err(FlowError::TooLarge);
