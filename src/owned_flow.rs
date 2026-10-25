@@ -3278,7 +3278,7 @@ impl Execution<'_> {
         }
         let message = match args.get(1).copied() {
             Some(value) => value,
-            None => self.intern_string(b"assertion failed!".to_vec())?,
+            None => self.intern_rooted_string(b"assertion failed!".to_vec(), args)?,
         };
         Ok(FlowError::Thrown(message))
     }
@@ -3557,10 +3557,14 @@ impl Execution<'_> {
         )
     }
 
-    fn protected_error_value(&mut self, error: FlowError) -> Result<Value, FlowError> {
+    fn protected_error_value(
+        &mut self,
+        error: FlowError,
+        roots: &[Value],
+    ) -> Result<Value, FlowError> {
         match error {
             FlowError::Thrown(value) => Ok(value),
-            other => self.intern_string(other.to_string().into_bytes()),
+            other => self.intern_rooted_string(other.to_string().into_bytes(), roots),
         }
     }
 
@@ -3578,7 +3582,7 @@ impl Execution<'_> {
             Err(error) if Self::unprotectable_error(&error) => Err(error),
             Err(error) => Ok(vec![
                 Value::Boolean(false),
-                self.protected_error_value(error)?,
+                self.protected_error_value(error, args)?,
             ]),
         }
     }
@@ -3604,7 +3608,7 @@ impl Execution<'_> {
             }
             Err(error) if Self::unprotectable_error(&error) => Err(error),
             Err(error) => {
-                let mut message = self.protected_error_value(error)?;
+                let mut message = self.protected_error_value(error, args)?;
                 // Lua retries its message handler on ordinary errors from that
                 // handler. Iterate rather than recursing on the Rust stack;
                 // this experimental limit is not general Lua recursion parity.
@@ -3618,12 +3622,16 @@ impl Execution<'_> {
                             ]);
                         }
                         Err(error) if Self::unprotectable_error(&error) => return Err(error),
-                        Err(error) => message = self.protected_error_value(error)?,
+                        Err(error) => {
+                            let mut roots = args.to_vec();
+                            roots.push(message);
+                            message = self.protected_error_value(error, &roots)?;
+                        }
                     }
                 }
                 Ok(vec![
                     Value::Boolean(false),
-                    self.intern_string(b"error in error handling".to_vec())?,
+                    self.intern_rooted_string(b"error in error handling".to_vec(), args)?,
                 ])
             }
         }
@@ -8522,6 +8530,53 @@ mod tests {
             execute_flow_capture(&stopped, 3_000_000).result,
             Err(FlowError::TooLarge)
         );
+    }
+
+
+    #[test]
+    fn protected_error_strings_recover_quota_with_rooted_arguments() {
+        for (operation, message) in [
+            ("local ok,message=pcall(assert,false)", "assertion failed!"),
+            (
+                "local ok,message=pcall(type)",
+                "invalid operand type in owned flow bytecode",
+            ),
+            (
+                "local ok,message=xpcall(type,function(e) return e end)",
+                "invalid operand type in owned flow bytecode",
+            ),
+        ] {
+            // Fill with GC stopped to isolate collection by the error path.
+            // Recompile each candidate to keep the observed pool boundary exact.
+            let mut lower = 14_000;
+            let mut upper = 16_000;
+            let mut last_success = None;
+            while lower + 1 < upper {
+                let middle = lower + (upper - lower) / 2;
+                let source = format!(
+                    "local saved='keeper'..777; collectgarbage('stop'); \
+                     for i=1,{middle} do local temp=tostring(i) end; \
+                     collectgarbage('restart'); local before=collectgarbage('count'); \
+                     {operation}; local after=collectgarbage('count'); \
+                     print(ok,message,saved,before>after)"
+                );
+                let program = compile_flow_chunk(&source).unwrap();
+                let outcome = execute_flow_capture(&program, 3_000_000);
+                match outcome.result {
+                    Ok(_) => {
+                        lower = middle;
+                        last_success = Some(outcome.stdout);
+                    }
+                    Err(FlowError::TooLarge) => upper = middle,
+                    other => panic!("{operation}: unexpected result: {other:?}"),
+                }
+            }
+            assert_eq!(
+                last_success,
+                Some(format!("false\t{message}\tkeeper777\ttrue\n").into_bytes()),
+                "{operation}"
+            );
+        }
     }
 
     #[test]
