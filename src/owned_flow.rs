@@ -87,10 +87,8 @@ const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"tointeger", Builtin::MathToInteger),
 ];
 
-const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
-    (b"len", Builtin::StringLen),
-    (b"sub", Builtin::StringSub),
-];
+const STRING_GLOBALS: &[(&[u8], Builtin)] =
+    &[(b"len", Builtin::StringLen), (b"sub", Builtin::StringSub)];
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"print", Builtin::Print),
@@ -2071,8 +2069,8 @@ impl Execution<'_> {
             self.math_table,
             self.string_table,
         ]
-            .into_iter()
-            .flatten()
+        .into_iter()
+        .flatten()
         {
             work.push(Value::Table(handle));
         }
