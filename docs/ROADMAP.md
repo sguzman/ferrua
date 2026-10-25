@@ -856,11 +856,11 @@
   - [x] Protect all builtin arguments across heap collection, including nested Lua call operands, and preserve stop-mode hard limits — src/owned_flow.rs: tostring_and_print_recover_string_quota_with_rooted_builtin_arguments; preflight collects only with rooted operands and automatic_gc
   - [x] Compare 19,000 conversions, surviving string values and nested print arguments against production fer and upstream Lua 5.4 with five green CI jobs — GitHub Actions 40209516272: all five jobs passed on 251a508b560f901dc303ab869da02f0dbe609de1; tests/owned_cli_differential.rs: owned_tostring_and_print_string_pressure_match_lua54
   - [x] Synchronize README, owned-engine docs, progress ledger and generated roadmap under all-green CI — GitHub Actions 40209714279: all five jobs passed on 6310c1adf668937b27ba0565f19a82e51e6ca075; README, owned-engine docs, machine ledger and generated roadmap synchronized
-- 🏷️ **T458** Root Lua type and math.type strings across bounded quota collection — `████████░░ 75%`
+- 🏷️ **T458** Root Lua type and math.type strings across bounded quota collection — `██████████ 100%`
   - [x] Route direct and protected type/math.type results through string quota collection with complete builtin argument roots — src/owned_flow.rs: math_builtin(MathType), protected_target(Type), VM direct builtin Type; tostring full args
   - [x] Verify nested, protected and first-party type outputs remain identical under long-running string churn — src/owned_flow.rs: type_and_math_type_preserve_dynamic_strings_under_quota_pressure; tests/owned_cli_differential.rs: owned_type_and_math_type_under_string_pressure_match_lua54
   - [x] Demonstrate an actual quota-triggered collection for fresh type/math.type names with calibrated stopped-GC heap fill and upstream Lua 5.4 comparisons — src/owned_flow.rs: type_and_math_type_trigger_real_collection_at_string_quota; GitHub Actions 40211697932 five jobs successful at commit 60135b5fadeb1cc4e8c801d92981798245c71bdf
-  - [ ] Synchronize documentation, evidence ledger and generated roadmap under green CI
+  - [x] Synchronize documentation, evidence ledger and generated roadmap under green CI — GitHub Actions 40211983977: all five jobs passed on b0452637f8ff12e11cdccb349873aead966faf42; README, owned-engine docs and generated roadmap accepted
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1002,5 +1002,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 98%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 
