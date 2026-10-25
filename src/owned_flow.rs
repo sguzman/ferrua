@@ -73,6 +73,8 @@ pub enum Builtin {
     MathMin,
     MathType,
     MathToInteger,
+    StringLen,
+    StringSub,
 }
 
 const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -83,6 +85,11 @@ const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"min", Builtin::MathMin),
     (b"type", Builtin::MathType),
     (b"tointeger", Builtin::MathToInteger),
+];
+
+const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
+    (b"len", Builtin::StringLen),
+    (b"sub", Builtin::StringSub),
 ];
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -1702,6 +1709,7 @@ struct Execution<'a> {
     globals: HashMap<usize, Value>,
     global_table: Option<usize>,
     math_table: Option<usize>,
+    string_table: Option<usize>,
 }
 
 impl Execution<'_> {
@@ -2057,7 +2065,12 @@ impl Execution<'_> {
                 }
             }
         }
-        for handle in [self.arg_handle, self.global_table, self.math_table]
+        for handle in [
+            self.arg_handle,
+            self.global_table,
+            self.math_table,
+            self.string_table,
+        ]
             .into_iter()
             .flatten()
         {
@@ -2625,6 +2638,26 @@ impl Execution<'_> {
         Ok(handle)
     }
 
+    /// Create one bounded writable Lua string library table per execution.
+    fn materialize_string_table(&mut self, pending: &[Value]) -> Result<usize, FlowError> {
+        if let Some(handle) = self.string_table {
+            return Ok(handle);
+        }
+        self.reserve_lazy_table_slot(pending)?;
+        let handle = self.insert_table(TableStorage {
+            array: Vec::new(),
+            hashed: HashMap::new(),
+            metatable: None,
+        })?;
+        // Keep the partial table rooted when string interning triggers GC.
+        self.string_table = Some(handle);
+        for &(name, builtin) in STRING_GLOBALS {
+            let key = self.intern_rooted_string(name.to_vec(), pending)?;
+            self.write_table(handle, TableKey::Hashed(key), Value::Builtin(builtin))?;
+        }
+        Ok(handle)
+    }
+
     /// Lazily expose the real global environment as a writable Lua table.
     /// Prior global overrides are folded in before the table becomes visible.
     fn materialize_global_table(&mut self) -> Result<usize, FlowError> {
@@ -2653,6 +2686,9 @@ impl Execution<'_> {
         let math_key = self.intern_rooted_string(b"math".to_vec(), &[])?;
         let math = self.materialize_math_table(&[math_key])?;
         self.write_table(handle, TableKey::Hashed(math_key), Value::Table(math))?;
+        let string_key = self.intern_rooted_string(b"string".to_vec(), &[])?;
+        let string = self.materialize_string_table(&[string_key])?;
+        self.write_table(handle, TableKey::Hashed(string_key), Value::Table(string))?;
         for (key, value) in std::mem::take(&mut self.globals) {
             self.write_table(handle, TableKey::Hashed(Value::String(key)), value)?;
         }
@@ -2684,6 +2720,9 @@ impl Execution<'_> {
         }
         if name == b"math" {
             return Ok(Value::Table(self.materialize_math_table(&[])?));
+        }
+        if name == b"string" {
+            return Ok(Value::Table(self.materialize_string_table(&[])?));
         }
         if name == b"_VERSION" {
             return self.intern_rooted_string(b"Lua 5.4".to_vec(), &[]);
@@ -3545,6 +3584,9 @@ impl Execution<'_> {
             Value::Builtin(builtin) if MATH_GLOBALS.iter().any(|&(_, item)| item == builtin) => {
                 Ok(vec![self.math_builtin(builtin, &arguments)?])
             }
+            Value::Builtin(builtin) if STRING_GLOBALS.iter().any(|&(_, item)| item == builtin) => {
+                Ok(vec![self.string_builtin(builtin, &arguments)?])
+            }
             _ => Err(FlowError::TypeError),
         }
     }
@@ -3705,6 +3747,47 @@ impl Execution<'_> {
             _ => return Err(FlowError::TypeError),
         };
         Ok(Value::Integer(length as i64))
+    }
+
+    /// Lua string offsets are one-based bytes; negatives count from the end.
+    fn string_offset(index: i64, length: i64) -> i64 {
+        if index < 0 {
+            index.saturating_add(length).saturating_add(1)
+        } else {
+            index
+        }
+    }
+
+    /// First-party bounded byte-string functions. Root the complete argument
+    /// list if slicing must allocate under a string-pool quota.
+    fn string_builtin(&mut self, builtin: Builtin, args: &[Value]) -> Result<Value, FlowError> {
+        let text = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
+        match builtin {
+            Builtin::StringLen => Ok(Value::Integer(text.len() as i64)),
+            Builtin::StringSub => {
+                let start = *args.get(1).ok_or(FlowError::TypeError)?;
+                let start = self
+                    .exact_integer_operand(start)
+                    .or_else(|_| self.integer_operand(start))?;
+                let end = args.get(2).copied().unwrap_or(Value::Nil);
+                let end = if end == Value::Nil {
+                    -1
+                } else {
+                    self.exact_integer_operand(end)
+                        .or_else(|_| self.integer_operand(end))?
+                };
+                let length = text.len() as i64;
+                let begin = Self::string_offset(start, length).max(1);
+                let finish = Self::string_offset(end, length).min(length);
+                let result = if begin > finish {
+                    Vec::new()
+                } else {
+                    text[(begin - 1) as usize..finish as usize].to_vec()
+                };
+                self.intern_rooted_string(result, args)
+            }
+            _ => Err(FlowError::InvalidBytecode),
+        }
     }
 
     fn string_bytes(&self, value: Value) -> Result<Vec<u8>, FlowError> {
@@ -4145,6 +4228,9 @@ impl Execution<'_> {
                             | Builtin::MathMin
                             | Builtin::MathType
                             | Builtin::MathToInteger => self.math_builtin(builtin, &args)?,
+                            Builtin::StringLen | Builtin::StringSub => {
+                                self.string_builtin(builtin, &args)?
+                            }
                         };
                         if matches!(
                             instructions[pc],
@@ -4796,6 +4882,7 @@ pub fn execute_flow_capture_with_args<'a>(
         globals: HashMap::new(),
         global_table: None,
         math_table: None,
+        string_table: None,
     };
     let mut result = execution.run(&program.instructions, program.slots, &[], &[], &[]);
     // Lua closes its state after evaluating the chunk, even after errors.
@@ -8575,6 +8662,41 @@ mod tests {
                 Some(format!("false\t{message}\tkeeper777\ttrue\n").into_bytes()),
                 "{operation}"
             );
+        }
+    }
+
+    #[test]
+    fn byte_string_len_and_sub_match_lua_positions_and_library_identity() {
+        for (source, expected) in [
+            (
+                "print(string.len('a\\0b'),string.sub('abcdef',2,4),string.sub('abcdef',-3),string.sub('abcdef',0,2))",
+                b"3\tbcd\tdef\tab\n".as_slice(),
+            ),
+            (
+                "print(string.sub('abc',5)=='',string.sub('abc',3,2)=='',string.sub('abc',-100,100),string.sub('',1)=='')",
+                b"true\ttrue\tabc\ttrue\n".as_slice(),
+            ),
+            (
+                "print(string.sub('a\\0b',2,2)=='\\0',string.len('é'),string.len(12345),string.sub('abcdef',math.mininteger,math.maxinteger))",
+                b"true\t2\t5\tabcdef\n".as_slice(),
+            ),
+            (
+                "local lib=string; assert(_G.string==lib); local saved=lib.len; lib.len=function() return 99 end; print(string.len('abc')); lib.len=saved; print(string.len('abc'))",
+                b"99\n3\n".as_slice(),
+            ),
+            (
+                "local good=pcall(string.len,false); local bad=pcall(string.sub,'abc'); print(good,bad)",
+                b"false\tfalse\n".as_slice(),
+            ),
+            (
+                "local saved=string.sub('kept'..42,1); for i=1,19000 do local s=tostring(i) end; print(saved,string.sub('abc',-1))",
+                b"kept42\tc\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 3_000_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
         }
     }
 

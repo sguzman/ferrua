@@ -88,6 +88,19 @@ fn curated_global_function_print_and_error_semantics_match_lua54() {
 }
 
 #[test]
+fn owned_string_len_sub_byte_offsets_match_lua54() {
+    for source in [
+        "print(string.len('a\\0b'),string.sub('abcdef',2,4),string.sub('abcdef',-3),string.sub('abcdef',0,2))",
+        "print(string.sub('abc',5)=='',string.sub('abc',3,2)=='',string.sub('abc',-100,100),string.sub('',1)=='')",
+        "print(string.sub('a\\0b',2,2)=='\\0',string.len('é'),string.len(12345),string.sub('abcdef',math.mininteger,math.maxinteger))",
+        "local lib=string; assert(_G.string==lib); local saved=lib.len; lib.len=function() return 99 end; print(string.len('abc')); lib.len=saved; print(string.len('abc'))",
+        "local good=pcall(string.len,false); local bad=pcall(string.sub,'abc'); print(good,bad)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn generated_branch_and_environment_interactions_match_lua54() {
     for seed in 0_i64..48 {
         let base = (seed * 11) % 23 - 8;
