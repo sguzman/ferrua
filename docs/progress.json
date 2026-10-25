@@ -5145,10 +5145,11 @@
                 },
                 {
                   "text": "Update README, owned-engine design, machine evidence ledger and generated roadmap under all-green CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40227737060: all five jobs green on 26e41b669e481ab10939f837a0e09c95472aa3af; README, owned engine docs, progress ledger and generated roadmap verified"
                 }
               ],
-              "progress": 75
+              "progress": 100
             }
           ]
         }

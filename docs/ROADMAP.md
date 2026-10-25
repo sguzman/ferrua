@@ -921,11 +921,11 @@
   - [x] Implement bounded raw table.concat and table.unpack with optional index ranges, binary/numeric sequences, multi-return adjustment and explicit instruction/memory limits — src/owned_flow.rs: table_library_range, table_concat_builtin and table_unpack_builtin; Rust unit owned_table_concat_unpack_cover_binary_sequences_and_result_arity; CI 40226958969
   - [x] Resolve discovered Lua 5.4 string-argument unpack behavior against upstream and require exact executable differential with downstream five-job CI — tests/owned_cli_differential.rs: owned_table_concat_unpack_sequence_results_match_lua54 verifies string length to nil-index unpack; GitHub Actions 40226958969 all five jobs passed on 7d40912
   - [x] Synchronize README, owned-engine docs, machine ledger and generated roadmap under five-job successful CI — GitHub Actions 40227143201: all five jobs passed on 03ade8053a88e76005776a6b14a9b89e00d4ec98; README, owned-engine documentation, ledger and generated ROADMAP synchronized
-- 📦 **T471** Bounded Lua table.pack with explicit n and nil-hole retention — `████████░░ 75%`
+- 📦 **T471** Bounded Lua table.pack with explicit n and nil-hole retention — `██████████ 100%`
   - [x] Provide table.pack as a first-class, zero-or-more-argument builtin returning a table with n equal to the exact input arity, including nils — src/owned_flow.rs: Builtin::TablePack and table_pack_builtin; Rust unit table_pack_preserves_nil_holes_and_explicit_argument_count; CI 40227533885
   - [x] Retain pending arguments and the partially created table across GC with managed table/string limits and shared instruction budget — src/owned_flow.rs: reserve_lazy_table_slot(args), rooted n key creation, write_table GC roots, MAX_TABLE_FIELDS and budget preflight; stress unit fixture; CI 40227533885
   - [x] Require exact owned, production, and upstream Lua 5.4 output/status parity including nil holes, n, empty pack and writable global identity under all five CI jobs — tests/owned_cli_differential.rs: owned_table_pack_nil_holes_and_argument_count_match_lua54; GitHub Actions 40227533885 five successful jobs on 7742ea96aee7a78aaf47719e99f274e9c3b60c9f
-  - [ ] Update README, owned-engine design, machine evidence ledger and generated roadmap under all-green CI
+  - [x] Update README, owned-engine design, machine evidence ledger and generated roadmap under all-green CI — GitHub Actions 40227737060: all five jobs green on 26e41b669e481ab10939f837a0e09c95472aa3af; README, owned engine docs, progress ledger and generated roadmap verified
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1069,5 +1069,5 @@
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
-- 🧺 Bounded first-party Lua table standard-library subset — `█████████░ 88%`
+- 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
 
