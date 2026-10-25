@@ -363,6 +363,25 @@ fn owned_string_simple_lua_anchors_and_wildcard_match_lua54() {
 }
 
 #[test]
+fn owned_lua_pattern_ascii_classes_and_escapes_match_lua54() {
+    for source in [
+        "print(string.find('ab12CD','%d%d'),string.match('ab12CD','%d%d'))",
+        "print(string.find('abCD','%u%u'),string.match('zzAb','%u%l'))",
+        "print(string.match('a  b','%s%s')=='  ',string.match('123a','%D')=='a')",
+        "print(string.match('!!','%p%p')=='!!',string.match('g9','%w%w')=='g9')",
+        "print(string.match('a.b','%.')=='.',string.find('a%b','%%'))",
+        "print(string.match('abc$','%$')=='$',string.find('^abc','%^'))",
+        "print(string.match('A\\0B','%z')=='\\0',string.match('a!','%W')=='!')",
+        "print(string.match('a!','%g%g')=='a!',string.match('hello','%x')=='e')",
+        "print(string.find('a[b]','%['),string.match('a(b)','%(')=='(')",
+        "print(string.find('123','^%d%d%d$'),string.match('1x','%d%a'))",
+        "print(string.match('abc','%q')==nil,string.match('q','%q')=='q')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",

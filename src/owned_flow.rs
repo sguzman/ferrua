@@ -4806,18 +4806,46 @@ impl Execution<'_> {
         let mut anchored_start = false;
         let mut anchored_end = false;
         if !plain {
-            if body.iter().any(|byte| b"()%[]*+-?".contains(byte)) {
-                return Err(FlowError::Unsupported(
-                    "Lua pattern quantifiers, classes and captures are not implemented".into(),
-                ));
-            }
             if body.first() == Some(&b'^') {
                 body = &body[1..];
                 anchored_start = true;
             }
+            // Lua treats an unescaped terminal '$' as the end anchor.
+            // Count preceding escapes so '%$' stays a literal dollar while
+            // '%%$' denotes a literal percent followed by an end anchor.
             if body.last() == Some(&b'$') {
-                body = &body[..body.len() - 1];
-                anchored_end = true;
+                let escaped = body[..body.len() - 1]
+                    .iter()
+                    .rev()
+                    .take_while(|&&byte| byte == b'%')
+                    .count()
+                    % 2
+                    == 1;
+                if !escaped {
+                    body = &body[..body.len() - 1];
+                    anchored_end = true;
+                }
+            }
+        }
+        // Each pattern atom consumes exactly one subject byte. A (byte,true)
+        // entry represents Lua's %-escaped classes/punctuation; quantifiers,
+        // sets, frontier/balanced constructs and captures are still gated.
+        let mut atoms = Vec::with_capacity(body.len());
+        let mut index = 0;
+        while index < body.len() {
+            let byte = body[index];
+            if !plain && byte == b'%' {
+                let escaped = *body.get(index + 1).ok_or(FlowError::TypeError)?;
+                atoms.push((escaped, true));
+                index += 2;
+            } else {
+                if !plain && b"()[]*+-?".contains(&byte) {
+                    return Err(FlowError::Unsupported(
+                        "Lua pattern quantifiers, sets and captures are not implemented".into(),
+                    ));
+                }
+                atoms.push((byte, false));
+                index += 1;
             }
         }
         let start = Self::string_offset(initial, source.len() as i64).max(1);
@@ -4825,28 +4853,58 @@ impl Execution<'_> {
             return Ok(None);
         }
         let offset = (start - 1) as usize;
-        if body.len() > source.len() - offset {
+        if atoms.len() > source.len() - offset {
             return Ok(None);
         }
-        for begin in offset..=source.len() - body.len() {
-            let cost = body.len().max(1);
+        for begin in offset..=source.len() - atoms.len() {
+            let cost = atoms.len().max(1);
             if self.steps.saturating_add(cost) > self.budget {
                 return Err(FlowError::StepBudgetExceeded);
             }
             self.steps += cost;
-            if (!anchored_end || begin + body.len() == source.len())
-                && source[begin..begin + body.len()]
+            if (!anchored_end || begin + atoms.len() == source.len())
+                && source[begin..begin + atoms.len()]
                     .iter()
-                    .zip(body)
-                    .all(|(&actual, &atom)| actual == atom || (!plain && atom == b'.'))
+                    .zip(&atoms)
+                    .all(|(&actual, &(atom, escaped))| {
+                        if escaped {
+                            Self::simple_pattern_escape_matches(atom, actual)
+                        } else {
+                            actual == atom || (!plain && atom == b'.')
+                        }
+                    })
             {
-                return Ok(Some((begin, begin + body.len())));
+                return Ok(Some((begin, begin + atoms.len())));
             }
             if anchored_start {
                 break;
             }
         }
         Ok(None)
+    }
+
+    /// Lua 5.4's %character classes under the project's C/ASCII locale.
+    /// Unknown escapes quote the following byte literally.
+    fn simple_pattern_escape_matches(class: u8, actual: u8) -> bool {
+        let positive = match class.to_ascii_lowercase() {
+            b'a' => Some(actual.is_ascii_alphabetic()),
+            b'c' => Some(actual.is_ascii_control()),
+            b'd' => Some(actual.is_ascii_digit()),
+            b'g' => Some((33..=126).contains(&actual)),
+            b'l' => Some(actual.is_ascii_lowercase()),
+            b'p' => Some(actual.is_ascii_punctuation()),
+            b's' => Some(actual.is_ascii_whitespace()),
+            b'u' => Some(actual.is_ascii_uppercase()),
+            b'w' => Some(actual.is_ascii_alphanumeric()),
+            b'x' => Some(actual.is_ascii_hexdigit()),
+            b'z' => Some(actual == 0),
+            _ => None,
+        };
+        match positive {
+            Some(found) if class.is_ascii_uppercase() => !found,
+            Some(found) => found,
+            None => actual == class,
+        }
     }
 
     /// Lua string offsets are one-based bytes; negatives count from the end.
