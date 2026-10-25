@@ -255,6 +255,33 @@ fn owned_math_sqrt_and_unsigned_integer_order_match_lua54() {
 }
 
 #[test]
+fn owned_math_min_max_use_lua_lt_metamethods_and_protect_operands() {
+    for source in [
+        "local mt={__lt=function(a,b) return a.n<b.n end}; local a=setmetatable({n=3},mt); local b=setmetatable({n=1},mt); local c=setmetatable({n=2},mt); print(math.min(a,b,c)==b,math.max(a,b,c)==a)",
+        "local mt={__lt=function(a,b) return a.n<b.n end}; local a=setmetatable({n=2},mt); local b=setmetatable({n=2},mt); print(math.min(a,b)==a,math.max(a,b)==a)",
+        "local less=setmetatable({}, {__call=function(_,a,b) return a.n<b.n end}); local mt={__lt=less}; local x=setmetatable({n=8},mt); local y=setmetatable({n=4},mt); print(math.min(x,y).n,math.max(x,y).n)",
+        "local mt={__lt=function(a,b) collectgarbage('collect'); return a.n<b.n end}; print(math.max(setmetatable({n=2},mt),setmetatable({n=8},mt)).n)",
+        "local mt={__lt=function(a,b) error(27) end}; local a=setmetatable({},mt); local ok,message=pcall(math.max,a,a); print(ok,message); print(pcall(math.min,a,a))",
+        "local obj={}; print(math.max(obj)==obj,math.min(obj)==obj); print(pcall(math.min,1,{}))",
+        "local mt={__lt=function(a,b) return a.n<b.n end}; local a=setmetatable({n=1},mt); local b={n=2}; print(math.max(a,b)==b,math.min(a,b)==a)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_math_min_max_incompatible_values_fail_like_lua54() {
+    for source in [
+        "math.max({}, {})",
+        "math.min({}, {})",
+        "math.max(1, 'hello')",
+        "math.min(false, 3)",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
 fn owned_string_len_sub_byte_offsets_match_lua54() {
     for source in [
         "print(string.len('a\\0b'),string.sub('abcdef',2,4),string.sub('abcdef',-3),string.sub('abcdef',0,2))",

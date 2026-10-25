@@ -3031,31 +3031,29 @@ impl Execution<'_> {
                 }
             }
             Builtin::MathMax | Builtin::MathMin => {
+                // Lua 5.4 uses lua_compare(L, best, candidate, LUA_OPLT)
+                // for max and its reversed operands for min. This includes
+                // table __lt callbacks, not only primitive numeric/string
+                // ordering. Comparisons are strict: ties retain the first
+                // argument. Roots retain all operands across callbacks that
+                // can run the collector or mutate their source tables.
                 let mut best = *args.first().ok_or(FlowError::TypeError)?;
-                for &value in &args[1..] {
-                    let ordering = match (best, value) {
-                        (
-                            Value::Integer(_) | Value::Float(_),
-                            Value::Integer(_) | Value::Float(_),
-                        ) => numeric_order(best, value),
-                        (Value::String(a), Value::String(b)) => Some(
-                            self.strings
-                                .get(a)
-                                .ok_or(FlowError::InvalidBytecode)?
-                                .cmp(self.strings.get(b).ok_or(FlowError::InvalidBytecode)?),
-                        ),
-                        _ => return Err(FlowError::TypeError),
-                    };
-                    let take = if builtin == Builtin::MathMax {
-                        ordering == Some(std::cmp::Ordering::Less)
-                    } else {
-                        ordering == Some(std::cmp::Ordering::Greater)
-                    };
-                    if take {
-                        best = value;
+                self.gc_temporary_roots.push(args.to_vec());
+                let result = (|| {
+                    for &value in &args[1..] {
+                        let replace = if builtin == Builtin::MathMax {
+                            self.table_sort_less(best, value, None)?
+                        } else {
+                            self.table_sort_less(value, best, None)?
+                        };
+                        if replace {
+                            best = value;
+                        }
                     }
-                }
-                Ok(best)
+                    Ok(best)
+                })();
+                self.gc_temporary_roots.pop();
+                result
             }
             _ => Err(FlowError::InvalidBytecode),
         }
