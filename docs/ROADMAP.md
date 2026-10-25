@@ -916,11 +916,11 @@
   - [x] Implement optional-separator string.rep, zero/negative repetition, overflow-safe length preflight and strict managed-string quotas — src/owned_flow.rs: StringRep with checked_mul/checked_add, hard MAX_STRING_POOL_BYTES limit and bounded work; Rust unit verifies oversized repetition refusal; CI 40225752837
   - [x] Require exact stdout and exit-status parity between owned fer, production fer and upstream Lua 5.4 for transformations and repetition — tests/owned_cli_differential.rs: owned_string_case_reverse_and_repeat_match_lua54; GitHub Actions 40225752837 all five jobs successful on c713b38a7445059d87373b50978ae24efb803443
   - [x] Synchronize machine ledger, README, generated roadmap and owned-engine documentation under all-green CI — GitHub Actions 40225934070: all five jobs successful on 95b0fd0126a6e901b6f7eada8a211f210f54bae7; README, owned-engine docs, machine ledger and generated ROADMAP synchronized
-- 🧺 **T470** GC-rooted Lua table library with bounded concat and unpack — `████████░░ 75%`
+- 🧺 **T470** GC-rooted Lua table library with bounded concat and unpack — `██████████ 100%`
   - [x] Expose a writable stable-identity table library through globals and _G while preserving its partially allocated table during GC — src/owned_flow.rs: materialize_table_table, table_table as GC root, TABLE_GLOBALS and _G.table; CI 40226958969
   - [x] Implement bounded raw table.concat and table.unpack with optional index ranges, binary/numeric sequences, multi-return adjustment and explicit instruction/memory limits — src/owned_flow.rs: table_library_range, table_concat_builtin and table_unpack_builtin; Rust unit owned_table_concat_unpack_cover_binary_sequences_and_result_arity; CI 40226958969
   - [x] Resolve discovered Lua 5.4 string-argument unpack behavior against upstream and require exact executable differential with downstream five-job CI — tests/owned_cli_differential.rs: owned_table_concat_unpack_sequence_results_match_lua54 verifies string length to nil-index unpack; GitHub Actions 40226958969 all five jobs passed on 7d40912
-  - [ ] Synchronize README, owned-engine docs, machine ledger and generated roadmap under five-job successful CI
+  - [x] Synchronize README, owned-engine docs, machine ledger and generated roadmap under five-job successful CI — GitHub Actions 40227143201: all five jobs passed on 03ade8053a88e76005776a6b14a9b89e00d4ec98; README, owned-engine documentation, ledger and generated ROADMAP synchronized
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1064,5 +1064,5 @@
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
-- 🧺 Bounded first-party Lua table standard-library subset — `████████░░ 75%`
+- 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
 
