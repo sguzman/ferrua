@@ -2388,7 +2388,7 @@ impl Execution<'_> {
     /// Lua 5.4 collector controls available in the owned bounded preview:
     /// explicit full cycles, stop/restart of automatic quota collection,
     /// querying automatic-collection state, and estimated managed-heap size.
-    fn collectgarbage_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+    fn collectgarbage_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
         let mode = match args.first().copied() {
             None => b"collect".to_vec(),
             Some(Value::String(handle)) => self
@@ -2399,15 +2399,15 @@ impl Execution<'_> {
             Some(_) => return Err(FlowError::TypeError),
         };
         match mode.as_slice() {
-            b"count" => Ok(vec![Value::Float(self.tracked_heap_kib().to_bits())]),
-            b"isrunning" => Ok(vec![Value::Boolean(self.automatic_gc)]),
+            b"count" => Ok(Value::Float(self.tracked_heap_kib().to_bits())),
+            b"isrunning" => Ok(Value::Boolean(self.automatic_gc)),
             b"stop" => {
                 self.automatic_gc = false;
-                Ok(vec![Value::Integer(0)])
+                Ok(Value::Integer(0))
             }
             b"restart" => {
                 self.automatic_gc = true;
-                Ok(vec![Value::Integer(0)])
+                Ok(Value::Integer(0))
             }
             b"collect" => {
                 // Lua does not run a nested collector cycle from within a
@@ -2415,8 +2415,9 @@ impl Execution<'_> {
                 // objects while their finalizer callbacks are executing.
                 if self.running_finalizers {
                     // lua_gc refuses to recurse from a finalizer. Lua's
-                    // collectgarbage wrapper produces *zero* results.
-                    return Ok(Vec::new());
+                    // collectgarbage wrapper then produces no results;
+                    // this scalar builtin path represents that as nil.
+                    return Ok(Value::Nil);
                 }
                 // Explicit full passes run even while automatic GC is
                 // stopped; snapshots preserve roots of suspended callers.
@@ -2427,7 +2428,7 @@ impl Execution<'_> {
                 let slots = frame.slots.clone();
                 let prepared = frame.prepared.clone();
                 self.collect_root_tables(args, &slots, &prepared)?;
-                Ok(vec![Value::Integer(0)])
+                Ok(Value::Integer(0))
             }
             _ => Err(FlowError::Unsupported(
                 "owned collector supports collect, count, stop, restart and isrunning".into(),
@@ -3380,7 +3381,9 @@ impl Execution<'_> {
             Value::Function(handle) => self.call_owned_function(handle, &arguments),
             Value::Builtin(Builtin::Error) => Err(self.error_builtin(&arguments)),
             Value::Builtin(Builtin::Print) => self.print_builtin(&arguments),
-            Value::Builtin(Builtin::CollectGarbage) => self.collectgarbage_builtin(&arguments),
+            Value::Builtin(Builtin::CollectGarbage) => {
+                Ok(vec![self.collectgarbage_builtin(&arguments)?])
+            }
             Value::Builtin(Builtin::Assert) => {
                 if arguments.first().copied().unwrap_or(Value::Nil).truthy() {
                     Ok(arguments)
@@ -3942,7 +3945,6 @@ impl Execution<'_> {
                         if matches!(
                             builtin,
                             Builtin::Print
-                                | Builtin::CollectGarbage
                                 | Builtin::Select
                                 | Builtin::Assert
                                 | Builtin::Next
@@ -3954,7 +3956,6 @@ impl Execution<'_> {
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
-                                Builtin::CollectGarbage => self.collectgarbage_builtin(&args)?,
                                 Builtin::Select => self.select_builtin(&args)?,
                                 Builtin::Pcall => self.pcall_builtin(&args)?,
                                 Builtin::Xpcall => self.xpcall_builtin(&args)?,
@@ -4026,13 +4027,13 @@ impl Execution<'_> {
                             | Builtin::Next
                             | Builtin::Pairs
                             | Builtin::Ipairs
-                            | Builtin::IpairsIterator
-                            | Builtin::CollectGarbage => {
+                            | Builtin::IpairsIterator => {
                                 unreachable!(
                                     "iteration/selection builtins handled as multiple results"
                                 )
                             }
                             Builtin::ToString => self.tostring_builtin(value, &args)?,
+                            Builtin::CollectGarbage => self.collectgarbage_builtin(&args)?,
                             Builtin::MathAbs
                             | Builtin::MathFloor
                             | Builtin::MathCeil
@@ -8096,21 +8097,21 @@ mod tests {
     }
 
     #[test]
-    fn finalizer_collectgarbage_returns_zero_values_not_one_nil() {
+    fn finalizer_collectgarbage_suppression_has_one_nil_return_value() {
         for (source, expected) in [
             (
                 "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
-                b"0\t1\n".as_slice(),
+                b"1\t1\n".as_slice(),
             ),
             (
                 "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
-                b"body\nclose\t0\n".as_slice(),
+                b"body\nclose\t1\n".as_slice(),
             ),
         ] {
             let program = compile_flow_chunk(source).unwrap();
-            let result = execute_flow_capture(&program, 200_000);
-            assert_eq!(result.result, Ok(vec![]), "{source}");
-            assert_eq!(result.stdout, expected, "{source}");
+            let outcome = execute_flow_capture(&program, 100_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
         }
     }
 
