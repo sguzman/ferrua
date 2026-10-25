@@ -2607,9 +2607,9 @@ impl Execution<'_> {
             // strings; unsigned ordering uses the full 64-bit Lua integer.
             Builtin::MathUlt => {
                 let left = self.exact_integer_operand(self.arithmetic_operand(first)?)?;
-                let right = self.exact_integer_operand(self.arithmetic_operand(
-                    *args.get(1).ok_or(FlowError::TypeError)?,
-                )?)?;
+                let right = self.exact_integer_operand(
+                    self.arithmetic_operand(*args.get(1).ok_or(FlowError::TypeError)?)?,
+                )?;
                 Ok(Value::Boolean((left as u64) < (right as u64)))
             }
             Builtin::MathAbs => match self.arithmetic_operand(first)? {
