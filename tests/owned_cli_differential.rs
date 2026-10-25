@@ -114,6 +114,18 @@ fn owned_string_byte_char_binary_and_return_arity_match_lua54() {
 }
 
 #[test]
+fn owned_string_case_reverse_and_repeat_match_lua54() {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn generated_branch_and_environment_interactions_match_lua54() {
     for seed in 0_i64..48 {
         let base = (seed * 11) % 23 - 8;

@@ -77,6 +77,10 @@ pub enum Builtin {
     StringSub,
     StringByte,
     StringChar,
+    StringLower,
+    StringUpper,
+    StringReverse,
+    StringRep,
 }
 
 const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -94,6 +98,10 @@ const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"sub", Builtin::StringSub),
     (b"byte", Builtin::StringByte),
     (b"char", Builtin::StringChar),
+    (b"lower", Builtin::StringLower),
+    (b"upper", Builtin::StringUpper),
+    (b"reverse", Builtin::StringReverse),
+    (b"rep", Builtin::StringRep),
 ];
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -3820,6 +3828,59 @@ impl Execution<'_> {
         let text = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         match builtin {
             Builtin::StringLen => Ok(Value::Integer(text.len() as i64)),
+            Builtin::StringLower | Builtin::StringUpper | Builtin::StringReverse => {
+                if self.steps.saturating_add(text.len()) > self.budget {
+                    return Err(FlowError::StepBudgetExceeded);
+                }
+                self.steps += text.len();
+                let mut result = text;
+                match builtin {
+                    Builtin::StringLower => result.make_ascii_lowercase(),
+                    Builtin::StringUpper => result.make_ascii_uppercase(),
+                    Builtin::StringReverse => result.reverse(),
+                    _ => unreachable!("byte transformation guarded above"),
+                }
+                self.intern_rooted_string(result, args)
+            }
+            Builtin::StringRep => {
+                let count = *args.get(1).ok_or(FlowError::TypeError)?;
+                let count = self
+                    .exact_integer_operand(count)
+                    .or_else(|_| self.integer_operand(count))?;
+                let separator = match args.get(2).copied() {
+                    Some(value) if value != Value::Nil => self.string_bytes(value)?,
+                    _ => Vec::new(),
+                };
+                if count <= 0 || (text.is_empty() && separator.is_empty()) {
+                    return self.intern_rooted_string(Vec::new(), args);
+                }
+                let count = usize::try_from(count).map_err(|_| FlowError::TooLarge)?;
+                let total = text
+                    .len()
+                    .checked_mul(count)
+                    .and_then(|bytes| {
+                        separator
+                            .len()
+                            .checked_mul(count - 1)
+                            .and_then(|separators| bytes.checked_add(separators))
+                    })
+                    .ok_or(FlowError::TooLarge)?;
+                if total > MAX_STRING_POOL_BYTES {
+                    return Err(FlowError::TooLarge);
+                }
+                if self.steps.saturating_add(total) > self.budget {
+                    return Err(FlowError::StepBudgetExceeded);
+                }
+                self.steps += total;
+                let mut result = Vec::with_capacity(total);
+                for index in 0..count {
+                    if index > 0 {
+                        result.extend_from_slice(&separator);
+                    }
+                    result.extend_from_slice(&text);
+                }
+                self.intern_rooted_string(result, args)
+            }
             Builtin::StringSub => {
                 let start = *args.get(1).ok_or(FlowError::TypeError)?;
                 let start = self
@@ -4288,9 +4349,13 @@ impl Execution<'_> {
                             | Builtin::MathMin
                             | Builtin::MathType
                             | Builtin::MathToInteger => self.math_builtin(builtin, &args)?,
-                            Builtin::StringLen | Builtin::StringSub | Builtin::StringChar => {
-                                self.string_builtin(builtin, &args)?
-                            }
+                            Builtin::StringLen
+                            | Builtin::StringSub
+                            | Builtin::StringChar
+                            | Builtin::StringLower
+                            | Builtin::StringUpper
+                            | Builtin::StringReverse
+                            | Builtin::StringRep => self.string_builtin(builtin, &args)?,
                         };
                         if matches!(
                             instructions[pc],
@@ -8793,6 +8858,42 @@ mod tests {
             assert_eq!(outcome.result, Ok(vec![]), "{source}");
             assert_eq!(outcome.stdout, expected, "{source}");
         }
+    }
+
+    #[test]
+    fn byte_string_case_reverse_and_repeat_follow_lua54_bounds() {
+        for (source, expected) in [
+            (
+                "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+                b"true\ttrue\ttrue\n".as_slice(),
+            ),
+            (
+                "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+                b"true\ttrue\ttrue\ttrue\n".as_slice(),
+            ),
+            (
+                "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+                b"true\ttrue\ttrue\n".as_slice(),
+            ),
+            (
+                "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+                b"255\t65\t0\ttrue\n".as_slice(),
+            ),
+            (
+                "local keep=string.rep('ab',3,'-'); for i=1,19000 do local s=tostring(i) end; print(keep,string.upper('abc'),string.reverse('abc'))",
+                b"ab-ab-ab\tABC\tcba\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 3_000_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+        let too_large = compile_flow_chunk("print(string.rep('abcd',20000))").unwrap();
+        assert_eq!(
+            execute_flow_capture(&too_large, 3_000_000).result,
+            Err(FlowError::TooLarge)
+        );
     }
 
     #[test]
