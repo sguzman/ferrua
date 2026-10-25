@@ -4835,9 +4835,9 @@ impl Execution<'_> {
             _ => 1,
         };
         match self.simple_pattern_match(&source, &pattern, initial, false)? {
-            Some((begin, end, captures)) if captures.is_empty() => {
-                Ok(vec![self.intern_rooted_string(source[begin..end].to_vec(), args)?])
-            }
+            Some((begin, end, captures)) if captures.is_empty() => Ok(vec![
+                self.intern_rooted_string(source[begin..end].to_vec(), args)?,
+            ]),
             Some((_, _, captures)) => self.simple_pattern_capture_values(&source, &captures, args),
             None => Ok(vec![Value::Nil]),
         }
@@ -5064,9 +5064,7 @@ impl Execution<'_> {
                         let mut next = captures;
                         let opened = next
                             .iter()
-                            .rposition(|&(_, end, is_position)| {
-                                end == usize::MAX && !is_position
-                            })
+                            .rposition(|&(_, end, is_position)| end == usize::MAX && !is_position)
                             .ok_or(FlowError::InvalidBytecode)?;
                         next[opened].1 = position;
                         states.push((atom_index + 1, position, next));
