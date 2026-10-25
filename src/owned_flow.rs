@@ -77,6 +77,11 @@ pub enum Builtin {
     MathUlt,
     MathFmod,
     MathModf,
+    MathSin,
+    MathCos,
+    MathTan,
+    MathRad,
+    MathDeg,
     StringLen,
     StringSub,
     StringByte,
@@ -106,6 +111,11 @@ const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"ult", Builtin::MathUlt),
     (b"fmod", Builtin::MathFmod),
     (b"modf", Builtin::MathModf),
+    (b"sin", Builtin::MathSin),
+    (b"cos", Builtin::MathCos),
+    (b"tan", Builtin::MathTan),
+    (b"rad", Builtin::MathRad),
+    (b"deg", Builtin::MathDeg),
 ];
 
 const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -2682,6 +2692,35 @@ impl Execution<'_> {
                 };
                 Ok(Value::Float((number(left) % number(right)).to_bits()))
             }
+            Builtin::MathSin
+            | Builtin::MathCos
+            | Builtin::MathTan
+            | Builtin::MathRad
+            | Builtin::MathDeg => {
+                let function = match builtin {
+                    Builtin::MathSin => "math.sin",
+                    Builtin::MathCos => "math.cos",
+                    Builtin::MathTan => "math.tan",
+                    Builtin::MathRad => "math.rad",
+                    Builtin::MathDeg => "math.deg",
+                    _ => return Err(FlowError::InvalidBytecode),
+                };
+                let operand = self.checked_math_number(function, args, 0, false)?;
+                let value = match operand {
+                    Value::Integer(integer) => integer as f64,
+                    Value::Float(bits) => f64::from_bits(bits),
+                    _ => return Err(FlowError::InvalidBytecode),
+                };
+                let result = match builtin {
+                    Builtin::MathSin => value.sin(),
+                    Builtin::MathCos => value.cos(),
+                    Builtin::MathTan => value.tan(),
+                    Builtin::MathRad => value * (std::f64::consts::PI / 180.0),
+                    Builtin::MathDeg => value * (180.0 / std::f64::consts::PI),
+                    _ => return Err(FlowError::InvalidBytecode),
+                };
+                Ok(Value::Float(result.to_bits()))
+            }
             Builtin::MathAbs => match self.arithmetic_operand(first)? {
                 Value::Integer(number) => Ok(Value::Integer(number.wrapping_abs())),
                 Value::Float(bits) => Ok(Value::Float(f64::from_bits(bits).abs().to_bits())),
@@ -4783,6 +4822,11 @@ impl Execution<'_> {
                                     | Builtin::MathUlt
                                     | Builtin::MathFmod
                                     | Builtin::MathModf
+                                    | Builtin::MathSin
+                                    | Builtin::MathCos
+                                    | Builtin::MathTan
+                                    | Builtin::MathRad
+                                    | Builtin::MathDeg
                                     | Builtin::StringChar
                                     | Builtin::TablePack
                                     | Builtin::CollectGarbage
@@ -4912,7 +4956,12 @@ impl Execution<'_> {
                             | Builtin::MathToInteger
                             | Builtin::MathSqrt
                             | Builtin::MathUlt
-                            | Builtin::MathFmod => self.math_builtin(builtin, &args)?,
+                            | Builtin::MathFmod
+                            | Builtin::MathSin
+                            | Builtin::MathCos
+                            | Builtin::MathTan
+                            | Builtin::MathRad
+                            | Builtin::MathDeg => self.math_builtin(builtin, &args)?,
                             Builtin::StringLen
                             | Builtin::StringSub
                             | Builtin::StringChar
@@ -10058,6 +10107,20 @@ mod tests {
         assert_eq!(
             outcome.stdout,
             b"true\tfloat\ttrue\ttrue\ttrue\ntrue\ttrue\ntrue\tfalse\ttrue\ttrue\nfalse\tfalse\tfalse\n"
+        );
+    }
+
+    #[test]
+    fn math_trigonometry_and_unit_conversions_are_float_and_protected() {
+        let program = compile_flow_chunk(
+            "local e=1e-10; print(math.type(math.sin(0)),math.type(math.cos(0)),math.type(math.tan(0)),math.type(math.rad(180)),math.type(math.deg(math.pi))); print(math.abs(math.sin(math.rad(30))-0.5)<e,math.abs(math.cos(math.rad(60))-0.5)<e,math.abs(math.tan(math.rad(45))-1)<e); print(math.abs(math.deg(math.rad(180))-180)<e,math.abs(math.rad(math.deg(math.pi))-math.pi)<e); local ok,x=pcall(math.rad,'180'); print(ok,math.abs(x-math.pi)<e); local p,msg=pcall(math.sin,false); print(p,msg); local q,err=pcall(math.cos); print(q,err)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 10000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(
+            outcome.stdout,
+            b"float\tfloat\tfloat\tfloat\tfloat\ntrue\ttrue\ttrue\ntrue\ttrue\ntrue\ttrue\nfalse\tbad argument #1 to 'math.sin' (number expected, got boolean)\nfalse\tbad argument #1 to 'math.cos' (number expected, got no value)\n"
         );
     }
 

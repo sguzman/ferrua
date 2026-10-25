@@ -88,6 +88,21 @@ fn curated_global_function_print_and_error_semantics_match_lua54() {
 }
 
 #[test]
+fn owned_math_trigonometry_and_angle_conversions_match_lua54() {
+    for source in [
+        "print(math.type(math.sin(0)),math.type(math.cos(0)),math.type(math.tan(0)),math.type(math.rad(180)),math.type(math.deg(math.pi)))",
+        "local e=1e-10; print(math.abs(math.sin(math.rad(30))-0.5)<e,math.abs(math.cos(math.rad(60))-0.5)<e,math.abs(math.tan(math.rad(45))-1)<e)",
+        "local e=1e-10; print(math.abs(math.deg(math.rad(180))-180)<e,math.abs(math.rad(math.deg(math.pi))-math.pi)<e)",
+        "print(math.sin(math.huge)~=math.sin(math.huge),math.cos(math.huge)~=math.cos(math.huge),math.tan(math.huge)~=math.tan(math.huge))",
+        "local e=1e-10; local ok,x=pcall(math.rad,'180'); print(ok,math.abs(x-math.pi)<e); print(pcall(math.sin,false)); print(pcall(math.cos))",
+        "local f=math.sin; math.sin=function() return 42 end; print(math.sin()); math.sin=f; print(math.sin(0)==0)",
+        "local deg=math.deg; local rad=math.rad; print(math.abs(deg(rad(90))-90)<1e-10, math.abs(rad(deg(math.pi))-math.pi)<1e-10)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_math_fmod_modf_multi_return_and_failure_parity_match_lua54() {
     for source in [
         "print(math.fmod(-7,3),math.fmod(7,-3),math.fmod(math.mininteger,-1),math.type(math.fmod(7,3)),math.type(math.fmod(7.0,3)),math.fmod(-7.0,3.0)==-1.0)",
