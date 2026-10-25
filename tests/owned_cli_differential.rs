@@ -89,7 +89,7 @@ fn curated_global_function_print_and_error_semantics_match_lua54() {
 
 #[test]
 fn owned_math_atan_argument_label_matches_lua54_not_production_alias() {
-    // Pinned luna-core reports this public math.atan call as 'atan2'.
+    // Pinned luna-core reports this public math.atan call as 'math.atan2'.
     // Preserve the public Lua 5.4 function name and compare upstream directly.
     let source = "local ok,message=pcall(math.atan,0,false); print(ok,message)";
     let owned = run_fer(true, source);
@@ -102,7 +102,7 @@ fn owned_math_atan_argument_label_matches_lua54_not_production_alias() {
     );
     assert_eq!(
         production.stdout,
-        b"false\tbad argument #2 to 'atan2' (number expected, got boolean)\n"
+        b"false\tbad argument #2 to 'math.atan2' (number expected, got boolean)\n"
     );
     if let Some(reference) = reference_output(source) {
         assert!(reference.status.success());
