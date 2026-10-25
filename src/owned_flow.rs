@@ -3152,10 +3152,8 @@ impl Execution<'_> {
             self.write_table(handle, TableKey::Hashed(key), Value::Builtin(builtin))?;
         }
         // Matches lutf8lib.c's literal charpattern byte range, including NUL.
-        let pattern = self.intern_rooted_string(
-            b"[\0-\x7F\xC2-\xFD][\x80-\xBF]*".to_vec(),
-            pending,
-        )?;
+        let pattern =
+            self.intern_rooted_string(b"[\0-\x7F\xC2-\xFD][\x80-\xBF]*".to_vec(), pending)?;
         let key = self.intern_rooted_string(b"charpattern".to_vec(), &[pattern])?;
         self.write_table(handle, TableKey::Hashed(key), pattern)?;
         Ok(handle)
@@ -4741,7 +4739,12 @@ impl Execution<'_> {
                 return Err(FlowError::InvalidBytecode);
             };
             if !(0..=0x7FFF_FFFF).contains(&code) {
-                return Err(self.utf8_argument_error(args, "utf8.char", index, "value out of range")?);
+                return Err(self.utf8_argument_error(
+                    args,
+                    "utf8.char",
+                    index,
+                    "value out of range",
+                )?);
             }
             lua_utf8_encode(code as u32, &mut output);
             if output.len() > MAX_STRING_POOL_BYTES {
@@ -4759,10 +4762,20 @@ impl Execution<'_> {
         let start = lua_utf8_pos(initial, text.len());
         let end = lua_utf8_pos(final_pos, text.len());
         if start < 1 || start > text.len() as i64 + 1 {
-            return Err(self.utf8_argument_error(args, "utf8.len", 1, "initial position out of bounds")?);
+            return Err(self.utf8_argument_error(
+                args,
+                "utf8.len",
+                1,
+                "initial position out of bounds",
+            )?);
         }
         if end > text.len() as i64 {
-            return Err(self.utf8_argument_error(args, "utf8.len", 2, "final position out of bounds")?);
+            return Err(self.utf8_argument_error(
+                args,
+                "utf8.len",
+                2,
+                "final position out of bounds",
+            )?);
         }
         let mut cursor = (start - 1) as usize;
         let mut count = 0_i64;
