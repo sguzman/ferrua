@@ -354,6 +354,9 @@ fn run_owned_source(
     io::stdout()
         .write_all(&outcome.stdout)
         .map_err(|err| format!("{name}: stdout write failed: {err}"))?;
+    io::stderr()
+        .write_all(&outcome.stderr)
+        .map_err(|err| format!("{name}: stderr write failed: {err}"))?;
     outcome.result.map(|_| ()).map_err(|err| match err {
         ferrua::owned_flow::FlowError::Thrown(_) => {
             let detail = outcome
