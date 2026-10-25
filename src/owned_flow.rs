@@ -8215,7 +8215,9 @@ mod tests {
             assert_eq!(outcome.stdout, b"alive\n", "{source}");
             assert_eq!(
                 String::from_utf8_lossy(&outcome.stderr),
-                format!("Lua warning: error in __gc (attempt to call a {expected} value (metamethod '__gc'))\n"),
+                format!(
+                    "Lua warning: error in __gc (attempt to call a {expected} value (metamethod '__gc'))\n"
+                ),
                 "{source}"
             );
         }
