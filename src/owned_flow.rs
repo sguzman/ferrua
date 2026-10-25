@@ -1677,6 +1677,8 @@ struct Execution<'a> {
     strings: Vec<Vec<u8>>,
     string_index: HashMap<Vec<u8>, usize>,
     string_bytes: usize,
+    free_strings: Vec<usize>,
+    retired_strings: HashSet<usize>,
     stdout: Vec<u8>,
     script_name: &'a str,
     script_args: &'a [String],
@@ -1845,6 +1847,13 @@ impl Execution<'_> {
         }
         let mut marked_tables = vec![false; self.tables.len()];
         let mut marked_closures = vec![false; self.closures.len()];
+        let mut marked_strings = vec![false; self.strings.len()];
+        // All compiler string handles are embedded in immutable bytecode and
+        // must remain valid even if no executed path has referenced them.
+        if self.program.strings.len() > marked_strings.len() {
+            return Err(FlowError::InvalidBytecode);
+        }
+        marked_strings[..self.program.strings.len()].fill(true);
         let mut work = stack.to_vec();
         // Saved caller stacks include operands that were popped to construct
         // calls, plus temporarily prepared indexed assignment addresses.
@@ -1918,25 +1927,41 @@ impl Execution<'_> {
                         }
                         let (weak_keys, weak_values) = self.table_weakness(table)?;
                         // Array indices are always primitive numeric keys.
-                        if !weak_values {
-                            work.extend(table.array.iter().flatten().copied());
+                        // Even weak values retain Lua's value-like strings.
+                        for &value in table.array.iter().flatten() {
+                            if !weak_values || matches!(value, Value::String(_)) {
+                                work.push(value);
+                            }
                         }
                         for (&key, &value) in &table.hashed {
-                            if !weak_keys {
+                            // Strings are never collectible weak references.
+                            if !weak_keys || matches!(key, Value::String(_)) {
                                 work.push(key);
-                                if !weak_values {
-                                    work.push(value);
-                                }
-                            } else if !weak_values {
-                                if matches!(key, Value::Table(_) | Value::Function(_)) {
+                            }
+                            if !weak_values {
+                                if weak_keys
+                                    && matches!(key, Value::Table(_) | Value::Function(_))
+                                {
                                     ephemerons.push((key, value));
                                     activated.push(false);
                                 } else {
-                                    // Uncollectible keys retain their values.
+                                    // Strong keys or uncollectible primitive
+                                    // keys directly retain their values.
                                     work.push(value);
                                 }
+                            } else if matches!(value, Value::String(_)) {
+                                work.push(value);
                             }
                         }
+                    }
+                    Value::String(handle) => {
+                        let mark = marked_strings
+                            .get_mut(handle)
+                            .ok_or(FlowError::InvalidBytecode)?;
+                        if self.retired_strings.contains(&handle) {
+                            return Err(FlowError::InvalidBytecode);
+                        }
+                        *mark = true;
                     }
                     Value::Function(handle) => {
                         let marked = marked_closures
@@ -2028,6 +2053,7 @@ impl Execution<'_> {
         let sweep_cost = marked_tables
             .len()
             .saturating_add(marked_closures.len())
+            .saturating_add(marked_strings.len())
             .saturating_add(self.captured_cells.len())
             .saturating_add(weak_scan_cost)
             .saturating_add(self.frame_allocations.iter().map(Vec::len).sum::<usize>());
@@ -2054,6 +2080,24 @@ impl Execution<'_> {
                 if table.hashed.remove(&key).is_some() {
                     self.table_cells -= 1;
                 }
+            }
+        }
+
+        // Drop unreachable execution-only interned byte strings. Tombstone
+        // slots are reused, while bytecode-owned literal handles stay pinned.
+        // No handle is recycled until the full ephemeron fixpoint and sweep
+        // budget checks have completed.
+        for (handle, live) in marked_strings.into_iter().enumerate() {
+            if !live && !self.retired_strings.contains(&handle) {
+                let bytes = std::mem::take(
+                    self.strings
+                        .get_mut(handle)
+                        .ok_or(FlowError::InvalidBytecode)?,
+                );
+                self.string_bytes -= bytes.len();
+                self.string_index.remove(bytes.as_slice());
+                self.retired_strings.insert(handle);
+                self.free_strings.push(handle);
             }
         }
 
@@ -3429,16 +3473,28 @@ impl Execution<'_> {
         if let Some(&handle) = self.string_index.get(bytes.as_slice()) {
             return Ok(Value::String(handle));
         }
-        if self.strings.len() >= MAX_STRINGS
+        if (self.strings.len() >= MAX_STRINGS && self.free_strings.is_empty())
             || bytes.len() > MAX_STRING_POOL_BYTES
             || self.string_bytes > MAX_STRING_POOL_BYTES.saturating_sub(bytes.len())
         {
             return Err(FlowError::TooLarge);
         }
-        let handle = self.strings.len();
+        let handle = if let Some(handle) = self.free_strings.pop() {
+            if !self.retired_strings.remove(&handle) {
+                return Err(FlowError::InvalidBytecode);
+            }
+            *self
+                .strings
+                .get_mut(handle)
+                .ok_or(FlowError::InvalidBytecode)? = bytes.clone();
+            handle
+        } else {
+            let handle = self.strings.len();
+            self.strings.push(bytes.clone());
+            handle
+        };
         self.string_bytes += bytes.len();
-        self.string_index.insert(bytes.clone(), handle);
-        self.strings.push(bytes);
+        self.string_index.insert(bytes, handle);
         Ok(Value::String(handle))
     }
 
@@ -4420,6 +4476,8 @@ pub fn execute_flow_capture_with_args<'a>(
         strings: program.strings.clone(),
         string_index,
         string_bytes,
+        free_strings: Vec::new(),
+        retired_strings: HashSet::new(),
         stdout: Vec::new(),
         script_name,
         script_args,
@@ -7792,6 +7850,23 @@ mod tests {
         let outcome = execute_flow_capture(&program, 200_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"number\tnumber\t42\ntrue\tnumber\ttrue\n");
+    }
+
+    #[test]
+    fn gc_reclaims_runtime_strings_and_reuses_handles_after_explicit_passes() {
+        let source = "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 450_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"true\tstable\tstable\t42\n");
+
+        // The same runtime string handles must not be swept when reachable
+        // through an ordinary table or weak table's primitive string entry.
+        let source = "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 5_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"22222\t33333\n");
     }
 
     #[test]

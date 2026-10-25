@@ -294,6 +294,18 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
 fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
     for source in [
         "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
