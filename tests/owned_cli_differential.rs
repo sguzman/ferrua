@@ -295,11 +295,36 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 
 #[test]
 fn owned_finalizer_suppresses_nested_collection_like_lua54() {
-    for source in [
-        "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==0 end}) end; collectgarbage('collect'); print(called)",
-        "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
-    ] {
-        assert_parity(source, true);
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==0 end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Pinned production luna-core rejects a nested collector request,
+            // returning false from pcall. Lua 5.4 suppresses the nested
+            // request and returns 0 without a reentrant GC cycle.
+            b"false\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\t0\n",
+            b"body\nclosing\ttrue\t0\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
     }
 }
 
