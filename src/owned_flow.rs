@@ -1888,6 +1888,25 @@ impl Execution<'_> {
                 _ => {}
             }
         }
+        // A full sweep traverses heap slots and captured-cell bookkeeping
+        // even when every object is unreachable and marking is cheap.
+        // Charge that bounded work before mutating any heap entry, so
+        // repeated manual sweeps cannot bypass the interpreter budget.
+        let sweep_cost = marked_tables
+            .len()
+            .saturating_add(marked_closures.len())
+            .saturating_add(self.captured_cells.len())
+            .saturating_add(
+                self.frame_allocations
+                    .iter()
+                    .map(Vec::len)
+                    .sum::<usize>(),
+            );
+        if self.steps.saturating_add(sweep_cost) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += sweep_cost;
+
         // Build live captured cells before retiring any closure; a single
         // lexical cell can be shared by many surviving closures.
         let mut live_captures = HashSet::new();
@@ -7666,6 +7685,39 @@ mod tests {
         let outcome = execute_flow_capture(&restarted, 2_000_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"ok\n");
+    }
+
+    #[test]
+    fn collector_charges_sweeps_against_execution_budget() {
+        let baseline = compile_flow_chunk(
+            "collectgarbage('stop'); for i=1,900 do local t={} end; print('ok')",
+        )
+        .unwrap();
+        let with_collect = compile_flow_chunk(
+            "collectgarbage('stop'); for i=1,900 do local t={} end; collectgarbage('collect'); print('ok')",
+        )
+        .unwrap();
+
+        // Determine the non-collecting execution cost, then leave room for
+        // builtin dispatch and marking but not the 900-slot sweep.
+        let mut lower = 0;
+        let mut upper = 100_000;
+        while lower + 1 < upper {
+            let middle = lower + (upper - lower) / 2;
+            match execute_flow_capture(&baseline, middle).result {
+                Ok(_) => upper = middle,
+                Err(FlowError::StepBudgetExceeded) => lower = middle,
+                other => panic!("unexpected baseline result: {other:?}"),
+            }
+        }
+        assert_eq!(execute_flow_capture(&baseline, upper).result, Ok(vec![]));
+        assert_eq!(
+            execute_flow_capture(&with_collect, upper + 100).result,
+            Err(FlowError::StepBudgetExceeded)
+        );
+        let enough = execute_flow_capture(&with_collect, upper + 5000);
+        assert_eq!(enough.result, Ok(vec![]));
+        assert_eq!(enough.stdout, b"ok\n");
     }
 
     #[test]
