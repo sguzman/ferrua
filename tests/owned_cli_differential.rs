@@ -295,11 +295,36 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 
 #[test]
 fn owned_finalizer_collectgarbage_zero_result_arity_matches_lua54() {
-    for source in [
-        "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
-        "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
-    ] {
-        assert_parity(source, true);
+    // Pinned production luna-core returns one nil result for the
+    // suppressed collection; Lua 5.4 returns zero results. Record the
+    // discrepancy instead of lowering the owned Lua 5.4 conformance check.
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"0\t1\n",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t0\n",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
     }
 }
 
