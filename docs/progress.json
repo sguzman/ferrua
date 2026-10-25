@@ -5234,6 +5234,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T475",
+              "emoji": "🧮",
+              "name": "Lua 5.4 math.sqrt and unsigned math.ult parity with protected diagnostics",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Implement floating square roots and unsigned 64-bit ordering with numeric-string and exact-integer coercion, exposed through mutable math table",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Builtin::MathSqrt/MathUlt, MATH_GLOBALS, checked_math_number, math_builtin, direct and protected dispatch"
+                },
+                {
+                  "text": "Test NaN, infinity, float return kind, signed-to-unsigned boundaries, numeric strings, missing/wrong argument types and protected-call diagnostics",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: math_sqrt_and_unsigned_ordering_handle_lua_numeric_boundaries; tests/owned_cli_differential.rs: owned_math_sqrt_and_unsigned_integer_order_match_lua54"
+                },
+                {
+                  "text": "Require exact production and Lua 5.4.6 stdout differential behavior plus all five CI jobs green",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40231607001: all five jobs green on bebbeaf2fa9522c82aa19b9776db61c870db96da; math math.sqrt/math.ult differential tests passed"
+                },
+                {
+                  "text": "Synchronize machine evidence ledger, generated roadmap, README and owned-engine documentation under passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -6257,6 +6284,13 @@
             "T472",
             "T473",
             "T474"
+          ]
+        },
+        {
+          "emoji": "🧮",
+          "name": "Bounded first-party Lua numeric math extensions",
+          "task_ids": [
+            "T475"
           ]
         }
       ]
