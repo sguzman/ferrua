@@ -5374,6 +5374,33 @@
                   "evidence": "GitHub Actions 40235330285: all five jobs passed on 80a95a44e88a0df25b44f3a18c26ecf6c3d50e53; generated roadmap, README, owned engine docs and machine evidence ledger accepted"
                 }
               ]
+            },
+            {
+              "id": "T480",
+              "emoji": "🔤",
+              "name": "Lua 5.4.6 utf8.char, utf8.len and utf8.codepoint strict/lax byte parity",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Implement byte-preserving Lua 5.4.6 utf8 char/len/codepoint and charpattern including extended lax 1..6-byte sequences",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: lua_utf8_decode, lua_utf8_encode, lua_utf8_pos, utf8_char_builtin, utf8_len_builtin, utf8_codepoint_builtin, UTF8_GLOBALS"
+                },
+                {
+                  "text": "Expose mutable lazy utf8 library through _G and direct globals with GC rooting and correct protected/multi-return dispatch",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution.utf8_table, materialize_utf8_table, read_global, gc roots and protected/direct dispatch"
+                },
+                {
+                  "text": "Check malformed/overlong input, strict/lax codepoint behavior, byte offsets, return arity and argument boundaries against Lua 5.4.6",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: utf8_char_len_and_codepoint_support_strict_and_lax_bytes; tests/owned_cli_differential.rs: owned_utf8_char_len_codepoint_and_lax_modes_match_lua54; GitHub Actions 40236014165 five green jobs on 7b64ea2fd63f34e745ce2c423e0494f2fee52940"
+                },
+                {
+                  "text": "Synchronize evidence ledger, generated roadmap, README and owned-engine scope under a green documentation CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -6408,6 +6435,13 @@
             "T477",
             "T478",
             "T479"
+          ]
+        },
+        {
+          "emoji": "🔤",
+          "name": "Bounded first-party Lua 5.4 UTF-8 standard-library compatibility",
+          "task_ids": [
+            "T480"
           ]
         }
       ]

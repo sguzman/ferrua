@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 208 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 209 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 99%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 99%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -966,6 +966,11 @@
   - [x] Implement first-class mutable math.random/math.randomseed and direct/protected multi-result parity, full integer ranges, budget-bounded rejection sampling, and Lua argument errors — src/owned_flow.rs: MathRandom/MathRandomSeed, MATH_GLOBALS, math_randomseed_builtin; Rust unit seeded_math_random_uses_lua_54_integer_and_float_semantics
   - [x] Pass exact seeded integer sequence and floating/range/seed parity against pinned upstream Lua 5.4.6 in all five CI jobs — GitHub Actions 40235109117: five jobs passed on 6cdf412820d404d813de3ee31437e4626da39ad6; tests/owned_cli_differential.rs: owned_seeded_random_sequences_match_pinned_lua54
   - [x] Synchronize roadmap, progress ledger, README, owned-engine documentation and acceptance evidence under green CI — GitHub Actions 40235330285: all five jobs passed on 80a95a44e88a0df25b44f3a18c26ecf6c3d50e53; generated roadmap, README, owned engine docs and machine evidence ledger accepted
+- 🔤 **T480** Lua 5.4.6 utf8.char, utf8.len and utf8.codepoint strict/lax byte parity — `████████░░ 75%`
+  - [x] Implement byte-preserving Lua 5.4.6 utf8 char/len/codepoint and charpattern including extended lax 1..6-byte sequences — src/owned_flow.rs: lua_utf8_decode, lua_utf8_encode, lua_utf8_pos, utf8_char_builtin, utf8_len_builtin, utf8_codepoint_builtin, UTF8_GLOBALS
+  - [x] Expose mutable lazy utf8 library through _G and direct globals with GC rooting and correct protected/multi-return dispatch — src/owned_flow.rs: Execution.utf8_table, materialize_utf8_table, read_global, gc roots and protected/direct dispatch
+  - [x] Check malformed/overlong input, strict/lax codepoint behavior, byte offsets, return arity and argument boundaries against Lua 5.4.6 — src/owned_flow.rs: utf8_char_len_and_codepoint_support_strict_and_lax_bytes; tests/owned_cli_differential.rs: owned_utf8_char_len_codepoint_and_lax_modes_match_lua54; GitHub Actions 40236014165 five green jobs on 7b64ea2fd63f34e745ce2c423e0494f2fee52940
+  - [ ] Synchronize evidence ledger, generated roadmap, README and owned-engine scope under a green documentation CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1111,4 +1116,5 @@
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
 - 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
 - 🧮 Bounded first-party Lua numeric math extensions — `██████████ 100%`
+- 🔤 Bounded first-party Lua 5.4 UTF-8 standard-library compatibility — `████████░░ 75%`
 
