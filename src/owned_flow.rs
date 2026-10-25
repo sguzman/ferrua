@@ -1949,6 +1949,28 @@ impl Execution<'_> {
         Ok(())
     }
 
+    /// Lazy standard-library tables must share the constructor's recycled
+    /// table-slot path. An exhausted pool may contain unreachable tables, or
+    /// already-recycled slots from a manual collection while GC is stopped.
+    fn reserve_lazy_table_slot(&mut self) -> Result<(), FlowError> {
+        if self.tables.len() >= MAX_TABLES && self.free_tables.is_empty() {
+            if self.automatic_gc {
+                let frame = self
+                    .gc_frame_roots
+                    .last()
+                    .ok_or(FlowError::InvalidBytecode)?;
+                let stack = frame.stack.clone();
+                let slots = frame.slots.clone();
+                let prepared = frame.prepared.clone();
+                self.collect_root_tables(&stack, &slots, &prepared)?;
+            }
+            if self.tables.len() >= MAX_TABLES && self.free_tables.is_empty() {
+                return Err(FlowError::TooLarge);
+            }
+        }
+        Ok(())
+    }
+
     fn insert_table(&mut self, table: TableStorage) -> Result<usize, FlowError> {
         if let Some(handle) = self.free_tables.pop() {
             if !self.retired_tables.remove(&handle) {
@@ -2140,9 +2162,7 @@ impl Execution<'_> {
         if let Some(handle) = self.math_table {
             return Ok(handle);
         }
-        if self.tables.len() >= MAX_TABLES {
-            return Err(FlowError::TooLarge);
-        }
+        self.reserve_lazy_table_slot()?;
         let handle = self.insert_table(TableStorage {
             array: Vec::new(),
             hashed: HashMap::new(),
@@ -2174,9 +2194,7 @@ impl Execution<'_> {
         if let Some(handle) = self.global_table {
             return Ok(handle);
         }
-        if self.tables.len() >= MAX_TABLES {
-            return Err(FlowError::TooLarge);
-        }
+        self.reserve_lazy_table_slot()?;
         let handle = self.insert_table(TableStorage {
             array: Vec::new(),
             hashed: HashMap::new(),
@@ -2242,9 +2260,10 @@ impl Execution<'_> {
         if let Some(handle) = self.arg_handle {
             return Ok(Value::Table(handle));
         }
-        if self.tables.len() >= MAX_TABLES || self.script_args.len() > MAX_TABLE_FIELDS {
+        if self.script_args.len() > MAX_TABLE_FIELDS {
             return Err(FlowError::TooLarge);
         }
+        self.reserve_lazy_table_slot()?;
         let name = self.intern_string(self.script_name.as_bytes().to_vec())?;
         let handle = self.insert_table(TableStorage {
             array: Vec::new(),
@@ -7647,6 +7666,38 @@ mod tests {
         let outcome = execute_flow_capture(&restarted, 2_000_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"ok\n");
+    }
+
+    #[test]
+    fn gc_reuses_full_table_pool_for_lazy_global_math_and_argument_tables() {
+        for (source, expected) in [
+            (
+                "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))",
+                b"table\ttable\ttable\n".as_slice(),
+            ),
+            (
+                "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('collect'); print(type(math))",
+                b"table\n".as_slice(),
+            ),
+            (
+                "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('collect'); print(type(arg))",
+                b"table\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 2_000_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+
+        let retained = compile_flow_chunk(
+            "collectgarbage('stop'); local keep={}; for i=1,16383 do keep[i]={} end; collectgarbage('restart'); print(type(math))",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_capture(&retained, 2_000_000).result,
+            Err(FlowError::TooLarge)
+        );
     }
 
     #[test]

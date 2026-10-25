@@ -291,6 +291,28 @@ fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
 }
 
 #[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
 fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
     for (source, expected) in [
         (
