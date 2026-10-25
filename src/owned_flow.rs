@@ -4837,7 +4837,10 @@ impl Execution<'_> {
             return Err(FlowError::StepBudgetExceeded);
         }
         self.steps += width;
-        Ok(vec![Value::Integer(cursor as i64 + 1), Value::Integer(code)])
+        Ok(vec![
+            Value::Integer(cursor as i64 + 1),
+            Value::Integer(code),
+        ])
     }
 
     fn utf8_offset_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
@@ -5493,8 +5496,12 @@ impl Execution<'_> {
                                 Builtin::Utf8Len => self.utf8_len_builtin(&args)?,
                                 Builtin::Utf8Codepoint => self.utf8_codepoint_builtin(&args)?,
                                 Builtin::Utf8Codes => self.utf8_codes_builtin(&args)?,
-                                Builtin::Utf8CodesIteratorStrict => self.utf8_codes_iterator(&args, true)?,
-                                Builtin::Utf8CodesIteratorLax => self.utf8_codes_iterator(&args, false)?,
+                                Builtin::Utf8CodesIteratorStrict => {
+                                    self.utf8_codes_iterator(&args, true)?
+                                }
+                                Builtin::Utf8CodesIteratorLax => {
+                                    self.utf8_codes_iterator(&args, false)?
+                                }
                                 Builtin::TableUnpack => self.table_unpack_builtin(&args)?,
                                 Builtin::TableInsert => self.table_insert_builtin(&args)?,
                                 Builtin::TableSort => self.table_sort_builtin(&args)?,
