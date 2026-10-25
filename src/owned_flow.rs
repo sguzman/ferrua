@@ -3712,16 +3712,31 @@ impl Execution<'_> {
                     else {
                         return Err(FlowError::TypeError);
                     };
+                    let existing = self
+                        .tables
+                        .get(handle)
+                        .ok_or(FlowError::InvalidBytecode)?
+                        .array
+                        .len();
+                    let growth = end.saturating_sub(existing);
+                    if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+                        // Tail expansion bypasses ordinary indexed writes.
+                        // Preserve all vararg/multi-return objects while the
+                        // collector traverses otherwise unreachable tables.
+                        let mut roots = Vec::with_capacity(results.len() + 1);
+                        roots.push(Value::Table(handle));
+                        roots.extend_from_slice(&results);
+                        self.collect_root_tables(&roots, &slots, &prepared)?;
+                    }
+                    if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+                        return Err(FlowError::TooLarge);
+                    }
                     let cells = &mut self
                         .tables
                         .get_mut(handle)
                         .ok_or(FlowError::InvalidBytecode)?
                         .array;
                     if end > cells.len() {
-                        let growth = end - cells.len();
-                        if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
-                            return Err(FlowError::TooLarge);
-                        }
                         self.table_cells += growth;
                         cells.resize(end, None);
                     }
@@ -7514,6 +7529,27 @@ mod tests {
         let outcome = execute_flow_capture(&program, 200_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"number\tnumber\t42\nfalse\n");
+    }
+
+    #[test]
+    fn gc_reclaims_unreachable_constructor_multi_return_table_tails() {
+        let values = (1..=40).map(|value| value.to_string()).collect::<Vec<_>>().join(",");
+        let source = format!(
+            "local function vals() return {values} end; for i=1,1800 do local t={{tag=i,vals()}} end; print('ok')"
+        );
+        let program = compile_flow_chunk(&source).unwrap();
+        let outcome = execute_flow_capture(&program, 3_000_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"ok\n");
+
+        let retained = format!(
+            "local function vals() return {values} end; local keep={{}}; for i=1,1800 do keep[i]={{tag=i,vals()}} end"
+        );
+        let program = compile_flow_chunk(&retained).unwrap();
+        assert_eq!(
+            execute_flow_capture(&program, 3_000_000).result,
+            Err(FlowError::TooLarge)
+        );
     }
 
     #[test]
