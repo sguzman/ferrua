@@ -4478,6 +4478,33 @@
                   "evidence": "GitHub Actions 40200111171: all five jobs successful on 07f9640b529d96ad12f72698d1666e6b4e174a47; README, machine ledger, owned-engine docs and generated roadmap accepted"
                 }
               ]
+            },
+            {
+              "id": "T448",
+              "emoji": "🎛️",
+              "name": "Lua garbage collector stop, restart and isrunning controls",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Expose stop/restart/isrunning in the bounded collectgarbage builtin while preserving the explicit full collect mode",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: collectgarbage_builtin and automatic_gc default; unit owned_gc_stop_restart_and_manual_collect_preserve_quota_safety"
+                },
+                {
+                  "text": "Apply stop/restart to automatic table, closure, field-write and constructor-tail collection without weakening quota guards",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: write_table, Op::NewFunction, Op::NewTable and Op::SetTableTail; stopped-heap and manual-collection unit regressions"
+                },
+                {
+                  "text": "Verify observable Lua 5.4 control transitions and manual collection in full Linux/MSRV/Arch/reference/consumer CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40200501075 and 40200671209: all five jobs passed; tests/owned_cli_differential.rs: owned_gc_stop_restart_and_manual_collection_match_lua54"
+                },
+                {
+                  "text": "Synchronize README, docs, machine evidence and generator-derived roadmap in all-green CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
