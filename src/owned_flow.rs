@@ -4833,6 +4833,15 @@ impl Execution<'_> {
         while index < body.len() {
             let (byte, escaped) = if !plain && body[index] == b'%' {
                 let quoted = *body.get(index + 1).ok_or(FlowError::TypeError)?;
+                // Lua gives %b and %f special structural meanings and %1
+                // through %9 are capture backreferences. Treating them as
+                // quoted literal bytes would silently report false matches.
+                if matches!(quoted, b'b' | b'f' | b'0'..=b'9') {
+                    return Err(FlowError::Unsupported(
+                        "Lua balanced, frontier and backreference patterns are not implemented"
+                            .into(),
+                    ));
+                }
                 index += 2;
                 (quoted, true)
             } else {

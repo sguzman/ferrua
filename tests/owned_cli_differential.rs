@@ -403,6 +403,15 @@ fn owned_lua_pattern_quantifiers_use_bounded_backtracking_like_lua54() {
 }
 
 #[test]
+fn owned_pattern_unsupported_structural_escapes_never_silently_match() {
+    for source in [
+        "local a=pcall(string.find,'abc','%b('); local b=pcall(string.match,'abc','%f'); local c=pcall(string.find,'abc','%1'); print(a,b,c)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
