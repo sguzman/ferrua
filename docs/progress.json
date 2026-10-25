@@ -4534,6 +4534,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T450",
+              "emoji": "🗃️",
+              "name": "Reuse reclaimed table slots for lazy Lua standard-library tables",
+              "checks": [
+                {
+                  "text": "Use a shared quota-safe recycled-slot preflight for lazy _G, math and arg table allocation",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: reserve_lazy_table_slot, materialize_global_table, materialize_math_table, argument_table"
+                },
+                {
+                  "text": "Reclaim unreachable table slots automatically and accept manually recycled slots while stopped without releasing reachable tables",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: gc_reuses_full_table_pool_for_lazy_global_math_and_argument_tables; includes retained-table quota rejection"
+                },
+                {
+                  "text": "Compare observable Lua table initialization after exhausted-slot pressure with production fer and Lua 5.4 under five-job CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40202985644: five jobs passed on 634ce9bd7f2de4d1e6ff5b4e9cb662c04c3e6616; tests/owned_cli_differential.rs: owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure"
+                },
+                {
+                  "text": "Synchronize README, engine documentation, evidence ledger and generated roadmap under all-green CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5519,7 +5546,8 @@
             "T446",
             "T447",
             "T448",
-            "T449"
+            "T449",
+            "T450"
           ]
         }
       ]
