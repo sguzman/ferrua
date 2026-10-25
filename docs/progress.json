@@ -5150,6 +5150,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T472",
+              "emoji": "↔️",
+              "name": "Bounded Lua table.insert and table.remove mutation semantics",
+              "checks": [
+                {
+                  "text": "Implement table.insert for append and indexed insertion, preserve zero-result return arity and reject invalid positions and excessive growth",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: table_insert_builtin with bounded shift budget and MAX_TABLE_FIELDS; unit table_insert_and_remove_match_lua_sequence_mutations; CI 40228356899"
+                },
+                {
+                  "text": "Implement table.remove with Lua's default and explicit positions, shifting behavior, preserved removed result and non-destructive size+1 boundary",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: table_remove_builtin, clear_index boundary fix; regression tests; CI 40228356899"
+                },
+                {
+                  "text": "Verify successful and protected failures, sequence mutation, append/remove and size+1 behavior against production and official Lua 5.4 in five successful CI jobs",
+                  "passed": true,
+                  "evidence": "tests/owned_cli_differential.rs: owned_table_insert_remove_mutation_and_bounds_match_lua54; GitHub Actions 40228356899 five green jobs on 4df39255903b5239e8ddd58262340fa991060b22"
+                },
+                {
+                  "text": "Synchronize README, owned-engine docs, evidence ledger and generated ROADMAP under five-job CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -6169,7 +6196,8 @@
           "name": "Bounded first-party Lua table standard-library subset",
           "task_ids": [
             "T470",
-            "T471"
+            "T471",
+            "T472"
           ]
         }
       ]
