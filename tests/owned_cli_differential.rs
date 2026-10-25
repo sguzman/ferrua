@@ -456,6 +456,21 @@ fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
 }
 
 #[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
     for source in [
         "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",

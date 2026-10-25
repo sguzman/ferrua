@@ -4560,17 +4560,29 @@ impl Execution<'_> {
         }
         self.steps += count;
         let backward = source == target && start > from && start <= end;
-        for offset in 0..count {
-            let offset = if backward { count - offset - 1 } else { offset };
-            let offset = offset as i64;
-            let source_index = from.checked_add(offset).ok_or(FlowError::TooLarge)?;
-            let target_index = start.checked_add(offset).ok_or(FlowError::TooLarge)?;
-            let key = self.table_key(Value::Integer(source_index))?;
-            let value = self.read_table(source, key)?;
-            let target_key = self.table_key(Value::Integer(target_index))?;
-            self.write_table(target, target_key, value)?;
-        }
-        Ok(Value::Table(target))
+        // Lua's lua_geti/lua_seti invoke __index/__newindex for array
+        // transfers. Root values returned by callbacks across later writes,
+        // since those writes may invoke Lua and collect the owned heap.
+        self.gc_temporary_roots.push(args.to_vec());
+        let result = (|| {
+            for offset in 0..count {
+                let offset = if backward { count - offset - 1 } else { offset };
+                let offset = offset as i64;
+                let source_index = from.checked_add(offset).ok_or(FlowError::TooLarge)?;
+                let target_index = start.checked_add(offset).ok_or(FlowError::TooLarge)?;
+                let key = self.table_key(Value::Integer(source_index))?;
+                let value = self.lookup_with_metatable(source, key)?;
+                self.gc_temporary_roots
+                    .last_mut()
+                    .ok_or(FlowError::InvalidBytecode)?
+                    .push(value);
+                let target_key = self.table_key(Value::Integer(target_index))?;
+                self.assign_with_metatable(target, target_key, value)?;
+            }
+            Ok(Value::Table(target))
+        })();
+        self.gc_temporary_roots.pop();
+        result
     }
 
     /// Match Lua's ordinary less-than relation for native numbers/bytes and
