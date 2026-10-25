@@ -88,13 +88,36 @@ fn curated_global_function_print_and_error_semantics_match_lua54() {
 }
 
 #[test]
+fn owned_math_atan_argument_label_matches_lua54_not_production_alias() {
+    // Pinned luna-core reports this public math.atan call as 'atan2'.
+    // Preserve the public Lua 5.4 function name and compare upstream directly.
+    let source = "local ok,message=pcall(math.atan,0,false); print(ok,message)";
+    let owned = run_fer(true, source);
+    let production = run_fer(false, source);
+    assert!(owned.status.success());
+    assert!(production.status.success());
+    assert_eq!(
+        owned.stdout,
+        b"false\tbad argument #2 to 'math.atan' (number expected, got boolean)\n"
+    );
+    assert_eq!(
+        production.stdout,
+        b"false\tbad argument #2 to 'atan2' (number expected, got boolean)\n"
+    );
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+}
+
+#[test]
 fn owned_inverse_trig_exp_and_optional_log_base_match_lua54() {
     for source in [
         "print(math.type(math.exp(1)),math.type(math.log(8,2)),math.type(math.atan(1)),math.type(math.asin(0)),math.type(math.acos(0)))",
         "local e=1e-10; print(math.abs(math.exp(0)-1)<e,math.abs(math.log(math.exp(1))-1)<e,math.abs(math.log(100,10)-2)<e,math.abs(math.log(8,2)-3)<e)",
         "local e=1e-10; print(math.abs(math.asin(1)-math.pi/2)<e,math.abs(math.acos(0)-math.pi/2)<e,math.abs(math.atan(1)-math.pi/4)<e,math.abs(math.atan(0,-1)-math.pi)<e)",
         "print(math.log(-1)~=math.log(-1),math.asin(2)~=math.asin(2),math.acos(2)~=math.acos(2),math.exp(math.huge)==math.huge)",
-        "local e=1e-10; local ok,value=pcall(math.log,'100',10); print(ok,math.abs(value-2)<e); print(pcall(math.exp,false)); print(pcall(math.atan,0,false))",
+        "local e=1e-10; local ok,value=pcall(math.log,'100',10); print(ok,math.abs(value-2)<e); print(pcall(math.exp,false))",
         "local original=math.atan; math.atan=function() return 42 end; print(math.atan()); math.atan=original; print(math.atan(0,1)==0)",
         "local e=1e-10; print(math.abs(math.log(8,nil)-math.log(8))<e,math.abs(math.atan('1','1')-math.pi/4)<e)",
     ] {
