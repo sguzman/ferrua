@@ -5094,6 +5094,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T470",
+              "emoji": "🧺",
+              "name": "GC-rooted Lua table library with bounded concat and unpack",
+              "checks": [
+                {
+                  "text": "Expose a writable stable-identity table library through globals and _G while preserving its partially allocated table during GC",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: materialize_table_table, table_table as GC root, TABLE_GLOBALS and _G.table; CI 40226958969"
+                },
+                {
+                  "text": "Implement bounded raw table.concat and table.unpack with optional index ranges, binary/numeric sequences, multi-return adjustment and explicit instruction/memory limits",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: table_library_range, table_concat_builtin and table_unpack_builtin; Rust unit owned_table_concat_unpack_cover_binary_sequences_and_result_arity; CI 40226958969"
+                },
+                {
+                  "text": "Resolve discovered Lua 5.4 string-argument unpack behavior against upstream and require exact executable differential with downstream five-job CI",
+                  "passed": true,
+                  "evidence": "tests/owned_cli_differential.rs: owned_table_concat_unpack_sequence_results_match_lua54 verifies string length to nil-index unpack; GitHub Actions 40226958969 all five jobs passed on 7d40912"
+                },
+                {
+                  "text": "Synchronize README, owned-engine docs, machine ledger and generated roadmap under five-job successful CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -6106,6 +6133,13 @@
           "task_ids": [
             "T468",
             "T469"
+          ]
+        },
+        {
+          "emoji": "🧺",
+          "name": "Bounded first-party Lua table standard-library subset",
+          "task_ids": [
+            "T470"
           ]
         }
       ]
