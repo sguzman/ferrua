@@ -4955,13 +4955,13 @@ impl Execution<'_> {
                             }
                             maximum += 1;
                         }
-                        let minimum = position + usize::from(repetition == b'+');
+                        let minimum = position + usize::from(*repetition == b'+');
                         if minimum <= maximum {
                             let alternatives = maximum - minimum + 1;
                             if states.len().saturating_add(alternatives) > MAX_STACK {
                                 return Err(FlowError::TooLarge);
                             }
-                            if repetition == b'-' {
+                            if *repetition == b'-' {
                                 for at in (minimum..=maximum).rev() {
                                     states.push((atom_index + 1, at));
                                 }
