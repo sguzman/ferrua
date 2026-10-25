@@ -936,11 +936,11 @@
   - [x] Support sparse values and hashed negative indices while bounding transfer size, arithmetic and instruction budget without relaxing protected-call resource limits — src/owned_flow.rs: checked_sub/checked_add, MAX_TABLE_FIELDS, shared budget, table_key and write_table; hard resource test table_move_large_transfer_preserves_uncatchable_resource_limit; CI 40229278754
   - [x] Prove upstream Lua 5.4 and production CLI parity for overlapping moves, distinct destinations, nil holes, negative indices and empty range — tests/owned_cli_differential.rs: owned_table_move_overlap_and_destination_match_lua54; GitHub Actions 40229278754 five successful jobs on 0acb52a32049476ac219843c8379087fe9c22032
   - [x] Synchronize README, owned-engine limitations, machine ledger and generated ROADMAP under five successful CI jobs — GitHub Actions 40229455976: all five jobs green on 9974d8632221cc82fd7d30fb81e160f57ab6250b; README, owned-engine docs, ledger and generated roadmap synchronized
-- 🔢 **T474** Bounded Lua table.sort with function comparators and GC-safe snapshots — `████████░░ 75%`
+- 🔢 **T474** Bounded Lua table.sort with function comparators and GC-safe snapshots — `██████████ 100%`
   - [x] Provide Lua table.sort with zero return values, numeric and byte-string ordering, and table __lt metamethod comparison — src/owned_flow.rs: table_sort_less, table_sort_builtin, direct/protected dispatch; Rust unit table_sort_orders_numbers_strings_callbacks_and_table_metamethods; CI 40230426019
   - [x] Support Lua function comparators, protected invalid-argument behavior, and bounded sorting work without mutating the source before successful comparisons — src/owned_flow.rs: bounded insertion sort, callback comparison, shared instruction budget and commit-on-success; Rust unit and differential tests; CI 40230426019
   - [x] Root all intermediate sort values during callback GC, and prove real CLI parity with pinned production and upstream Lua 5.4 across supported sorting scenarios — src/owned_flow.rs: gc_temporary_roots traced independently of Lua frames, table_sort_builtin snapshot roots and comparator callback; owned-only regression table_sort_snapshot_roots_values_during_comparator_gc_and_mutation; tests/owned_cli_differential.rs: owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54; GitHub Actions 40230426019 all five jobs passed on 49f63695ee7eb1e126b0e72bdcb17be7bd1d4f99
-  - [ ] Synchronize README, owned-engine limitations, machine ledger and generated roadmap under five successful CI jobs
+  - [x] Synchronize README, owned-engine limitations, machine ledger and generated roadmap under five successful CI jobs — GitHub Actions 40230602507: all five jobs successful on a58766250a3e7ed1badd9aba3c889772819f9fe7; README, native temporary GC root design, machine progress ledger and generated roadmap synchronized
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1084,5 +1084,5 @@
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
-- 🧺 Bounded first-party Lua table standard-library subset — `██████████ 95%`
+- 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
 
