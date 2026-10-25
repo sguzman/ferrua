@@ -7482,7 +7482,8 @@ mod tests {
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"ok\n");
 
-        let source = "local refs={}; for i=1,1800 do local t={}; refs[i]=t; for j=1,40 do t[j]=j end end";
+        let source =
+            "local refs={}; for i=1,1800 do local t={}; refs[i]=t; for j=1,40 do t[j]=j end end";
         let program = compile_flow_chunk(source).unwrap();
         assert_eq!(
             execute_flow_capture(&program, 3_000_000).result,
