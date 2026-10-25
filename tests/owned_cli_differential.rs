@@ -294,6 +294,28 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
 fn owned_type_and_math_type_under_string_pressure_match_lua54() {
     for (source, expected) in [
         (

@@ -2164,17 +2164,18 @@ impl Execution<'_> {
     /// Lazy standard-library tables must share the constructor's recycled
     /// table-slot path. An exhausted pool may contain unreachable tables, or
     /// already-recycled slots from a manual collection while GC is stopped.
-    fn reserve_lazy_table_slot(&mut self) -> Result<(), FlowError> {
+    fn reserve_lazy_table_slot(&mut self, pending: &[Value]) -> Result<(), FlowError> {
         if self.tables.len() >= MAX_TABLES && self.free_tables.is_empty() {
             if self.automatic_gc {
                 let frame = self
                     .gc_frame_roots
                     .last()
                     .ok_or(FlowError::InvalidBytecode)?;
-                let stack = frame.stack.clone();
+                let mut roots = frame.stack.clone();
+                roots.extend_from_slice(pending);
                 let slots = frame.slots.clone();
                 let prepared = frame.prepared.clone();
-                self.collect_root_tables(&stack, &slots, &prepared)?;
+                self.collect_root_tables(&roots, &slots, &prepared)?;
             }
             if self.tables.len() >= MAX_TABLES && self.free_tables.is_empty() {
                 return Err(FlowError::TooLarge);
@@ -2370,11 +2371,11 @@ impl Execution<'_> {
     }
 
     /// Create one bounded numeric-library table for this execution.
-    fn materialize_math_table(&mut self) -> Result<usize, FlowError> {
+    fn materialize_math_table(&mut self, pending: &[Value]) -> Result<usize, FlowError> {
         if let Some(handle) = self.math_table {
             return Ok(handle);
         }
-        self.reserve_lazy_table_slot()?;
+        self.reserve_lazy_table_slot(pending)?;
         let handle = self.insert_table(TableStorage {
             array: Vec::new(),
             hashed: HashMap::new(),
@@ -2382,7 +2383,7 @@ impl Execution<'_> {
         })?;
         self.math_table = Some(handle);
         for &(name, builtin) in MATH_GLOBALS {
-            let key = self.intern_string(name.to_vec())?;
+            let key = self.intern_rooted_string(name.to_vec(), pending)?;
             self.write_table(handle, TableKey::Hashed(key), Value::Builtin(builtin))?;
         }
         for (name, value) in [
@@ -2394,7 +2395,7 @@ impl Execution<'_> {
             (b"maxinteger".as_slice(), Value::Integer(i64::MAX)),
             (b"mininteger".as_slice(), Value::Integer(i64::MIN)),
         ] {
-            let key = self.intern_string(name.to_vec())?;
+            let key = self.intern_rooted_string(name.to_vec(), pending)?;
             self.write_table(handle, TableKey::Hashed(key), value)?;
         }
         Ok(handle)
@@ -2406,7 +2407,7 @@ impl Execution<'_> {
         if let Some(handle) = self.global_table {
             return Ok(handle);
         }
-        self.reserve_lazy_table_slot()?;
+        self.reserve_lazy_table_slot(&[])?;
         let handle = self.insert_table(TableStorage {
             array: Vec::new(),
             hashed: HashMap::new(),
@@ -2414,19 +2415,19 @@ impl Execution<'_> {
         })?;
         self.global_table = Some(handle);
         for &(name, builtin) in BUILTIN_GLOBALS {
-            let key = self.intern_string(name.to_vec())?;
+            let key = self.intern_rooted_string(name.to_vec(), &[])?;
             self.write_table(handle, TableKey::Hashed(key), Value::Builtin(builtin))?;
         }
-        let version = self.intern_string(b"_VERSION".to_vec())?;
-        let number = self.intern_string(b"Lua 5.4".to_vec())?;
+        let version = self.intern_rooted_string(b"_VERSION".to_vec(), &[])?;
+        let number = self.intern_rooted_string(b"Lua 5.4".to_vec(), &[version])?;
         self.write_table(handle, TableKey::Hashed(version), number)?;
-        let self_key = self.intern_string(b"_G".to_vec())?;
+        let self_key = self.intern_rooted_string(b"_G".to_vec(), &[])?;
         self.write_table(handle, TableKey::Hashed(self_key), Value::Table(handle))?;
-        let arg_key = self.intern_string(b"arg".to_vec())?;
-        let arguments = self.argument_table()?;
+        let arg_key = self.intern_rooted_string(b"arg".to_vec(), &[])?;
+        let arguments = self.argument_table(&[arg_key])?;
         self.write_table(handle, TableKey::Hashed(arg_key), arguments)?;
-        let math_key = self.intern_string(b"math".to_vec())?;
-        let math = self.materialize_math_table()?;
+        let math_key = self.intern_rooted_string(b"math".to_vec(), &[])?;
+        let math = self.materialize_math_table(&[math_key])?;
         self.write_table(handle, TableKey::Hashed(math_key), Value::Table(math))?;
         for (key, value) in std::mem::take(&mut self.globals) {
             self.write_table(handle, TableKey::Hashed(Value::String(key)), value)?;
@@ -2455,39 +2456,40 @@ impl Execution<'_> {
             return Ok(Value::Builtin(builtin));
         }
         if name == b"arg" {
-            return self.argument_table();
+            return self.argument_table(&[]);
         }
         if name == b"math" {
-            return Ok(Value::Table(self.materialize_math_table()?));
+            return Ok(Value::Table(self.materialize_math_table(&[])?));
         }
         if name == b"_VERSION" {
-            return self.intern_string(b"Lua 5.4".to_vec());
+            return self.intern_rooted_string(b"Lua 5.4".to_vec(), &[]);
         }
         Ok(Value::Nil)
     }
 
     /// Materialize the standard Lua argv table only when referenced. Repeated
     /// global lookups and calls share the same writable table identity.
-    fn argument_table(&mut self) -> Result<Value, FlowError> {
+    fn argument_table(&mut self, pending: &[Value]) -> Result<Value, FlowError> {
         if let Some(handle) = self.arg_handle {
             return Ok(Value::Table(handle));
         }
         if self.script_args.len() > MAX_TABLE_FIELDS {
             return Err(FlowError::TooLarge);
         }
-        self.reserve_lazy_table_slot()?;
-        let name = self.intern_string(self.script_name.as_bytes().to_vec())?;
+        self.reserve_lazy_table_slot(pending)?;
+        let name = self.intern_rooted_string(self.script_name.as_bytes().to_vec(), pending)?;
         let handle = self.insert_table(TableStorage {
             array: Vec::new(),
             hashed: HashMap::new(),
             metatable: None,
         })?;
+        // Root the partial arg table before allocating further strings.
+        self.arg_handle = Some(handle);
         self.write_table(handle, TableKey::Hashed(Value::Integer(0)), name)?;
         for (index, argument) in self.script_args.iter().enumerate() {
-            let text = self.intern_string(argument.as_bytes().to_vec())?;
+            let text = self.intern_rooted_string(argument.as_bytes().to_vec(), pending)?;
             self.write_table(handle, TableKey::Positive(index + 1), text)?;
         }
-        self.arg_handle = Some(handle);
         Ok(Value::Table(handle))
     }
 
@@ -7904,6 +7906,44 @@ mod tests {
             assert_eq!(outcome.result, Ok(vec![]), "{source}");
             assert_eq!(outcome.stdout, expected, "{source}");
         }
+    }
+
+    #[test]
+    fn lazy_standard_tables_root_pending_keys_during_string_collection() {
+        let mut lower = 14_000;
+        let mut upper = 16_000;
+        let mut verified = None;
+        while lower + 1 < upper {
+            let middle = lower + (upper - lower) / 2;
+            let source = format!(
+                "local keep=tostring(123456789); collectgarbage('stop'); \
+                 for i=1,{middle} do local s=tostring(i) end; \
+                 collectgarbage('restart'); \
+                 local before=collectgarbage('count'); \
+                 local g=_G; local after=collectgarbage('count'); \
+                 print(g._VERSION,g.arg[0],type(g.math),keep,before>after)"
+            );
+            let program = compile_flow_chunk(&source).unwrap();
+            let outcome = execute_flow_capture(&program, 3_000_000);
+            match outcome.result {
+                Ok(_) => {
+                    lower = middle;
+                    verified = Some(outcome.stdout);
+                }
+                Err(FlowError::TooLarge) => upper = middle,
+                other => panic!("{source}: unexpected result: {other:?}"),
+            }
+        }
+        assert_eq!(
+            verified,
+            Some(b"Lua 5.4\t=owned\ttable\t123456789\ttrue\n".to_vec())
+        );
+        let args = vec!["first".to_owned(), "second".to_owned()];
+        let source = "for i=1,19000 do local s=tostring(i) end; print(_G.arg[0],_G.arg[1],_G.arg[2],type(_G.math))";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture_with_args(&program, 3_000_000, "script.lua", &args);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"script.lua\tfirst\tsecond\ttable\n");
     }
 
     #[test]
