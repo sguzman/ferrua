@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 204 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 205 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -946,6 +946,11 @@
   - [x] Test NaN, infinity, float return kind, signed-to-unsigned boundaries, numeric strings, missing/wrong argument types and protected-call diagnostics — src/owned_flow.rs: math_sqrt_and_unsigned_ordering_handle_lua_numeric_boundaries; tests/owned_cli_differential.rs: owned_math_sqrt_and_unsigned_integer_order_match_lua54
   - [x] Require exact production and Lua 5.4.6 stdout differential behavior plus all five CI jobs green — GitHub Actions 40231607001: all five jobs green on bebbeaf2fa9522c82aa19b9776db61c870db96da; math math.sqrt/math.ult differential tests passed
   - [x] Synchronize machine evidence ledger, generated roadmap, README and owned-engine documentation under passing CI — GitHub Actions 40231788919: five green jobs on 9ad590906df880020b7ac9c1c0748ca07acd5b78; README, docs/OWNED_ENGINE.md, docs/progress.json and generated docs/ROADMAP.md synchronized
+- 🧮 **T476** Lua 5.4 math.fmod and two-result math.modf parity — `████████░░ 75%`
+  - [x] Implement integer/floating math.fmod including negative divisors and mininteger edge, plus two-result math.modf with integer-part classification — src/owned_flow.rs: Builtin::MathFmod/MathModf, MATH_GLOBALS, math_builtin and math_modf_builtin, direct multiple-result dispatch
+  - [x] Exercise protected math.modf with two returned values, integer and floating result types, NaN/infinity, numeric strings and Lua argument errors — src/owned_flow.rs: math_fmod_and_modf_preserve_signed_remainder_and_result_arity; tests/owned_cli_differential.rs: owned_math_fmod_modf_multi_return_and_failure_parity_match_lua54; protected_target dispatch order regression
+  - [x] Require all five CI jobs green including upstream Lua 5.4 differential, Rust formatting, tests and downstream action consumer — GitHub Actions 40232374511: all five jobs passed on 4e1be2e8c80341f144ad57c6699428b7bf3743ac
+  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine reference under all-green CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1090,5 +1095,5 @@
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
 - 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
-- 🧮 Bounded first-party Lua numeric math extensions — `██████████ 100%`
+- 🧮 Bounded first-party Lua numeric math extensions — `█████████░ 88%`
 
