@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 183 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 183 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -836,11 +836,11 @@
   - [x] Remove unreachable weak keys or values after a complete fixpoint, keeping primitives and preserving two-sided weak semantics within budget — src/owned_flow.rs: weak_clears, weak_value_unreachable; owned_gc_weak_keys_and_ephemeron_fixpoint_preserve_lua_reachability
   - [x] Verify cycle removal, reachable key retention, primitive keys, ephemeron chains, and double-weak tables against production fer and upstream Lua 5.4 — GitHub Actions 40206193452: five jobs passed on b0e738cbfe6c34026e928e95019dc3608540aff3; tests/owned_cli_differential.rs: owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54
   - [x] Synchronize README, owned-engine documentation, evidence ledger and generated roadmap under successful CI — GitHub Actions 40206384742: five jobs passed on 43f1405270d6ab21a14bf8b4e186d11f2e2c9e29; README, owned-engine docs, machine ledger and generated roadmap accepted
-- 🧪 **T454** Generated Lua ephemeron-chain order-independence differential matrix — `████████░░ 75%`
+- 🧪 **T454** Generated Lua ephemeron-chain order-independence differential matrix — `██████████ 100%`
   - [x] Construct bounded weak-key chains with dependent table values in both forward and reverse insertion order — tests/owned_cli_differential.rs: generated_ephemeron_chains_match_lua54_across_insertion_orders, lengths 2 through 10
   - [x] Verify fixed-point activation, later release of weak keys and first-party closure keys after explicit collection — tests/owned_cli_differential.rs: generated_ephemeron_chains_match_lua54_across_insertion_orders, includes function-key backreference
   - [x] Pass generated owned CLI comparisons against production fer and upstream Lua 5.4 in full five-job CI — GitHub Actions 40206664620: five jobs successful on d6a070f3c6d868e065f24a39051c18fe0c68b51a
-  - [ ] Synchronize evidence docs, task ledger and generated roadmap under successful CI
+  - [x] Synchronize evidence docs, task ledger and generated roadmap under successful CI — GitHub Actions 40206842745: five jobs passed on d217fbef4fca2f737038f76f9e14427ddaeebd07; README, owned-engine docs, machine ledger and generated roadmap accepted
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -982,5 +982,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 98%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 
