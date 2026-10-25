@@ -7900,10 +7900,9 @@ mod tests {
             assert_eq!(outcome.result, Ok(vec![]), "{source}");
             assert_eq!(outcome.stdout, expected, "{source}");
         }
-        let stopped = compile_flow_chunk(
-            "collectgarbage('stop'); for i=1,19000 do local s='v'..i end",
-        )
-        .unwrap();
+        let stopped =
+            compile_flow_chunk("collectgarbage('stop'); for i=1,19000 do local s='v'..i end")
+                .unwrap();
         assert_eq!(
             execute_flow_capture(&stopped, 3_000_000).result,
             Err(FlowError::TooLarge)
