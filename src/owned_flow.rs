@@ -93,6 +93,9 @@ pub enum Builtin {
     Utf8Len,
     Utf8Codepoint,
     Utf8Offset,
+    Utf8Codes,
+    Utf8CodesIteratorStrict,
+    Utf8CodesIteratorLax,
     StringLen,
     StringSub,
     StringByte,
@@ -141,6 +144,7 @@ const UTF8_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"len", Builtin::Utf8Len),
     (b"codepoint", Builtin::Utf8Codepoint),
     (b"offset", Builtin::Utf8Offset),
+    (b"codes", Builtin::Utf8Codes),
 ];
 
 const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -4126,6 +4130,13 @@ impl Execution<'_> {
             Value::Builtin(Builtin::Utf8Len) => self.utf8_len_builtin(&arguments),
             Value::Builtin(Builtin::Utf8Codepoint) => self.utf8_codepoint_builtin(&arguments),
             Value::Builtin(Builtin::Utf8Offset) => Ok(vec![self.utf8_offset_builtin(&arguments)?]),
+            Value::Builtin(Builtin::Utf8Codes) => self.utf8_codes_builtin(&arguments),
+            Value::Builtin(Builtin::Utf8CodesIteratorStrict) => {
+                self.utf8_codes_iterator(&arguments, true)
+            }
+            Value::Builtin(Builtin::Utf8CodesIteratorLax) => {
+                self.utf8_codes_iterator(&arguments, false)
+            }
             Value::Builtin(Builtin::StringByte) => self.string_byte_builtin(&arguments),
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
             Value::Builtin(Builtin::TablePack) => Ok(vec![self.table_pack_builtin(&arguments)?]),
@@ -4759,6 +4770,76 @@ impl Execution<'_> {
 
     /// Byte-oriented Lua 5.4 offset counts lead bytes rather than validating
     /// sequences, and allows the position immediately after the last byte.
+    /// Lua codes returns a (iterator, string-state, integer-control) triple.
+    /// Keep string byte content intact even when the source was a number.
+    fn utf8_codes_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let input = *args.first().ok_or(FlowError::TypeError)?;
+        let bytes = self.string_bytes(input)?;
+        if bytes.first().is_some_and(|byte| byte & 0xC0 == 0x80) {
+            return Err(self.utf8_argument_error(args, "utf8.codes", 0, "invalid UTF-8 code")?);
+        }
+        let state = if matches!(input, Value::String(_)) {
+            input
+        } else {
+            self.intern_rooted_string(bytes, args)?
+        };
+        let lax = args.get(1).copied().unwrap_or(Value::Nil).truthy();
+        let iterator = if lax {
+            Builtin::Utf8CodesIteratorLax
+        } else {
+            Builtin::Utf8CodesIteratorStrict
+        };
+        Ok(vec![Value::Builtin(iterator), state, Value::Integer(0)])
+    }
+
+    /// Match lutf8lib.c: each control value is the last 1-based byte offset,
+    /// and the iterator skips continuation bytes before decoding the next
+    /// strict or lax codepoint. Invalid bytes raise "invalid UTF-8 code".
+    fn utf8_codes_iterator(
+        &mut self,
+        args: &[Value],
+        strict: bool,
+    ) -> Result<Vec<Value>, FlowError> {
+        let bytes = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
+        let control = args
+            .get(1)
+            .copied()
+            .and_then(|value| self.exact_integer_operand(value).ok())
+            .unwrap_or(0);
+        let Ok(mut cursor) = usize::try_from(control) else {
+            return Ok(Vec::new());
+        };
+        while cursor < bytes.len() && bytes[cursor] & 0xC0 == 0x80 {
+            if self.steps >= self.budget {
+                return Err(FlowError::StepBudgetExceeded);
+            }
+            self.steps += 1;
+            cursor += 1;
+        }
+        if cursor >= bytes.len() {
+            return Ok(Vec::new());
+        }
+        let decoded = lua_utf8_decode(&bytes[cursor..], strict);
+        let (code, width) = match decoded {
+            Some((code, width))
+                if !bytes
+                    .get(cursor + width)
+                    .is_some_and(|byte| byte & 0xC0 == 0x80) =>
+            {
+                (code, width)
+            }
+            _ => {
+                let error = self.intern_rooted_string(b"invalid UTF-8 code".to_vec(), args)?;
+                return Err(FlowError::Thrown(error));
+            }
+        };
+        if self.steps.saturating_add(width) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += width;
+        Ok(vec![Value::Integer(cursor as i64 + 1), Value::Integer(code)])
+    }
+
     fn utf8_offset_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
         let bytes = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         let Value::Integer(mut remaining) =
@@ -5382,6 +5463,9 @@ impl Execution<'_> {
                                 | Builtin::StringByte
                                 | Builtin::Utf8Len
                                 | Builtin::Utf8Codepoint
+                                | Builtin::Utf8Codes
+                                | Builtin::Utf8CodesIteratorStrict
+                                | Builtin::Utf8CodesIteratorLax
                                 | Builtin::TableUnpack
                                 | Builtin::TableInsert
                                 | Builtin::TableSort
@@ -5408,6 +5492,9 @@ impl Execution<'_> {
                                 Builtin::StringByte => self.string_byte_builtin(&args)?,
                                 Builtin::Utf8Len => self.utf8_len_builtin(&args)?,
                                 Builtin::Utf8Codepoint => self.utf8_codepoint_builtin(&args)?,
+                                Builtin::Utf8Codes => self.utf8_codes_builtin(&args)?,
+                                Builtin::Utf8CodesIteratorStrict => self.utf8_codes_iterator(&args, true)?,
+                                Builtin::Utf8CodesIteratorLax => self.utf8_codes_iterator(&args, false)?,
                                 Builtin::TableUnpack => self.table_unpack_builtin(&args)?,
                                 Builtin::TableInsert => self.table_insert_builtin(&args)?,
                                 Builtin::TableSort => self.table_sort_builtin(&args)?,
@@ -5475,6 +5562,9 @@ impl Execution<'_> {
                             | Builtin::StringByte
                             | Builtin::Utf8Len
                             | Builtin::Utf8Codepoint
+                            | Builtin::Utf8Codes
+                            | Builtin::Utf8CodesIteratorStrict
+                            | Builtin::Utf8CodesIteratorLax
                             | Builtin::TableUnpack
                             | Builtin::TableInsert
                             | Builtin::TableSort
@@ -10674,6 +10764,20 @@ mod tests {
         assert_eq!(
             outcome.stdout,
             b"123\t-456\t2\ninteger\ttrue\tfloat\ttrue\ntrue\ttrue\ttrue\n1\t0\n1\tinteger\nfalse\n"
+        );
+    }
+
+    #[test]
+    fn utf8_codes_iterates_byte_positions_with_strict_and_lax_decoding() {
+        let program = compile_flow_chunk(
+            "local s='Aé💩'; local iter,state,control=utf8.codes(s); print(type(iter),state==s,control,select('#',utf8.codes(s))); for p,c in utf8.codes(s) do print(p,c) end; local ok,p,c=pcall(iter,state,0); print(ok,p,c); print(select('#',iter(state,4))); for p,c in utf8.codes(utf8.char(0x110000),true) do print(p,c) end; local valid=pcall(function() for p,c in utf8.codes(utf8.char(0x110000)) do end end); print(valid)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 10000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(
+            outcome.stdout,
+            b"function\ttrue\t0\t3\n1\t65\n2\t233\n4\t128169\ntrue\t1\t65\n0\n1\t1114112\nfalse\n"
         );
     }
 

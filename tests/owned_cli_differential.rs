@@ -120,6 +120,22 @@ fn owned_math_atan_argument_label_matches_lua54_with_backend_alias_variation() {
 }
 
 #[test]
+fn owned_utf8_codes_generic_iteration_strict_lax_and_errors_match_lua54() {
+    for source in [
+        "local s='Aé💩'; print(select('#',utf8.codes(s))); local f,state,i=utf8.codes(s); print(type(f),state==s,i); for p,c in utf8.codes(s) do print(p,c) end",
+        "local f,s,n=utf8.codes('Aé'); print(f(s,0)); print(f(s,1)); print(select('#',f(s,2))); local p,c=pcall(f,s,0); print(p,c)",
+        "local t={}; for p,c in utf8.codes('héllo') do t[#t+1]=p..':'..c end; print(table.concat(t,','))",
+        "local x=utf8.char(0x110000); for p,c in utf8.codes(x,true) do print(p,c) end; local ok=pcall(function() for p,c in utf8.codes(x) do end end); print(ok)",
+        "local x=utf8.char(0xD800); for p,c in utf8.codes(x,true) do print(p,c) end; print(pcall(function() for p,c in utf8.codes(x) do end end))",
+        "local x=string.char(0x80,65); local ok=pcall(utf8.codes,x); print(ok); local ok2=pcall(function() for p,c in utf8.codes('A'..string.char(0x80)) do end end); print(ok2)",
+        "local count=0; for p,c in utf8.codes('') do count=count+1 end; print(count); local f,s,i=utf8.codes(123); print(type(f),type(s),i)",
+        "local old=utf8.codes; utf8.codes=function() return 42 end; print(utf8.codes()); utf8.codes=old; print(type(utf8.codes('a')))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_utf8_offset_byte_boundaries_and_continuations_match_lua54() {
     for source in [
         "local s='Aé💩Z'; print(utf8.offset(s,1),utf8.offset(s,2),utf8.offset(s,3),utf8.offset(s,4),utf8.offset(s,5),utf8.offset(s,6)==nil)",
