@@ -3380,9 +3380,7 @@ impl Execution<'_> {
             Value::Function(handle) => self.call_owned_function(handle, &arguments),
             Value::Builtin(Builtin::Error) => Err(self.error_builtin(&arguments)),
             Value::Builtin(Builtin::Print) => self.print_builtin(&arguments),
-            Value::Builtin(Builtin::CollectGarbage) => {
-                self.collectgarbage_builtin(&arguments)
-            }
+            Value::Builtin(Builtin::CollectGarbage) => self.collectgarbage_builtin(&arguments),
             Value::Builtin(Builtin::Assert) => {
                 if arguments.first().copied().unwrap_or(Value::Nil).truthy() {
                     Ok(arguments)
