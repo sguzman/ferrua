@@ -343,6 +343,19 @@ fn owned_table_concat_unpack_sequence_results_match_lua54() {
 }
 
 #[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+        "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
     for source in [
         "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",

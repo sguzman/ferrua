@@ -4635,22 +4635,33 @@ impl Execution<'_> {
             return Err(FlowError::StepBudgetExceeded);
         }
         self.steps += count;
-        let mut result = Vec::with_capacity(count);
-        for offset in 0..count {
-            let index = start
-                .checked_add(offset as i64)
-                .ok_or(FlowError::TooLarge)?;
-            let value = match target {
-                Value::Table(handle) => {
-                    let key = self.table_key(Value::Integer(index))?;
-                    self.read_table(handle, key)?
-                }
-                Value::String(_) => Value::Nil,
-                _ => return Err(FlowError::InvalidBytecode),
-            };
-            result.push(value);
-        }
-        Ok(result)
+        // lua_geti observes __index; callbacks may collect between adjacent
+        // elements. Root every prior result until all values are returned.
+        self.gc_temporary_roots.push(args.to_vec());
+        let result = (|| {
+            let mut result = Vec::with_capacity(count);
+            for offset in 0..count {
+                let index = start
+                    .checked_add(offset as i64)
+                    .ok_or(FlowError::TooLarge)?;
+                let value = match target {
+                    Value::Table(handle) => {
+                        let key = self.table_key(Value::Integer(index))?;
+                        self.lookup_with_metatable(handle, key)?
+                    }
+                    Value::String(_) => Value::Nil,
+                    _ => return Err(FlowError::InvalidBytecode),
+                };
+                self.gc_temporary_roots
+                    .last_mut()
+                    .ok_or(FlowError::InvalidBytecode)?
+                    .push(value);
+                result.push(value);
+            }
+            Ok(result)
+        })();
+        self.gc_temporary_roots.pop();
+        result
     }
 
     /// table.concat accepts byte strings and numeric entries. Host-side
@@ -4676,7 +4687,7 @@ impl Execution<'_> {
                 return Err(FlowError::InvalidBytecode);
             };
             let key = self.table_key(Value::Integer(index))?;
-            let value = self.read_table(handle, key)?;
+            let value = self.lookup_with_metatable(handle, key)?;
             let bytes = self.string_bytes(value)?;
             let extra = bytes.len() + if offset > 0 { separator.len() } else { 0 };
             if output.len().saturating_add(extra) > MAX_STRING_POOL_BYTES {
