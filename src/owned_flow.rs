@@ -1866,6 +1866,44 @@ impl Execution<'_> {
             .filter(|value| *value != Value::Nil))
     }
 
+    /// Closing the Lua state must finalize even reachable registered tables.
+    /// Take a reverse-registration snapshot: objects registered by finalizers
+    /// during shutdown are not finalized in this closing pass. Leave their
+    /// storage intact until all callbacks have finished.
+    fn finalize_on_shutdown(&mut self) -> Result<(), FlowError> {
+        if self.running_finalizers {
+            return Err(FlowError::InvalidBytecode);
+        }
+        let pending: Vec<usize> = self
+            .gc_registrations
+            .iter()
+            .rev()
+            .copied()
+            .filter(|handle| {
+                !self.gc_finalized.contains(handle) && !self.retired_tables.contains(handle)
+            })
+            .collect();
+        self.running_finalizers = true;
+        let outcome = (|| -> Result<(), FlowError> {
+            for handle in pending {
+                if self.steps >= self.budget {
+                    return Err(FlowError::StepBudgetExceeded);
+                }
+                self.steps += 1;
+                self.gc_finalized.insert(handle);
+                if let Some(method) = self.table_finalizer(handle)? {
+                    match self.protected_target(method, &[Value::Table(handle)]) {
+                        Ok(_) | Err(FlowError::Thrown(_)) | Err(FlowError::TypeError) => {}
+                        Err(error) => return Err(error),
+                    }
+                }
+            }
+            Ok(())
+        })();
+        self.running_finalizers = false;
+        outcome
+    }
+
     /// Bounded mark-and-sweep across active Lua call frames. Each suspended
     /// caller retains its pre-instruction stack and prepared table targets;
     /// ancestor cell allocations are conservatively retained as extra roots.
@@ -4642,7 +4680,15 @@ pub fn execute_flow_capture_with_args<'a>(
         global_table: None,
         math_table: None,
     };
-    let result = execution.run(&program.instructions, program.slots, &[], &[], &[]);
+    let mut result = execution.run(&program.instructions, program.slots, &[], &[], &[]);
+    // Lua closes its state after evaluating the chunk, even after errors.
+    // Preserve the original script failure if closing also reaches a bound.
+    let shutdown = execution.finalize_on_shutdown();
+    if result.is_ok() {
+        if let Err(error) = shutdown {
+            result = Err(error);
+        }
+    }
     let error_text = match &result {
         Err(FlowError::Thrown(Value::String(handle))) => execution.strings.get(*handle).cloned(),
         Err(FlowError::Thrown(Value::Integer(value))) => Some(value.to_string().into_bytes()),
@@ -8039,6 +8085,33 @@ mod tests {
         let outcome = execute_flow_capture(&program, 25_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"true\n17\n");
+    }
+
+    #[test]
+    fn closing_owned_state_finalizes_live_tables_in_reverse_order() {
+        for (source, expected) in [
+            (
+                "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+                b"body\tA\tB\nclose\tB\nclose\tA\n".as_slice(),
+            ),
+            (
+                "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+                b"once\nbody\n".as_slice(),
+            ),
+            (
+                "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+                b"body\noriginal\n".as_slice(),
+            ),
+            (
+                "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+                b"body\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 100_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
     }
 
     #[test]

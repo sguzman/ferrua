@@ -294,6 +294,18 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    for source in [
+        "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+        "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+        "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+        "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
     for source in [
         "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
