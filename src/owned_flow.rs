@@ -100,6 +100,7 @@ pub enum Builtin {
     StringSub,
     StringByte,
     StringFind,
+    StringMatch,
     StringChar,
     StringLower,
     StringUpper,
@@ -153,6 +154,7 @@ const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"sub", Builtin::StringSub),
     (b"byte", Builtin::StringByte),
     (b"find", Builtin::StringFind),
+    (b"match", Builtin::StringMatch),
     (b"char", Builtin::StringChar),
     (b"lower", Builtin::StringLower),
     (b"upper", Builtin::StringUpper),
@@ -4788,33 +4790,46 @@ impl Execution<'_> {
                 "Lua pattern expressions in string.find are not implemented".into(),
             ));
         }
+        let Some(position) = self.literal_match_position(&source, &pattern, initial)? else {
+            return Ok(vec![Value::Nil]);
+        };
+        Ok(vec![
+            Value::Integer(position as i64 + 1),
+            Value::Integer((position + pattern.len()) as i64),
+        ])
+    }
+
+    /// Search for an exact byte sequence from a Lua 1-based initial index.
+    /// The result is a zero-based offset; all candidate comparisons are
+    /// charged to the shared VM step budget. Used by find and match.
+    fn literal_match_position(
+        &mut self,
+        source: &[u8],
+        pattern: &[u8],
+        initial: i64,
+    ) -> Result<Option<usize>, FlowError> {
         let start = Self::string_offset(initial, source.len() as i64).max(1);
         if start > source.len() as i64 + 1 {
-            return Ok(vec![Value::Nil]);
+            return Ok(None);
         }
         let offset = (start - 1) as usize;
         if pattern.is_empty() {
-            return Ok(vec![Value::Integer(start), Value::Integer(start - 1)]);
+            return Ok(Some(offset));
         }
         if pattern.len() > source.len() - offset {
-            return Ok(vec![Value::Nil]);
+            return Ok(None);
         }
-        // Charge each possible candidate before comparing it; host byte-slice
-        // scans must not bypass the shared bytecode instruction limit.
         for position in offset..=source.len() - pattern.len() {
             let cost = pattern.len().max(1);
             if self.steps.saturating_add(cost) > self.budget {
                 return Err(FlowError::StepBudgetExceeded);
             }
             self.steps += cost;
-            if source[position..].starts_with(&pattern) {
-                return Ok(vec![
-                    Value::Integer(position as i64 + 1),
-                    Value::Integer((position + pattern.len()) as i64),
-                ]);
+            if source[position..].starts_with(pattern) {
+                return Ok(Some(position));
             }
         }
-        Ok(vec![Value::Nil])
+        Ok(None)
     }
 
     /// Lua string offsets are one-based bytes; negatives count from the end.
@@ -5162,6 +5177,29 @@ impl Execution<'_> {
         }
         let text = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         match builtin {
+            Builtin::StringMatch => {
+                // A capture-free, literal Lua pattern returns exactly one
+                // string result, or one nil if no literal occurs.
+                let pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
+                if pattern.iter().any(|byte| b"^$()%.[]*+-?".contains(byte)) {
+                    return Err(FlowError::Unsupported(
+                        "Lua pattern expressions in string.match are not implemented".into(),
+                    ));
+                }
+                let initial = match args.get(2).copied() {
+                    Some(index) if index != Value::Nil => self
+                        .exact_integer_operand(index)
+                        .or_else(|_| self.integer_operand(index))?,
+                    _ => 1,
+                };
+                match self.literal_match_position(&text, &pattern, initial)? {
+                    Some(position) => self.intern_rooted_string(
+                        text[position..position + pattern.len()].to_vec(),
+                        args,
+                    ),
+                    None => Ok(Value::Nil),
+                }
+            }
             Builtin::StringLen => Ok(Value::Integer(text.len() as i64)),
             Builtin::StringLower | Builtin::StringUpper | Builtin::StringReverse => {
                 if self.steps.saturating_add(text.len()) > self.budget {
@@ -5759,7 +5797,8 @@ impl Execution<'_> {
                             | Builtin::StringLower
                             | Builtin::StringUpper
                             | Builtin::StringReverse
-                            | Builtin::StringRep => self.string_builtin(builtin, &args)?,
+                            | Builtin::StringRep
+                            | Builtin::StringMatch => self.string_builtin(builtin, &args)?,
                             Builtin::Utf8Char => self.utf8_char_builtin(&args)?,
                             Builtin::Utf8Offset => self.utf8_offset_builtin(&args)?,
                             Builtin::TableConcat => self.table_concat_builtin(&args)?,

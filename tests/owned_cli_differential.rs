@@ -330,6 +330,22 @@ fn owned_string_find_literal_subset_matches_lua54() {
 }
 
 #[test]
+fn owned_string_match_capture_free_literals_match_lua54() {
+    for source in [
+        "print(string.match('abcabc','bc'),string.match('abcabc','bc',3),string.match('abcabc','bc',-3))",
+        "print(string.match('abcdef','zzz')==nil,select('#',string.match('abcdef','zzz')),select('#',string.match('abc','b')))",
+        "print(string.match('abc','')=='',string.match('abc','',4)=='',string.match('abc','',5)==nil)",
+        "print(string.match('ab\\0cd','\\0c',1)=='\\0c',string.len(string.match('éé','é',2)))",
+        "print(string.match('aba','a',0),string.match('aba','a',-100),string.match('aba','a',4)==nil)",
+        "print(string.match(112233,22),string.match('x111',11,2),string.match('abcabc','bc','3'))",
+        "local m=string.match; string.match=function() return 17 end; print(string.match()); string.match=m; print(string.match('abc','b'))",
+        "local ok,s=pcall(string.match,'abc','b'); print(ok,s); print(pcall(string.match,'abc')); print(pcall(string.match,false,'a'))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
