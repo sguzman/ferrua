@@ -294,6 +294,28 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
 fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
     // Both the pinned production backend and Lua 5.4 suppress a nested GC
     // request from __gc and return one nil value in this calling context.

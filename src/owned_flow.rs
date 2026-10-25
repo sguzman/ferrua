@@ -8183,6 +8183,38 @@ mod tests {
     }
 
     #[test]
+    fn warn_controls_and_finalizer_errors_follow_lua54() {
+        for (source, stdout, stderr) in [
+            (
+                "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+                b"0\n".as_slice(),
+                b"Lua warning: hello world\nLua warning: restored\n".as_slice(),
+            ),
+            (
+                "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+                b"alive\n".as_slice(),
+                b"Lua warning: error in __gc metamethod (gc-failed)\n".as_slice(),
+            ),
+            (
+                "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+                b"body\n".as_slice(),
+                b"Lua warning: error in __gc metamethod (shutdown-failed)\n".as_slice(),
+            ),
+            (
+                "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+                b"alive\n".as_slice(),
+                b"".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 100_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, stdout, "{source}");
+            assert_eq!(outcome.stderr, stderr, "{source}");
+        }
+    }
+
+    #[test]
     fn finalizer_collectgarbage_suppression_has_one_nil_return_value() {
         for (source, expected) in [
             (
