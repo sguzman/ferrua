@@ -115,6 +115,32 @@ fn owned_math_atan_argument_label_matches_lua54_with_backend_alias_variation() {
 }
 
 #[test]
+fn owned_seeded_random_sequences_match_pinned_lua54() {
+    for source in [
+        "math.randomseed(123,-456); print(math.random(0),math.random(0),math.random(0),math.random(0))",
+        "local a,b=math.randomseed(0,0); print(a,b,select('#',math.randomseed(0,0))); print(math.random(1,9),math.random(1,9),math.random(-8,-2),math.random(math.mininteger,math.maxinteger))",
+        "math.randomseed(-1,-2); print(math.random(0),math.random(10),math.random(-11,-5),math.random(1,1))",
+        "math.randomseed(5,7); local a,b,c=math.random(),math.random(),math.random(); print(math.type(a),a>=0 and a<1,b>=0 and b<1,c>=0 and c<1); math.randomseed(5,7); print(a==math.random(),b==math.random(),c==math.random())",
+        "math.randomseed(3,4); local x=math.random(0); math.randomseed(3,4); print(x==math.random(0)); local a,b=math.randomseed(3,nil); print(a,b)",
+        "local ok,msg=pcall(math.random,2,1); print(ok,msg); print(pcall(math.random,1.5)); print(pcall(math.randomseed,nil)); local ok2=pcall(math.random,1,2,3); print(ok2)",
+        "local a,b=math.randomseed(); local x=math.random(0); math.randomseed(a,b); print(x==math.random(0),type(a),type(b))",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        let production = run_fer(false, source);
+        assert!(production.status.success(), "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
 fn owned_inverse_trig_exp_and_optional_log_base_match_lua54() {
     for source in [
         "print(math.type(math.exp(1)),math.type(math.log(8,2)),math.type(math.atan(1)),math.type(math.asin(0)),math.type(math.acos(0)))",

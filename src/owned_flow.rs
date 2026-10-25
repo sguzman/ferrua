@@ -87,6 +87,8 @@ pub enum Builtin {
     MathAsin,
     MathAcos,
     MathAtan,
+    MathRandom,
+    MathRandomSeed,
     StringLen,
     StringSub,
     StringByte,
@@ -126,6 +128,8 @@ const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"asin", Builtin::MathAsin),
     (b"acos", Builtin::MathAcos),
     (b"atan", Builtin::MathAtan),
+    (b"random", Builtin::MathRandom),
+    (b"randomseed", Builtin::MathRandomSeed),
 ];
 
 const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -1731,6 +1735,27 @@ struct GcFrameRoots {
     prepared: Vec<PendingTarget>,
 }
 
+// Lua 5.4.6's xoshiro256** generator, adapted using Rust's explicit
+// wrapping u64 arithmetic. Only seeded sequences are conformance fixtures.
+fn lua_random_next(state: &mut [u64; 4]) -> u64 {
+    let [a, b, c, d] = *state;
+    let result = b.wrapping_mul(5).rotate_left(7).wrapping_mul(9);
+    let mixed_c = c ^ a;
+    let mixed_d = d ^ b;
+    state[0] = a ^ mixed_d;
+    state[1] = b ^ mixed_c;
+    state[2] = mixed_c ^ (b << 17);
+    state[3] = mixed_d.rotate_left(45);
+    result
+}
+
+fn lua_random_seed(state: &mut [u64; 4], a: u64, b: u64) {
+    *state = [a, 0xff, b, 0];
+    for _ in 0..16 {
+        lua_random_next(state);
+    }
+}
+
 struct Execution<'a> {
     program: &'a FlowProgram,
     budget: usize,
@@ -1769,6 +1794,7 @@ struct Execution<'a> {
     globals: HashMap<usize, Value>,
     global_table: Option<usize>,
     math_table: Option<usize>,
+    random_state: [u64; 4],
     string_table: Option<usize>,
     table_library: Option<usize>,
 }
@@ -2640,6 +2666,121 @@ impl Execution<'_> {
         Err(FlowError::Thrown(value))
     }
 
+    /// Mimic the Lua 5.4 default weak seed without importing random crates.
+    /// This generator is explicitly not a cryptographic source.
+    fn weak_random_seeds(&self) -> (u64, u64) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
+        let second = (self as *const _ as usize as u64)
+            ^ ((now.subsec_nanos() as u64) << 32)
+            ^ (std::process::id() as u64);
+        (now.as_secs(), second)
+    }
+
+    /// Every rejection draw is charged to the shared owned VM budget.
+    fn draw_random(&mut self) -> Result<u64, FlowError> {
+        if self.steps >= self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += 1;
+        Ok(lua_random_next(&mut self.random_state))
+    }
+
+    /// Lua math.random uses unbiased rejection sampling rather than modulo.
+    fn math_random_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        let raw = self.draw_random()?;
+        if args.is_empty() {
+            let fraction = ((raw >> 11) as f64) * (1.0 / 9007199254740992.0);
+            return Ok(Value::Float(fraction.to_bits()));
+        }
+        if args.len() > 2 {
+            let message = self.intern_rooted_string(
+                b"wrong number of arguments".to_vec(),
+                args,
+            )?;
+            return Err(FlowError::Thrown(message));
+        }
+        let (low, up) = if args.len() == 1 {
+            let Value::Integer(up) =
+                self.checked_math_number("math.random", args, 0, true)?
+            else {
+                return Err(FlowError::InvalidBytecode);
+            };
+            if up == 0 {
+                return Ok(Value::Integer(raw as i64));
+            }
+            (1_i64, up)
+        } else {
+            let Value::Integer(low) =
+                self.checked_math_number("math.random", args, 0, true)?
+            else {
+                return Err(FlowError::InvalidBytecode);
+            };
+            let Value::Integer(up) =
+                self.checked_math_number("math.random", args, 1, true)?
+            else {
+                return Err(FlowError::InvalidBytecode);
+            };
+            (low, up)
+        };
+        if low > up {
+            let message = self.intern_rooted_string(
+                b"bad argument #1 to 'math.random' (interval is empty)".to_vec(),
+                args,
+            )?;
+            return Err(FlowError::Thrown(message));
+        }
+        let range = (up as u64).wrapping_sub(low as u64);
+        let sample = if range & range.wrapping_add(1) == 0 {
+            raw & range
+        } else {
+            let mut mask = range;
+            mask |= mask >> 1;
+            mask |= mask >> 2;
+            mask |= mask >> 4;
+            mask |= mask >> 8;
+            mask |= mask >> 16;
+            mask |= mask >> 32;
+            let mut candidate = raw;
+            loop {
+                let projected = candidate & mask;
+                if projected <= range {
+                    break projected;
+                }
+                candidate = self.draw_random()?;
+            }
+        };
+        Ok(Value::Integer((sample.wrapping_add(low as u64)) as i64))
+    }
+
+    /// Both seed components are observable Lua return values.
+    fn math_randomseed_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let (first, second) = if args.is_empty() {
+            let (first, second) = self.weak_random_seeds();
+            (first as i64, second as i64)
+        } else {
+            let Value::Integer(first) =
+                self.checked_math_number("math.randomseed", args, 0, true)?
+            else {
+                return Err(FlowError::InvalidBytecode);
+            };
+            let second = if args.get(1).is_some_and(|v| *v != Value::Nil) {
+                let Value::Integer(second) =
+                    self.checked_math_number("math.randomseed", args, 1, true)?
+                else {
+                    return Err(FlowError::InvalidBytecode);
+                };
+                second
+            } else {
+                0
+            };
+            (first, second)
+        };
+        lua_random_seed(&mut self.random_state, first as u64, second as u64);
+        Ok(vec![Value::Integer(first), Value::Integer(second)])
+    }
+
     /// A small first-party Lua 5.4 numeric library. Unsupported math
     /// functions remain absent rather than falling back to another runtime.
     fn math_builtin(&mut self, builtin: Builtin, args: &[Value]) -> Result<Value, FlowError> {
@@ -2732,6 +2873,7 @@ impl Execution<'_> {
                 Ok(Value::Float(result.to_bits()))
             }
 
+            Builtin::MathRandom => self.math_random_builtin(args),
             Builtin::MathExp
             | Builtin::MathLog
             | Builtin::MathAsin
@@ -3867,6 +4009,9 @@ impl Execution<'_> {
             }
             // Multi-result math.modf must precede the generic math guard.
             Value::Builtin(Builtin::MathModf) => self.math_modf_builtin(&arguments),
+            Value::Builtin(Builtin::MathRandomSeed) => {
+                self.math_randomseed_builtin(&arguments)
+            }
             Value::Builtin(builtin) if MATH_GLOBALS.iter().any(|&(_, item)| item == builtin) => {
                 Ok(vec![self.math_builtin(builtin, &arguments)?])
             }
@@ -4891,6 +5036,8 @@ impl Execution<'_> {
                                     | Builtin::MathAsin
                                     | Builtin::MathAcos
                                     | Builtin::MathAtan
+                                    | Builtin::MathRandom
+                                    | Builtin::MathRandomSeed
                                     | Builtin::StringChar
                                     | Builtin::TablePack
                                     | Builtin::CollectGarbage
@@ -4918,6 +5065,7 @@ impl Execution<'_> {
                                 | Builtin::TableInsert
                                 | Builtin::TableSort
                                 | Builtin::MathModf
+                                | Builtin::MathRandomSeed
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
@@ -4941,6 +5089,7 @@ impl Execution<'_> {
                                 Builtin::TableInsert => self.table_insert_builtin(&args)?,
                                 Builtin::TableSort => self.table_sort_builtin(&args)?,
                                 Builtin::MathModf => self.math_modf_builtin(&args)?,
+                                Builtin::MathRandomSeed => self.math_randomseed_builtin(&args)?,
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
@@ -5004,7 +5153,8 @@ impl Execution<'_> {
                             | Builtin::TableUnpack
                             | Builtin::TableInsert
                             | Builtin::TableSort
-                            | Builtin::MathModf => {
+                            | Builtin::MathModf
+                            | Builtin::MathRandomSeed => {
                                 unreachable!(
                                     "iteration/selection builtins handled as multiple results"
                                 )
@@ -5030,7 +5180,8 @@ impl Execution<'_> {
                             | Builtin::MathLog
                             | Builtin::MathAsin
                             | Builtin::MathAcos
-                            | Builtin::MathAtan => self.math_builtin(builtin, &args)?,
+                            | Builtin::MathAtan
+                            | Builtin::MathRandom => self.math_builtin(builtin, &args)?,
                             Builtin::StringLen
                             | Builtin::StringSub
                             | Builtin::StringChar
@@ -5694,9 +5845,14 @@ pub fn execute_flow_capture_with_args<'a>(
         globals: HashMap::new(),
         global_table: None,
         math_table: None,
+        random_state: [0, 0xff, 0, 0],
         string_table: None,
         table_library: None,
     };
+    // Lua's default seed is intentionally weak/noncryptographic; explicit
+    // randomseed(x,y) is deterministic, and has upstream Lua 5.4 parity tests.
+    let (seed_a, seed_b) = execution.weak_random_seeds();
+    lua_random_seed(&mut execution.random_state, seed_a, seed_b);
     let mut result = execution.run(&program.instructions, program.slots, &[], &[], &[]);
     // Lua closes its state after evaluating the chunk, even after errors.
     // Preserve the original script failure if closing also reaches a bound.
@@ -10176,6 +10332,20 @@ mod tests {
         assert_eq!(
             outcome.stdout,
             b"true\tfloat\ttrue\ttrue\ttrue\ntrue\ttrue\ntrue\tfalse\ttrue\ttrue\nfalse\tfalse\tfalse\n"
+        );
+    }
+
+    #[test]
+    fn seeded_math_random_uses_lua_54_integer_and_float_semantics() {
+        let program = compile_flow_chunk(
+            "local a,b=math.randomseed(123,-456); print(a,b,select('#',math.randomseed(123,-456))); local x=math.random(0); local y=math.random(1,9); local z=math.random(); print(math.type(x),y>=1 and y<=9,math.type(z),z>=0 and z<1); math.randomseed(123,-456); print(x==math.random(0),y==math.random(1,9),z==math.random()); local p,q=math.randomseed(1,nil); print(p,q); print(math.random(1,1),math.type(math.random(0))); local ok=pcall(math.random,2,1); print(ok)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 10000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(
+            outcome.stdout,
+            b"123\t-456\t2\ninteger\ttrue\tfloat\ttrue\ntrue\ttrue\ttrue\n1\t0\n1\tinteger\nfalse\n"
         );
     }
 
