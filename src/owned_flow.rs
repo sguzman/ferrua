@@ -3280,7 +3280,10 @@ impl Execution<'_> {
             // can suspend this frame after popping operands from its stack.
             // Unlike borrowed Rust pointers, these owned roots remain valid
             // while nested execution mutates the heap.
-            let roots = self.gc_frame_roots.last_mut().ok_or(FlowError::InvalidBytecode)?;
+            let roots = self
+                .gc_frame_roots
+                .last_mut()
+                .ok_or(FlowError::InvalidBytecode)?;
             roots.stack.clear();
             roots.stack.extend_from_slice(&stack);
             roots.prepared.clear();
