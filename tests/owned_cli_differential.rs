@@ -284,7 +284,15 @@ fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
 
 #[test]
 fn owned_weak_mode_nul_termination_matches_lua54_6() {
-    for mode in ["v\\0k", "k\\0v", "kv\\0x", "x\\0kv"] {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
         let source = format!(
             "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
              do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
@@ -292,7 +300,19 @@ fn owned_weak_mode_nul_termination_matches_lua54_6() {
              local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
              print(key_gone,w[1]==nil)"
         );
-        assert_parity(&source, true);
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
     }
 }
 
