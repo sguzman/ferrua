@@ -891,11 +891,11 @@
   - [x] Preserve strong-key/weak-value, weak-key/strong-value, double-weak and ordinary table behavior across five diverse modes — src/owned_flow.rs: gc_weak_mode_recognizes_repeated_flags_and_extra_characters
   - [x] Require upstream Lua 5.4 differential parity plus successful Linux, Rust 1.96 and downstream CI — GitHub Actions 40220982279: all five jobs passed on 8b7b83c24e0a745be3ff8d79b309a74d7175b9f7; tests/owned_cli_differential.rs: owned_weak_mode_flag_characters_match_lua54
   - [x] Synchronize README, owned-engine documentation, ledger and generated roadmap with green CI — GitHub Actions 40221252193: all five jobs passed on f1d7f82e864482de87dbe71aee00846964d79af6; README, owned-engine docs, machine ledger and generated roadmap accepted
-- 🪄 **T465** Verify callable-table Lua finalizers through explicit GC and shutdown — `████████░░ 75%`
+- 🪄 **T465** Verify callable-table Lua finalizers through explicit GC and shutdown — `██████████ 100%`
   - [x] Exercise __gc finalizers that are tables whose own metatable supplies a callable __call method — src/owned_flow.rs: gc_callable_table_finalizers_follow_lua54_registration_and_shutdown, explicit collector case
   - [x] Check callback receiver/argument propagation, state shutdown, and changed __gc values after registration — src/owned_flow.rs: gc_callable_table_finalizers_follow_lua54_registration_and_shutdown, three scenarios
   - [x] Require upstream Lua 5.4 exact stdout parity, Rust unit tests, Rust 1.96 compatibility and downstream CI — GitHub Actions 40221523648: five successful jobs on 6d7e48649dcbc4ba47fb1c19dcd91e4c4dec4376; tests/owned_cli_differential.rs: owned_callable_table_finalizers_match_lua54
-  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine docs under passing CI
+  - [x] Synchronize machine ledger, generated roadmap, README and owned-engine docs under passing CI — GitHub Actions 40221747885: all five jobs passed on 45f08bd1d3611ed7328b1020398690d7c0e1e123, including README, owned-engine docs, ledger and generated roadmap
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1037,5 +1037,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 99%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 
