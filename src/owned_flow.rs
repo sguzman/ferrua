@@ -4328,7 +4328,8 @@ impl Execution<'_> {
             return Err(FlowError::TypeError);
         }
         let reported_length = self.length_with_metatable(target)?;
-        let length = self.exact_integer_operand(reported_length)
+        let length = self
+            .exact_integer_operand(reported_length)
             .or_else(|_| self.integer_operand(reported_length))?;
         let start = match args.get(start_argument).copied() {
             Some(value) if value != Value::Nil => self
