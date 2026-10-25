@@ -295,13 +295,46 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 
 #[test]
 fn owned_lua_state_shutdown_finalizers_match_lua54() {
-    for source in [
-        "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
-        "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
-        "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
-        "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
-    ] {
-        assert_parity(source, true);
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
     }
 }
 
