@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 192 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 193 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -886,6 +886,11 @@
   - [x] Preserve nonfatal script execution and bounded warning output when invalid __gc methods are collected — src/owned_flow.rs: invalid_lua_gc_methods_warn_with_call_type_diagnostics
   - [x] Require exact Lua 5.4 stdout/stderr parity including the metamethod __gc context suffix and five-job green CI — GitHub Actions 40220339912: five jobs passed on ce0b79fe93bf1d7184c49b014489dfbcd18f6a21; tests/owned_cli_differential.rs: owned_noncallable_finalizer_warnings_match_lua54
   - [x] Synchronize README, engine docs, machine-readable ledger and generated roadmap under passing CI — GitHub Actions 40220570576: all five jobs passed on c391622f6815bb077ccc66ff053b490855c90709; README, engine documentation, machine ledger and generated roadmap accepted
+- 🔤 **T464** Interpret Lua weak-table mode characters as independent flags — `████████░░ 75%`
+  - [x] Apply k/v flag presence anywhere in __mode, including repeats and unrelated characters — src/owned_flow.rs: table_weakness reads mode.contains(k/v) independently
+  - [x] Preserve strong-key/weak-value, weak-key/strong-value, double-weak and ordinary table behavior across five diverse modes — src/owned_flow.rs: gc_weak_mode_recognizes_repeated_flags_and_extra_characters
+  - [x] Require upstream Lua 5.4 differential parity plus successful Linux, Rust 1.96 and downstream CI — GitHub Actions 40220982279: all five jobs passed on 8b7b83c24e0a745be3ff8d79b309a74d7175b9f7; tests/owned_cli_differential.rs: owned_weak_mode_flag_characters_match_lua54
+  - [ ] Synchronize README, owned-engine documentation, ledger and generated roadmap with green CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1027,5 +1032,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 99%`
 
