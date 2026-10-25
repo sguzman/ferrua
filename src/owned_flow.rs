@@ -3767,6 +3767,8 @@ impl Execution<'_> {
             Value::Builtin(Builtin::SetMetatable) => {
                 Ok(vec![self.setmetatable_builtin(&arguments)?])
             }
+            // Multi-result math.modf must precede the generic math guard.
+            Value::Builtin(Builtin::MathModf) => self.math_modf_builtin(&arguments),
             Value::Builtin(builtin) if MATH_GLOBALS.iter().any(|&(_, item)| item == builtin) => {
                 Ok(vec![self.math_builtin(builtin, &arguments)?])
             }
@@ -3779,7 +3781,6 @@ impl Execution<'_> {
             }
             Value::Builtin(Builtin::TableMove) => Ok(vec![self.table_move_builtin(&arguments)?]),
             Value::Builtin(Builtin::TableSort) => self.table_sort_builtin(&arguments),
-            Value::Builtin(Builtin::MathModf) => self.math_modf_builtin(&arguments),
             Value::Builtin(Builtin::TableConcat) => {
                 Ok(vec![self.table_concat_builtin(&arguments)?])
             }
