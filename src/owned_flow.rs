@@ -82,6 +82,11 @@ pub enum Builtin {
     MathTan,
     MathRad,
     MathDeg,
+    MathExp,
+    MathLog,
+    MathAsin,
+    MathAcos,
+    MathAtan,
     StringLen,
     StringSub,
     StringByte,
@@ -116,6 +121,11 @@ const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"tan", Builtin::MathTan),
     (b"rad", Builtin::MathRad),
     (b"deg", Builtin::MathDeg),
+    (b"exp", Builtin::MathExp),
+    (b"log", Builtin::MathLog),
+    (b"asin", Builtin::MathAsin),
+    (b"acos", Builtin::MathAcos),
+    (b"atan", Builtin::MathAtan),
 ];
 
 const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -2721,6 +2731,55 @@ impl Execution<'_> {
                 };
                 Ok(Value::Float(result.to_bits()))
             }
+
+            Builtin::MathExp
+            | Builtin::MathLog
+            | Builtin::MathAsin
+            | Builtin::MathAcos
+            | Builtin::MathAtan => {
+                let function = match builtin {
+                    Builtin::MathExp => "math.exp",
+                    Builtin::MathLog => "math.log",
+                    Builtin::MathAsin => "math.asin",
+                    Builtin::MathAcos => "math.acos",
+                    Builtin::MathAtan => "math.atan",
+                    _ => return Err(FlowError::InvalidBytecode),
+                };
+                let input = self.checked_math_number(function, args, 0, false)?;
+                let number = match input {
+                    Value::Integer(number) => number as f64,
+                    Value::Float(bits) => f64::from_bits(bits),
+                    _ => return Err(FlowError::InvalidBytecode),
+                };
+                let second = match builtin {
+                    Builtin::MathAtan if args.get(1).is_some() => {
+                        Some(self.checked_math_number(function, args, 1, false)?)
+                    }
+                    Builtin::MathLog if args.get(1).is_some_and(|v| *v != Value::Nil) => {
+                        Some(self.checked_math_number(function, args, 1, false)?)
+                    }
+                    _ => None,
+                };
+                let second = second.map(|number| match number {
+                    Value::Integer(value) => value as f64,
+                    Value::Float(bits) => f64::from_bits(bits),
+                    _ => unreachable!("checked Lua math number"),
+                });
+                let result = match builtin {
+                    Builtin::MathExp => number.exp(),
+                    Builtin::MathAsin => number.asin(),
+                    Builtin::MathAcos => number.acos(),
+                    Builtin::MathAtan => number.atan2(second.unwrap_or(1.0)),
+                    Builtin::MathLog => match second {
+                        None => number.ln(),
+                        Some(2.0) => number.log2(),
+                        Some(10.0) => number.log10(),
+                        Some(base) => number.ln() / base.ln(),
+                    },
+                    _ => return Err(FlowError::InvalidBytecode),
+                };
+                Ok(Value::Float(result.to_bits()))
+            }
             Builtin::MathAbs => match self.arithmetic_operand(first)? {
                 Value::Integer(number) => Ok(Value::Integer(number.wrapping_abs())),
                 Value::Float(bits) => Ok(Value::Float(f64::from_bits(bits).abs().to_bits())),
@@ -4827,6 +4886,11 @@ impl Execution<'_> {
                                     | Builtin::MathTan
                                     | Builtin::MathRad
                                     | Builtin::MathDeg
+                                    | Builtin::MathExp
+                                    | Builtin::MathLog
+                                    | Builtin::MathAsin
+                                    | Builtin::MathAcos
+                                    | Builtin::MathAtan
                                     | Builtin::StringChar
                                     | Builtin::TablePack
                                     | Builtin::CollectGarbage
@@ -4961,7 +5025,12 @@ impl Execution<'_> {
                             | Builtin::MathCos
                             | Builtin::MathTan
                             | Builtin::MathRad
-                            | Builtin::MathDeg => self.math_builtin(builtin, &args)?,
+                            | Builtin::MathDeg
+                            | Builtin::MathExp
+                            | Builtin::MathLog
+                            | Builtin::MathAsin
+                            | Builtin::MathAcos
+                            | Builtin::MathAtan => self.math_builtin(builtin, &args)?,
                             Builtin::StringLen
                             | Builtin::StringSub
                             | Builtin::StringChar
@@ -10107,6 +10176,20 @@ mod tests {
         assert_eq!(
             outcome.stdout,
             b"true\tfloat\ttrue\ttrue\ttrue\ntrue\ttrue\ntrue\tfalse\ttrue\ttrue\nfalse\tfalse\tfalse\n"
+        );
+    }
+
+    #[test]
+    fn math_inverse_trig_exponents_and_optional_base_log_obey_lua_values() {
+        let program = compile_flow_chunk(
+            "local e=1e-10; print(math.type(math.exp(1)),math.type(math.log(8,2)),math.type(math.atan(1)),math.type(math.asin(0)),math.type(math.acos(0))); print(math.abs(math.exp(0)-1)<e,math.abs(math.log(math.exp(1))-1)<e,math.abs(math.log(100,10)-2)<e,math.abs(math.log(8,2)-3)<e); print(math.abs(math.asin(1)-math.pi/2)<e,math.abs(math.acos(0)-math.pi/2)<e,math.abs(math.atan(1)-math.pi/4)<e,math.abs(math.atan(0,-1)-math.pi)<e); print(math.log(-1)~=math.log(-1),math.asin(2)~=math.asin(2),math.acos(2)~=math.acos(2),math.exp(math.huge)==math.huge); local ok,value=pcall(math.log,'100',10); print(ok,math.abs(value-2)<e); print(pcall(math.exp,false)); print(pcall(math.atan,0,false))",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 10000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(
+            outcome.stdout,
+            b"float\\tfloat\\tfloat\\tfloat\\tfloat\\ntrue\\ttrue\\ttrue\\ttrue\\ntrue\\ttrue\\ttrue\\ttrue\\ntrue\\ttrue\\ttrue\\ttrue\\ntrue\\ttrue\\nfalse\\tbad argument #1 to 'math.exp' (number expected, got boolean)\\nfalse\\tbad argument #2 to 'math.atan' (number expected, got boolean)\\n"
         );
     }
 
