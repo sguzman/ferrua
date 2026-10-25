@@ -339,7 +339,7 @@ fn owned_string_match_capture_free_literals_match_lua54() {
         "print(string.match('aba','a',0),string.match('aba','a',-100),string.match('aba','a',4)==nil)",
         "print(string.match(112233,22),string.match('x111',11,2),string.match('abcabc','bc','3'))",
         "local m=string.match; string.match=function() return 17 end; print(string.match()); string.match=m; print(string.match('abc','b'))",
-        "local ok,s=pcall(string.match,'abc','b'); print(ok,s); print(pcall(string.match,'abc')); print(pcall(string.match,false,'a'))",
+        "local ok,s=pcall(string.match,'abc','b'); print(ok,s); local a,x=pcall(string.match,'abc'); local b,y=pcall(string.match,false,'a'); print(a,type(x),b,type(y))",
     ] {
         assert_parity(source, true);
     }
