@@ -307,6 +307,36 @@ fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
 }
 
 #[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
 fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
     assert_parity(
         "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
