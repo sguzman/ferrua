@@ -460,6 +460,24 @@ fn owned_lua_pattern_nested_balanced_delimiters_match_lua54() {
 }
 
 #[test]
+fn owned_lua_pattern_substring_and_position_captures_match_lua54() {
+    for source in [
+        "local a,b=string.match('abc','(a)(b)'); print(a,b,select('#',string.match('abc','(a)(b)')))",
+        "local x,y,a,b=string.find('abc','(a)(b)'); print(x,y,a,b)",
+        "print(string.match('abc','()'),string.find('abc','()'))",
+        "local a,b=string.match('abc','(a(b))'); print(a,b); print(string.find('abc','(a(b))'))",
+        "print(string.match('a123b','(%d+)'),string.match('abc','(z)')==nil)",
+        "local x,y=string.match('xy','()%a+()'); print(x,y)",
+        "print(string.match('abc','(a)bc'),string.match('abc','(a)(b)c',2)==nil)",
+        "local x,y=string.match('ab\\0cd','(ab)(\\0c)'); print(x=='ab',y=='\\0c')",
+        "local a=pcall(string.match,'abc','('); local b=pcall(string.find,'abc','a)'); print(a,b)",
+        "print(string.find('abc','(a)',1,true)==nil,string.match('abc','a')=='a')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",

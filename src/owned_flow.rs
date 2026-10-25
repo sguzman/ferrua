@@ -4141,6 +4141,7 @@ impl Execution<'_> {
             }
             Value::Builtin(Builtin::StringByte) => self.string_byte_builtin(&arguments),
             Value::Builtin(Builtin::StringFind) => self.string_find_literal_builtin(&arguments),
+            Value::Builtin(Builtin::StringMatch) => self.string_match_builtin(&arguments),
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
             Value::Builtin(Builtin::TablePack) => Ok(vec![self.table_pack_builtin(&arguments)?]),
             Value::Builtin(Builtin::TableInsert) => self.table_insert_builtin(&arguments),
@@ -4780,14 +4781,66 @@ impl Execution<'_> {
             _ => 1,
         };
         let plain = args.get(3).copied().unwrap_or(Value::Nil).truthy();
-        let Some((begin, end)) = self.simple_pattern_match(&source, &pattern, initial, plain)?
+        let Some((begin, end, captures)) =
+            self.simple_pattern_match(&source, &pattern, initial, plain)?
         else {
             return Ok(vec![Value::Nil]);
         };
-        Ok(vec![
-            Value::Integer(begin as i64 + 1),
-            Value::Integer(end as i64),
-        ])
+        let mut values = vec![Value::Integer(begin as i64 + 1), Value::Integer(end as i64)];
+        values.extend(self.simple_pattern_capture_values(&source, &captures, args)?);
+        Ok(values)
+    }
+
+    /// Root each captured byte string across subsequent GC-capable interns.
+    fn simple_pattern_capture_values(
+        &mut self,
+        source: &[u8],
+        captures: &[(usize, usize, bool)],
+        args: &[Value],
+    ) -> Result<Vec<Value>, FlowError> {
+        self.gc_temporary_roots.push(args.to_vec());
+        let result = (|| {
+            let mut values = Vec::with_capacity(captures.len());
+            for &(start, end, is_position) in captures {
+                let value = if is_position {
+                    Value::Integer(start as i64 + 1)
+                } else {
+                    let roots = self
+                        .gc_temporary_roots
+                        .last()
+                        .ok_or(FlowError::InvalidBytecode)?
+                        .clone();
+                    self.intern_rooted_string(source[start..end].to_vec(), &roots)?
+                };
+                self.gc_temporary_roots
+                    .last_mut()
+                    .ok_or(FlowError::InvalidBytecode)?
+                    .push(value);
+                values.push(value);
+            }
+            Ok(values)
+        })();
+        self.gc_temporary_roots.pop();
+        result
+    }
+
+    /// Match Lua byte patterns with multiple results for each capture.
+    fn string_match_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let source = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
+        let pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
+        let initial = match args.get(2).copied() {
+            Some(index) if index != Value::Nil => self
+                .exact_integer_operand(index)
+                .or_else(|_| self.integer_operand(index))?,
+            _ => 1,
+        };
+        match self.simple_pattern_match(&source, &pattern, initial, false)? {
+            Some((begin, end, captures)) if captures.is_empty() => {
+                Ok(vec![self.intern_rooted_string(source[begin..end].to_vec(), args)?])
+            }
+            Some((_, _, captures)) => self.simple_pattern_capture_values(&source, &captures, args),
+            None => Ok(vec![Value::Nil]),
+        }
     }
 
     /// Search a bounded byte string using only the implemented Lua-pattern
@@ -4801,7 +4854,7 @@ impl Execution<'_> {
         pattern: &[u8],
         initial: i64,
         plain: bool,
-    ) -> Result<Option<(usize, usize)>, FlowError> {
+    ) -> Result<Option<(usize, usize, Vec<(usize, usize, bool)>)>, FlowError> {
         let mut body = pattern;
         let mut anchored_start = false;
         let mut anchored_end = false;
@@ -4834,6 +4887,9 @@ impl Execution<'_> {
             Bracket(Vec<u8>),
             Frontier(Vec<u8>),
             Balanced(u8, u8),
+            CaptureOpen,
+            CaptureClose,
+            CapturePosition,
         }
         if self.steps.saturating_add(body.len()) > self.budget {
             return Err(FlowError::StepBudgetExceeded);
@@ -4841,8 +4897,30 @@ impl Execution<'_> {
         self.steps += body.len();
         let mut atoms = Vec::with_capacity(body.len());
         let mut index = 0;
+        let mut captures = 0usize;
+        let mut opened = 0usize;
         while index < body.len() {
-            let atom = if !plain && body[index] == b'[' {
+            let atom = if !plain && body[index] == b'(' {
+                captures += 1;
+                if captures > 32 {
+                    return Err(FlowError::TooLarge);
+                }
+                if body.get(index + 1) == Some(&b')') {
+                    index += 2;
+                    Atom::CapturePosition
+                } else {
+                    opened += 1;
+                    index += 1;
+                    Atom::CaptureOpen
+                }
+            } else if !plain && body[index] == b')' {
+                if opened == 0 {
+                    return Err(FlowError::TypeError);
+                }
+                opened -= 1;
+                index += 1;
+                Atom::CaptureClose
+            } else if !plain && body[index] == b'[' {
                 let start = index + 1;
                 let mut cursor = start;
                 if body.get(cursor) == Some(&b'^') {
@@ -4910,7 +4988,7 @@ impl Execution<'_> {
                 }
             } else {
                 let value = body[index];
-                if !plain && b"()*+-?]".contains(&value) {
+                if !plain && b"*+-?]".contains(&value) {
                     return Err(FlowError::Unsupported(
                         "Lua captures and malformed repetition are not implemented".into(),
                     ));
@@ -4925,12 +5003,24 @@ impl Execution<'_> {
             } else {
                 0
             };
-            if repetition != 0 && matches!(&atom, Atom::Frontier(_) | Atom::Balanced(_, _)) {
+            if repetition != 0
+                && matches!(
+                    &atom,
+                    Atom::Frontier(_)
+                        | Atom::Balanced(_, _)
+                        | Atom::CaptureOpen
+                        | Atom::CaptureClose
+                        | Atom::CapturePosition
+                )
+            {
                 return Err(FlowError::Unsupported(
                     "Lua structural-pattern repetition is not implemented".into(),
                 ));
             }
             atoms.push((atom, repetition));
+        }
+        if opened != 0 {
+            return Err(FlowError::TypeError);
         }
         let start = Self::string_offset(initial, source.len() as i64).max(1);
         if start > source.len() as i64 + 1 {
@@ -4944,19 +5034,46 @@ impl Execution<'_> {
             self.steps += 1;
             // Explicit DFS replaces recursive Lua pattern backtracking.
             // Branch order is greedy for *, + and ?, lazy for -.
-            let mut states = vec![(0usize, begin)];
-            while let Some((atom_index, position)) = states.pop() {
+            let mut states = vec![(0usize, begin, Vec::new())];
+            while let Some((atom_index, position, captures)) = states.pop() {
                 if self.steps >= self.budget {
                     return Err(FlowError::StepBudgetExceeded);
                 }
                 self.steps += 1;
                 if atom_index == atoms.len() {
                     if !anchored_end || position == source.len() {
-                        return Ok(Some((begin, position)));
+                        return Ok(Some((begin, position, captures)));
                     }
                     continue;
                 }
                 let (atom, repetition) = &atoms[atom_index];
+                match atom {
+                    Atom::CapturePosition => {
+                        let mut next = captures;
+                        next.push((position, position, true));
+                        states.push((atom_index + 1, position, next));
+                        continue;
+                    }
+                    Atom::CaptureOpen => {
+                        let mut next = captures;
+                        next.push((position, usize::MAX, false));
+                        states.push((atom_index + 1, position, next));
+                        continue;
+                    }
+                    Atom::CaptureClose => {
+                        let mut next = captures;
+                        let opened = next
+                            .iter()
+                            .rposition(|&(_, end, is_position)| {
+                                end == usize::MAX && !is_position
+                            })
+                            .ok_or(FlowError::InvalidBytecode)?;
+                        next[opened].1 = position;
+                        states.push((atom_index + 1, position, next));
+                        continue;
+                    }
+                    _ => {}
+                }
                 if let Atom::Frontier(contents) = atom {
                     let previous = if position == 0 {
                         0
@@ -4967,7 +5084,7 @@ impl Execution<'_> {
                     if !Self::simple_pattern_bracket_matches(contents, previous)
                         && Self::simple_pattern_bracket_matches(contents, next)
                     {
-                        states.push((atom_index + 1, position));
+                        states.push((atom_index + 1, position, captures.clone()));
                     }
                     continue;
                 }
@@ -4984,7 +5101,7 @@ impl Execution<'_> {
                         if byte == *closing {
                             depth -= 1;
                             if depth == 0 {
-                                states.push((atom_index + 1, cursor + 1));
+                                states.push((atom_index + 1, cursor + 1, captures.clone()));
                                 break;
                             }
                         } else if byte == *opening {
@@ -5005,20 +5122,24 @@ impl Execution<'_> {
                             Atom::Bracket(contents) => {
                                 Self::simple_pattern_bracket_matches(contents, source[at])
                             }
-                            Atom::Frontier(_) | Atom::Balanced(_, _) => false,
+                            Atom::Frontier(_)
+                            | Atom::Balanced(_, _)
+                            | Atom::CaptureOpen
+                            | Atom::CaptureClose
+                            | Atom::CapturePosition => false,
                         }
                 };
                 match *repetition {
                     0 => {
                         if matches(position) {
-                            states.push((atom_index + 1, position + 1));
+                            states.push((atom_index + 1, position + 1, captures.clone()));
                         }
                     }
                     b'?' => {
                         // Stack is LIFO: evaluate consuming before skipping.
-                        states.push((atom_index + 1, position));
+                        states.push((atom_index + 1, position, captures.clone()));
                         if matches(position) {
-                            states.push((atom_index + 1, position + 1));
+                            states.push((atom_index + 1, position + 1, captures.clone()));
                         }
                     }
                     b'*' | b'+' | b'-' => {
@@ -5041,11 +5162,11 @@ impl Execution<'_> {
                             }
                             if *repetition == b'-' {
                                 for at in (minimum..=maximum).rev() {
-                                    states.push((atom_index + 1, at));
+                                    states.push((atom_index + 1, at, captures.clone()));
                                 }
                             } else {
                                 for at in minimum..=maximum {
-                                    states.push((atom_index + 1, at));
+                                    states.push((atom_index + 1, at, captures.clone()));
                                 }
                             }
                         }
@@ -5461,23 +5582,6 @@ impl Execution<'_> {
         }
         let text = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         match builtin {
-            Builtin::StringMatch => {
-                // Without captures, Lua returns the entire matched byte
-                // slice as one string, including embedded NULs.
-                let pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
-                let initial = match args.get(2).copied() {
-                    Some(index) if index != Value::Nil => self
-                        .exact_integer_operand(index)
-                        .or_else(|_| self.integer_operand(index))?,
-                    _ => 1,
-                };
-                match self.simple_pattern_match(&text, &pattern, initial, false)? {
-                    Some((begin, end)) => {
-                        self.intern_rooted_string(text[begin..end].to_vec(), args)
-                    }
-                    None => Ok(Value::Nil),
-                }
-            }
             Builtin::StringLen => Ok(Value::Integer(text.len() as i64)),
             Builtin::StringLower | Builtin::StringUpper | Builtin::StringReverse => {
                 if self.steps.saturating_add(text.len()) > self.budget {
@@ -5927,6 +6031,7 @@ impl Execution<'_> {
                                 | Builtin::Xpcall
                                 | Builtin::StringByte
                                 | Builtin::StringFind
+                                | Builtin::StringMatch
                                 | Builtin::Utf8Len
                                 | Builtin::Utf8Codepoint
                                 | Builtin::Utf8Codes
@@ -5957,6 +6062,7 @@ impl Execution<'_> {
                                 Builtin::IpairsIterator => self.ipairs_iterator(&args)?,
                                 Builtin::StringByte => self.string_byte_builtin(&args)?,
                                 Builtin::StringFind => self.string_find_literal_builtin(&args)?,
+                                Builtin::StringMatch => self.string_match_builtin(&args)?,
                                 Builtin::Utf8Len => self.utf8_len_builtin(&args)?,
                                 Builtin::Utf8Codepoint => self.utf8_codepoint_builtin(&args)?,
                                 Builtin::Utf8Codes => self.utf8_codes_builtin(&args)?,
@@ -6032,6 +6138,7 @@ impl Execution<'_> {
                             | Builtin::IpairsIterator
                             | Builtin::StringByte
                             | Builtin::StringFind
+                            | Builtin::StringMatch
                             | Builtin::Utf8Len
                             | Builtin::Utf8Codepoint
                             | Builtin::Utf8Codes
@@ -6075,8 +6182,7 @@ impl Execution<'_> {
                             | Builtin::StringLower
                             | Builtin::StringUpper
                             | Builtin::StringReverse
-                            | Builtin::StringRep
-                            | Builtin::StringMatch => self.string_builtin(builtin, &args)?,
+                            | Builtin::StringRep => self.string_builtin(builtin, &args)?,
                             Builtin::Utf8Char => self.utf8_char_builtin(&args)?,
                             Builtin::Utf8Offset => self.utf8_offset_builtin(&args)?,
                             Builtin::TableConcat => self.table_concat_builtin(&args)?,
