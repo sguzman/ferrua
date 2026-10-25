@@ -7894,7 +7894,7 @@ mod tests {
                 b"string\tfloat\t123456789\n".as_slice(),
             ),
             (
-                "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(pcall(type,hold),pcall(math.type,7),hold)",
+                "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
                 b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
             ),
         ];
