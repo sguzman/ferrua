@@ -283,6 +283,20 @@ fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
 }
 
 #[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
 fn owned_weak_value_gc_matches_upstream_lua54() {
     for source in [
         "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",

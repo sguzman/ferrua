@@ -1839,12 +1839,9 @@ impl Execution<'_> {
             return Ok((false, false));
         };
         let mode = self.strings.get(*value).ok_or(FlowError::InvalidBytecode)?;
-        Ok(match mode.as_slice() {
-            b"k" => (true, false),
-            b"v" => (false, true),
-            b"kv" | b"vk" => (true, true),
-            _ => (false, false),
-        })
+        // Lua 5.4 treats 'k' and 'v' as flags anywhere in __mode.
+        // Duplicate letters and unrelated characters are ignored.
+        Ok((mode.contains(&b'k'), mode.contains(&b'v')))
     }
 
     /// The __gc field is sampled for registration when a metatable is
@@ -8517,6 +8514,29 @@ mod tests {
         let outcome = execute_flow_capture(&program, 5_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"22222\t33333\n");
+    }
+
+    #[test]
+    fn gc_weak_mode_recognizes_repeated_flags_and_extra_characters() {
+        for (mode, expected) in [
+            ("kvv", b"true\ttrue\n".as_slice()),
+            ("xxvkx", b"true\ttrue\n".as_slice()),
+            ("kkx", b"true\tfalse\n".as_slice()),
+            ("vvx", b"false\ttrue\n".as_slice()),
+            ("xyz", b"false\tfalse\n".as_slice()),
+        ] {
+            let source = format!(
+                "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+                 do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+                 collectgarbage('collect'); \
+                 local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+                 print(key_gone,w[1]==nil)"
+            );
+            let program = compile_flow_chunk(&source).unwrap();
+            let outcome = execute_flow_capture(&program, 30_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
     }
 
     #[test]
