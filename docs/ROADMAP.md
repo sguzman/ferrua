@@ -881,11 +881,11 @@
   - [x] Report ordinary string-valued __gc callback errors through warning stderr during explicit collection and shutdown without propagating exceptions — src/owned_flow.rs: warn_finalizer_error in both finalizer loops; warn_controls_and_finalizer_errors_follow_lua54
   - [x] Verify exact warning text and stdout/stderr parity with pinned Lua 5.4, including disabled warnings, ordinary warnings and __gc errors in green five-job CI — GitHub Actions 40219670624: all five jobs passed on f564bcc6b1b16ea1971a1de43d48ee2c7c160405; tests/owned_cli_differential.rs: owned_finalizer_warning_stream_matches_upstream_lua54
   - [x] Synchronize README, engine docs, evidence ledger and generated roadmap under CI — GitHub Actions 40219894676: all five jobs passed on 000901bcfd21693cb18359d863563e327e8ac5e0, with generated roadmap, README, owned-engine documentation and ledger accepted
-- 🪧 **T463** Report noncallable Lua __gc finalizers with reference-compatible warning context — `████████░░ 75%`
+- 🪧 **T463** Report noncallable Lua __gc finalizers with reference-compatible warning context — `██████████ 100%`
   - [x] Produce method-type-specific diagnostics for noncallable __gc values instead of the generic nonstring error fallback — src/owned_flow.rs: warn_finalizer_error(error,method), including number/boolean/string/table call-type labeling
   - [x] Preserve nonfatal script execution and bounded warning output when invalid __gc methods are collected — src/owned_flow.rs: invalid_lua_gc_methods_warn_with_call_type_diagnostics
   - [x] Require exact Lua 5.4 stdout/stderr parity including the metamethod __gc context suffix and five-job green CI — GitHub Actions 40220339912: five jobs passed on ce0b79fe93bf1d7184c49b014489dfbcd18f6a21; tests/owned_cli_differential.rs: owned_noncallable_finalizer_warnings_match_lua54
-  - [ ] Synchronize README, engine docs, machine-readable ledger and generated roadmap under passing CI
+  - [x] Synchronize README, engine docs, machine-readable ledger and generated roadmap under passing CI — GitHub Actions 40220570576: all five jobs passed on c391622f6815bb077ccc66ff053b490855c90709; README, engine documentation, machine ledger and generated roadmap accepted
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1027,5 +1027,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 99%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 
