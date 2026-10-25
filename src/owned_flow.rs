@@ -1630,6 +1630,7 @@ struct Closure {
 #[derive(Default)]
 struct GcFrameRoots {
     stack: Vec<Value>,
+    slots: Vec<usize>,
     prepared: Vec<PendingTarget>,
 }
 
@@ -1707,23 +1708,53 @@ impl Execution<'_> {
         })
     }
 
+    /// Collect with the operands of an in-flight table write pinned. Some
+    /// writes occur inside builtins (e.g. arg construction), not directly in
+    /// bytecode, so the target table might not yet be in a lexical variable.
+    fn collect_table_write(
+        &mut self,
+        handle: usize,
+        key: TableKey,
+        value: Value,
+    ) -> Result<(), FlowError> {
+        let Some(frame) = self.gc_frame_roots.last() else {
+            return Err(FlowError::TooLarge);
+        };
+        let slots = frame.slots.clone();
+        let prepared = frame.prepared.clone();
+        let mut roots = vec![Value::Table(handle), value];
+        if let TableKey::Hashed(key) = key {
+            roots.push(key);
+        }
+        self.collect_root_tables(&roots, &slots, &prepared)
+    }
+
     fn write_table(&mut self, handle: usize, key: TableKey, value: Value) -> Result<(), FlowError> {
+        let table = self.tables.get(handle).ok_or(FlowError::InvalidBytecode)?;
+        let growth = match key {
+            TableKey::Positive(field) => {
+                if value == Value::Nil && field > table.array.len() {
+                    return Ok(());
+                }
+                field.saturating_sub(table.array.len())
+            }
+            TableKey::Hashed(field) => {
+                usize::from(value != Value::Nil && !table.hashed.contains_key(&field))
+            }
+        };
+        if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+            self.collect_table_write(handle, key, value)?;
+        }
+        if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+            return Err(FlowError::TooLarge);
+        }
         let table = self
             .tables
             .get_mut(handle)
             .ok_or(FlowError::InvalidBytecode)?;
         match key {
             TableKey::Positive(field) => {
-                // Deleting a nonexistent field is a no-op, not a reason to
-                // grow the bounded array or consume execution heap quota.
-                if value == Value::Nil && field > table.array.len() {
-                    return Ok(());
-                }
                 if field > table.array.len() {
-                    let growth = field - table.array.len();
-                    if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
-                        return Err(FlowError::TooLarge);
-                    }
                     self.table_cells += growth;
                     table.array.resize(field, None);
                 }
@@ -1735,10 +1766,7 @@ impl Execution<'_> {
                         self.table_cells -= 1;
                     }
                 } else {
-                    if !table.hashed.contains_key(&field) {
-                        if self.table_cells >= MAX_TABLE_CELLS_TOTAL {
-                            return Err(FlowError::TooLarge);
-                        }
+                    if growth > 0 {
                         self.table_cells += 1;
                     }
                     table.hashed.insert(field, value);
@@ -3286,6 +3314,8 @@ impl Execution<'_> {
                 .ok_or(FlowError::InvalidBytecode)?;
             roots.stack.clear();
             roots.stack.extend_from_slice(&stack);
+            roots.slots.clear();
+            roots.slots.extend_from_slice(&slots);
             roots.prepared.clear();
             roots.prepared.extend_from_slice(&prepared);
             let next = pc + 1;
@@ -7442,6 +7472,22 @@ mod tests {
         let huge = vec!["x".repeat(MAX_STRING_POOL_BYTES + 1)];
         let outcome = execute_flow_capture_with_args(&program, 1000, "script.lua", &huge);
         assert_eq!(outcome.result, Err(FlowError::TooLarge));
+    }
+
+    #[test]
+    fn gc_reclaims_unreachable_table_fields_at_write_pressure() {
+        let source = "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 3_000_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"ok\n");
+
+        let source = "local refs={}; for i=1,1800 do local t={}; refs[i]=t; for j=1,40 do t[j]=j end end";
+        let program = compile_flow_chunk(source).unwrap();
+        assert_eq!(
+            execute_flow_capture(&program, 3_000_000).result,
+            Err(FlowError::TooLarge)
+        );
     }
 
     #[test]
