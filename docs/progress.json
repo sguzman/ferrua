@@ -4450,6 +4450,33 @@
                   "evidence": "GitHub Actions 40198609569: all five jobs successful on a132d32c8c22b20284ea7556918ad1ccafe177fb; README, owned-engine docs, machine ledger and generator-derived roadmap passed integrity checks"
                 }
               ]
+            },
+            {
+              "id": "T447",
+              "emoji": "🧺",
+              "name": "Collect unreachable Lua multi-return constructor tail allocations",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Attempt bounded collection before positional table-tail expansion rejects array-cell quota pressure",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Op::SetTableTail growth reservation and collect_root_tables retry; CI #40199755341"
+                },
+                {
+                  "text": "Preserve destination table and all expanded return values while tracing live Lua roots",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: gc_reclaims_unreachable_constructor_multi_return_table_tails; tests/owned_cli_differential.rs: owned_gc_tail_constructor_matches_lua54_across_heap_pressure"
+                },
+                {
+                  "text": "Verify temporary-heap success and retained-heap limit against production fer and upstream Lua 5.4 in five-job CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40199755341 and 40199927574: Linux/Arch, Rust 1.96, Lua 5.4 differentials, and consumer all successful"
+                },
+                {
+                  "text": "Synchronize README, owned-engine evidence, machine ledger, and generated roadmap under all-green CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }

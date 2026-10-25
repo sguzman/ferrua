@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 175 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 176 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -801,6 +801,11 @@
   - [x] Pin the destination table, key and value while collecting, and reject truly retained over-quota heaps — src/owned_flow.rs: gc_reclaims_unreachable_table_fields_at_write_pressure (72,000 writes); tests/owned_cli_differential.rs: owned_nested_and_field_pressure_gc_matches_lua54
   - [x] Pass Linux tests, Rust 1.96, upstream Lua 5.4, Arch installation, and downstream consumer — GitHub Actions 40198119296 and 40198348836: all five jobs passed including Lua 5.4 differential
   - [x] Synchronize feature scope, README, machine ledger and generated roadmap under green CI — GitHub Actions 40198609569: all five jobs successful on a132d32c8c22b20284ea7556918ad1ccafe177fb; README, owned-engine docs, machine ledger and generator-derived roadmap passed integrity checks
+- 🧺 **T447** Collect unreachable Lua multi-return constructor tail allocations — `████████░░ 75%`
+  - [x] Attempt bounded collection before positional table-tail expansion rejects array-cell quota pressure — src/owned_flow.rs: Op::SetTableTail growth reservation and collect_root_tables retry; CI #40199755341
+  - [x] Preserve destination table and all expanded return values while tracing live Lua roots — src/owned_flow.rs: gc_reclaims_unreachable_constructor_multi_return_table_tails; tests/owned_cli_differential.rs: owned_gc_tail_constructor_matches_lua54_across_heap_pressure
+  - [x] Verify temporary-heap success and retained-heap limit against production fer and upstream Lua 5.4 in five-job CI — GitHub Actions 40199755341 and 40199927574: Linux/Arch, Rust 1.96, Lua 5.4 differentials, and consumer all successful
+  - [ ] Synchronize README, owned-engine evidence, machine ledger, and generated roadmap under all-green CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
