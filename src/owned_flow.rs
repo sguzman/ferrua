@@ -99,6 +99,7 @@ pub enum Builtin {
     StringLen,
     StringSub,
     StringByte,
+    StringFind,
     StringChar,
     StringLower,
     StringUpper,
@@ -151,6 +152,7 @@ const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"len", Builtin::StringLen),
     (b"sub", Builtin::StringSub),
     (b"byte", Builtin::StringByte),
+    (b"find", Builtin::StringFind),
     (b"char", Builtin::StringChar),
     (b"lower", Builtin::StringLower),
     (b"upper", Builtin::StringUpper),
@@ -4136,6 +4138,7 @@ impl Execution<'_> {
                 self.utf8_codes_iterator(&arguments, false)
             }
             Value::Builtin(Builtin::StringByte) => self.string_byte_builtin(&arguments),
+            Value::Builtin(Builtin::StringFind) => self.string_find_literal_builtin(&arguments),
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
             Value::Builtin(Builtin::TablePack) => Ok(vec![self.table_pack_builtin(&arguments)?]),
             Value::Builtin(Builtin::TableInsert) => self.table_insert_builtin(&arguments),
@@ -4760,6 +4763,58 @@ impl Execution<'_> {
             output.extend_from_slice(&bytes);
         }
         self.intern_rooted_string(output, args)
+    }
+
+    /// First-party bounded Lua 5.4 string.find **literal** subset.
+    /// With plain=true, arbitrary bytes (including pattern punctuation) are
+    /// searched literally. Without plain mode, only patterns containing no
+    /// Lua pattern magic are accepted; full Lua pattern/capture semantics
+    /// remain outside this opt-in owned-engine subset.
+    ///
+    /// Match indices are inclusive, one-based byte positions. A missing
+    /// match returns one nil; a found literal returns two integers.
+    fn string_find_literal_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let source = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
+        let pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
+        let initial = match args.get(2).copied() {
+            Some(index) if index != Value::Nil => self
+                .exact_integer_operand(index)
+                .or_else(|_| self.integer_operand(index))?,
+            _ => 1,
+        };
+        let plain = args.get(3).copied().unwrap_or(Value::Nil).truthy();
+        if !plain && pattern.iter().any(|byte| b"^$()%.[]*+-?".contains(byte)) {
+            return Err(FlowError::Unsupported(
+                "Lua pattern expressions in string.find are not implemented".into(),
+            ));
+        }
+        let start = Self::string_offset(initial, source.len() as i64).max(1);
+        if start > source.len() as i64 + 1 {
+            return Ok(vec![Value::Nil]);
+        }
+        let offset = (start - 1) as usize;
+        if pattern.is_empty() {
+            return Ok(vec![Value::Integer(start), Value::Integer(start - 1)]);
+        }
+        if pattern.len() > source.len() - offset {
+            return Ok(vec![Value::Nil]);
+        }
+        // Charge each possible candidate before comparing it; host byte-slice
+        // scans must not bypass the shared bytecode instruction limit.
+        for position in offset..=source.len() - pattern.len() {
+            let cost = pattern.len().max(1);
+            if self.steps.saturating_add(cost) > self.budget {
+                return Err(FlowError::StepBudgetExceeded);
+            }
+            self.steps += cost;
+            if source[position..].starts_with(&pattern) {
+                return Ok(vec![
+                    Value::Integer(position as i64 + 1),
+                    Value::Integer((position + pattern.len()) as i64),
+                ]);
+            }
+        }
+        Ok(vec![Value::Nil])
     }
 
     /// Lua string offsets are one-based bytes; negatives count from the end.
@@ -5555,6 +5610,7 @@ impl Execution<'_> {
                                 | Builtin::Pcall
                                 | Builtin::Xpcall
                                 | Builtin::StringByte
+                                | Builtin::StringFind
                                 | Builtin::Utf8Len
                                 | Builtin::Utf8Codepoint
                                 | Builtin::Utf8Codes
@@ -5584,6 +5640,7 @@ impl Execution<'_> {
                                 }
                                 Builtin::IpairsIterator => self.ipairs_iterator(&args)?,
                                 Builtin::StringByte => self.string_byte_builtin(&args)?,
+                                Builtin::StringFind => self.string_find_literal_builtin(&args)?, 
                                 Builtin::Utf8Len => self.utf8_len_builtin(&args)?,
                                 Builtin::Utf8Codepoint => self.utf8_codepoint_builtin(&args)?,
                                 Builtin::Utf8Codes => self.utf8_codes_builtin(&args)?,
@@ -5658,6 +5715,7 @@ impl Execution<'_> {
                             | Builtin::Ipairs
                             | Builtin::IpairsIterator
                             | Builtin::StringByte
+                            | Builtin::StringFind
                             | Builtin::Utf8Len
                             | Builtin::Utf8Codepoint
                             | Builtin::Utf8Codes

@@ -311,6 +311,25 @@ fn owned_string_byte_char_binary_and_return_arity_match_lua54() {
 }
 
 #[test]
+fn owned_string_find_literal_subset_matches_lua54() {
+    for source in [
+        "print(string.find('abcabc','bc')); print(string.find('abcabc','bc',3)); print(string.find('abcabc','bc',-3))",
+        "print(string.find('abc','xyz')==nil,select('#',string.find('abc','xyz')),select('#',string.find('abc','a')))",
+        "print(string.find('abc','',1),string.find('abc','',4),string.find('abc','',5)==nil)",
+        "print(string.find('abc','a',0),string.find('abc','a',-100),string.find('abc','a',100)==nil)",
+        "print(string.find('a.b','.',1,true),string.find('a%b','%',1,true),string.find('a[b]','[',1,true))",
+        "print(string.find('a\\0b','\\0',1,true),string.find('éé','é',2,true),string.len('é'))",
+        "print(string.find('xx--xx','--',1,true),string.find('xx--xx','xx',-2,true))",
+        "print(string.find('123123',23,1,true),string.find(123123,'23',1,true),string.find('123123','23','2',true))",
+        "local f=string.find; string.find=function() return 42 end; print(string.find('abc')); string.find=f; print(string.find('abc','b'))",
+        "local a,b,c=pcall(string.find,'abc','b'); print(a,b,c); print(select('#',string.find('abc','x')))",
+        "local a=pcall(string.find,false,'a'); local b=pcall(string.find,'abc',false); local c=pcall(string.find,'abc'); print(a,b,c)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
