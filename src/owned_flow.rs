@@ -1724,6 +1724,9 @@ struct Execution<'a> {
     free_cells: Vec<usize>,
     frame_allocations: Vec<Vec<usize>>,
     gc_frame_roots: Vec<GcFrameRoots>,
+    /// Native builtins retain heap values across nested Lua callbacks.
+    /// These roots must not disturb Lua call-frame accounting.
+    gc_temporary_roots: Vec<Vec<Value>>,
     strings: Vec<Vec<u8>>,
     string_index: HashMap<Vec<u8>, usize>,
     string_bytes: usize,
@@ -2065,6 +2068,10 @@ impl Execution<'_> {
                     }
                 }
             }
+        }
+        // Native operations can retain values outside Lua operand stacks.
+        for pending in &self.gc_temporary_roots {
+            work.extend_from_slice(pending);
         }
         // Ancestor frames are suspended and their exact lexical-slot state
         // is not available here. Keeping all their allocated cells is safe
@@ -4083,11 +4090,7 @@ impl Execution<'_> {
         }
         let mut roots = args.to_vec();
         roots.extend_from_slice(&sorted);
-        self.gc_frame_roots.push(GcFrameRoots {
-            stack: roots,
-            slots: Vec::new(),
-            prepared: Vec::new(),
-        });
+        self.gc_temporary_roots.push(roots);
         let result = (|| {
             for index in 1..sorted.len() {
                 let mut at = index;
@@ -4108,7 +4111,7 @@ impl Execution<'_> {
             }
             Ok(Vec::new())
         })();
-        self.gc_frame_roots.pop();
+        self.gc_temporary_roots.pop();
         result
     }
 
@@ -5424,6 +5427,7 @@ pub fn execute_flow_capture_with_args<'a>(
         free_cells: Vec::new(),
         frame_allocations: Vec::new(),
         gc_frame_roots: Vec::new(),
+        gc_temporary_roots: Vec::new(),
         strings: program.strings.clone(),
         string_index,
         string_bytes,
