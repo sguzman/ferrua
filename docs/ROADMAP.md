@@ -901,11 +901,11 @@
   - [x] Retain long-mode string flags as implemented by pinned Lua 5.4.6 (ttisstring) rather than newer short-string-only behavior — src/owned_flow.rs: gc_weak_mode_accepts_long_strings_in_pinned_lua54_6; pinned Lua v5.4.6 lgc.c traversetable
   - [x] Require exact owned stdout plus upstream Lua 5.4 differential output and separately preserve the known pinned luna-core divergence, in five-job CI — GitHub Actions 40222402112: five jobs passed on bb2b0fa7b1289f933e1752d85055c3d8a31a250a; tests/owned_cli_differential.rs: owned_weak_mode_nul_termination_matches_lua54_6 and owned_long_weak_mode_strings_match_pinned_lua54_6
   - [x] Synchronize README, owned-engine documentation, machine evidence ledger and generated roadmap under all-green CI — GitHub Actions 40222612434: all five jobs passed on ec4ca1c68064d58555d60fbfd3e571af2e4ecb3c; documentation, evidence ledger and generated roadmap accepted
-- 🧯 **T467** GC-safe string allocation for assert and protected-call diagnostics — `████████░░ 75%`
+- 🧯 **T467** GC-safe string allocation for assert and protected-call diagnostics — `██████████ 100%`
   - [x] Root the default assert(false) failure message during quota-triggered collection — src/owned_flow.rs: assertion_failure uses intern_rooted_string with full builtin arguments; commit e85cbad
   - [x] Root pcall/xpcall internal errors, message-handler retries and terminal error text without relaxing memory limits — src/owned_flow.rs: protected_error_value, pcall_builtin and xpcall_builtin explicitly carry argument and retry-message roots; commit e85cbad
   - [x] Calibrate a near-full stopped-GC string pool, restart collection and verify live values and actual reclamation through all three error paths under five-job CI — src/owned_flow.rs: protected_error_strings_recover_quota_with_rooted_arguments; GitHub Actions 40223559390 five jobs successful on e85cbad
-  - [ ] Synchronize README, owned-engine documentation, machine ledger and generated roadmap under passing five-job CI
+  - [x] Synchronize README, owned-engine documentation, machine ledger and generated roadmap under passing five-job CI — GitHub Actions 40223916106: all five jobs green on fb2408267c477bccd3bf71503de492c1dafa3d38; README, owned-engine docs, progress ledger and generated ROADMAP consistent
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1047,5 +1047,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 99%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 
