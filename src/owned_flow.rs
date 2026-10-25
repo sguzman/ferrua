@@ -4779,9 +4779,8 @@ impl Execution<'_> {
             )?);
         }
         let mut cursor = (position - 1) as usize;
-        let is_continuation = |index: usize| {
-            bytes.get(index).is_some_and(|byte| byte & 0xC0 == 0x80)
-        };
+        let is_continuation =
+            |index: usize| bytes.get(index).is_some_and(|byte| byte & 0xC0 == 0x80);
         if remaining == 0 {
             while cursor > 0 && is_continuation(cursor) {
                 if self.steps >= self.budget {
@@ -4793,10 +4792,8 @@ impl Execution<'_> {
             return Ok(Value::Integer(cursor as i64 + 1));
         }
         if is_continuation(cursor) {
-            let value = self.intern_rooted_string(
-                b"initial position is a continuation byte".to_vec(),
-                args,
-            )?;
+            let value = self
+                .intern_rooted_string(b"initial position is a continuation byte".to_vec(), args)?;
             return Err(FlowError::Thrown(value));
         }
         if remaining < 0 {
