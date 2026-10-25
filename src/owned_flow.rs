@@ -1919,7 +1919,10 @@ impl Execution<'_> {
             return Ok(());
         }
         let detail = if let FlowError::Thrown(Value::String(handle)) = error {
-            self.strings.get(*handle).ok_or(FlowError::InvalidBytecode)?.clone()
+            self.strings
+                .get(*handle)
+                .ok_or(FlowError::InvalidBytecode)?
+                .clone()
         } else {
             b"error object is not a string".to_vec()
         };
@@ -2265,9 +2268,9 @@ impl Execution<'_> {
                     if let Some(method) = self.table_finalizer(handle)? {
                         match self.protected_target(method, &[Value::Table(handle)]) {
                             Ok(_) => {}
-                        Err(error @ (FlowError::Thrown(_) | FlowError::TypeError)) => {
-                            self.warn_finalizer_error(&error)?;
-                        }
+                            Err(error @ (FlowError::Thrown(_) | FlowError::TypeError)) => {
+                                self.warn_finalizer_error(&error)?;
+                            }
                             Err(error) => return Err(error),
                         }
                     }
