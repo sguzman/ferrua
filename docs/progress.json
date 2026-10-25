@@ -4870,6 +4870,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T462",
+              "emoji": "⚠️",
+              "name": "Capture Lua warning controls and nonfatal finalizer error messages",
+              "checks": [
+                {
+                  "text": "Implement Lua warn global with default-off @on/@off controls, multipart messages, and bounded stderr capture separated from normal print",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Builtin::Warn, warn_builtin, emit_warning, FlowOutcome.stderr; src/main.rs owned output stderr forwarding"
+                },
+                {
+                  "text": "Report ordinary string-valued __gc callback errors through warning stderr during explicit collection and shutdown without propagating exceptions",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: warn_finalizer_error in both finalizer loops; warn_controls_and_finalizer_errors_follow_lua54"
+                },
+                {
+                  "text": "Verify exact warning text and stdout/stderr parity with pinned Lua 5.4, including disabled warnings, ordinary warnings and __gc errors in green five-job CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40219670624: all five jobs passed on f564bcc6b1b16ea1971a1de43d48ee2c7c160405; tests/owned_cli_differential.rs: owned_finalizer_warning_stream_matches_upstream_lua54"
+                },
+                {
+                  "text": "Synchronize README, engine docs, evidence ledger and generated roadmap under CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5867,7 +5894,8 @@
             "T458",
             "T459",
             "T460",
-            "T461"
+            "T461",
+            "T462"
           ]
         }
       ]
