@@ -3963,7 +3963,11 @@ impl Execution<'_> {
         // Lua's loop advances the index to size only when shifting.
         // Removing at size + 1 must clear that absent index, not size.
         let clear_index = if position < size { size } else { position };
-        self.write_table(handle, self.table_key(Value::Integer(clear_index))?, Value::Nil)?;
+        self.write_table(
+            handle,
+            self.table_key(Value::Integer(clear_index))?,
+            Value::Nil,
+        )?;
         Ok(removed)
     }
 
