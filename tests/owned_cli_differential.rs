@@ -471,6 +471,19 @@ fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
 }
 
 #[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
     for source in [
         "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",

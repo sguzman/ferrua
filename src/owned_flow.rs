@@ -4647,14 +4647,20 @@ impl Execution<'_> {
             callback @ (Value::Function(_) | Value::Builtin(_)) => Some(callback),
             _ => return Err(FlowError::TypeError),
         };
-        let mut sorted = Vec::with_capacity(length);
-        for index in 1..=length {
-            sorted.push(self.read_table(handle, TableKey::Positive(index))?);
-        }
-        let mut roots = args.to_vec();
-        roots.extend_from_slice(&sorted);
-        self.gc_temporary_roots.push(roots);
+        // C Lua's array accesses are lua_geti/lua_seti, not raw operations.
+        // Pin each value immediately after its __index result: the next
+        // callback can allocate and collect before the snapshot is complete.
+        self.gc_temporary_roots.push(args.to_vec());
         let result = (|| {
+            let mut sorted = Vec::with_capacity(length);
+            for index in 1..=length {
+                let value = self.lookup_with_metatable(handle, TableKey::Positive(index))?;
+                self.gc_temporary_roots
+                    .last_mut()
+                    .ok_or(FlowError::InvalidBytecode)?
+                    .push(value);
+                sorted.push(value);
+            }
             for index in 1..sorted.len() {
                 let mut at = index;
                 while at > 0 {
@@ -4670,7 +4676,7 @@ impl Execution<'_> {
                 }
             }
             for (index, value) in sorted.into_iter().enumerate() {
-                self.write_table(handle, TableKey::Positive(index + 1), value)?;
+                self.assign_with_metatable(handle, TableKey::Positive(index + 1), value)?;
             }
             Ok(Vec::new())
         })();
