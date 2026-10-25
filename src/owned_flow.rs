@@ -2743,7 +2743,10 @@ impl Execution<'_> {
     fn math_modf_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
         let number = self.checked_math_number("math.modf", args, 0, false)?;
         if let Value::Integer(integer) = number {
-            return Ok(vec![Value::Integer(integer), Value::Float(0.0_f64.to_bits())]);
+            return Ok(vec![
+                Value::Integer(integer),
+                Value::Float(0.0_f64.to_bits()),
+            ]);
         }
         let Value::Float(bits) = number else {
             return Err(FlowError::InvalidBytecode);
