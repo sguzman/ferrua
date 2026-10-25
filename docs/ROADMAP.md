@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 180 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 181 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -826,6 +826,11 @@
   - [x] Verify quota rejection when a full sweep exceeds the remaining budget and successful collection with sufficient budget — src/owned_flow.rs: collector_charges_sweeps_against_execution_budget adaptive baseline regression
   - [x] Pass Linux formatting/clippy/tests, Rust 1.96, Lua 5.4 reference checks, Arch packaging and downstream consumer — GitHub Actions 40203647611: all five jobs passed on e19a977561b40a126f41e70e25975a29338a2143
   - [x] Synchronize README, owned-engine docs, evidence ledger and generated roadmap under passing CI — GitHub Actions 40203824158: five jobs passed on 599f26f45b145a9ffe44d6cfdae348e892c3e57e; README, owned-engine docs, ledger and generator-derived roadmap accepted
+- 🫧 **T452** Lua 5.4 weak-value tables and dead-value reclamation — `████████░░ 75%`
+  - [x] Honor metatable __mode=v by tracing keys and skipping weakly held table/closure values — src/owned_flow.rs: table_uses_weak_values and collect_root_tables weak-value traversal
+  - [x] Prune unmarked array/hash values before recycling heap objects, preserving reachable objects, strings, primitive values and strong keys under budgeted collection — src/owned_flow.rs: weak_value_unreachable, weak_clears validation and budget charge, owned_gc_weak_value_tables_collect_dead_tables_and_closures
+  - [x] Compare live retention, dead table/closure removal, strong-key behavior and mode changes with production fer and upstream Lua 5.4 — GitHub Actions 40205578882: all five jobs passed on 78b39053a49050b7e7831afa50fd34bf36c853ac; tests/owned_cli_differential.rs: owned_weak_value_gc_matches_upstream_lua54
+  - [ ] Synchronize README, owned-engine documentation, ledger and generator-derived roadmap under five-job CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -967,5 +972,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 98%`
 

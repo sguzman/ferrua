@@ -4590,6 +4590,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T452",
+              "emoji": "🫧",
+              "name": "Lua 5.4 weak-value tables and dead-value reclamation",
+              "checks": [
+                {
+                  "text": "Honor metatable __mode=v by tracing keys and skipping weakly held table/closure values",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: table_uses_weak_values and collect_root_tables weak-value traversal"
+                },
+                {
+                  "text": "Prune unmarked array/hash values before recycling heap objects, preserving reachable objects, strings, primitive values and strong keys under budgeted collection",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: weak_value_unreachable, weak_clears validation and budget charge, owned_gc_weak_value_tables_collect_dead_tables_and_closures"
+                },
+                {
+                  "text": "Compare live retention, dead table/closure removal, strong-key behavior and mode changes with production fer and upstream Lua 5.4",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40205578882: all five jobs passed on 78b39053a49050b7e7831afa50fd34bf36c853ac; tests/owned_cli_differential.rs: owned_weak_value_gc_matches_upstream_lua54"
+                },
+                {
+                  "text": "Synchronize README, owned-engine documentation, ledger and generator-derived roadmap under five-job CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5577,7 +5604,8 @@
             "T448",
             "T449",
             "T450",
-            "T451"
+            "T451",
+            "T452"
           ]
         }
       ]
