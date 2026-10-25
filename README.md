@@ -6,7 +6,7 @@
 
 **Project color:** `#15B6A9` · `oklch(70% 0.12 186)` ([OKLCH decision](docs/COLOR.md)).
 
-> **CI-validated development preview, not a stable release.** The default `fer` interpreter still uses pinned pure-Rust `luna-core`. `--engine=owned` explicitly opts into Ferrua's bounded first-party Lua 5.4 subset without fallback. It supports captured `print`, CLI `arg`, mutable globals, `_G`, lexical `_ENV`, and named functions; full standard libraries, REPL, coroutines, complete garbage collection, and complete conformance remain unfinished. The bounded owned collector now traces suspended Lua call frames, reclaims unreachable cyclic tables and function objects, recycles orphaned captured cells, and retries array/hash field growth and multi-return table-constructor tail expansion under memory pressure. Limited Lua garbage-collector controls (`collect`, `stop`, `restart`, `isrunning`) are supported; string reclamation, weak tables, finalizers, incremental/generational modes, accurate heap counting and complete Lua 5.4 GC parity remain open. This is not an audited sandbox.
+> **CI-validated development preview, not a stable release.** The default `fer` interpreter still uses pinned pure-Rust `luna-core`. `--engine=owned` explicitly opts into Ferrua's bounded first-party Lua 5.4 subset without fallback. It supports captured `print`, CLI `arg`, mutable globals, `_G`, lexical `_ENV`, and named functions; full standard libraries, REPL, coroutines, complete garbage collection, and complete conformance remain unfinished. The bounded owned collector now traces suspended Lua call frames, reclaims unreachable cyclic tables and function objects, recycles orphaned captured cells, and retries array/hash field growth and multi-return table-constructor tail expansion under memory pressure. Limited Lua garbage-collector controls (`collect`, `count`, `stop`, `restart`, `isrunning`) are supported; `count` estimates tracked owned-heap storage rather than reporting allocator-exact memory. String reclamation, weak tables, finalizers, incremental/generational modes, exact accounting and complete Lua 5.4 GC parity remain open. This is not an audited sandbox.
 
 **Owned engine cutover:** the [graduation contract](docs/ENGINE_GRADUATION.md) defines the full implementation, conformance and native release gates. Roadmap percentages count accepted atomic tasks; they are **not** Lua compatibility percentages.
 
@@ -40,7 +40,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified CI:** [all five jobs green on `c0e6d95`, including bounded owned print and arguments, lexical `_ENV`, error-object diagnostics, 72 generated global/environment parity cases, Rust 1.96, Arch packaging and the downstream consumer](https://github.com/sguzman/ferrua/actions/runs/40135554634). Native EndeavourOS/Hyprland QA and stable owned-engine graduation remain pending.
+**Latest verified implementation CI:** [all five jobs green on `e90d320`, including bounded owned-heap `collectgarbage('count')` and upstream Lua 5.4 differentials](https://github.com/sguzman/ferrua/actions/runs/40202464541). Native EndeavourOS/Hyprland QA and stable owned-engine graduation remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 

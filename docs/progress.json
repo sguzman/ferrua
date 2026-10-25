@@ -4506,6 +4506,33 @@
                   "evidence": "GitHub Actions 40200855261: five-job successful acceptance on cb562198f15356d105920ddce174947eed1e2702; README/docs/ledger/generated roadmap integrity passed"
                 }
               ]
+            },
+            {
+              "id": "T449",
+              "emoji": "📈",
+              "name": "Bounded managed-heap accounting for Lua collectgarbage count",
+              "checks": [
+                {
+                  "text": "Return a Lua number for count using tracked tables, closures, lexical cells and interned string storage",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Execution::tracked_heap_kib, collectgarbage_builtin count branch"
+                },
+                {
+                  "text": "Verify heap size grows with temporary allocations and falls after explicit collection while automatic GC is stopped",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: gc_count_reflects_unreachable_table_storage_reclamation"
+                },
+                {
+                  "text": "Compare observable type, allocation growth and reclamation with production fer and Lua 5.4 in five-job CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40202464541: all five jobs passed on e90d3205928522a78a731d91637cf2496992a48c; tests/owned_cli_differential.rs: owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54"
+                },
+                {
+                  "text": "Synchronize README, owned-engine docs, machine ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5479,6 +5506,19 @@
           "name": "Original Lua error object preservation in owned CLI diagnostics",
           "task_ids": [
             "T442"
+          ]
+        },
+        {
+          "emoji": "♻️",
+          "name": "Bounded garbage collection and observable heap controls",
+          "task_ids": [
+            "T443",
+            "T444",
+            "T445",
+            "T446",
+            "T447",
+            "T448",
+            "T449"
           ]
         }
       ]

@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 177 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 178 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -811,6 +811,11 @@
   - [x] Apply stop/restart to automatic table, closure, field-write and constructor-tail collection without weakening quota guards — src/owned_flow.rs: write_table, Op::NewFunction, Op::NewTable and Op::SetTableTail; stopped-heap and manual-collection unit regressions
   - [x] Verify observable Lua 5.4 control transitions and manual collection in full Linux/MSRV/Arch/reference/consumer CI — GitHub Actions 40200501075 and 40200671209: all five jobs passed; tests/owned_cli_differential.rs: owned_gc_stop_restart_and_manual_collection_match_lua54
   - [x] Synchronize README, docs, machine evidence and generator-derived roadmap in all-green CI — GitHub Actions 40200855261: five-job successful acceptance on cb562198f15356d105920ddce174947eed1e2702; README/docs/ledger/generated roadmap integrity passed
+- 📈 **T449** Bounded managed-heap accounting for Lua collectgarbage count — `████████░░ 75%`
+  - [x] Return a Lua number for count using tracked tables, closures, lexical cells and interned string storage — src/owned_flow.rs: Execution::tracked_heap_kib, collectgarbage_builtin count branch
+  - [x] Verify heap size grows with temporary allocations and falls after explicit collection while automatic GC is stopped — src/owned_flow.rs: gc_count_reflects_unreachable_table_storage_reclamation
+  - [x] Compare observable type, allocation growth and reclamation with production fer and Lua 5.4 in five-job CI — GitHub Actions 40202464541: all five jobs passed on e90d3205928522a78a731d91637cf2496992a48c; tests/owned_cli_differential.rs: owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54
+  - [ ] Synchronize README, owned-engine docs, machine ledger and generated roadmap under passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -952,4 +957,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 96%`
 
