@@ -4753,10 +4753,11 @@
                 },
                 {
                   "text": "Synchronize README, owned-engine docs, progress ledger and generated roadmap under all-green CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40209714279: all five jobs passed on 6310c1adf668937b27ba0565f19a82e51e6ca075; README, owned-engine docs, machine ledger and generated roadmap synchronized"
                 }
               ],
-              "progress": 75
+              "progress": 100
             }
           ]
         }

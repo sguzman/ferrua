@@ -851,11 +851,11 @@
   - [x] Pin concatenation operands and active/suspended Lua roots while collecting, preserve retained strings, and enforce stop-mode quota rejection — src/owned_flow.rs: concatenation_retries_string_quota_after_rooted_collection unit cases; collect_root_tables in-flight operand roots
   - [x] Match production fer and upstream Lua 5.4 for 19,000 ephemeral concatenations, retained strings and nested caller arguments in full five-job CI — GitHub Actions 40208874043: five jobs successful on c0141d9b7ddf1009f54c2bb701f1dda4682166ff; tests/owned_cli_differential.rs: owned_concat_string_pressure_gc_matches_lua54
   - [x] Synchronize README, owned-engine scope docs, machine ledger and generated roadmap with passing CI — GitHub Actions 40209094338: all five jobs passed on 190f35361e03824eca734da2b8e9d9746d8b6678 with generated roadmap, README, owned-engine docs and ledger synchronized
-- 🖨️ **T457** Recover Lua tostring/print string-pool pressure with explicit builtin roots — `████████░░ 75%`
+- 🖨️ **T457** Recover Lua tostring/print string-pool pressure with explicit builtin roots — `██████████ 100%`
   - [x] Generalize quota-triggered string interning to accept explicit root lists and use it for tostring/print conversion without broadening arbitrary interners — src/owned_flow.rs: intern_rooted_string; tostring_builtin root argument; print_builtin passes complete argument list; concat_with_metamethod shares rooted path
   - [x] Protect all builtin arguments across heap collection, including nested Lua call operands, and preserve stop-mode hard limits — src/owned_flow.rs: tostring_and_print_recover_string_quota_with_rooted_builtin_arguments; preflight collects only with rooted operands and automatic_gc
   - [x] Compare 19,000 conversions, surviving string values and nested print arguments against production fer and upstream Lua 5.4 with five green CI jobs — GitHub Actions 40209516272: all five jobs passed on 251a508b560f901dc303ab869da02f0dbe609de1; tests/owned_cli_differential.rs: owned_tostring_and_print_string_pressure_match_lua54
-  - [ ] Synchronize README, owned-engine docs, progress ledger and generated roadmap under all-green CI
+  - [x] Synchronize README, owned-engine docs, progress ledger and generated roadmap under all-green CI — GitHub Actions 40209714279: all five jobs passed on 6310c1adf668937b27ba0565f19a82e51e6ca075; README, owned-engine docs, machine ledger and generated roadmap synchronized
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -997,5 +997,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 98%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 
