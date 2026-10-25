@@ -170,6 +170,20 @@ fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
 }
 
 #[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local ok=pcall(table.move,t,1,math.maxinteger,1); local d={3}; print(ok,table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn generated_branch_and_environment_interactions_match_lua54() {
     for seed in 0_i64..48 {
         let base = (seed * 11) % 23 - 8;

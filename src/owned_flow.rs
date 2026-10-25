@@ -86,6 +86,7 @@ pub enum Builtin {
     TablePack,
     TableInsert,
     TableRemove,
+    TableMove,
 }
 
 const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -115,6 +116,7 @@ const TABLE_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"pack", Builtin::TablePack),
     (b"insert", Builtin::TableInsert),
     (b"remove", Builtin::TableRemove),
+    (b"move", Builtin::TableMove),
 ];
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -3644,6 +3646,9 @@ impl Execution<'_> {
             Value::Builtin(Builtin::TableRemove) => {
                 Ok(vec![self.table_remove_builtin(&arguments)?])
             }
+            Value::Builtin(Builtin::TableMove) => {
+                Ok(vec![self.table_move_builtin(&arguments)?])
+            }
             Value::Builtin(Builtin::TableConcat) => {
                 Ok(vec![self.table_concat_builtin(&arguments)?])
             }
@@ -3969,6 +3974,57 @@ impl Execution<'_> {
             Value::Nil,
         )?;
         Ok(removed)
+    }
+
+    /// Copy a bounded indexed range like Lua 5.4 table.move. A destination
+    /// overlapping the source on its right must be copied backward.
+    fn table_move_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        let Value::Table(source) = *args.first().ok_or(FlowError::TypeError)? else {
+            return Err(FlowError::TypeError);
+        };
+        let parse_index = |value: Value| {
+            self.exact_integer_operand(value)
+                .or_else(|_| self.integer_operand(value))
+        };
+        let from = parse_index(*args.get(1).ok_or(FlowError::TypeError)?)?;
+        let end = parse_index(*args.get(2).ok_or(FlowError::TypeError)?)?;
+        let start = parse_index(*args.get(3).ok_or(FlowError::TypeError)?)?;
+        let target = match args.get(4).copied().unwrap_or(Value::Nil) {
+            Value::Nil => source,
+            Value::Table(handle) => handle,
+            _ => return Err(FlowError::TypeError),
+        };
+        self.tables.get(source).ok_or(FlowError::InvalidBytecode)?;
+        self.tables.get(target).ok_or(FlowError::InvalidBytecode)?;
+        if end < from {
+            return Ok(Value::Table(target));
+        }
+        let count = end
+            .checked_sub(from)
+            .and_then(|n| n.checked_add(1))
+            .ok_or(FlowError::TooLarge)?;
+        let count = usize::try_from(count).map_err(|_| FlowError::TooLarge)?;
+        if count > MAX_TABLE_FIELDS
+            || start.checked_add(count as i64 - 1).is_none()
+        {
+            return Err(FlowError::TooLarge);
+        }
+        if self.steps.saturating_add(count) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += count;
+        let backward = source == target && start > from && start <= end;
+        for offset in 0..count {
+            let offset = if backward { count - offset - 1 } else { offset };
+            let offset = offset as i64;
+            let source_index = from.checked_add(offset).ok_or(FlowError::TooLarge)?;
+            let target_index = start.checked_add(offset).ok_or(FlowError::TooLarge)?;
+            let key = self.table_key(Value::Integer(source_index))?;
+            let value = self.read_table(source, key)?;
+            let target_key = self.table_key(Value::Integer(target_index))?;
+            self.write_table(target, target_key, value)?;
+        }
+        Ok(Value::Table(target))
     }
 
     /// table.unpack exposes genuine zero-or-more results from raw table
@@ -4642,6 +4698,7 @@ impl Execution<'_> {
                             Builtin::TableConcat => self.table_concat_builtin(&args)?,
                             Builtin::TablePack => self.table_pack_builtin(&args)?,
                             Builtin::TableRemove => self.table_remove_builtin(&args)?,
+                            Builtin::TableMove => self.table_move_builtin(&args)?,
                         };
                         if matches!(
                             instructions[pc],
@@ -9272,6 +9329,41 @@ mod tests {
         ] {
             let program = compile_flow_chunk(source).unwrap();
             let outcome = execute_flow_capture(&program, 20_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+    }
+
+    #[test]
+    fn table_move_handles_overlaps_distinct_tables_and_bounded_ranges() {
+        for (source, expected) in [
+            (
+                "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+                b"true\t1\t1\t2\t3\n".as_slice(),
+            ),
+            (
+                "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+                b"2\t3\t3\n".as_slice(),
+            ),
+            (
+                "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+                b"true\t9\t1\t2\t1\n".as_slice(),
+            ),
+            (
+                "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+                b"1\tnil\t3\n".as_slice(),
+            ),
+            (
+                "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+                b"x\n".as_slice(),
+            ),
+            (
+                "local t={1,2}; local ok=pcall(table.move,t,1,math.maxinteger,1); local d={3}; print(ok,table.move(t,5,4,1,d)==d,d[1])",
+                b"false\ttrue\t3\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 30_000);
             assert_eq!(outcome.result, Ok(vec![]), "{source}");
             assert_eq!(outcome.stdout, expected, "{source}");
         }
