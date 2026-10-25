@@ -1633,7 +1633,8 @@ struct Execution<'a> {
     free_tables: Vec<usize>,
     retired_tables: HashSet<usize>,
     table_cells: usize,
-    closures: Vec<Closure>,
+    closures: Vec<Option<Closure>>,
+    free_closures: Vec<usize>,
     cells: Vec<Option<Value>>,
     captured_cells: HashSet<usize>,
     free_cells: Vec<usize>,
@@ -1809,6 +1810,7 @@ impl Execution<'_> {
                     let closure = self
                         .closures
                         .get(handle)
+                        .and_then(Option::as_ref)
                         .ok_or(FlowError::InvalidBytecode)?;
                     for &(_, cell) in &closure.captures {
                         if let Some(Some(value)) = self.cells.get(cell) {
@@ -1819,7 +1821,40 @@ impl Execution<'_> {
                 _ => {}
             }
         }
+        // Build live captured cells before retiring any closure; a single
+        // lexical cell can be shared by many surviving closures.
+        let mut live_captures = HashSet::new();
+        for (handle, &live) in marked_closures.iter().enumerate() {
+            if live {
+                let closure = self.closures[handle]
+                    .as_ref()
+                    .ok_or(FlowError::InvalidBytecode)?;
+                live_captures.extend(closure.captures.iter().map(|&(_, cell)| cell));
+            }
+        }
         // Sweep only after all roots have been traced within the budget.
+        for (handle, live) in marked_closures.into_iter().enumerate() {
+            if !live && self.closures[handle].take().is_some() {
+                self.free_closures.push(handle);
+            }
+        }
+        // A cell captured only by dead closures no longer needs capture
+        // protection. Retain active stack-frame slots and release orphaned
+        // cells, removing them from frame cleanup bookkeeping to avoid a
+        // duplicate free when the root frame finally returns.
+        let active_slots: HashSet<usize> = slots.iter().copied().collect();
+        let abandoned: Vec<usize> = self.captured_cells
+            .iter().copied()
+            .filter(|cell| !live_captures.contains(cell))
+            .collect();
+        for cell in abandoned {
+            self.captured_cells.remove(&cell);
+            if !active_slots.contains(&cell) {
+                *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = None;
+                self.free_cells.push(cell);
+                self.frame_allocations[0].retain(|&allocated| allocated != cell);
+            }
+        }
         for (handle, live) in marked_tables.into_iter().enumerate() {
             if !live && !self.retired_tables.contains(&handle) {
                 let table = &mut self.tables[handle];
@@ -3087,6 +3122,7 @@ impl Execution<'_> {
         let closure = self
             .closures
             .get(handle)
+            .and_then(Option::as_ref)
             .cloned()
             .ok_or(FlowError::InvalidBytecode)?;
         let function = self
@@ -3194,9 +3230,14 @@ impl Execution<'_> {
                 Op::Constant(value) => stack.push(*value),
                 Op::ReadGlobal(key) => stack.push(self.read_global(*key)?),
                 Op::NewFunction(index) => {
-                    if *index >= self.program.functions.len() || self.closures.len() >= MAX_CLOSURES
-                    {
+                    if *index >= self.program.functions.len() {
                         return Err(FlowError::InvalidBytecode);
+                    }
+                    if self.closures.len() >= MAX_CLOSURES && self.free_closures.is_empty() {
+                        self.collect_root_tables(&stack, &slots, &prepared)?;
+                    }
+                    if self.closures.len() >= MAX_CLOSURES && self.free_closures.is_empty() {
+                        return Err(FlowError::TooLarge);
                     }
                     let spec = &self.program.functions[*index];
                     let mut captures = Vec::new();
@@ -3205,11 +3246,25 @@ impl Execution<'_> {
                         self.captured_cells.insert(cell);
                         captures.push((child_slot, cell));
                     }
-                    let handle = self.closures.len();
-                    self.closures.push(Closure {
+                    let closure = Closure {
                         function: *index,
                         captures,
-                    });
+                    };
+                    let handle = if let Some(recycled) = self.free_closures.pop() {
+                        let slot = self
+                            .closures
+                            .get_mut(recycled)
+                            .ok_or(FlowError::InvalidBytecode)?;
+                        if slot.is_some() {
+                            return Err(FlowError::InvalidBytecode);
+                        }
+                        *slot = Some(closure);
+                        recycled
+                    } else {
+                        let index = self.closures.len();
+                        self.closures.push(Some(closure));
+                        index
+                    };
                     stack.push(Value::Function(handle));
                 }
                 Op::Call(argc) | Op::CallMany(argc) | Op::CallSpread { prefix: argc, .. } => {
@@ -3952,6 +4007,7 @@ pub fn execute_flow_capture_with_args<'a>(
         retired_tables: HashSet::new(),
         table_cells: 0,
         closures: Vec::new(),
+        free_closures: Vec::new(),
         cells: Vec::new(),
         captured_cells: HashSet::new(),
         free_cells: Vec::new(),
@@ -7322,6 +7378,26 @@ mod tests {
         let huge = vec!["x".repeat(MAX_STRING_POOL_BYTES + 1)];
         let outcome = execute_flow_capture_with_args(&program, 1000, "script.lua", &huge);
         assert_eq!(outcome.result, Err(FlowError::TooLarge));
+    }
+
+    #[test]
+    fn root_gc_recycles_short_lived_closures_and_captured_cells() {
+        let source = "local keep; do local saved=42; keep=function() return saved end end; for i=1,42000 do local f=function() return i end end; print(keep())";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 2_000_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"42\n");
+
+        let source = "local refs={}; for i=1,17000 do refs[i]=function() return i end end; print('unreachable')";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 1_000_000);
+        assert_eq!(outcome.result, Err(FlowError::TooLarge));
+
+        let source = "local f; do local n=3; f=function() if n==0 then return 1 end n=n-1; return f() end end; for i=1,20000 do local temporary=function() return i end end; print(f())";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 1_000_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"1\n");
     }
 
     #[test]
