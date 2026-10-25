@@ -84,6 +84,8 @@ pub enum Builtin {
     TableConcat,
     TableUnpack,
     TablePack,
+    TableInsert,
+    TableRemove,
 }
 
 const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -111,6 +113,8 @@ const TABLE_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"concat", Builtin::TableConcat),
     (b"unpack", Builtin::TableUnpack),
     (b"pack", Builtin::TablePack),
+    (b"insert", Builtin::TableInsert),
+    (b"remove", Builtin::TableRemove),
 ];
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -3636,6 +3640,10 @@ impl Execution<'_> {
             Value::Builtin(Builtin::StringByte) => self.string_byte_builtin(&arguments),
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
             Value::Builtin(Builtin::TablePack) => Ok(vec![self.table_pack_builtin(&arguments)?]),
+            Value::Builtin(Builtin::TableInsert) => self.table_insert_builtin(&arguments),
+            Value::Builtin(Builtin::TableRemove) => {
+                Ok(vec![self.table_remove_builtin(&arguments)?])
+            }
             Value::Builtin(Builtin::TableConcat) => {
                 Ok(vec![self.table_concat_builtin(&arguments)?])
             }
@@ -3878,6 +3886,86 @@ impl Execution<'_> {
             }
         }
         Ok(Value::Table(handle))
+    }
+
+    /// table.insert follows Lua's two/three-argument array insertion
+    /// conventions. Charge shifting work up front and preserve bounded
+    /// table-slot limits instead of implicitly growing an unbounded Vec.
+    fn table_insert_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
+            return Err(FlowError::TypeError);
+        };
+        let Value::Integer(size) = self.raw_len(Value::Table(handle))? else {
+            return Err(FlowError::InvalidBytecode);
+        };
+        let last = size.checked_add(1).ok_or(FlowError::TooLarge)?;
+        let (position, value) = match args {
+            [_, value] => (last, *value),
+            [_, position, value] => (
+                self.exact_integer_operand(*position)
+                    .or_else(|_| self.integer_operand(*position))?,
+                *value,
+            ),
+            _ => return Err(FlowError::TypeError),
+        };
+        if position < 1 || position > last {
+            return Err(FlowError::TypeError);
+        }
+        if last > MAX_TABLE_FIELDS as i64 {
+            return Err(FlowError::TooLarge);
+        }
+        let work = (last - position + 1) as usize;
+        if self.steps.saturating_add(work) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += work;
+        for index in (position..last).rev() {
+            let value = self.read_table(handle, self.table_key(Value::Integer(index))?)?;
+            self.write_table(
+                handle,
+                self.table_key(Value::Integer(index + 1))?,
+                value,
+            )?;
+        }
+        self.write_table(handle, self.table_key(Value::Integer(position))?, value)?;
+        Ok(Vec::new())
+    }
+
+    /// table.remove returns the removed value while shifting subsequent
+    /// elements left. Lua permits a no-op removal at size + 1.
+    fn table_remove_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
+            return Err(FlowError::TypeError);
+        };
+        let Value::Integer(size) = self.raw_len(Value::Table(handle))? else {
+            return Err(FlowError::InvalidBytecode);
+        };
+        let position = match args.get(1).copied() {
+            Some(value) if value != Value::Nil => self
+                .exact_integer_operand(value)
+                .or_else(|_| self.integer_operand(value))?,
+            _ => size,
+        };
+        let last = size.checked_add(1).ok_or(FlowError::TooLarge)?;
+        if position != size && (position < 1 || position > last) {
+            return Err(FlowError::TypeError);
+        }
+        let work = if position < size {
+            (size - position + 1) as usize
+        } else {
+            1
+        };
+        if self.steps.saturating_add(work) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += work;
+        let removed = self.read_table(handle, self.table_key(Value::Integer(position))?)?;
+        for index in position..size {
+            let value = self.read_table(handle, self.table_key(Value::Integer(index + 1))?)?;
+            self.write_table(handle, self.table_key(Value::Integer(index))?, value)?;
+        }
+        self.write_table(handle, self.table_key(Value::Integer(size))?, Value::Nil)?;
+        Ok(removed)
     }
 
     /// table.unpack exposes genuine zero-or-more results from raw table
@@ -4444,6 +4532,7 @@ impl Execution<'_> {
                                 | Builtin::Xpcall
                                 | Builtin::StringByte
                                 | Builtin::TableUnpack
+                                | Builtin::TableInsert
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
@@ -4464,6 +4553,7 @@ impl Execution<'_> {
                                 Builtin::IpairsIterator => self.ipairs_iterator(&args)?,
                                 Builtin::StringByte => self.string_byte_builtin(&args)?,
                                 Builtin::TableUnpack => self.table_unpack_builtin(&args)?,
+                                Builtin::TableInsert => self.table_insert_builtin(&args)?,
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
@@ -4524,7 +4614,8 @@ impl Execution<'_> {
                             | Builtin::Ipairs
                             | Builtin::IpairsIterator
                             | Builtin::StringByte
-                            | Builtin::TableUnpack => {
+                            | Builtin::TableUnpack
+                            | Builtin::TableInsert => {
                                 unreachable!(
                                     "iteration/selection builtins handled as multiple results"
                                 )
@@ -4547,6 +4638,7 @@ impl Execution<'_> {
                             | Builtin::StringRep => self.string_builtin(builtin, &args)?,
                             Builtin::TableConcat => self.table_concat_builtin(&args)?,
                             Builtin::TablePack => self.table_pack_builtin(&args)?,
+                            Builtin::TableRemove => self.table_remove_builtin(&args)?,
                         };
                         if matches!(
                             instructions[pc],
@@ -9146,6 +9238,37 @@ mod tests {
         ] {
             let program = compile_flow_chunk(source).unwrap();
             let outcome = execute_flow_capture(&program, 3_000_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+    }
+
+    #[test]
+    fn table_insert_and_remove_match_lua_sequence_mutations() {
+        for (source, expected) in [
+            (
+                "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+                b"1,2,3,4\n2\t1,3,4\n4\t1,3\n".as_slice(),
+            ),
+            (
+                "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+                b"true\na\t0\t1\n".as_slice(),
+            ),
+            (
+                "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+                b"false\tfalse\ttrue\t1,2,4\n".as_slice(),
+            ),
+            (
+                "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+                b"true\t1,2\n1\t2\n".as_slice(),
+            ),
+            (
+                "local t=table.pack('a',nil,'c'); table.insert(t,2,'b'); print(table.remove(t,2),t[1],t[2],t[3],t.n)",
+                b"b\ta\tnil\tc\t3\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 20_000);
             assert_eq!(outcome.result, Ok(vec![]), "{source}");
             assert_eq!(outcome.stdout, expected, "{source}");
         }

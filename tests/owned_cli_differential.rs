@@ -158,6 +158,18 @@ fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
 }
 
 #[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn generated_branch_and_environment_interactions_match_lua54() {
     for seed in 0_i64..48 {
         let base = (seed * 11) % 23 - 8;
