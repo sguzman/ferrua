@@ -40,7 +40,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified implementation CI:** [all five jobs green at `b91b714`, including Lua 5.4 sequence metamethod parity across table.move, insert/remove, concat/unpack and preserved release safeguards](https://github.com/sguzman/ferrua/actions/runs/40241802566). The earlier UTF-8 and machine-ledger acceptance remains verified at [CI #40238262526](https://github.com/sguzman/ferrua/actions/runs/40238262526). Native EndeavourOS/Hyprland QA and stable owned-engine graduation remain pending.
+**Latest verified implementation CI:** [all five jobs green at `51630f3`, including Lua 5.4 table.sort `__index`/`__newindex` parity and preserved release safeguards](https://github.com/sguzman/ferrua/actions/runs/40242167867). The broader table-metamethod matrix was accepted in [CI #40241802566](https://github.com/sguzman/ferrua/actions/runs/40241802566); UTF-8 and machine-ledger acceptance remains verified at [CI #40238262526](https://github.com/sguzman/ferrua/actions/runs/40238262526). Native EndeavourOS/Hyprland QA and stable owned-engine graduation remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
