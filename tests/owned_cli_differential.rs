@@ -184,6 +184,22 @@ fn owned_table_move_overlap_and_destination_match_lua54() {
 }
 
 #[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn generated_branch_and_environment_interactions_match_lua54() {
     for seed in 0_i64..48 {
         let base = (seed * 11) % 23 - 8;

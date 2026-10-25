@@ -87,6 +87,7 @@ pub enum Builtin {
     TableInsert,
     TableRemove,
     TableMove,
+    TableSort,
 }
 
 const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -117,6 +118,7 @@ const TABLE_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"insert", Builtin::TableInsert),
     (b"remove", Builtin::TableRemove),
     (b"move", Builtin::TableMove),
+    (b"sort", Builtin::TableSort),
 ];
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -3647,6 +3649,7 @@ impl Execution<'_> {
                 Ok(vec![self.table_remove_builtin(&arguments)?])
             }
             Value::Builtin(Builtin::TableMove) => Ok(vec![self.table_move_builtin(&arguments)?]),
+            Value::Builtin(Builtin::TableSort) => self.table_sort_builtin(&arguments),
             Value::Builtin(Builtin::TableConcat) => {
                 Ok(vec![self.table_concat_builtin(&arguments)?])
             }
@@ -4021,6 +4024,97 @@ impl Execution<'_> {
             self.write_table(target, target_key, value)?;
         }
         Ok(Value::Table(target))
+    }
+
+    /// Match Lua's ordinary less-than relation for native numbers/bytes and
+    /// __lt tables. Optional comparators use normal protected-target execution
+    /// with bounded native call depth and Lua truthiness.
+    fn table_sort_less(
+        &mut self,
+        left: Value,
+        right: Value,
+        comparator: Option<Value>,
+    ) -> Result<bool, FlowError> {
+        if let Some(callback) = comparator {
+            if self.depth >= MAX_CALL_DEPTH {
+                return Err(FlowError::CallDepthExceeded);
+            }
+            self.depth += 1;
+            let called = self.protected_target(callback, &[left, right]);
+            self.depth -= 1;
+            return Ok(called?
+                .first()
+                .copied()
+                .unwrap_or(Value::Nil)
+                .truthy());
+        }
+        match (left, right) {
+            (
+                Value::Integer(_) | Value::Float(_),
+                Value::Integer(_) | Value::Float(_),
+            ) => Ok(numeric_order(left, right) == Some(std::cmp::Ordering::Less)),
+            (Value::String(a), Value::String(b)) => Ok(
+                self.strings
+                    .get(a)
+                    .ok_or(FlowError::InvalidBytecode)?
+                    < self.strings.get(b).ok_or(FlowError::InvalidBytecode)?,
+            ),
+            _ => Ok(self.ordering_with_metamethod(Binary::Less, left, right)?.truthy()),
+        }
+    }
+
+    /// Sort a bounded snapshot using insertion sort. Unlike Lua's in-place
+    /// quicksort, the owned VM commits only after successful comparisons.
+    /// GC roots keep all snapshot entries live through comparator callbacks.
+    fn table_sort_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
+            return Err(FlowError::TypeError);
+        };
+        let comparator = match args.get(1).copied().unwrap_or(Value::Nil) {
+            Value::Nil => None,
+            callback @ (Value::Function(_) | Value::Builtin(_)) => Some(callback),
+            _ => return Err(FlowError::TypeError),
+        };
+        let Value::Integer(length) = self.raw_len(Value::Table(handle))? else {
+            return Err(FlowError::InvalidBytecode);
+        };
+        let length = usize::try_from(length).map_err(|_| FlowError::TooLarge)?;
+        if length > MAX_TABLE_FIELDS {
+            return Err(FlowError::TooLarge);
+        }
+        let mut sorted = Vec::with_capacity(length);
+        for index in 1..=length {
+            sorted.push(self.read_table(handle, TableKey::Positive(index))?);
+        }
+        let mut roots = args.to_vec();
+        roots.extend_from_slice(&sorted);
+        self.gc_frame_roots.push(GcFrameRoots {
+            stack: roots,
+            slots: Vec::new(),
+            prepared: Vec::new(),
+        });
+        let result = (|| {
+            for index in 1..sorted.len() {
+                let mut at = index;
+                while at > 0 {
+                    if self.steps >= self.budget {
+                        return Err(FlowError::StepBudgetExceeded);
+                    }
+                    self.steps += 1;
+                    if !self.table_sort_less(sorted[at], sorted[at - 1], comparator)? {
+                        break;
+                    }
+                    sorted.swap(at, at - 1);
+                    at -= 1;
+                }
+            }
+            for (index, value) in sorted.into_iter().enumerate() {
+                self.write_table(handle, TableKey::Positive(index + 1), value)?;
+            }
+            Ok(Vec::new())
+        })();
+        self.gc_frame_roots.pop();
+        result
     }
 
     /// table.unpack exposes genuine zero-or-more results from raw table
@@ -4588,6 +4682,7 @@ impl Execution<'_> {
                                 | Builtin::StringByte
                                 | Builtin::TableUnpack
                                 | Builtin::TableInsert
+                                | Builtin::TableSort
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
@@ -4609,6 +4704,7 @@ impl Execution<'_> {
                                 Builtin::StringByte => self.string_byte_builtin(&args)?,
                                 Builtin::TableUnpack => self.table_unpack_builtin(&args)?,
                                 Builtin::TableInsert => self.table_insert_builtin(&args)?,
+                                Builtin::TableSort => self.table_sort_builtin(&args)?,
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
@@ -4670,7 +4766,8 @@ impl Execution<'_> {
                             | Builtin::IpairsIterator
                             | Builtin::StringByte
                             | Builtin::TableUnpack
-                            | Builtin::TableInsert => {
+                            | Builtin::TableInsert
+                            | Builtin::TableSort => {
                                 unreachable!(
                                     "iteration/selection builtins handled as multiple results"
                                 )
@@ -9374,6 +9471,49 @@ mod tests {
             execute_flow_capture(&program, 30_000).result,
             Err(FlowError::TooLarge)
         );
+    }
+
+    #[test]
+    fn table_sort_orders_numbers_strings_callbacks_and_table_metamethods() {
+        for (source, expected) in [
+            (
+                "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+                b"0\t1,2,3\n".as_slice(),
+            ),
+            (
+                "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+                b"a|b|c\n".as_slice(),
+            ),
+            (
+                "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+                b"4,3,2,1\n".as_slice(),
+            ),
+            (
+                "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+                b"-1,0,2,3.5\n".as_slice(),
+            ),
+            (
+                "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+                b"0\t0\n5\n".as_slice(),
+            ),
+            (
+                "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+                b"false\tfalse\t3,2,1\n".as_slice(),
+            ),
+            (
+                "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+                b"1\t2\t3\n".as_slice(),
+            ),
+            (
+                "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+                b"1,2,3\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 100_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
     }
 
     #[test]
