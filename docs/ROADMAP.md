@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 210 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 211 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 99%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 99%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -976,6 +976,11 @@
   - [x] Cover multibyte strings, continuation positions, empty strings, negative indices, beyond-end navigation, numeric arguments and mutable library identity — src/owned_flow.rs: utf8_offset_counts_byte_beginnings_and_reports_continuation_errors; tests/owned_cli_differential.rs: owned_utf8_offset_byte_boundaries_and_continuations_match_lua54
   - [x] Pass upstream Lua 5.4.6 differential, Rust checks, Rust 1.96 and downstream consumer tests — GitHub Actions 40237098499: five jobs green at f697937a0773c445d40dceed349f5dfc29b53729
   - [x] Synchronize machine acceptance ledger, generated roadmap, README, and scoped owned-engine documentation with passing CI — GitHub Actions 40237334267: all five CI jobs passed on a2b816d01fc265b7eed7e02e7488f4bee89afc58; README, owned-engine documentation, evidence ledger and generated roadmap synchronized
+- 🔤 **T482** Lua 5.4.6 utf8.codes strict/lax generic iteration and error parity — `████████░░ 75%`
+  - [x] Expose utf8.codes returning Lua iterator/string/control triple using existing GenericForCheck runtime and two internal iterator flavors — src/owned_flow.rs: Utf8Codes, Utf8CodesIteratorStrict/Lax, UTF8_GLOBALS, utf8_codes_builtin, direct and protected multi-return dispatch
+  - [x] Decode lead bytes under strict and lax UTF-8, traverse real byte positions, accept numeric string coercion, reject malformed sequences and bound iteration work — src/owned_flow.rs: utf8_codes_iterator, lua_utf8_decode, bounded VM steps; Rust unit utf8_codes_iterates_byte_positions_with_strict_and_lax_decoding
+  - [x] Verify UTF-8 generic-for loops, explicit calls, state triples, surrogate/extended codepoints, invalid and continuation bytes against Lua 5.4.6; retain full error suffix despite source-prefix differences — tests/owned_cli_differential.rs: owned_utf8_codes_generic_iteration_strict_lax_and_errors_match_lua54; GitHub Actions 40237888459 all five jobs green on c8207a3dc6b577fe78bca51c5d8d8f46631c50f2
+  - [ ] Synchronize progress ledger, generated roadmap, README and owned-engine compatibility notes under passing documentation CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1121,5 +1126,5 @@
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
 - 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
 - 🧮 Bounded first-party Lua numeric math extensions — `██████████ 100%`
-- 🔤 Bounded first-party Lua 5.4 UTF-8 standard-library compatibility — `██████████ 100%`
+- 🔤 Bounded first-party Lua 5.4 UTF-8 standard-library compatibility — `█████████░ 92%`
 
