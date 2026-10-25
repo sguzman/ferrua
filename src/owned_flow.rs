@@ -9512,6 +9512,22 @@ mod tests {
     }
 
     #[test]
+    fn table_sort_snapshot_roots_values_during_comparator_gc_and_mutation() {
+        // Mutating the sorted table from a comparator is not reference-Lua
+        // parity territory. This owned-only regression verifies that values
+        // retained by the sorter remain rooted after the Lua table is cleared.
+        let source = "local t={{n=3},{n=1},{n=2}}; local changed=false; \
+                      table.sort(t,function(a,b) \
+                        if not changed then t[1]=nil; t[2]=nil; t[3]=nil; changed=true end; \
+                        collectgarbage('collect'); return a.n<b.n \
+                      end); print(t[1].n,t[2].n,t[3].n)";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 100_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"1\t2\t3\n");
+    }
+
+    #[test]
     fn gc_reclaims_runtime_strings_and_reuses_handles_after_explicit_passes() {
         let source = "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))";
         let program = compile_flow_chunk(source).unwrap();
