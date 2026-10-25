@@ -5351,7 +5351,7 @@
               "id": "T479",
               "emoji": "🎲",
               "name": "Lua 5.4 xoshiro256** random and randomseed compatibility",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Implement owned xoshiro256** RNG with Lua 5.4.6 seed mixing, unbiased integer projection and non-cryptographic implicit seeding",
@@ -5370,7 +5370,8 @@
                 },
                 {
                   "text": "Synchronize roadmap, progress ledger, README, owned-engine documentation and acceptance evidence under green CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40235330285: all five jobs passed on 80a95a44e88a0df25b44f3a18c26ecf6c3d50e53; generated roadmap, README, owned engine docs and machine evidence ledger accepted"
                 }
               ]
             }
