@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 187 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 188 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -861,6 +861,11 @@
   - [x] Verify nested, protected and first-party type outputs remain identical under long-running string churn — src/owned_flow.rs: type_and_math_type_preserve_dynamic_strings_under_quota_pressure; tests/owned_cli_differential.rs: owned_type_and_math_type_under_string_pressure_match_lua54
   - [x] Demonstrate an actual quota-triggered collection for fresh type/math.type names with calibrated stopped-GC heap fill and upstream Lua 5.4 comparisons — src/owned_flow.rs: type_and_math_type_trigger_real_collection_at_string_quota; GitHub Actions 40211697932 five jobs successful at commit 60135b5fadeb1cc4e8c801d92981798245c71bdf
   - [x] Synchronize documentation, evidence ledger and generated roadmap under green CI — GitHub Actions 40211983977: all five jobs passed on b0452637f8ff12e11cdccb349873aead966faf42; README, owned-engine docs and generated roadmap accepted
+- 🧰 **T459** Preserve pending keys and lazy standard tables during string-pool reclamation — `████████░░ 75%`
+  - [x] Root pending Lua keys across table slot-pressure GC when constructing lazy math and argv libraries, including nested _G initialization — src/owned_flow.rs: reserve_lazy_table_slot(pending), materialize_math_table(pending), materialize_global_table
+  - [x] Root partial arg tables before allocating argument strings and use safe interning for _G, math and script arguments without exposing transient string handles — src/owned_flow.rs: argument_table(pending), early arg_handle, intern_rooted_string at lazy library construction
+  - [x] Verify near-quota stopped/restarted collection, retained globals, argv values, _G math fields and reference Lua observable output in green five-job CI — GitHub Actions 40212415339: all five jobs passed on 0d16541ce91dc2cf517c56ce2205c5cf8cc8dcec; src/owned_flow.rs lazy_standard_tables_root_pending_keys_during_string_collection; tests/owned_cli_differential.rs owned_lazy_standard_tables_survive_string_pressure_like_lua54
+  - [ ] Synchronize machine ledger and generator-derived roadmap, README and owned-engine documentation under all-green CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1002,5 +1007,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 99%`
 

@@ -4786,6 +4786,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T459",
+              "emoji": "🧰",
+              "name": "Preserve pending keys and lazy standard tables during string-pool reclamation",
+              "checks": [
+                {
+                  "text": "Root pending Lua keys across table slot-pressure GC when constructing lazy math and argv libraries, including nested _G initialization",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: reserve_lazy_table_slot(pending), materialize_math_table(pending), materialize_global_table"
+                },
+                {
+                  "text": "Root partial arg tables before allocating argument strings and use safe interning for _G, math and script arguments without exposing transient string handles",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: argument_table(pending), early arg_handle, intern_rooted_string at lazy library construction"
+                },
+                {
+                  "text": "Verify near-quota stopped/restarted collection, retained globals, argv values, _G math fields and reference Lua observable output in green five-job CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40212415339: all five jobs passed on 0d16541ce91dc2cf517c56ce2205c5cf8cc8dcec; src/owned_flow.rs lazy_standard_tables_root_pending_keys_during_string_collection; tests/owned_cli_differential.rs owned_lazy_standard_tables_survive_string_pressure_like_lua54"
+                },
+                {
+                  "text": "Synchronize machine ledger and generator-derived roadmap, README and owned-engine documentation under all-green CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5780,7 +5807,8 @@
             "T455",
             "T456",
             "T457",
-            "T458"
+            "T458",
+            "T459"
           ]
         }
       ]
