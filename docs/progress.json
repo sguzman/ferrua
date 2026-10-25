@@ -4455,7 +4455,7 @@
               "id": "T447",
               "emoji": "🧺",
               "name": "Collect unreachable Lua multi-return constructor tail allocations",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Attempt bounded collection before positional table-tail expansion rejects array-cell quota pressure",
@@ -4474,7 +4474,8 @@
                 },
                 {
                   "text": "Synchronize README, owned-engine evidence, machine ledger, and generated roadmap under all-green CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40200111171: all five jobs successful on 07f9640b529d96ad12f72698d1666e6b4e174a47; README, machine ledger, owned-engine docs and generated roadmap accepted"
                 }
               ]
             }
