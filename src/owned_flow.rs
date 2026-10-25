@@ -3049,11 +3049,14 @@ impl Execution<'_> {
     fn tostring_builtin(&mut self, value: Value, roots: &[Value]) -> Result<Value, FlowError> {
         let text = match value {
             Value::String(_) => value,
-            Value::Integer(number) => self.intern_rooted_string(number.to_string().into_bytes(), roots)?,
-            Value::Float(bits) => {
-                self.intern_rooted_string(format!("{:?}", f64::from_bits(bits)).into_bytes(), roots)?
+            Value::Integer(number) => {
+                self.intern_rooted_string(number.to_string().into_bytes(), roots)?
             }
-            Value::Boolean(boolean) => self.intern_rooted_string(boolean.to_string().into_bytes(), roots)?,
+            Value::Float(bits) => self
+                .intern_rooted_string(format!("{:?}", f64::from_bits(bits)).into_bytes(), roots)?,
+            Value::Boolean(boolean) => {
+                self.intern_rooted_string(boolean.to_string().into_bytes(), roots)?
+            }
             Value::Nil => self.intern_rooted_string(b"nil".to_vec(), roots)?,
             Value::Table(handle) => {
                 if let Some(method) = self.metatable_field(handle, b"__tostring")? {
@@ -3071,9 +3074,10 @@ impl Execution<'_> {
                         Value::Integer(number) => {
                             self.intern_rooted_string(number.to_string().into_bytes(), roots)?
                         }
-                        Value::Float(bits) => {
-                            self.intern_rooted_string(format!("{:?}", f64::from_bits(bits)).into_bytes(), roots)?
-                        }
+                        Value::Float(bits) => self.intern_rooted_string(
+                            format!("{:?}", f64::from_bits(bits)).into_bytes(),
+                            roots,
+                        )?,
                         _ => return Err(FlowError::TypeError),
                     }
                 } else {
@@ -3472,7 +3476,11 @@ impl Execution<'_> {
     /// pin all in-flight Lua operands, including builtin arguments held by
     /// host-side Rust vectors. Other interners may still hold unrooted
     /// intermediate values and retain the strict noncollecting quota.
-    fn intern_rooted_string(&mut self, bytes: Vec<u8>, roots: &[Value]) -> Result<Value, FlowError> {
+    fn intern_rooted_string(
+        &mut self,
+        bytes: Vec<u8>,
+        roots: &[Value],
+    ) -> Result<Value, FlowError> {
         let pool_full = (self.strings.len() >= MAX_STRINGS && self.free_strings.is_empty())
             || self.string_bytes.saturating_add(bytes.len()) > MAX_STRING_POOL_BYTES;
         if self.automatic_gc
@@ -7895,10 +7903,9 @@ mod tests {
             assert_eq!(outcome.result, Ok(vec![]), "{source}");
             assert_eq!(outcome.stdout, expected, "{source}");
         }
-        let stopped = compile_flow_chunk(
-            "collectgarbage('stop'); for i=1,19000 do local s=tostring(i) end",
-        )
-        .unwrap();
+        let stopped =
+            compile_flow_chunk("collectgarbage('stop'); for i=1,19000 do local s=tostring(i) end")
+                .unwrap();
         assert_eq!(
             execute_flow_capture(&stopped, 3_000_000).result,
             Err(FlowError::TooLarge)
