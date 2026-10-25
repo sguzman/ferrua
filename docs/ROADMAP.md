@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 99%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 99%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -956,11 +956,11 @@
   - [x] Test float return types, angle identities, numeric strings, infinity NaNs, Lua argument errors and writable library identity using bounded numeric comparisons — src/owned_flow.rs: math_trigonometry_and_unit_conversions_are_float_and_protected; tests/owned_cli_differential.rs: owned_math_trigonometry_and_angle_conversions_match_lua54
   - [x] Verify Rust lint/tests and differential parity with pinned Lua 5.4, Rust 1.96, downstream action and aggregate five-job CI — GitHub Actions 40233132487: all five CI jobs passed on daa9f42c6ff46d9c211e2fd3a3bb87902e6b5f5e
   - [x] Synchronize README, owned-engine documentation, machine ledger and generated roadmap under all-green CI — GitHub Actions 40233353603: all five jobs passed at 22b41882cac8e21287723346d790cd2e70eb385e; README, machine evidence ledger, generated roadmap, and owned engine documentation synchronized
-- 🧮 **T478** Lua 5.4 inverse trigonometry, exponentials and logarithms — `████████░░ 75%`
+- 🧮 **T478** Lua 5.4 inverse trigonometry, exponentials and logarithms — `██████████ 100%`
   - [x] Implement math.exp, math.log (with optional base), math.asin, math.acos and two-argument math.atan with mutable library exports — src/owned_flow.rs: MathExp/MathLog/MathAsin/MathAcos/MathAtan, math_builtin, MATH_GLOBALS, direct/protected calls
   - [x] Test numeric-string conversion, optional nil/base behavior, NaN/infinity, float return types, invalid argument error objects and production atan2-label divergence without weakening assertions — src/owned_flow.rs: math_inverse_trig_exponents_and_optional_base_log_obey_lua_values; tests/owned_cli_differential.rs: owned_inverse_trig_exp_and_optional_log_base_match_lua54 and owned_math_atan_argument_label_matches_lua54_with_backend_alias_variation
   - [x] Pass upstream Lua 5.4 differential, ordinary Rust tests, Rust 1.96 and downstream consumer CI, retaining explicit implementation/production divergence — GitHub Actions 40233937548: all five jobs passed at 3846b423787c36efd1689119e6fb79c762746c0e
-  - [ ] Synchronize evidence ledger, generated roadmap, README and owned-engine limitations with all-green documentation CI
+  - [x] Synchronize evidence ledger, generated roadmap, README and owned-engine limitations with all-green documentation CI — GitHub Actions 40234368441: all five jobs passed on aff117d4b94b9910d64d2cb6e731a58a980f4115, including the explicit Lua 5.4 atan diagnostic check, refreshed machine evidence and generated roadmap
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1105,5 +1105,5 @@
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
 - 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
-- 🧮 Bounded first-party Lua numeric math extensions — `█████████░ 94%`
+- 🧮 Bounded first-party Lua numeric math extensions — `██████████ 100%`
 

@@ -5323,7 +5323,7 @@
               "id": "T478",
               "emoji": "🧮",
               "name": "Lua 5.4 inverse trigonometry, exponentials and logarithms",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Implement math.exp, math.log (with optional base), math.asin, math.acos and two-argument math.atan with mutable library exports",
@@ -5342,7 +5342,8 @@
                 },
                 {
                   "text": "Synchronize evidence ledger, generated roadmap, README and owned-engine limitations with all-green documentation CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40234368441: all five jobs passed on aff117d4b94b9910d64d2cb6e731a58a980f4115, including the explicit Lua 5.4 atan diagnostic check, refreshed machine evidence and generated roadmap"
                 }
               ]
             }
