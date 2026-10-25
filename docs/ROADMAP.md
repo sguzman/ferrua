@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 179 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 179 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -816,11 +816,11 @@
   - [x] Verify heap size grows with temporary allocations and falls after explicit collection while automatic GC is stopped — src/owned_flow.rs: gc_count_reflects_unreachable_table_storage_reclamation
   - [x] Compare observable type, allocation growth and reclamation with production fer and Lua 5.4 in five-job CI — GitHub Actions 40202464541: all five jobs passed on e90d3205928522a78a731d91637cf2496992a48c; tests/owned_cli_differential.rs: owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54
   - [x] Synchronize README, owned-engine docs, machine ledger and generated roadmap under passing CI — GitHub Actions 40202733199: all five jobs successful on a33e16682f9a1873fae6f609b1ab7826ef39fb57; README, owned-engine docs, ledger and generated roadmap passed checks
-- 🗃️ **T450** Reuse reclaimed table slots for lazy Lua standard-library tables — `████████░░ 75%`
+- 🗃️ **T450** Reuse reclaimed table slots for lazy Lua standard-library tables — `██████████ 100%`
   - [x] Use a shared quota-safe recycled-slot preflight for lazy _G, math and arg table allocation — src/owned_flow.rs: reserve_lazy_table_slot, materialize_global_table, materialize_math_table, argument_table
   - [x] Reclaim unreachable table slots automatically and accept manually recycled slots while stopped without releasing reachable tables — src/owned_flow.rs: gc_reuses_full_table_pool_for_lazy_global_math_and_argument_tables; includes retained-table quota rejection
   - [x] Compare observable Lua table initialization after exhausted-slot pressure with production fer and Lua 5.4 under five-job CI — GitHub Actions 40202985644: five jobs passed on 634ce9bd7f2de4d1e6ff5b4e9cb662c04c3e6616; tests/owned_cli_differential.rs: owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure
-  - [ ] Synchronize README, engine documentation, evidence ledger and generated roadmap under all-green CI
+  - [x] Synchronize README, engine documentation, evidence ledger and generated roadmap under all-green CI — GitHub Actions 40203151735: five jobs passed on 7c34f5c50a12212ddb9c068dd864d475cca4d4c3; README, owned-engine docs, ledger and generator-derived roadmap accepted
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -962,5 +962,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 97%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 
