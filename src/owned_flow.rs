@@ -73,6 +73,8 @@ pub enum Builtin {
     MathMin,
     MathType,
     MathToInteger,
+    MathSqrt,
+    MathUlt,
     StringLen,
     StringSub,
     StringByte,
@@ -98,6 +100,8 @@ const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"min", Builtin::MathMin),
     (b"type", Builtin::MathType),
     (b"tointeger", Builtin::MathToInteger),
+    (b"sqrt", Builtin::MathSqrt),
+    (b"ult", Builtin::MathUlt),
 ];
 
 const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -2589,6 +2593,25 @@ impl Execution<'_> {
                     .map(Value::Integer)
                     .unwrap_or(Value::Nil))
             }
+            // Lua's square root always returns a floating-point value, even
+            // for an exact integer input. Preserve IEEE-754 NaN/inf results.
+            Builtin::MathSqrt => {
+                let number = match self.arithmetic_operand(first)? {
+                    Value::Integer(number) => number as f64,
+                    Value::Float(bits) => f64::from_bits(bits),
+                    _ => return Err(FlowError::TypeError),
+                };
+                Ok(Value::Float(number.sqrt().to_bits()))
+            }
+            // luaL_checkinteger accepts exactly integral floats and numeric
+            // strings; unsigned ordering uses the full 64-bit Lua integer.
+            Builtin::MathUlt => {
+                let left = self.exact_integer_operand(self.arithmetic_operand(first)?)?;
+                let right = self.exact_integer_operand(self.arithmetic_operand(
+                    *args.get(1).ok_or(FlowError::TypeError)?,
+                )?)?;
+                Ok(Value::Boolean((left as u64) < (right as u64)))
+            }
             Builtin::MathAbs => match self.arithmetic_operand(first)? {
                 Value::Integer(number) => Ok(Value::Integer(number.wrapping_abs())),
                 Value::Float(bits) => Ok(Value::Float(f64::from_bits(bits).abs().to_bits())),
@@ -4778,7 +4801,9 @@ impl Execution<'_> {
                             | Builtin::MathMax
                             | Builtin::MathMin
                             | Builtin::MathType
-                            | Builtin::MathToInteger => self.math_builtin(builtin, &args)?,
+                            | Builtin::MathToInteger
+                            | Builtin::MathSqrt
+                            | Builtin::MathUlt => self.math_builtin(builtin, &args)?,
                             Builtin::StringLen
                             | Builtin::StringSub
                             | Builtin::StringChar
@@ -9911,6 +9936,20 @@ mod tests {
             compile_flow_chunk(&source),
             Err(FlowError::TooLarge)
         ));
+    }
+
+    #[test]
+    fn math_sqrt_and_unsigned_ordering_handle_lua_numeric_boundaries() {
+        let program = compile_flow_chunk(
+            "local m=math; assert(_G.math==m); print(math.sqrt(81)==9.0,math.type(math.sqrt(81)),math.sqrt('16')==4.0,math.sqrt(2)^2>1.999,math.sqrt(2)^2<2.001); print(math.sqrt(-1)~=math.sqrt(-1),math.sqrt(math.huge)==math.huge); print(math.ult(1,-1),math.ult(-1,1),math.ult(2.0,3.0),math.ult('2','3')); local a=pcall(math.sqrt,false); local b=pcall(math.ult,1.5,2); local c=pcall(math.ult,2); print(a,b,c)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 10000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(
+            outcome.stdout,
+            b"true\\tfloat\\ttrue\\ttrue\\ttrue\\ntrue\\ttrue\\ntrue\\tfalse\\ttrue\\ttrue\\nfalse\\tfalse\\tfalse\\n"
+        );
     }
 
     #[test]

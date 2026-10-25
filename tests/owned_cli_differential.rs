@@ -88,6 +88,19 @@ fn curated_global_function_print_and_error_semantics_match_lua54() {
 }
 
 #[test]
+fn owned_math_sqrt_and_unsigned_integer_order_match_lua54() {
+    for source in [
+        "print(math.sqrt(81)==9.0,math.type(math.sqrt(81)),math.sqrt('16')==4.0,math.sqrt(2)^2>1.999,math.sqrt(2)^2<2.001)",
+        "print(math.sqrt(-1)~=math.sqrt(-1),math.sqrt(math.huge)==math.huge)",
+        "print(math.ult(1,-1),math.ult(-1,1),math.ult(2.0,3.0),math.ult('2','3'))",
+        "local f=math.sqrt; local u=math.ult; math.sqrt=function() return 17 end; print(math.sqrt(),f(25)); math.sqrt=f; print(math.sqrt(25)==5.0,u(1,-1))",
+        "local ok,x=pcall(math.sqrt,9); print(ok,x==3.0); print(pcall(math.sqrt,false)); print(pcall(math.ult,1.5,2)); print(pcall(math.ult,2))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_len_sub_byte_offsets_match_lua54() {
     for source in [
         "print(string.len('a\\0b'),string.sub('abcdef',2,4),string.sub('abcdef',-3),string.sub('abcdef',0,2))",
