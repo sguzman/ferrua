@@ -5122,6 +5122,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T471",
+              "emoji": "📦",
+              "name": "Bounded Lua table.pack with explicit n and nil-hole retention",
+              "checks": [
+                {
+                  "text": "Provide table.pack as a first-class, zero-or-more-argument builtin returning a table with n equal to the exact input arity, including nils",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Builtin::TablePack and table_pack_builtin; Rust unit table_pack_preserves_nil_holes_and_explicit_argument_count; CI 40227533885"
+                },
+                {
+                  "text": "Retain pending arguments and the partially created table across GC with managed table/string limits and shared instruction budget",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: reserve_lazy_table_slot(args), rooted n key creation, write_table GC roots, MAX_TABLE_FIELDS and budget preflight; stress unit fixture; CI 40227533885"
+                },
+                {
+                  "text": "Require exact owned, production, and upstream Lua 5.4 output/status parity including nil holes, n, empty pack and writable global identity under all five CI jobs",
+                  "passed": true,
+                  "evidence": "tests/owned_cli_differential.rs: owned_table_pack_nil_holes_and_argument_count_match_lua54; GitHub Actions 40227533885 five successful jobs on 7742ea96aee7a78aaf47719e99f274e9c3b60c9f"
+                },
+                {
+                  "text": "Update README, owned-engine design, machine evidence ledger and generated roadmap under all-green CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -6140,7 +6167,8 @@
           "emoji": "🧺",
           "name": "Bounded first-party Lua table standard-library subset",
           "task_ids": [
-            "T470"
+            "T470",
+            "T471"
           ]
         }
       ]
