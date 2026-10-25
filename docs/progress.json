@@ -5010,6 +5010,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T467",
+              "emoji": "🧯",
+              "name": "GC-safe string allocation for assert and protected-call diagnostics",
+              "checks": [
+                {
+                  "text": "Root the default assert(false) failure message during quota-triggered collection",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: assertion_failure uses intern_rooted_string with full builtin arguments; commit e85cbad"
+                },
+                {
+                  "text": "Root pcall/xpcall internal errors, message-handler retries and terminal error text without relaxing memory limits",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: protected_error_value, pcall_builtin and xpcall_builtin explicitly carry argument and retry-message roots; commit e85cbad"
+                },
+                {
+                  "text": "Calibrate a near-full stopped-GC string pool, restart collection and verify live values and actual reclamation through all three error paths under five-job CI",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: protected_error_strings_recover_quota_with_rooted_arguments; GitHub Actions 40223559390 five jobs successful on e85cbad"
+                },
+                {
+                  "text": "Synchronize README, owned-engine documentation, machine ledger and generated roadmap under passing five-job CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -6012,7 +6039,8 @@
             "T463",
             "T464",
             "T465",
-            "T466"
+            "T466",
+            "T467"
           ]
         }
       ]
