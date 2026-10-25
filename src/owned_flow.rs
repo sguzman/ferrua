@@ -4925,9 +4925,7 @@ impl Execution<'_> {
             } else {
                 0
             };
-            if repetition != 0
-                && matches!(&atom, Atom::Frontier(_) | Atom::Balanced(_, _))
-            {
+            if repetition != 0 && matches!(&atom, Atom::Frontier(_) | Atom::Balanced(_, _)) {
                 return Err(FlowError::Unsupported(
                     "Lua structural-pattern repetition is not implemented".into(),
                 ));
