@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 182 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 182 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -831,11 +831,11 @@
   - [x] Prune unmarked array/hash values before recycling heap objects, preserving reachable objects, strings, primitive values and strong keys under budgeted collection — src/owned_flow.rs: weak_value_unreachable, weak_clears validation and budget charge, owned_gc_weak_value_tables_collect_dead_tables_and_closures
   - [x] Compare live retention, dead table/closure removal, strong-key behavior and mode changes with production fer and upstream Lua 5.4 — GitHub Actions 40205578882: all five jobs passed on 78b39053a49050b7e7831afa50fd34bf36c853ac; tests/owned_cli_differential.rs: owned_weak_value_gc_matches_upstream_lua54
   - [x] Synchronize README, owned-engine documentation, ledger and generator-derived roadmap under five-job CI — GitHub Actions 40205762653: five jobs passed on 5ca50db644b7256946fe7fc797233475620d41bc; README, docs, machine ledger and generated roadmap accepted
-- 🗝️ **T453** Lua weak-key, double-weak and ephemeron fixpoint collection — `████████░░ 75%`
+- 🗝️ **T453** Lua weak-key, double-weak and ephemeron fixpoint collection — `██████████ 100%`
   - [x] Trace weak-key tables using dependent-value ephemerons, retaining values only when their collectable keys become independently marked — src/owned_flow.rs: table_weakness; collect_root_tables ephemerons/activated iterative worklist
   - [x] Remove unreachable weak keys or values after a complete fixpoint, keeping primitives and preserving two-sided weak semantics within budget — src/owned_flow.rs: weak_clears, weak_value_unreachable; owned_gc_weak_keys_and_ephemeron_fixpoint_preserve_lua_reachability
   - [x] Verify cycle removal, reachable key retention, primitive keys, ephemeron chains, and double-weak tables against production fer and upstream Lua 5.4 — GitHub Actions 40206193452: five jobs passed on b0e738cbfe6c34026e928e95019dc3608540aff3; tests/owned_cli_differential.rs: owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54
-  - [ ] Synchronize README, owned-engine documentation, evidence ledger and generated roadmap under successful CI
+  - [x] Synchronize README, owned-engine documentation, evidence ledger and generated roadmap under successful CI — GitHub Actions 40206384742: five jobs passed on 43f1405270d6ab21a14bf8b4e186d11f2e2c9e29; README, owned-engine docs, machine ledger and generated roadmap accepted
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -977,5 +977,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 98%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 
