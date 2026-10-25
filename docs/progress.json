@@ -4562,6 +4562,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T451",
+              "emoji": "⏱️",
+              "name": "Charge bounded collector sweep traversal to the VM instruction budget",
+              "checks": [
+                {
+                  "text": "Reserve sweep cost for table slots, closure slots, capture bookkeeping and frame allocations before heap mutation",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: collect_root_tables bounded sweep_cost preflight"
+                },
+                {
+                  "text": "Verify quota rejection when a full sweep exceeds the remaining budget and successful collection with sufficient budget",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: collector_charges_sweeps_against_execution_budget adaptive baseline regression"
+                },
+                {
+                  "text": "Pass Linux formatting/clippy/tests, Rust 1.96, Lua 5.4 reference checks, Arch packaging and downstream consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40203647611: all five jobs passed on e19a977561b40a126f41e70e25975a29338a2143"
+                },
+                {
+                  "text": "Synchronize README, owned-engine docs, evidence ledger and generated roadmap under passing CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5548,7 +5575,8 @@
             "T447",
             "T448",
             "T449",
-            "T450"
+            "T450",
+            "T451"
           ]
         }
       ]
