@@ -1983,7 +1983,10 @@ impl Execution<'_> {
         }
         // Called from a live bytecode frame; the root snapshots were taken
         // before the Call opcode consumed the function and arguments.
-        let frame = self.gc_frame_roots.last().ok_or(FlowError::InvalidBytecode)?;
+        let frame = self
+            .gc_frame_roots
+            .last()
+            .ok_or(FlowError::InvalidBytecode)?;
         let slots = frame.slots.clone();
         let prepared = frame.prepared.clone();
         self.collect_root_tables(args, &slots, &prepared)?;
