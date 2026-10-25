@@ -7907,6 +7907,40 @@ mod tests {
     }
 
     #[test]
+    fn type_and_math_type_trigger_real_collection_at_string_quota() {
+        // Determine the largest string-pool fill that succeeds with GC
+        // stopped, using the same compiled program on both branches.
+        // The first type name is not pre-interned; math is materialized
+        // before the fill to isolate string allocation by these builtins.
+        let mut low = 14_000;
+        let mut high = 16_000;
+        let mut final_output = None;
+        while low + 1 < high {
+            let middle = low + (high - low) / 2;
+            let source = format!(
+                "local _=math.abs(7); collectgarbage('stop'); \
+                 for i=1,{middle} do local s=tostring(i) end; \
+                 collectgarbage('restart'); \
+                 local before=collectgarbage('count'); \
+                 local first=type({{}}); local second=math.type(7); \
+                 local after=collectgarbage('count'); \
+                 print(first,second,before>after)"
+            );
+            let program = compile_flow_chunk(&source).unwrap();
+            let outcome = execute_flow_capture(&program, 3_000_000);
+            match outcome.result {
+                Ok(_) => {
+                    low = middle;
+                    final_output = Some(outcome.stdout);
+                }
+                Err(FlowError::TooLarge) => high = middle,
+                other => panic!("{source}: unexpected result: {other:?}"),
+            }
+        }
+        assert_eq!(final_output, Some(b"table\tinteger\ttrue\n".to_vec()));
+    }
+
+    #[test]
     fn tostring_and_print_recover_string_quota_with_rooted_builtin_arguments() {
         for (source, expected) in [
             (
