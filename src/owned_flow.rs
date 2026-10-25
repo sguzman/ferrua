@@ -1624,6 +1624,15 @@ struct Closure {
     captures: Vec<(usize, usize)>,
 }
 
+/// Bytecode stack roots retained for suspended Lua callers. The snapshot is
+/// refreshed at each instruction boundary, before any operand is popped for
+/// a function call or a metamethod callback.
+#[derive(Default)]
+struct GcFrameRoots {
+    stack: Vec<Value>,
+    prepared: Vec<PendingTarget>,
+}
+
 struct Execution<'a> {
     program: &'a FlowProgram,
     budget: usize,
@@ -1639,6 +1648,7 @@ struct Execution<'a> {
     captured_cells: HashSet<usize>,
     free_cells: Vec<usize>,
     frame_allocations: Vec<Vec<usize>>,
+    gc_frame_roots: Vec<GcFrameRoots>,
     strings: Vec<Vec<u8>>,
     string_index: HashMap<Vec<u8>, usize>,
     string_bytes: usize,
@@ -1738,31 +1748,57 @@ impl Execution<'_> {
         Ok(())
     }
 
-    /// Root-frame-only bounded mark-and-sweep for table cycles.
-    /// Suspended nested Lua stacks are not available to the collector.
+    /// Bounded mark-and-sweep across active Lua call frames. Each suspended
+    /// caller retains its pre-instruction stack and prepared table targets;
+    /// ancestor cell allocations are conservatively retained as extra roots.
     fn collect_root_tables(
         &mut self,
         stack: &[Value],
         slots: &[usize],
         prepared: &[PendingTarget],
     ) -> Result<(), FlowError> {
-        if self.depth != 0 || self.frame_allocations.len() != 1 {
-            return Ok(());
+        if self.frame_allocations.is_empty()
+            || self.frame_allocations.len() != self.gc_frame_roots.len()
+        {
+            return Err(FlowError::InvalidBytecode);
         }
         let mut marked_tables = vec![false; self.tables.len()];
         let mut marked_closures = vec![false; self.closures.len()];
         let mut work = stack.to_vec();
+        // Saved caller stacks include operands that were popped to construct
+        // calls, plus temporarily prepared indexed assignment addresses.
+        for frame in &self.gc_frame_roots {
+            work.extend_from_slice(&frame.stack);
+            for &target in &frame.prepared {
+                if let PendingTarget::Indexed { table, key } = target {
+                    work.push(Value::Table(table));
+                    if let TableKey::Hashed(value) = key {
+                        work.push(value);
+                    }
+                }
+            }
+        }
+        // Ancestor frames are suspended and their exact lexical-slot state
+        // is not available here. Keeping all their allocated cells is safe
+        // and bounded; the executing frame uses the precise slot list below.
+        for frame in self.frame_allocations.iter().rev().skip(1) {
+            for &cell in frame {
+                if let Some(Some(value)) = self.cells.get(cell) {
+                    work.push(*value);
+                }
+            }
+        }
         for &cell in slots {
             if let Some(Some(value)) = self.cells.get(cell) {
                 work.push(*value);
             }
         }
         work.extend(self.globals.values().copied());
-        for target in prepared {
-            if let PendingTarget::Indexed { table, key } = *target {
+        for &target in prepared {
+            if let PendingTarget::Indexed { table, key } = target {
                 work.push(Value::Table(table));
-                if let TableKey::Hashed(key) = key {
-                    work.push(key);
+                if let TableKey::Hashed(value) = key {
+                    work.push(value);
                 }
             }
         }
@@ -1842,19 +1878,28 @@ impl Execution<'_> {
         // protection. Retain active stack-frame slots and release orphaned
         // cells, removing them from frame cleanup bookkeeping to avoid a
         // duplicate free when the root frame finally returns.
-        let active_slots: HashSet<usize> = slots.iter().copied().collect();
+        let mut active_slots: HashSet<usize> = slots.iter().copied().collect();
+        for frame in self.frame_allocations.iter().rev().skip(1) {
+            active_slots.extend(frame.iter().copied());
+        }
         let abandoned: Vec<usize> = self
             .captured_cells
             .iter()
             .copied()
             .filter(|cell| !live_captures.contains(cell))
             .collect();
+        let mut released = HashSet::new();
         for cell in abandoned {
             self.captured_cells.remove(&cell);
             if !active_slots.contains(&cell) {
                 *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = None;
                 self.free_cells.push(cell);
-                self.frame_allocations[0].retain(|&allocated| allocated != cell);
+                released.insert(cell);
+            }
+        }
+        if !released.is_empty() {
+            for frame in &mut self.frame_allocations {
+                frame.retain(|cell| !released.contains(cell));
             }
         }
         for (handle, live) in marked_tables.into_iter().enumerate() {
@@ -3166,7 +3211,11 @@ impl Execution<'_> {
         varargs: &[Value],
     ) -> Result<Vec<Value>, FlowError> {
         self.frame_allocations.push(Vec::new());
+        self.gc_frame_roots.push(GcFrameRoots::default());
         let result = self.run_inner(instructions, slot_count, initial, captures, varargs);
+        self.gc_frame_roots
+            .pop()
+            .ok_or(FlowError::InvalidBytecode)?;
         let allocated = self
             .frame_allocations
             .pop()
@@ -3227,6 +3276,15 @@ impl Execution<'_> {
                 return Err(FlowError::StepBudgetExceeded);
             }
             self.steps += 1;
+            // Snapshot *before* the operation. A metamethod or function call
+            // can suspend this frame after popping operands from its stack.
+            // Unlike borrowed Rust pointers, these owned roots remain valid
+            // while nested execution mutates the heap.
+            let roots = self.gc_frame_roots.last_mut().ok_or(FlowError::InvalidBytecode)?;
+            roots.stack.clear();
+            roots.stack.extend_from_slice(&stack);
+            roots.prepared.clear();
+            roots.prepared.extend_from_slice(&prepared);
             let next = pc + 1;
             match &instructions[pc] {
                 Op::Constant(value) => stack.push(*value),
@@ -4014,6 +4072,7 @@ pub fn execute_flow_capture_with_args<'a>(
         captured_cells: HashSet::new(),
         free_cells: Vec::new(),
         frame_allocations: Vec::new(),
+        gc_frame_roots: Vec::new(),
         strings: program.strings.clone(),
         string_index,
         string_bytes,
@@ -7380,6 +7439,21 @@ mod tests {
         let huge = vec!["x".repeat(MAX_STRING_POOL_BYTES + 1)];
         let outcome = execute_flow_capture_with_args(&program, 1000, "script.lua", &huge);
         assert_eq!(outcome.result, Err(FlowError::TooLarge));
+    }
+
+    #[test]
+    fn nested_gc_preserves_suspended_caller_stack_and_closure_values() {
+        let source = "local function pressure() for i=1,21000 do local t={}; t.self=t end; return 7 end; local function combine(t,n) return t.value+n end; print(combine({value=35},pressure()))";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 2_000_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"42\n");
+
+        let source = "local function pressure() for i=1,21000 do local f=function() return i end end; return 4 end; local function apply(f,n) return f()+n end; local function make() local x=38; return function() return x end end; print(apply(make(),pressure()))";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 2_000_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"42\n");
     }
 
     #[test]
