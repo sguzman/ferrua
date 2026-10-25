@@ -63,6 +63,7 @@ pub enum Builtin {
     Error,
     Pcall,
     Xpcall,
+    CollectGarbage,
     MathAbs,
     MathFloor,
     MathCeil,
@@ -96,6 +97,7 @@ const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"error", Builtin::Error),
     (b"pcall", Builtin::Pcall),
     (b"xpcall", Builtin::Xpcall),
+    (b"collectgarbage", Builtin::CollectGarbage),
     (b"next", Builtin::Next),
     (b"pairs", Builtin::Pairs),
     (b"ipairs", Builtin::Ipairs),
@@ -1965,6 +1967,29 @@ impl Execution<'_> {
         Ok(handle)
     }
 
+    /// An explicitly requested complete pass is supported; other Lua 5.4
+    /// collector modes are not simulated by the bounded preview VM.
+    fn collectgarbage_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        if let Some(option) = args.first() {
+            let Value::String(handle) = *option else {
+                return Err(FlowError::TypeError);
+            };
+            let mode = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
+            if mode != b"collect" {
+                return Err(FlowError::Unsupported(
+                    "owned collector only supports the 'collect' mode".into(),
+                ));
+            }
+        }
+        // Called from a live bytecode frame; the root snapshots were taken
+        // before the Call opcode consumed the function and arguments.
+        let frame = self.gc_frame_roots.last().ok_or(FlowError::InvalidBytecode)?;
+        let slots = frame.slots.clone();
+        let prepared = frame.prepared.clone();
+        self.collect_root_tables(args, &slots, &prepared)?;
+        Ok(Value::Integer(0))
+    }
+
     /// A small first-party Lua 5.4 numeric library. Unsupported math
     /// functions remain absent rather than falling back to another runtime.
     fn math_builtin(&mut self, builtin: Builtin, args: &[Value]) -> Result<Value, FlowError> {
@@ -2902,6 +2927,9 @@ impl Execution<'_> {
             Value::Function(handle) => self.call_owned_function(handle, &arguments),
             Value::Builtin(Builtin::Error) => Err(self.error_builtin(&arguments)),
             Value::Builtin(Builtin::Print) => self.print_builtin(&arguments),
+            Value::Builtin(Builtin::CollectGarbage) => {
+                Ok(vec![self.collectgarbage_builtin(&arguments)?])
+            }
             Value::Builtin(Builtin::Assert) => {
                 if arguments.first().copied().unwrap_or(Value::Nil).truthy() {
                     Ok(arguments)
@@ -3405,6 +3433,7 @@ impl Execution<'_> {
                                     | Builtin::Assert
                                     | Builtin::MathType
                                     | Builtin::MathToInteger
+                                    | Builtin::CollectGarbage
                             )
                         {
                             return Err(FlowError::TypeError);
@@ -3503,6 +3532,7 @@ impl Execution<'_> {
                                 )
                             }
                             Builtin::ToString => self.tostring_builtin(value)?,
+                            Builtin::CollectGarbage => self.collectgarbage_builtin(&args)?,
                             Builtin::MathAbs
                             | Builtin::MathFloor
                             | Builtin::MathCeil
@@ -7472,6 +7502,15 @@ mod tests {
         let huge = vec!["x".repeat(MAX_STRING_POOL_BYTES + 1)];
         let outcome = execute_flow_capture_with_args(&program, 1000, "script.lua", &huge);
         assert_eq!(outcome.result, Err(FlowError::TooLarge));
+    }
+
+    #[test]
+    fn explicit_collectgarbage_supports_bounded_full_collection_only() {
+        let source = "local keep={v=42}; for i=1,2000 do local t={}; t.self=t end; print(type(collectgarbage()), type(collectgarbage('collect')),keep.v); local ok=pcall(collectgarbage,'count'); print(ok)";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 200_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"number\tnumber\t42\nfalse\n");
     }
 
     #[test]
