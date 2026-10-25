@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 177 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 177 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -806,11 +806,11 @@
   - [x] Preserve destination table and all expanded return values while tracing live Lua roots — src/owned_flow.rs: gc_reclaims_unreachable_constructor_multi_return_table_tails; tests/owned_cli_differential.rs: owned_gc_tail_constructor_matches_lua54_across_heap_pressure
   - [x] Verify temporary-heap success and retained-heap limit against production fer and upstream Lua 5.4 in five-job CI — GitHub Actions 40199755341 and 40199927574: Linux/Arch, Rust 1.96, Lua 5.4 differentials, and consumer all successful
   - [x] Synchronize README, owned-engine evidence, machine ledger, and generated roadmap under all-green CI — GitHub Actions 40200111171: all five jobs successful on 07f9640b529d96ad12f72698d1666e6b4e174a47; README, machine ledger, owned-engine docs and generated roadmap accepted
-- 🎛️ **T448** Lua garbage collector stop, restart and isrunning controls — `████████░░ 75%`
+- 🎛️ **T448** Lua garbage collector stop, restart and isrunning controls — `██████████ 100%`
   - [x] Expose stop/restart/isrunning in the bounded collectgarbage builtin while preserving the explicit full collect mode — src/owned_flow.rs: collectgarbage_builtin and automatic_gc default; unit owned_gc_stop_restart_and_manual_collect_preserve_quota_safety
   - [x] Apply stop/restart to automatic table, closure, field-write and constructor-tail collection without weakening quota guards — src/owned_flow.rs: write_table, Op::NewFunction, Op::NewTable and Op::SetTableTail; stopped-heap and manual-collection unit regressions
   - [x] Verify observable Lua 5.4 control transitions and manual collection in full Linux/MSRV/Arch/reference/consumer CI — GitHub Actions 40200501075 and 40200671209: all five jobs passed; tests/owned_cli_differential.rs: owned_gc_stop_restart_and_manual_collection_match_lua54
-  - [ ] Synchronize README, docs, machine evidence and generator-derived roadmap in all-green CI
+  - [x] Synchronize README, docs, machine evidence and generator-derived roadmap in all-green CI — GitHub Actions 40200855261: five-job successful acceptance on cb562198f15356d105920ddce174947eed1e2702; README/docs/ledger/generated roadmap integrity passed
 
 **Feature inventory** (computed from associated atomic task progress):
 
