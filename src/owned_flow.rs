@@ -2935,7 +2935,7 @@ impl Execution<'_> {
             Ok(bytes)
         });
         match direct {
-            Ok(bytes) => self.intern_concat_string(bytes, left, right),
+            Ok(bytes) => self.intern_rooted_string(bytes, &[left, right]),
             Err(FlowError::TypeError) => self.binary_metamethod(b"__concat", left, right),
             Err(error) => Err(error),
         }
@@ -3046,15 +3046,15 @@ impl Execution<'_> {
 
     /// Shared stringification for ordinary and protected builtin calls.
     /// Metamethod callbacks remain subject to the owned VM call-depth guard.
-    fn tostring_builtin(&mut self, value: Value) -> Result<Value, FlowError> {
+    fn tostring_builtin(&mut self, value: Value, roots: &[Value]) -> Result<Value, FlowError> {
         let text = match value {
             Value::String(_) => value,
-            Value::Integer(number) => self.intern_string(number.to_string().into_bytes())?,
+            Value::Integer(number) => self.intern_rooted_string(number.to_string().into_bytes(), roots)?,
             Value::Float(bits) => {
-                self.intern_string(format!("{:?}", f64::from_bits(bits)).into_bytes())?
+                self.intern_rooted_string(format!("{:?}", f64::from_bits(bits)).into_bytes(), roots)?
             }
-            Value::Boolean(boolean) => self.intern_string(boolean.to_string().into_bytes())?,
-            Value::Nil => self.intern_string(b"nil".to_vec())?,
+            Value::Boolean(boolean) => self.intern_rooted_string(boolean.to_string().into_bytes(), roots)?,
+            Value::Nil => self.intern_rooted_string(b"nil".to_vec(), roots)?,
             Value::Table(handle) => {
                 if let Some(method) = self.metatable_field(handle, b"__tostring")? {
                     // Lua invokes __tostring as a normal callable value.
@@ -3069,21 +3069,21 @@ impl Execution<'_> {
                     match returned.first().copied().unwrap_or(Value::Nil) {
                         Value::String(index) => Value::String(index),
                         Value::Integer(number) => {
-                            self.intern_string(number.to_string().into_bytes())?
+                            self.intern_rooted_string(number.to_string().into_bytes(), roots)?
                         }
                         Value::Float(bits) => {
-                            self.intern_string(format!("{:?}", f64::from_bits(bits)).into_bytes())?
+                            self.intern_rooted_string(format!("{:?}", f64::from_bits(bits)).into_bytes(), roots)?
                         }
                         _ => return Err(FlowError::TypeError),
                     }
                 } else {
-                    self.intern_string(format!("table: 0x{handle:x}").into_bytes())?
+                    self.intern_rooted_string(format!("table: 0x{handle:x}").into_bytes(), roots)?
                 }
             }
             Value::Function(handle) => {
-                self.intern_string(format!("function: 0x{handle:x}").into_bytes())?
+                self.intern_rooted_string(format!("function: 0x{handle:x}").into_bytes(), roots)?
             }
-            Value::Builtin(_) => self.intern_string(b"function: builtin".to_vec())?,
+            Value::Builtin(_) => self.intern_rooted_string(b"function: builtin".to_vec(), roots)?,
         };
         Ok(text)
     }
@@ -3097,7 +3097,7 @@ impl Execution<'_> {
             if index > 0 {
                 line.push(b'\t');
             }
-            let converted = self.tostring_builtin(argument)?;
+            let converted = self.tostring_builtin(argument, args)?;
             let Value::String(handle) = converted else {
                 return Err(FlowError::TypeError);
             };
@@ -3259,7 +3259,7 @@ impl Execution<'_> {
             }
             Value::Builtin(Builtin::ToString) => {
                 let argument = *arguments.first().ok_or(FlowError::TypeError)?;
-                Ok(vec![self.tostring_builtin(argument)?])
+                Ok(vec![self.tostring_builtin(argument, &arguments)?])
             }
             Value::Builtin(Builtin::RawLen) => {
                 let argument = *arguments.first().ok_or(FlowError::TypeError)?;
@@ -3468,16 +3468,11 @@ impl Execution<'_> {
         }
     }
 
-    /// Only the direct concat opcode may collect on dynamic string quota
-    /// pressure: both operands are explicit roots while the new byte string
-    /// is still being assembled. Other interners can hold intermediate Rust
-    /// values not yet rooted in Lua and must retain their current hard limit.
-    fn intern_concat_string(
-        &mut self,
-        bytes: Vec<u8>,
-        left: Value,
-        right: Value,
-    ) -> Result<Value, FlowError> {
+    /// Collect on string quota pressure only at boundaries that explicitly
+    /// pin all in-flight Lua operands, including builtin arguments held by
+    /// host-side Rust vectors. Other interners may still hold unrooted
+    /// intermediate values and retain the strict noncollecting quota.
+    fn intern_rooted_string(&mut self, bytes: Vec<u8>, roots: &[Value]) -> Result<Value, FlowError> {
         let pool_full = (self.strings.len() >= MAX_STRINGS && self.free_strings.is_empty())
             || self.string_bytes.saturating_add(bytes.len()) > MAX_STRING_POOL_BYTES;
         if self.automatic_gc
@@ -3491,7 +3486,7 @@ impl Execution<'_> {
                 .ok_or(FlowError::InvalidBytecode)?;
             let slots = frame.slots.clone();
             let prepared = frame.prepared.clone();
-            self.collect_root_tables(&[left, right], &slots, &prepared)?;
+            self.collect_root_tables(roots, &slots, &prepared)?;
         }
         self.intern_string(bytes)
     }
@@ -3876,7 +3871,7 @@ impl Execution<'_> {
                                     "iteration/selection builtins handled as multiple results"
                                 )
                             }
-                            Builtin::ToString => self.tostring_builtin(value)?,
+                            Builtin::ToString => self.tostring_builtin(value, &[value])?,
                             Builtin::CollectGarbage => self.collectgarbage_builtin(&args)?,
                             Builtin::MathAbs
                             | Builtin::MathFloor
@@ -7877,6 +7872,37 @@ mod tests {
         let outcome = execute_flow_capture(&program, 200_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"number\tnumber\t42\ntrue\tnumber\ttrue\n");
+    }
+
+    #[test]
+    fn tostring_and_print_recover_string_quota_with_rooted_builtin_arguments() {
+        for (source, expected) in [
+            (
+                "for i=1,19000 do local s=tostring(i) end; print('ok')",
+                b"ok\n".as_slice(),
+            ),
+            (
+                "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+                b"99999\n".as_slice(),
+            ),
+            (
+                "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+                b"123456\t7\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 3_000_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+        let stopped = compile_flow_chunk(
+            "collectgarbage('stop'); for i=1,19000 do local s=tostring(i) end",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_capture(&stopped, 3_000_000).result,
+            Err(FlowError::TooLarge)
+        );
     }
 
     #[test]

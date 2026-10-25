@@ -294,6 +294,42 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
 fn owned_concat_string_pressure_gc_matches_lua54() {
     for (source, expected) in [
         (
