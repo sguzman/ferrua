@@ -5346,6 +5346,33 @@
                   "evidence": "GitHub Actions 40234368441: all five jobs passed on aff117d4b94b9910d64d2cb6e731a58a980f4115, including the explicit Lua 5.4 atan diagnostic check, refreshed machine evidence and generated roadmap"
                 }
               ]
+            },
+            {
+              "id": "T479",
+              "emoji": "🎲",
+              "name": "Lua 5.4 xoshiro256** random and randomseed compatibility",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Implement owned xoshiro256** RNG with Lua 5.4.6 seed mixing, unbiased integer projection and non-cryptographic implicit seeding",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: lua_random_next, lua_random_seed, Execution.random_state, draw_random, math_random_builtin, weak_random_seeds"
+                },
+                {
+                  "text": "Implement first-class mutable math.random/math.randomseed and direct/protected multi-result parity, full integer ranges, budget-bounded rejection sampling, and Lua argument errors",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: MathRandom/MathRandomSeed, MATH_GLOBALS, math_randomseed_builtin; Rust unit seeded_math_random_uses_lua_54_integer_and_float_semantics"
+                },
+                {
+                  "text": "Pass exact seeded integer sequence and floating/range/seed parity against pinned upstream Lua 5.4.6 in all five CI jobs",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40235109117: five jobs passed on 6cdf412820d404d813de3ee31437e4626da39ad6; tests/owned_cli_differential.rs: owned_seeded_random_sequences_match_pinned_lua54"
+                },
+                {
+                  "text": "Synchronize roadmap, progress ledger, README, owned-engine documentation and acceptance evidence under green CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -6378,7 +6405,8 @@
             "T475",
             "T476",
             "T477",
-            "T478"
+            "T478",
+            "T479"
           ]
         }
       ]

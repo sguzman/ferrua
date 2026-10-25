@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 207 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 208 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 99%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 99%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -961,6 +961,11 @@
   - [x] Test numeric-string conversion, optional nil/base behavior, NaN/infinity, float return types, invalid argument error objects and production atan2-label divergence without weakening assertions — src/owned_flow.rs: math_inverse_trig_exponents_and_optional_base_log_obey_lua_values; tests/owned_cli_differential.rs: owned_inverse_trig_exp_and_optional_log_base_match_lua54 and owned_math_atan_argument_label_matches_lua54_with_backend_alias_variation
   - [x] Pass upstream Lua 5.4 differential, ordinary Rust tests, Rust 1.96 and downstream consumer CI, retaining explicit implementation/production divergence — GitHub Actions 40233937548: all five jobs passed at 3846b423787c36efd1689119e6fb79c762746c0e
   - [x] Synchronize evidence ledger, generated roadmap, README and owned-engine limitations with all-green documentation CI — GitHub Actions 40234368441: all five jobs passed on aff117d4b94b9910d64d2cb6e731a58a980f4115, including the explicit Lua 5.4 atan diagnostic check, refreshed machine evidence and generated roadmap
+- 🎲 **T479** Lua 5.4 xoshiro256** random and randomseed compatibility — `████████░░ 75%`
+  - [x] Implement owned xoshiro256** RNG with Lua 5.4.6 seed mixing, unbiased integer projection and non-cryptographic implicit seeding — src/owned_flow.rs: lua_random_next, lua_random_seed, Execution.random_state, draw_random, math_random_builtin, weak_random_seeds
+  - [x] Implement first-class mutable math.random/math.randomseed and direct/protected multi-result parity, full integer ranges, budget-bounded rejection sampling, and Lua argument errors — src/owned_flow.rs: MathRandom/MathRandomSeed, MATH_GLOBALS, math_randomseed_builtin; Rust unit seeded_math_random_uses_lua_54_integer_and_float_semantics
+  - [x] Pass exact seeded integer sequence and floating/range/seed parity against pinned upstream Lua 5.4.6 in all five CI jobs — GitHub Actions 40235109117: five jobs passed on 6cdf412820d404d813de3ee31437e4626da39ad6; tests/owned_cli_differential.rs: owned_seeded_random_sequences_match_pinned_lua54
+  - [ ] Synchronize roadmap, progress ledger, README, owned-engine documentation and acceptance evidence under green CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1105,5 +1110,5 @@
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
 - 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
-- 🧮 Bounded first-party Lua numeric math extensions — `██████████ 100%`
+- 🧮 Bounded first-party Lua numeric math extensions — `██████████ 95%`
 
