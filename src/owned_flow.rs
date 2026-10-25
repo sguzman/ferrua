@@ -4340,7 +4340,7 @@ impl Execution<'_> {
                 let length = self.length_with_metatable(target)?;
                 self.exact_integer_operand(length)
                     .or_else(|_| self.integer_operand(length))?
-            },
+            }
         };
         if end < start {
             return Ok((target, start, 0));
