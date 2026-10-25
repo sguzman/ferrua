@@ -1920,6 +1920,11 @@ impl Execution<'_> {
             }
         }
         for &cell in slots {
+            // A released lexical slot can point at an old captured cell
+            // still held by a closure, without rooting it from this frame.
+            if cell == usize::MAX {
+                continue;
+            }
             if let Some(Some(value)) = self.cells.get(cell) {
                 work.push(*value);
             }
@@ -3647,6 +3652,11 @@ impl Execution<'_> {
     /// the prior cell rather than observing later iteration values.
     fn iteration_cell(&mut self, slots: &mut [usize], slot: usize) -> Result<usize, FlowError> {
         let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
+        if cell == usize::MAX {
+            let fresh = self.allocate_cell()?;
+            *slots.get_mut(slot).ok_or(FlowError::InvalidBytecode)? = fresh;
+            return Ok(fresh);
+        }
         self.cells.get(cell).ok_or(FlowError::InvalidBytecode)?;
         if !self.captured_cells.contains(&cell) {
             return Ok(cell);
@@ -4073,7 +4083,12 @@ impl Execution<'_> {
                     // otherwise unreachable table/function/string values.
                     for &slot in indices {
                         let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
-                        if !self.captured_cells.contains(&cell) {
+                        if self.captured_cells.contains(&cell) {
+                            // The old lexical cell remains available only
+                            // through closures that captured it. A later
+                            // iteration rebinds this slot to a fresh cell.
+                            *slots.get_mut(slot).ok_or(FlowError::InvalidBytecode)? = usize::MAX;
+                        } else {
                             *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = None;
                         }
                     }
