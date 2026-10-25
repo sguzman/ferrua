@@ -1745,9 +1745,7 @@ impl Execution<'_> {
                 usize::from(value != Value::Nil && !table.hashed.contains_key(&field))
             }
         };
-        if self.automatic_gc
-            && self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL
-        {
+        if self.automatic_gc && self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
             self.collect_table_write(handle, key, value)?;
         }
         if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
@@ -7566,10 +7564,8 @@ mod tests {
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"true\nfalse\ntrue\n");
 
-        let stopped = compile_flow_chunk(
-            "collectgarbage('stop'); for i=1,17000 do local t={} end",
-        )
-        .unwrap();
+        let stopped =
+            compile_flow_chunk("collectgarbage('stop'); for i=1,17000 do local t={} end").unwrap();
         assert_eq!(
             execute_flow_capture(&stopped, 1_000_000).result,
             Err(FlowError::TooLarge)
