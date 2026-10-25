@@ -106,8 +106,10 @@ const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"rep", Builtin::StringRep),
 ];
 
-const TABLE_GLOBALS: &[(&[u8], Builtin)] =
-    &[(b"concat", Builtin::TableConcat), (b"unpack", Builtin::TableUnpack)];
+const TABLE_GLOBALS: &[(&[u8], Builtin)] = &[
+    (b"concat", Builtin::TableConcat),
+    (b"unpack", Builtin::TableUnpack),
+];
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"print", Builtin::Print),
@@ -3633,7 +3635,7 @@ impl Execution<'_> {
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
             Value::Builtin(Builtin::TableConcat) => {
                 Ok(vec![self.table_concat_builtin(&arguments)?])
-            },
+            }
             Value::Builtin(builtin) if STRING_GLOBALS.iter().any(|&(_, item)| item == builtin) => {
                 Ok(vec![self.string_builtin(builtin, &arguments)?])
             }
@@ -3874,8 +3876,7 @@ impl Execution<'_> {
             let key = self.table_key(Value::Integer(index))?;
             let value = self.read_table(handle, key)?;
             let bytes = self.string_bytes(value)?;
-            let extra = bytes.len()
-                + if offset > 0 { separator.len() } else { 0 };
+            let extra = bytes.len() + if offset > 0 { separator.len() } else { 0 };
             if output.len().saturating_add(extra) > MAX_STRING_POOL_BYTES {
                 return Err(FlowError::TooLarge);
             }
@@ -9049,10 +9050,7 @@ mod tests {
                 "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
                 b"99\n12\n".as_slice(),
             ),
-            (
-                "print(table.unpack({1,2,3}))",
-                b"1\t2\t3\n".as_slice(),
-            ),
+            ("print(table.unpack({1,2,3}))", b"1\t2\t3\n".as_slice()),
             (
                 "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local bad2=pcall(table.unpack,'text'); print(good,bad,bad2)",
                 b"true\tfalse\tfalse\n".as_slice(),
