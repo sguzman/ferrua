@@ -4863,16 +4863,15 @@ impl Execution<'_> {
             }
             self.steps += cost;
             if (!anchored_end || begin + atoms.len() == source.len())
-                && source[begin..begin + atoms.len()]
-                    .iter()
-                    .zip(&atoms)
-                    .all(|(&actual, &(atom, escaped))| {
+                && source[begin..begin + atoms.len()].iter().zip(&atoms).all(
+                    |(&actual, &(atom, escaped))| {
                         if escaped {
                             Self::simple_pattern_escape_matches(atom, actual)
                         } else {
                             actual == atom || (!plain && atom == b'.')
                         }
-                    })
+                    },
+                )
             {
                 return Ok(Some((begin, begin + atoms.len())));
             }
