@@ -3921,11 +3921,7 @@ impl Execution<'_> {
         self.steps += work;
         for index in (position..last).rev() {
             let value = self.read_table(handle, self.table_key(Value::Integer(index))?)?;
-            self.write_table(
-                handle,
-                self.table_key(Value::Integer(index + 1))?,
-                value,
-            )?;
+            self.write_table(handle, self.table_key(Value::Integer(index + 1))?, value)?;
         }
         self.write_table(handle, self.table_key(Value::Integer(position))?, value)?;
         Ok(Vec::new())
