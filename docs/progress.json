@@ -4982,6 +4982,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T466",
+              "emoji": "🧬",
+              "name": "Match Lua 5.4.6 weak-table mode NUL and long-string semantics",
+              "checks": [
+                {
+                  "text": "Use the embedded-NUL terminator when scanning k/v weak-mode flags, preserving pre-NUL mode semantics",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: table_weakness prefix split at NUL, gc_weak_mode_stops_scanning_at_embedded_nul"
+                },
+                {
+                  "text": "Retain long-mode string flags as implemented by pinned Lua 5.4.6 (ttisstring) rather than newer short-string-only behavior",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: gc_weak_mode_accepts_long_strings_in_pinned_lua54_6; pinned Lua v5.4.6 lgc.c traversetable"
+                },
+                {
+                  "text": "Require exact owned stdout plus upstream Lua 5.4 differential output and separately preserve the known pinned luna-core divergence, in five-job CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40222402112: five jobs passed on bb2b0fa7b1289f933e1752d85055c3d8a31a250a; tests/owned_cli_differential.rs: owned_weak_mode_nul_termination_matches_lua54_6 and owned_long_weak_mode_strings_match_pinned_lua54_6"
+                },
+                {
+                  "text": "Synchronize README, owned-engine documentation, machine evidence ledger and generated roadmap under all-green CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5983,7 +6010,8 @@
             "T462",
             "T463",
             "T464",
-            "T465"
+            "T465",
+            "T466"
           ]
         }
       ]
