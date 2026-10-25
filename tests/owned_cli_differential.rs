@@ -299,10 +299,9 @@ fn owned_finalizer_suppresses_nested_collection_like_lua54() {
         (
             "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
             b"true\n",
-            // Pinned production returns false from pcall. Lua 5.4
-            // suppresses the collector request and returns no values,
-            // so pcall succeeds with a nil second result.
-            b"false\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
         ),
         (
             "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
