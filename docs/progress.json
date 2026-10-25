@@ -5267,7 +5267,7 @@
               "id": "T476",
               "emoji": "🧮",
               "name": "Lua 5.4 math.fmod and two-result math.modf parity",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Implement integer/floating math.fmod including negative divisors and mininteger edge, plus two-result math.modf with integer-part classification",
@@ -5286,7 +5286,8 @@
                 },
                 {
                   "text": "Synchronize machine ledger, generated roadmap, README and owned-engine reference under all-green CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40232718370: all five jobs green on 1e556fe2caf5e05c4310f8dfabca156ff6d0a2e3; machine ledger, roadmap, README and owned engine documentation synchronized"
                 }
               ]
             }
