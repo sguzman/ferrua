@@ -308,6 +308,32 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(owned.status.success(), "{source}: {}", String::from_utf8_lossy(&owned.stderr));
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
 fn owned_noncallable_finalizer_warnings_match_lua54() {
     for finalizer in ["12", "true", "'not callable'", "{}"] {
         let source = format!(

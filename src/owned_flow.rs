@@ -8221,6 +8221,29 @@ mod tests {
     }
 
     #[test]
+    fn gc_callable_table_finalizers_follow_lua54_registration_and_shutdown() {
+        for (source, expected) in [
+            (
+                "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+                b"7\n".as_slice(),
+            ),
+            (
+                "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+                b"body\nclosing\t9\n".as_slice(),
+            ),
+            (
+                "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+                b"new\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 100_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+    }
+
+    #[test]
     fn warn_controls_and_finalizer_errors_follow_lua54() {
         for (source, stdout, stderr) in [
             (
