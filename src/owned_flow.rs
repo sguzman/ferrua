@@ -4312,12 +4312,12 @@ impl Execution<'_> {
         Ok(Value::Integer(length as i64))
     }
 
-    /// A bounded sequence range. Lua 5.4's table.unpack calls luaL_len
-    /// on its first argument, so byte strings can also supply a length.
-    /// Table access is currently raw; metamethod-derived table lengths
-    /// and custom indexing remain separate graduation work.
+    /// A bounded sequence range. Lua 5.4's table.unpack and table.concat
+    /// obtain the default last index through luaL_len, which invokes __len
+    /// on tables. Explicit last indices bypass this metamethod. Indexed
+    /// reads still use the bounded raw table subset.
     fn table_library_range(
-        &self,
+        &mut self,
         args: &[Value],
         start_argument: usize,
         end_argument: usize,
@@ -4336,9 +4336,10 @@ impl Execution<'_> {
             Some(value) if value != Value::Nil => self
                 .exact_integer_operand(value)
                 .or_else(|_| self.integer_operand(value))?,
-            _ => match self.raw_len(target)? {
-                Value::Integer(length) => length,
-                _ => return Err(FlowError::InvalidBytecode),
+            _ => {
+                let length = self.length_with_metatable(target)?;
+                self.exact_integer_operand(length)
+                    .or_else(|_| self.integer_operand(length))?
             },
         };
         if end < start {
