@@ -427,6 +427,21 @@ fn owned_table_move_overlap_and_destination_match_lua54() {
 }
 
 #[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
     for source in [
         "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",

@@ -4409,9 +4409,12 @@ impl Execution<'_> {
         let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
             return Err(FlowError::TypeError);
         };
-        let Value::Integer(size) = self.raw_len(Value::Table(handle))? else {
-            return Err(FlowError::InvalidBytecode);
-        };
+        // Lua's aux_getn observes __len before insertion/removal. Convert
+        // integer-compatible results exactly as luaL_len requires.
+        let reported_size = self.length_with_metatable(Value::Table(handle))?;
+        let size = self
+            .exact_integer_operand(reported_size)
+            .or_else(|_| self.integer_operand(reported_size))?;
         let last = size.checked_add(1).ok_or(FlowError::TooLarge)?;
         let (position, value) = match args {
             [_, value] => (last, *value),
@@ -4447,9 +4450,12 @@ impl Execution<'_> {
         let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
             return Err(FlowError::TypeError);
         };
-        let Value::Integer(size) = self.raw_len(Value::Table(handle))? else {
-            return Err(FlowError::InvalidBytecode);
-        };
+        // Lua's aux_getn observes __len before insertion/removal. Convert
+        // integer-compatible results exactly as luaL_len requires.
+        let reported_size = self.length_with_metatable(Value::Table(handle))?;
+        let size = self
+            .exact_integer_operand(reported_size)
+            .or_else(|_| self.integer_operand(reported_size))?;
         let position = match args.get(1).copied() {
             Some(value) if value != Value::Nil => self
                 .exact_integer_operand(value)
