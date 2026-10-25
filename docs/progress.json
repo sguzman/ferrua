@@ -5038,6 +5038,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T468",
+              "emoji": "🧵",
+              "name": "First-party Lua 5.4 byte-string len/sub/byte/char library subset",
+              "checks": [
+                {
+                  "text": "Create a GC-rooted, mutable string table whose identity is shared with _G and direct global access",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: materialize_string_table and string_table GC roots; CI 40224576646 passed on 6c3b099"
+                },
+                {
+                  "text": "Implement Lua byte-length and substring index conventions, including negative/extreme offsets and binary/UTF-8 byte semantics",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: string_builtin, string_offset, byte_string_len_and_sub_match_lua_positions_and_library_identity; upstream CI 40224576646 passed"
+                },
+                {
+                  "text": "Implement byte extraction with Lua multiple-result adjustment and bounded char construction, and verify via owned CLI versus production and Lua 5.4",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: string_byte_builtin, string_builtin; tests/owned_cli_differential.rs: owned_string_byte_char_binary_and_return_arity_match_lua54; five-job CI 40225092377 on 5a7e286 passed"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned-engine documentation under five-job CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -6042,6 +6069,13 @@
             "T465",
             "T466",
             "T467"
+          ]
+        },
+        {
+          "emoji": "🧵",
+          "name": "Bounded first-party Lua byte-string standard library subset",
+          "task_ids": [
+            "T468"
           ]
         }
       ]

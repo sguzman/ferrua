@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 196 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 197 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -906,6 +906,11 @@
   - [x] Root pcall/xpcall internal errors, message-handler retries and terminal error text without relaxing memory limits — src/owned_flow.rs: protected_error_value, pcall_builtin and xpcall_builtin explicitly carry argument and retry-message roots; commit e85cbad
   - [x] Calibrate a near-full stopped-GC string pool, restart collection and verify live values and actual reclamation through all three error paths under five-job CI — src/owned_flow.rs: protected_error_strings_recover_quota_with_rooted_arguments; GitHub Actions 40223559390 five jobs successful on e85cbad
   - [x] Synchronize README, owned-engine documentation, machine ledger and generated roadmap under passing five-job CI — GitHub Actions 40223916106: all five jobs green on fb2408267c477bccd3bf71503de492c1dafa3d38; README, owned-engine docs, progress ledger and generated ROADMAP consistent
+- 🧵 **T468** First-party Lua 5.4 byte-string len/sub/byte/char library subset — `████████░░ 75%`
+  - [x] Create a GC-rooted, mutable string table whose identity is shared with _G and direct global access — src/owned_flow.rs: materialize_string_table and string_table GC roots; CI 40224576646 passed on 6c3b099
+  - [x] Implement Lua byte-length and substring index conventions, including negative/extreme offsets and binary/UTF-8 byte semantics — src/owned_flow.rs: string_builtin, string_offset, byte_string_len_and_sub_match_lua_positions_and_library_identity; upstream CI 40224576646 passed
+  - [x] Implement byte extraction with Lua multiple-result adjustment and bounded char construction, and verify via owned CLI versus production and Lua 5.4 — src/owned_flow.rs: string_byte_builtin, string_builtin; tests/owned_cli_differential.rs: owned_string_byte_char_binary_and_return_arity_match_lua54; five-job CI 40225092377 on 5a7e286 passed
+  - [ ] Synchronize machine ledger, generated roadmap, README and owned-engine documentation under five-job CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1048,4 +1053,5 @@
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
+- 🧵 Bounded first-party Lua byte-string standard library subset — `████████░░ 75%`
 
