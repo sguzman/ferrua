@@ -294,6 +294,22 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
 fn owned_finalizer_warning_stream_matches_upstream_lua54() {
     for source in [
         "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",

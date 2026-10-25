@@ -1914,7 +1914,7 @@ impl Execution<'_> {
         Ok(Vec::new())
     }
 
-    fn warn_finalizer_error(&mut self, error: &FlowError) -> Result<(), FlowError> {
+    fn warn_finalizer_error(&mut self, error: &FlowError, method: Value) -> Result<(), FlowError> {
         if !self.warnings_enabled {
             return Ok(());
         }
@@ -1923,6 +1923,19 @@ impl Execution<'_> {
                 .get(*handle)
                 .ok_or(FlowError::InvalidBytecode)?
                 .clone()
+        } else if matches!(error, FlowError::TypeError) {
+            // A noncallable finalizer produces an ordinary Lua call error.
+            // This covers the direct incorrect-__gc case; arbitrary errors
+            // raised within callable metamethods still need full diagnostics.
+            let name = match method {
+                Value::Integer(_) | Value::Float(_) => "number",
+                Value::Boolean(_) => "boolean",
+                Value::String(_) => "string",
+                Value::Table(_) => "table",
+                Value::Nil => "nil",
+                Value::Function(_) | Value::Builtin(_) => "function",
+            };
+            format!("attempt to call a {name} value").into_bytes()
         } else {
             b"error object is not a string".to_vec()
         };
@@ -1961,7 +1974,7 @@ impl Execution<'_> {
                     match self.protected_target(method, &[Value::Table(handle)]) {
                         Ok(_) => {}
                         Err(error @ (FlowError::Thrown(_) | FlowError::TypeError)) => {
-                            self.warn_finalizer_error(&error)?;
+                            self.warn_finalizer_error(&error, method)?;
                         }
                         Err(error) => return Err(error),
                     }
@@ -2269,7 +2282,7 @@ impl Execution<'_> {
                         match self.protected_target(method, &[Value::Table(handle)]) {
                             Ok(_) => {}
                             Err(error @ (FlowError::Thrown(_) | FlowError::TypeError)) => {
-                                self.warn_finalizer_error(&error)?;
+                                self.warn_finalizer_error(&error, method)?;
                             }
                             Err(error) => return Err(error),
                         }
@@ -8183,6 +8196,29 @@ mod tests {
         let outcome = execute_flow_capture(&program, 25_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"true\n17\n");
+    }
+
+    #[test]
+    fn invalid_lua_gc_methods_warn_with_call_type_diagnostics() {
+        for (finalizer, expected) in [
+            ("12", "number"),
+            ("true", "boolean"),
+            ("'not callable'", "string"),
+            ("{}", "table"),
+        ] {
+            let source = format!(
+                "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+            );
+            let program = compile_flow_chunk(&source).unwrap();
+            let outcome = execute_flow_capture(&program, 100_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, b"alive\n", "{source}");
+            assert_eq!(
+                String::from_utf8_lossy(&outcome.stderr),
+                format!("Lua warning: error in __gc (attempt to call a {expected} value)\n"),
+                "{source}"
+            );
+        }
     }
 
     #[test]
