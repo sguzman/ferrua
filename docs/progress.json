@@ -5239,7 +5239,7 @@
               "id": "T475",
               "emoji": "🧮",
               "name": "Lua 5.4 math.sqrt and unsigned math.ult parity with protected diagnostics",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Implement floating square roots and unsigned 64-bit ordering with numeric-string and exact-integer coercion, exposed through mutable math table",
@@ -5258,7 +5258,8 @@
                 },
                 {
                   "text": "Synchronize machine evidence ledger, generated roadmap, README and owned-engine documentation under passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40231788919: five green jobs on 9ad590906df880020b7ac9c1c0748ca07acd5b78; README, docs/OWNED_ENGINE.md, docs/progress.json and generated docs/ROADMAP.md synchronized"
                 }
               ]
             }

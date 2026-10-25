@@ -941,11 +941,11 @@
   - [x] Support Lua function comparators, protected invalid-argument behavior, and bounded sorting work without mutating the source before successful comparisons — src/owned_flow.rs: bounded insertion sort, callback comparison, shared instruction budget and commit-on-success; Rust unit and differential tests; CI 40230426019
   - [x] Root all intermediate sort values during callback GC, and prove real CLI parity with pinned production and upstream Lua 5.4 across supported sorting scenarios — src/owned_flow.rs: gc_temporary_roots traced independently of Lua frames, table_sort_builtin snapshot roots and comparator callback; owned-only regression table_sort_snapshot_roots_values_during_comparator_gc_and_mutation; tests/owned_cli_differential.rs: owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54; GitHub Actions 40230426019 all five jobs passed on 49f63695ee7eb1e126b0e72bdcb17be7bd1d4f99
   - [x] Synchronize README, owned-engine limitations, machine ledger and generated roadmap under five successful CI jobs — GitHub Actions 40230602507: all five jobs successful on a58766250a3e7ed1badd9aba3c889772819f9fe7; README, native temporary GC root design, machine progress ledger and generated roadmap synchronized
-- 🧮 **T475** Lua 5.4 math.sqrt and unsigned math.ult parity with protected diagnostics — `████████░░ 75%`
+- 🧮 **T475** Lua 5.4 math.sqrt and unsigned math.ult parity with protected diagnostics — `██████████ 100%`
   - [x] Implement floating square roots and unsigned 64-bit ordering with numeric-string and exact-integer coercion, exposed through mutable math table — src/owned_flow.rs: Builtin::MathSqrt/MathUlt, MATH_GLOBALS, checked_math_number, math_builtin, direct and protected dispatch
   - [x] Test NaN, infinity, float return kind, signed-to-unsigned boundaries, numeric strings, missing/wrong argument types and protected-call diagnostics — src/owned_flow.rs: math_sqrt_and_unsigned_ordering_handle_lua_numeric_boundaries; tests/owned_cli_differential.rs: owned_math_sqrt_and_unsigned_integer_order_match_lua54
   - [x] Require exact production and Lua 5.4.6 stdout differential behavior plus all five CI jobs green — GitHub Actions 40231607001: all five jobs green on bebbeaf2fa9522c82aa19b9776db61c870db96da; math math.sqrt/math.ult differential tests passed
-  - [ ] Synchronize machine evidence ledger, generated roadmap, README and owned-engine documentation under passing CI
+  - [x] Synchronize machine evidence ledger, generated roadmap, README and owned-engine documentation under passing CI — GitHub Actions 40231788919: five green jobs on 9ad590906df880020b7ac9c1c0748ca07acd5b78; README, docs/OWNED_ENGINE.md, docs/progress.json and generated docs/ROADMAP.md synchronized
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1090,5 +1090,5 @@
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
 - 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
-- 🧮 Bounded first-party Lua numeric math extensions — `████████░░ 75%`
+- 🧮 Bounded first-party Lua numeric math extensions — `██████████ 100%`
 

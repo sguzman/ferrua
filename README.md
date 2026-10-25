@@ -40,7 +40,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified implementation CI:** [all five jobs green on `bebbeaf2`, including Lua 5.4 `math.sqrt`/`math.ult` parity and protected argument diagnostics](https://github.com/sguzman/ferrua/actions/runs/40231607001). Native EndeavourOS/Hyprland QA and stable owned-engine graduation remain pending.
+**Latest verified implementation and documentation CI:** [all five jobs green on `9ad5909`, including Lua 5.4 `math.sqrt`/`math.ult` parity, protected diagnostics and ledger/roadmap consistency](https://github.com/sguzman/ferrua/actions/runs/40231788919). Native EndeavourOS/Hyprland QA and stable owned-engine graduation remain pending.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
