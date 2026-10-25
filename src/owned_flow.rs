@@ -1926,7 +1926,7 @@ impl Execution<'_> {
         } else {
             b"error object is not a string".to_vec()
         };
-        let mut message = b"error in __gc metamethod (".to_vec();
+        let mut message = b"error in __gc (".to_vec();
         message.extend_from_slice(&detail);
         message.push(b')');
         self.emit_warning(&message)
@@ -8196,12 +8196,12 @@ mod tests {
             (
                 "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
                 b"alive\n".as_slice(),
-                b"Lua warning: error in __gc metamethod (gc-failed)\n".as_slice(),
+                b"Lua warning: error in __gc (gc-failed)\n".as_slice(),
             ),
             (
                 "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
                 b"body\n".as_slice(),
-                b"Lua warning: error in __gc metamethod (shutdown-failed)\n".as_slice(),
+                b"Lua warning: error in __gc (shutdown-failed)\n".as_slice(),
             ),
             (
                 "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
