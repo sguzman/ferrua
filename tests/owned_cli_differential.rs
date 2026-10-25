@@ -281,3 +281,43 @@ fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
         }
     }
 }
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
