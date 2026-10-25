@@ -294,6 +294,42 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(pcall(type,hold),pcall(math.type,7),hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
 fn owned_tostring_and_print_string_pressure_match_lua54() {
     for (source, expected) in [
         (

@@ -2301,8 +2301,8 @@ impl Execution<'_> {
         let first = args.first().copied().unwrap_or(Value::Nil);
         match builtin {
             Builtin::MathType => match first {
-                Value::Integer(_) => self.intern_string(b"integer".to_vec()),
-                Value::Float(_) => self.intern_string(b"float".to_vec()),
+                Value::Integer(_) => self.intern_rooted_string(b"integer".to_vec(), args),
+                Value::Float(_) => self.intern_rooted_string(b"float".to_vec(), args),
                 _ => Ok(Value::Nil),
             },
             Builtin::MathToInteger => {
@@ -3253,7 +3253,7 @@ impl Execution<'_> {
                     Value::Table(_) => b"table",
                     Value::Function(_) | Value::Builtin(_) => b"function",
                 };
-                Ok(vec![self.intern_string(name.to_vec())?])
+                Ok(vec![self.intern_rooted_string(name.to_vec(), &arguments)?])
             }
             Value::Builtin(Builtin::ToNumber) => {
                 if arguments.is_empty() {
@@ -3845,7 +3845,7 @@ impl Execution<'_> {
                                     Value::Table(_) => b"table",
                                     Value::Function(_) | Value::Builtin(_) => b"function",
                                 };
-                                self.intern_string(name.to_vec())?
+                                self.intern_rooted_string(name.to_vec(), &args)?
                             }
                             Builtin::ToNumber => self.tonumber_builtin(&args)?,
                             Builtin::RawEqual => {
@@ -3879,7 +3879,7 @@ impl Execution<'_> {
                                     "iteration/selection builtins handled as multiple results"
                                 )
                             }
-                            Builtin::ToString => self.tostring_builtin(value, &[value])?,
+                            Builtin::ToString => self.tostring_builtin(value, &args)?,
                             Builtin::CollectGarbage => self.collectgarbage_builtin(&args)?,
                             Builtin::MathAbs
                             | Builtin::MathFloor
@@ -7880,6 +7880,30 @@ mod tests {
         let outcome = execute_flow_capture(&program, 200_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"number\tnumber\t42\ntrue\tnumber\ttrue\n");
+    }
+
+    #[test]
+    fn type_and_math_type_preserve_dynamic_strings_under_quota_pressure() {
+        let cases = [
+            (
+                "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+                b"string\tinteger\t123456789\n".as_slice(),
+            ),
+            (
+                "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+                b"string\tfloat\t123456789\n".as_slice(),
+            ),
+            (
+                "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(pcall(type,hold),pcall(math.type,7),hold)",
+                b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+            ),
+        ];
+        for (source, expected) in cases {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 3_000_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
     }
 
     #[test]
