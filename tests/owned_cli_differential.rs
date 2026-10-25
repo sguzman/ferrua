@@ -88,6 +88,22 @@ fn curated_global_function_print_and_error_semantics_match_lua54() {
 }
 
 #[test]
+fn owned_math_fmod_modf_multi_return_and_failure_parity_match_lua54() {
+    for source in [
+        "print(math.fmod(-7,3),math.fmod(7,-3),math.fmod(math.mininteger,-1),math.type(math.fmod(7,3)),math.type(math.fmod(7.0,3)),math.fmod(-7.0,3.0)==-1.0)",
+        "print(math.fmod('7','3'),math.type(math.fmod('7','3')),math.fmod(7.0,0.0)~=math.fmod(7.0,0.0))",
+        "local x,y=math.modf(-3.75); print(x,y,math.type(x),math.type(y)); print(math.modf(3.25))",
+        "print(select('#',math.modf(3.75)),select('#',pcall(math.modf,3.75))); local ok,a,b=pcall(math.modf,'3.25'); print(ok,a,b)",
+        "local a,b=math.modf(math.mininteger); print(a==math.mininteger,b==0,math.type(b)); local c,d=math.modf(math.huge); print(c==math.huge,d==0,math.type(c))",
+        "local a,b=math.modf(math.sqrt(-1)); print(a~=a,b~=b); print(math.fmod(7,0.0)~=math.fmod(7,0.0))",
+        "local ok,msg=pcall(math.fmod,2,0); print(ok,msg); local p,e=pcall(math.modf,false); print(p,e); local q,t=pcall(math.fmod,2); print(q,t)",
+        "local old=math.modf; math.modf=function() return 42 end; print(math.modf()); math.modf=old; print(math.modf(3.25))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_math_sqrt_and_unsigned_integer_order_match_lua54() {
     for source in [
         "print(math.sqrt(81)==9.0,math.type(math.sqrt(81)),math.sqrt('16')==4.0,math.sqrt(2)^2>1.999,math.sqrt(2)^2<2.001)",

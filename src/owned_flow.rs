@@ -75,6 +75,8 @@ pub enum Builtin {
     MathToInteger,
     MathSqrt,
     MathUlt,
+    MathFmod,
+    MathModf,
     StringLen,
     StringSub,
     StringByte,
@@ -102,6 +104,8 @@ const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"tointeger", Builtin::MathToInteger),
     (b"sqrt", Builtin::MathSqrt),
     (b"ult", Builtin::MathUlt),
+    (b"fmod", Builtin::MathFmod),
+    (b"modf", Builtin::MathModf),
 ];
 
 const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -2654,6 +2658,30 @@ impl Execution<'_> {
                 };
                 Ok(Value::Boolean((left as u64) < (right as u64)))
             }
+            Builtin::MathFmod => {
+                let left = self.checked_math_number("math.fmod", args, 0, false)?;
+                let right = self.checked_math_number("math.fmod", args, 1, false)?;
+                // Lua selects integer remainder only when *both original
+                // arguments* are integers; numeric strings use the float path.
+                if let (Some(Value::Integer(a)), Some(Value::Integer(b))) =
+                    (args.first().copied(), args.get(1).copied())
+                {
+                    if b == 0 {
+                        let error = self.intern_rooted_string(
+                            b"bad argument #2 to 'math.fmod' (zero)".to_vec(),
+                            args,
+                        )?;
+                        return Err(FlowError::Thrown(error));
+                    }
+                    return Ok(Value::Integer(if b == -1 { 0 } else { a % b }));
+                }
+                let number = |value: Value| match value {
+                    Value::Integer(n) => n as f64,
+                    Value::Float(bits) => f64::from_bits(bits),
+                    _ => unreachable!("checked Lua math number"),
+                };
+                Ok(Value::Float((number(left) % number(right)).to_bits()))
+            }
             Builtin::MathAbs => match self.arithmetic_operand(first)? {
                 Value::Integer(number) => Ok(Value::Integer(number.wrapping_abs())),
                 Value::Float(bits) => Ok(Value::Float(f64::from_bits(bits).abs().to_bits())),
@@ -2708,6 +2736,32 @@ impl Execution<'_> {
             }
             _ => Err(FlowError::InvalidBytecode),
         }
+    }
+
+    /// Lua math.modf returns two values. Preserve integer-valued whole
+    /// parts when representable and always return a floating fractional part.
+    fn math_modf_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let number = self.checked_math_number("math.modf", args, 0, false)?;
+        if let Value::Integer(integer) = number {
+            return Ok(vec![Value::Integer(integer), Value::Float(0.0_f64.to_bits())]);
+        }
+        let Value::Float(bits) = number else {
+            return Err(FlowError::InvalidBytecode);
+        };
+        let value = f64::from_bits(bits);
+        let whole = value.trunc();
+        // C modf preserves the sign of zero even for exact negative inputs,
+        // and returns signed zero rather than NaN for infinite inputs.
+        let fraction = if value.is_infinite() || whole == value {
+            0.0_f64.copysign(value)
+        } else {
+            value - whole
+        };
+        let whole = match self.exact_integer_operand(Value::Float(whole.to_bits())) {
+            Ok(integer) => Value::Integer(integer),
+            Err(_) => Value::Float(whole.to_bits()),
+        };
+        Ok(vec![whole, Value::Float(fraction.to_bits())])
     }
 
     /// Create one bounded numeric-library table for this execution.
@@ -3722,6 +3776,7 @@ impl Execution<'_> {
             }
             Value::Builtin(Builtin::TableMove) => Ok(vec![self.table_move_builtin(&arguments)?]),
             Value::Builtin(Builtin::TableSort) => self.table_sort_builtin(&arguments),
+            Value::Builtin(Builtin::MathModf) => self.math_modf_builtin(&arguments),
             Value::Builtin(Builtin::TableConcat) => {
                 Ok(vec![self.table_concat_builtin(&arguments)?])
             }
@@ -4720,6 +4775,10 @@ impl Execution<'_> {
                                     | Builtin::Assert
                                     | Builtin::MathType
                                     | Builtin::MathToInteger
+                                    | Builtin::MathSqrt
+                                    | Builtin::MathUlt
+                                    | Builtin::MathFmod
+                                    | Builtin::MathModf
                                     | Builtin::StringChar
                                     | Builtin::TablePack
                                     | Builtin::CollectGarbage
@@ -4746,6 +4805,7 @@ impl Execution<'_> {
                                 | Builtin::TableUnpack
                                 | Builtin::TableInsert
                                 | Builtin::TableSort
+                                | Builtin::MathModf
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
@@ -4768,6 +4828,7 @@ impl Execution<'_> {
                                 Builtin::TableUnpack => self.table_unpack_builtin(&args)?,
                                 Builtin::TableInsert => self.table_insert_builtin(&args)?,
                                 Builtin::TableSort => self.table_sort_builtin(&args)?,
+                                Builtin::MathModf => self.math_modf_builtin(&args)?,
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
@@ -4830,7 +4891,8 @@ impl Execution<'_> {
                             | Builtin::StringByte
                             | Builtin::TableUnpack
                             | Builtin::TableInsert
-                            | Builtin::TableSort => {
+                            | Builtin::TableSort
+                            | Builtin::MathModf => {
                                 unreachable!(
                                     "iteration/selection builtins handled as multiple results"
                                 )
@@ -4845,7 +4907,8 @@ impl Execution<'_> {
                             | Builtin::MathType
                             | Builtin::MathToInteger
                             | Builtin::MathSqrt
-                            | Builtin::MathUlt => self.math_builtin(builtin, &args)?,
+                            | Builtin::MathUlt
+                            | Builtin::MathFmod => self.math_builtin(builtin, &args)?,
                             Builtin::StringLen
                             | Builtin::StringSub
                             | Builtin::StringChar
@@ -9991,6 +10054,20 @@ mod tests {
         assert_eq!(
             outcome.stdout,
             b"true\tfloat\ttrue\ttrue\ttrue\ntrue\ttrue\ntrue\tfalse\ttrue\ttrue\nfalse\tfalse\tfalse\n"
+        );
+    }
+
+    #[test]
+    fn math_fmod_and_modf_preserve_signed_remainder_and_result_arity() {
+        let program = compile_flow_chunk(
+            "print(math.fmod(-7,3),math.fmod(7,-3),math.fmod(math.mininteger,-1),math.type(math.fmod(7,3)),math.type(math.fmod(7.0,3)),math.fmod(-7.0,3.0)==-1.0); local x,y=math.modf(-3.75); print(x,y,math.type(x),math.type(y)); local a,b=math.modf(3.25); print(a,b); local i,f=math.modf(math.huge); print(i==math.huge,f==0,math.type(i)); local ok,c,d=pcall(math.modf,1.25); print(ok,c,d); local bad,msg=pcall(math.fmod,2,0); print(bad,msg)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 10000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(
+            outcome.stdout,
+            b"-1\t1\t0\tinteger\tfloat\ttrue\n-3\t-0.75\tinteger\tfloat\n3\t0.25\ntrue\ttrue\tfloat\ntrue\t1\t0.25\nfalse\tbad argument #2 to 'math.fmod' (zero)\n"
         );
     }
 
