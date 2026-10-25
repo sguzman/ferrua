@@ -9948,7 +9948,7 @@ mod tests {
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(
             outcome.stdout,
-            b"true\\tfloat\\ttrue\\ttrue\\ttrue\\ntrue\\ttrue\\ntrue\\tfalse\\ttrue\\ttrue\\nfalse\\tfalse\\tfalse\\n"
+            b"true\tfloat\ttrue\ttrue\ttrue\ntrue\ttrue\ntrue\tfalse\ttrue\ttrue\nfalse\tfalse\tfalse\n"
         );
     }
 
