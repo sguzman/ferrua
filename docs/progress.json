@@ -4809,10 +4809,11 @@
                 },
                 {
                   "text": "Synchronize machine ledger and generator-derived roadmap, README and owned-engine documentation under all-green CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40212608995: all five jobs passed on be89f620a62abfd3651c5fbe82d1b9be7b908506; evidence ledger and generated documentation accepted"
                 }
               ],
-              "progress": 75
+              "progress": 100
             }
           ]
         }
