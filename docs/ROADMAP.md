@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 205 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 206 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -951,6 +951,11 @@
   - [x] Exercise protected math.modf with two returned values, integer and floating result types, NaN/infinity, numeric strings and Lua argument errors — src/owned_flow.rs: math_fmod_and_modf_preserve_signed_remainder_and_result_arity; tests/owned_cli_differential.rs: owned_math_fmod_modf_multi_return_and_failure_parity_match_lua54; protected_target dispatch order regression
   - [x] Require all five CI jobs green including upstream Lua 5.4 differential, Rust formatting, tests and downstream action consumer — GitHub Actions 40232374511: all five jobs passed on 4e1be2e8c80341f144ad57c6699428b7bf3743ac
   - [x] Synchronize machine ledger, generated roadmap, README and owned-engine reference under all-green CI — GitHub Actions 40232718370: all five jobs green on 1e556fe2caf5e05c4310f8dfabca156ff6d0a2e3; machine ledger, roadmap, README and owned engine documentation synchronized
+- 📐 **T477** Lua 5.4 trigonometry and radian-degree conversion parity — `████████░░ 75%`
+  - [x] Expose math.sin, math.cos, math.tan, math.rad and math.deg through mutable first-party math table and direct/protected dispatch — src/owned_flow.rs: MATH_GLOBALS, MathSin/MathCos/MathTan/MathRad/MathDeg, math_builtin and checked_math_number
+  - [x] Test float return types, angle identities, numeric strings, infinity NaNs, Lua argument errors and writable library identity using bounded numeric comparisons — src/owned_flow.rs: math_trigonometry_and_unit_conversions_are_float_and_protected; tests/owned_cli_differential.rs: owned_math_trigonometry_and_angle_conversions_match_lua54
+  - [x] Verify Rust lint/tests and differential parity with pinned Lua 5.4, Rust 1.96, downstream action and aggregate five-job CI — GitHub Actions 40233132487: all five CI jobs passed on daa9f42c6ff46d9c211e2fd3a3bb87902e6b5f5e
+  - [ ] Synchronize README, owned-engine documentation, machine ledger and generated roadmap under all-green CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1095,5 +1100,5 @@
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
 - 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
-- 🧮 Bounded first-party Lua numeric math extensions — `██████████ 100%`
+- 🧮 Bounded first-party Lua numeric math extensions — `█████████░ 92%`
 
