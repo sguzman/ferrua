@@ -294,6 +294,16 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    for source in [
+        "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==0 end}) end; collectgarbage('collect'); print(called)",
+        "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_lua_state_shutdown_finalizers_match_lua54() {
     // The pinned production backend currently closes live marked tables in
     // registration order, while Lua 5.4 explicitly requires reverse order.

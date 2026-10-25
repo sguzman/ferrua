@@ -2410,6 +2410,12 @@ impl Execution<'_> {
                 Ok(Value::Integer(0))
             }
             b"collect" => {
+                // Lua does not run a nested collector cycle from within a
+                // finalizer. Suppress the request without revisiting heap
+                // objects while their finalizer callbacks are executing.
+                if self.running_finalizers {
+                    return Ok(Value::Integer(0));
+                }
                 // Explicit full passes run even while automatic GC is
                 // stopped; snapshots preserve roots of suspended callers.
                 let frame = self
@@ -8085,6 +8091,25 @@ mod tests {
         let outcome = execute_flow_capture(&program, 25_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"true\n17\n");
+    }
+
+    #[test]
+    fn nested_collectgarbage_requests_inside_finalizers_do_not_reenter_heap_sweep() {
+        for (source, expected) in [
+            (
+                "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==0 end}) end; collectgarbage('collect'); print(called)",
+                b"true\n".as_slice(),
+            ),
+            (
+                "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+                b"body\nclosing\ttrue\t0\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 100_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
     }
 
     #[test]
