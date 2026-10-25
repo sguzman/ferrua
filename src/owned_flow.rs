@@ -3646,9 +3646,7 @@ impl Execution<'_> {
             Value::Builtin(Builtin::TableRemove) => {
                 Ok(vec![self.table_remove_builtin(&arguments)?])
             }
-            Value::Builtin(Builtin::TableMove) => {
-                Ok(vec![self.table_move_builtin(&arguments)?])
-            }
+            Value::Builtin(Builtin::TableMove) => Ok(vec![self.table_move_builtin(&arguments)?]),
             Value::Builtin(Builtin::TableConcat) => {
                 Ok(vec![self.table_concat_builtin(&arguments)?])
             }
@@ -4004,9 +4002,7 @@ impl Execution<'_> {
             .and_then(|n| n.checked_add(1))
             .ok_or(FlowError::TooLarge)?;
         let count = usize::try_from(count).map_err(|_| FlowError::TooLarge)?;
-        if count > MAX_TABLE_FIELDS
-            || start.checked_add(count as i64 - 1).is_none()
-        {
+        if count > MAX_TABLE_FIELDS || start.checked_add(count as i64 - 1).is_none() {
             return Err(FlowError::TooLarge);
         }
         if self.steps.saturating_add(count) > self.budget {
