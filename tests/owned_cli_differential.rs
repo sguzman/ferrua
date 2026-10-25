@@ -442,6 +442,20 @@ fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
 }
 
 #[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
     for source in [
         "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",

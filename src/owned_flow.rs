@@ -4436,12 +4436,30 @@ impl Execution<'_> {
             return Err(FlowError::StepBudgetExceeded);
         }
         self.steps += work;
-        for index in (position..last).rev() {
-            let value = self.read_table(handle, self.table_key(Value::Integer(index))?)?;
-            self.write_table(handle, self.table_key(Value::Integer(index + 1))?, value)?;
-        }
-        self.write_table(handle, self.table_key(Value::Integer(position))?, value)?;
-        Ok(Vec::new())
+        // lua_geti/lua_seti honor __index/__newindex. Keep values returned
+        // by callbacks rooted across later Lua callbacks and possible GC.
+        self.gc_temporary_roots.push(args.to_vec());
+        let result = (|| {
+            for index in (position..last).rev() {
+                let item = self.lookup_with_metatable(
+                    handle,
+                    self.table_key(Value::Integer(index))?,
+                )?;
+                self.gc_temporary_roots
+                    .last_mut()
+                    .ok_or(FlowError::InvalidBytecode)?
+                    .push(item);
+                self.assign_with_metatable(
+                    handle,
+                    self.table_key(Value::Integer(index + 1))?,
+                    item,
+                )?;
+            }
+            self.assign_with_metatable(handle, self.table_key(Value::Integer(position))?, value)?;
+            Ok(Vec::new())
+        })();
+        self.gc_temporary_roots.pop();
+        result
     }
 
     /// table.remove returns the removed value while shifting subsequent
@@ -4475,20 +4493,45 @@ impl Execution<'_> {
             return Err(FlowError::StepBudgetExceeded);
         }
         self.steps += work;
-        let removed = self.read_table(handle, self.table_key(Value::Integer(position))?)?;
-        for index in position..size {
-            let value = self.read_table(handle, self.table_key(Value::Integer(index + 1))?)?;
-            self.write_table(handle, self.table_key(Value::Integer(index))?, value)?;
-        }
-        // Lua's loop advances the index to size only when shifting.
-        // Removing at size + 1 must clear that absent index, not size.
-        let clear_index = if position < size { size } else { position };
-        self.write_table(
-            handle,
-            self.table_key(Value::Integer(clear_index))?,
-            Value::Nil,
-        )?;
-        Ok(removed)
+        // lua_geti/lua_seti honor __index/__newindex. Retain the removed
+        // value and intermediate callback results across collection.
+        self.gc_temporary_roots.push(args.to_vec());
+        let result = (|| {
+            let removed = self.lookup_with_metatable(
+                handle,
+                self.table_key(Value::Integer(position))?,
+            )?;
+            self.gc_temporary_roots
+                .last_mut()
+                .ok_or(FlowError::InvalidBytecode)?
+                .push(removed);
+            for index in position..size {
+                let item = self.lookup_with_metatable(
+                    handle,
+                    self.table_key(Value::Integer(index + 1))?,
+                )?;
+                self.gc_temporary_roots
+                    .last_mut()
+                    .ok_or(FlowError::InvalidBytecode)?
+                    .push(item);
+                self.assign_with_metatable(
+                    handle,
+                    self.table_key(Value::Integer(index))?,
+                    item,
+                )?;
+            }
+            // Lua's loop advances the index to size only when shifting.
+            // Removing at size + 1 must clear that absent index, not size.
+            let clear_index = if position < size { size } else { position };
+            self.assign_with_metatable(
+                handle,
+                self.table_key(Value::Integer(clear_index))?,
+                Value::Nil,
+            )?;
+            Ok(removed)
+        })();
+        self.gc_temporary_roots.pop();
+        result
     }
 
     /// Copy a bounded indexed range like Lua 5.4 table.move. A destination
