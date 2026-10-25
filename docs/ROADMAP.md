@@ -926,11 +926,11 @@
   - [x] Retain pending arguments and the partially created table across GC with managed table/string limits and shared instruction budget — src/owned_flow.rs: reserve_lazy_table_slot(args), rooted n key creation, write_table GC roots, MAX_TABLE_FIELDS and budget preflight; stress unit fixture; CI 40227533885
   - [x] Require exact owned, production, and upstream Lua 5.4 output/status parity including nil holes, n, empty pack and writable global identity under all five CI jobs — tests/owned_cli_differential.rs: owned_table_pack_nil_holes_and_argument_count_match_lua54; GitHub Actions 40227533885 five successful jobs on 7742ea96aee7a78aaf47719e99f274e9c3b60c9f
   - [x] Update README, owned-engine design, machine evidence ledger and generated roadmap under all-green CI — GitHub Actions 40227737060: all five jobs green on 26e41b669e481ab10939f837a0e09c95472aa3af; README, owned engine docs, progress ledger and generated roadmap verified
-- ↔️ **T472** Bounded Lua table.insert and table.remove mutation semantics — `████████░░ 75%`
+- ↔️ **T472** Bounded Lua table.insert and table.remove mutation semantics — `██████████ 100%`
   - [x] Implement table.insert for append and indexed insertion, preserve zero-result return arity and reject invalid positions and excessive growth — src/owned_flow.rs: table_insert_builtin with bounded shift budget and MAX_TABLE_FIELDS; unit table_insert_and_remove_match_lua_sequence_mutations; CI 40228356899
   - [x] Implement table.remove with Lua's default and explicit positions, shifting behavior, preserved removed result and non-destructive size+1 boundary — src/owned_flow.rs: table_remove_builtin, clear_index boundary fix; regression tests; CI 40228356899
   - [x] Verify successful and protected failures, sequence mutation, append/remove and size+1 behavior against production and official Lua 5.4 in five successful CI jobs — tests/owned_cli_differential.rs: owned_table_insert_remove_mutation_and_bounds_match_lua54; GitHub Actions 40228356899 five green jobs on 4df39255903b5239e8ddd58262340fa991060b22
-  - [ ] Synchronize README, owned-engine docs, evidence ledger and generated ROADMAP under five-job CI
+  - [x] Synchronize README, owned-engine docs, evidence ledger and generated ROADMAP under five-job CI — GitHub Actions 40228555379: all five jobs passed on 3fa39ceb6224e07ae5a217c47aec20efc708a2ff; README, owned-engine docs, ledger and generated ROADMAP synchronized
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1074,5 +1074,5 @@
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
-- 🧺 Bounded first-party Lua table standard-library subset — `█████████░ 92%`
+- 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
 
