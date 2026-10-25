@@ -4684,10 +4684,10 @@ pub fn execute_flow_capture_with_args<'a>(
     // Lua closes its state after evaluating the chunk, even after errors.
     // Preserve the original script failure if closing also reaches a bound.
     let shutdown = execution.finalize_on_shutdown();
-    if result.is_ok() {
-        if let Err(error) = shutdown {
-            result = Err(error);
-        }
+    if result.is_ok()
+        && let Err(error) = shutdown
+    {
+        result = Err(error);
     }
     let error_text = match &result {
         Err(FlowError::Thrown(Value::String(handle))) => execution.strings.get(*handle).cloned(),
