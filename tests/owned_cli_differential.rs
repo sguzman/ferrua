@@ -404,11 +404,8 @@ fn owned_lua_pattern_quantifiers_use_bounded_backtracking_like_lua54() {
 
 #[test]
 fn owned_pattern_unsupported_structural_escapes_never_silently_match() {
-    for source in [
-        "local a=pcall(string.find,'abc','%b('); local b=pcall(string.match,'abc','%f'); local c=pcall(string.find,'abc','%1'); print(a,b,c)",
-    ] {
-        assert_parity(source, true);
-    }
+    let source = "local a=pcall(string.find,'abc','%b('); local b=pcall(string.match,'abc','%f'); local c=pcall(string.find,'abc','%1'); print(a,b,c)";
+    assert_parity(source, true);
 }
 
 #[test]
