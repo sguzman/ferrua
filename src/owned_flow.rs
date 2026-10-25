@@ -4313,9 +4313,10 @@ impl Execution<'_> {
     }
 
     /// A bounded sequence range. Lua 5.4's table.unpack and table.concat
-    /// obtain the default last index through luaL_len, which invokes __len
-    /// on tables. Explicit last indices bypass this metamethod. Indexed
-    /// reads still use the bounded raw table subset.
+    /// eagerly compute luaL_len for the optional last-index default, even
+    /// when an explicit end index is supplied. Thus __len runs (or fails)
+    /// exactly once per call regardless of end-index presence. Indexed reads
+    /// still use the bounded raw table subset.
     fn table_library_range(
         &mut self,
         args: &[Value],
@@ -4326,6 +4327,9 @@ impl Execution<'_> {
         if !matches!(target, Value::Table(_) | Value::String(_)) {
             return Err(FlowError::TypeError);
         }
+        let reported_length = self.length_with_metatable(target)?;
+        let length = self.exact_integer_operand(reported_length)
+            .or_else(|_| self.integer_operand(reported_length))?;
         let start = match args.get(start_argument).copied() {
             Some(value) if value != Value::Nil => self
                 .exact_integer_operand(value)
@@ -4336,11 +4340,7 @@ impl Execution<'_> {
             Some(value) if value != Value::Nil => self
                 .exact_integer_operand(value)
                 .or_else(|_| self.integer_operand(value))?,
-            _ => {
-                let length = self.length_with_metatable(target)?;
-                self.exact_integer_operand(length)
-                    .or_else(|_| self.integer_operand(length))?
-            }
+            _ => length,
         };
         if end < start {
             return Ok((target, start, 0));

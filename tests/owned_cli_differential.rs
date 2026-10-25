@@ -343,14 +343,14 @@ fn owned_table_concat_unpack_sequence_results_match_lua54() {
 }
 
 #[test]
-fn owned_table_concat_and_unpack_use_len_metamethod_when_end_omitted() {
+fn owned_table_concat_and_unpack_eagerly_evaluate_len_even_with_explicit_end() {
     for source in [
         "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
         "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
         "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
         "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
         "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
-        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); print(ok,e,good,f); print(table.concat(t,',',1,3))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
         "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
         "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
     ] {
