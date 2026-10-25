@@ -7533,7 +7533,10 @@ mod tests {
 
     #[test]
     fn gc_reclaims_unreachable_constructor_multi_return_table_tails() {
-        let values = (1..=40).map(|value| value.to_string()).collect::<Vec<_>>().join(",");
+        let values = (1..=40)
+            .map(|value| value.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
         let source = format!(
             "local function vals() return {values} end; for i=1,1800 do local t={{tag=i,vals()}} end; print('ok')"
         );
