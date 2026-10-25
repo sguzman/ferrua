@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 201 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 202 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -931,6 +931,11 @@
   - [x] Implement table.remove with Lua's default and explicit positions, shifting behavior, preserved removed result and non-destructive size+1 boundary — src/owned_flow.rs: table_remove_builtin, clear_index boundary fix; regression tests; CI 40228356899
   - [x] Verify successful and protected failures, sequence mutation, append/remove and size+1 behavior against production and official Lua 5.4 in five successful CI jobs — tests/owned_cli_differential.rs: owned_table_insert_remove_mutation_and_bounds_match_lua54; GitHub Actions 40228356899 five green jobs on 4df39255903b5239e8ddd58262340fa991060b22
   - [x] Synchronize README, owned-engine docs, evidence ledger and generated ROADMAP under five-job CI — GitHub Actions 40228555379: all five jobs passed on 3fa39ceb6224e07ae5a217c47aec20efc708a2ff; README, owned-engine docs, ledger and generated ROADMAP synchronized
+- 📤 **T473** Bounded Lua table.move with overlap-safe copying and separate destinations — `████████░░ 75%`
+  - [x] Implement table.move as a first-class callable with optional destination table, correct return identity, empty ranges and directional overlap safety — src/owned_flow.rs: table_move_builtin, TABLE_GLOBALS, protected and direct dispatch; Rust unit table_move_handles_overlaps_distinct_tables_and_bounded_ranges; CI 40229278754
+  - [x] Support sparse values and hashed negative indices while bounding transfer size, arithmetic and instruction budget without relaxing protected-call resource limits — src/owned_flow.rs: checked_sub/checked_add, MAX_TABLE_FIELDS, shared budget, table_key and write_table; hard resource test table_move_large_transfer_preserves_uncatchable_resource_limit; CI 40229278754
+  - [x] Prove upstream Lua 5.4 and production CLI parity for overlapping moves, distinct destinations, nil holes, negative indices and empty range — tests/owned_cli_differential.rs: owned_table_move_overlap_and_destination_match_lua54; GitHub Actions 40229278754 five successful jobs on 0acb52a32049476ac219843c8379087fe9c22032
+  - [ ] Synchronize README, owned-engine limitations, machine ledger and generated ROADMAP under five successful CI jobs
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1074,5 +1079,5 @@
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
-- 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
+- 🧺 Bounded first-party Lua table standard-library subset — `█████████░ 94%`
 

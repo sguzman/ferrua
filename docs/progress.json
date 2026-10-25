@@ -5178,6 +5178,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T473",
+              "emoji": "📤",
+              "name": "Bounded Lua table.move with overlap-safe copying and separate destinations",
+              "checks": [
+                {
+                  "text": "Implement table.move as a first-class callable with optional destination table, correct return identity, empty ranges and directional overlap safety",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: table_move_builtin, TABLE_GLOBALS, protected and direct dispatch; Rust unit table_move_handles_overlaps_distinct_tables_and_bounded_ranges; CI 40229278754"
+                },
+                {
+                  "text": "Support sparse values and hashed negative indices while bounding transfer size, arithmetic and instruction budget without relaxing protected-call resource limits",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: checked_sub/checked_add, MAX_TABLE_FIELDS, shared budget, table_key and write_table; hard resource test table_move_large_transfer_preserves_uncatchable_resource_limit; CI 40229278754"
+                },
+                {
+                  "text": "Prove upstream Lua 5.4 and production CLI parity for overlapping moves, distinct destinations, nil holes, negative indices and empty range",
+                  "passed": true,
+                  "evidence": "tests/owned_cli_differential.rs: owned_table_move_overlap_and_destination_match_lua54; GitHub Actions 40229278754 five successful jobs on 0acb52a32049476ac219843c8379087fe9c22032"
+                },
+                {
+                  "text": "Synchronize README, owned-engine limitations, machine ledger and generated ROADMAP under five successful CI jobs",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -6198,7 +6225,8 @@
           "task_ids": [
             "T470",
             "T471",
-            "T472"
+            "T472",
+            "T473"
           ]
         }
       ]
