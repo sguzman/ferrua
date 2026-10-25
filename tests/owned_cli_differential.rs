@@ -137,20 +137,12 @@ fn owned_table_concat_unpack_sequence_results_match_lua54() {
         assert_parity(source, true);
     }
 
-    // Pinned luna-core accepts a string in table.unpack's first argument,
-    // whereas official Lua 5.4 rejects it. Preserve the reference behavior
-    // without silently weakening the owned engine to match production.
-    let source = "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local bad2=pcall(table.unpack,'text'); print(good,bad,bad2)";
-    let owned = run_fer(true, source);
-    assert!(owned.status.success());
-    assert_eq!(owned.stdout, b"true\tfalse\tfalse\n");
-    let production = run_fer(false, source);
-    assert!(production.status.success());
-    assert_eq!(production.stdout, b"true\tfalse\ttrue\n");
-    if let Some(reference) = reference_output(source) {
-        assert!(reference.status.success());
-        assert_eq!(owned.stdout, reference.stdout);
-    }
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
 }
 
 #[test]

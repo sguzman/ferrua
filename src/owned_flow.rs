@@ -3801,17 +3801,20 @@ impl Execution<'_> {
         Ok(Value::Integer(length as i64))
     }
 
-    /// A bounded Lua table slice. The initial library handles raw array
-    /// indices only; metamethod-derived sequence lengths are not yet accepted.
+    /// A bounded sequence range. Lua 5.4's table.unpack calls luaL_len
+    /// on its first argument, so byte strings can also supply a length.
+    /// Table access is currently raw; metamethod-derived table lengths
+    /// and custom indexing remain separate graduation work.
     fn table_library_range(
         &self,
         args: &[Value],
         start_argument: usize,
         end_argument: usize,
-    ) -> Result<(usize, i64, usize), FlowError> {
-        let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
+    ) -> Result<(Value, i64, usize), FlowError> {
+        let target = *args.first().ok_or(FlowError::TypeError)?;
+        if !matches!(target, Value::Table(_) | Value::String(_)) {
             return Err(FlowError::TypeError);
-        };
+        }
         let start = match args.get(start_argument).copied() {
             Some(value) if value != Value::Nil => self
                 .exact_integer_operand(value)
@@ -3822,13 +3825,13 @@ impl Execution<'_> {
             Some(value) if value != Value::Nil => self
                 .exact_integer_operand(value)
                 .or_else(|_| self.integer_operand(value))?,
-            _ => match self.raw_len(Value::Table(handle))? {
+            _ => match self.raw_len(target)? {
                 Value::Integer(length) => length,
                 _ => return Err(FlowError::InvalidBytecode),
             },
         };
         if end < start {
-            return Ok((handle, start, 0));
+            return Ok((target, start, 0));
         }
         let size = end
             .checked_sub(start)
@@ -3838,12 +3841,13 @@ impl Execution<'_> {
         if size > MAX_STACK {
             return Err(FlowError::TooLarge);
         }
-        Ok((handle, start, size))
+        Ok((target, start, size))
     }
 
-    /// table.unpack exposes genuine zero-or-more results from raw array slots.
+    /// table.unpack exposes genuine zero-or-more results from raw table
+    /// slots, or nils from integer indexing of Lua byte strings.
     fn table_unpack_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
-        let (handle, start, count) = self.table_library_range(args, 1, 2)?;
+        let (target, start, count) = self.table_library_range(args, 1, 2)?;
         if self.steps.saturating_add(count) > self.budget {
             return Err(FlowError::StepBudgetExceeded);
         }
@@ -3853,8 +3857,15 @@ impl Execution<'_> {
             let index = start
                 .checked_add(offset as i64)
                 .ok_or(FlowError::TooLarge)?;
-            let key = self.table_key(Value::Integer(index))?;
-            result.push(self.read_table(handle, key)?);
+            let value = match target {
+                Value::Table(handle) => {
+                    let key = self.table_key(Value::Integer(index))?;
+                    self.read_table(handle, key)?
+                }
+                Value::String(_) => Value::Nil,
+                _ => return Err(FlowError::InvalidBytecode),
+            };
+            result.push(value);
         }
         Ok(result)
     }
@@ -3867,12 +3878,20 @@ impl Execution<'_> {
             Some(value) if value != Value::Nil => self.string_bytes(value)?,
             _ => Vec::new(),
         };
-        let (handle, start, count) = self.table_library_range(args, 2, 3)?;
+        let (target, start, count) = self.table_library_range(args, 2, 3)?;
+        // The Lua reference admits strings for sequence length, but their
+        // indexed elements are nil. A nonempty join therefore fails.
+        if matches!(target, Value::String(_)) && count > 0 {
+            return Err(FlowError::TypeError);
+        }
         let mut output = Vec::new();
         for offset in 0..count {
             let index = start
                 .checked_add(offset as i64)
                 .ok_or(FlowError::TooLarge)?;
+            let Value::Table(handle) = target else {
+                return Err(FlowError::InvalidBytecode);
+            };
             let key = self.table_key(Value::Integer(index))?;
             let value = self.read_table(handle, key)?;
             let bytes = self.string_bytes(value)?;
@@ -9052,8 +9071,8 @@ mod tests {
             ),
             ("print(table.unpack({1,2,3}))", b"1\t2\t3\n".as_slice()),
             (
-                "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local bad2=pcall(table.unpack,'text'); print(good,bad,bad2)",
-                b"true\tfalse\tfalse\n".as_slice(),
+                "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+                b"true\tfalse\ttrue\tnil\tnil\tnil\tnil\n".as_slice(),
             ),
             (
                 "local t={string.char(65,0,66)}; for i=1,19000 do local s=tostring(i) end; print(table.concat(t)==string.char(65,0,66))",
