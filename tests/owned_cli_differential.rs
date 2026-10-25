@@ -343,7 +343,7 @@ fn owned_table_concat_unpack_sequence_results_match_lua54() {
 }
 
 #[test]
-fn owned_table_concat_and_unpack_eagerly_evaluate_len_even_with_explicit_end() {
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
     for source in [
         "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
         "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",

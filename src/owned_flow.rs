@@ -4312,25 +4312,30 @@ impl Execution<'_> {
         Ok(Value::Integer(length as i64))
     }
 
-    /// A bounded sequence range. Lua 5.4's table.unpack and table.concat
-    /// eagerly compute luaL_len for the optional last-index default, even
-    /// when an explicit end index is supplied. Thus __len runs (or fails)
-    /// exactly once per call regardless of end-index presence. Indexed reads
-    /// still use the bounded raw table subset.
+    /// A bounded sequence range. Lua 5.4 table.concat evaluates luaL_len
+    /// eagerly (even for an explicit end); table.unpack evaluates it only
+    /// when its end index is omitted or nil. Both honor __len, while indexed
+    /// reads still use the bounded raw table subset.
     fn table_library_range(
         &mut self,
         args: &[Value],
         start_argument: usize,
         end_argument: usize,
+        eager_length: bool,
     ) -> Result<(Value, i64, usize), FlowError> {
         let target = *args.first().ok_or(FlowError::TypeError)?;
         if !matches!(target, Value::Table(_) | Value::String(_)) {
             return Err(FlowError::TypeError);
         }
-        let reported_length = self.length_with_metatable(target)?;
-        let length = self
-            .exact_integer_operand(reported_length)
-            .or_else(|_| self.integer_operand(reported_length))?;
+        let default_end = if eager_length {
+            let length = self.length_with_metatable(target)?;
+            Some(
+                self.exact_integer_operand(length)
+                    .or_else(|_| self.integer_operand(length))?,
+            )
+        } else {
+            None
+        };
         let start = match args.get(start_argument).copied() {
             Some(value) if value != Value::Nil => self
                 .exact_integer_operand(value)
@@ -4341,7 +4346,14 @@ impl Execution<'_> {
             Some(value) if value != Value::Nil => self
                 .exact_integer_operand(value)
                 .or_else(|_| self.integer_operand(value))?,
-            _ => length,
+            _ => match default_end {
+                Some(length) => length,
+                None => {
+                    let length = self.length_with_metatable(target)?;
+                    self.exact_integer_operand(length)
+                        .or_else(|_| self.integer_operand(length))?
+                }
+            },
         };
         if end < start {
             return Ok((target, start, 0));
@@ -4618,7 +4630,7 @@ impl Execution<'_> {
     /// table.unpack exposes genuine zero-or-more results from raw table
     /// slots, or nils from integer indexing of Lua byte strings.
     fn table_unpack_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
-        let (target, start, count) = self.table_library_range(args, 1, 2)?;
+        let (target, start, count) = self.table_library_range(args, 1, 2, false)?;
         if self.steps.saturating_add(count) > self.budget {
             return Err(FlowError::StepBudgetExceeded);
         }
@@ -4649,7 +4661,7 @@ impl Execution<'_> {
             Some(value) if value != Value::Nil => self.string_bytes(value)?,
             _ => Vec::new(),
         };
-        let (target, start, count) = self.table_library_range(args, 2, 3)?;
+        let (target, start, count) = self.table_library_range(args, 2, 3, true)?;
         // The Lua reference admits strings for sequence length, but their
         // indexed elements are nil. A nonempty join therefore fails.
         if matches!(target, Value::String(_)) && count > 0 {
