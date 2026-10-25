@@ -4441,10 +4441,8 @@ impl Execution<'_> {
         self.gc_temporary_roots.push(args.to_vec());
         let result = (|| {
             for index in (position..last).rev() {
-                let item = self.lookup_with_metatable(
-                    handle,
-                    self.table_key(Value::Integer(index))?,
-                )?;
+                let item =
+                    self.lookup_with_metatable(handle, self.table_key(Value::Integer(index))?)?;
                 self.gc_temporary_roots
                     .last_mut()
                     .ok_or(FlowError::InvalidBytecode)?
@@ -4497,28 +4495,20 @@ impl Execution<'_> {
         // value and intermediate callback results across collection.
         self.gc_temporary_roots.push(args.to_vec());
         let result = (|| {
-            let removed = self.lookup_with_metatable(
-                handle,
-                self.table_key(Value::Integer(position))?,
-            )?;
+            let removed =
+                self.lookup_with_metatable(handle, self.table_key(Value::Integer(position))?)?;
             self.gc_temporary_roots
                 .last_mut()
                 .ok_or(FlowError::InvalidBytecode)?
                 .push(removed);
             for index in position..size {
-                let item = self.lookup_with_metatable(
-                    handle,
-                    self.table_key(Value::Integer(index + 1))?,
-                )?;
+                let item =
+                    self.lookup_with_metatable(handle, self.table_key(Value::Integer(index + 1))?)?;
                 self.gc_temporary_roots
                     .last_mut()
                     .ok_or(FlowError::InvalidBytecode)?
                     .push(item);
-                self.assign_with_metatable(
-                    handle,
-                    self.table_key(Value::Integer(index))?,
-                    item,
-                )?;
+                self.assign_with_metatable(handle, self.table_key(Value::Integer(index))?, item)?;
             }
             // Lua's loop advances the index to size only when shifting.
             // Removing at size + 1 must clear that absent index, not size.
