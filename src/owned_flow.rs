@@ -2575,6 +2575,47 @@ impl Execution<'_> {
         }
     }
 
+    /// Validate Lua math arguments without losing the first-party error value.
+    /// luaL_checknumber/checkinteger distinguish missing and wrong-typed inputs
+    /// from numeric values that cannot be represented as integers.
+    fn checked_math_number(
+        &mut self,
+        function: &str,
+        args: &[Value],
+        index: usize,
+        integral: bool,
+    ) -> Result<Value, FlowError> {
+        let parsed = args
+            .get(index)
+            .copied()
+            .and_then(|value| self.arithmetic_operand(value).ok());
+        if let Some(number) = parsed {
+            if !integral {
+                return Ok(number);
+            }
+            if let Ok(integer) = self.exact_integer_operand(number) {
+                return Ok(Value::Integer(integer));
+            }
+        }
+        let detail = if integral && parsed.is_some() {
+            "number has no integer representation".to_string()
+        } else {
+            let kind = match args.get(index).copied() {
+                None => "no value",
+                Some(Value::Nil) => "nil",
+                Some(Value::Boolean(_)) => "boolean",
+                Some(Value::String(_)) => "string",
+                Some(Value::Table(_)) => "table",
+                Some(Value::Function(_) | Value::Builtin(_)) => "function",
+                Some(Value::Integer(_) | Value::Float(_)) => "number",
+            };
+            format!("number expected, got {kind}")
+        };
+        let message = format!("bad argument #{} to '{function}' ({detail})", index + 1);
+        let value = self.intern_rooted_string(message.into_bytes(), args)?;
+        Err(FlowError::Thrown(value))
+    }
+
     /// A small first-party Lua 5.4 numeric library. Unsupported math
     /// functions remain absent rather than falling back to another runtime.
     fn math_builtin(&mut self, builtin: Builtin, args: &[Value]) -> Result<Value, FlowError> {
@@ -2596,20 +2637,21 @@ impl Execution<'_> {
             // Lua's square root always returns a floating-point value, even
             // for an exact integer input. Preserve IEEE-754 NaN/inf results.
             Builtin::MathSqrt => {
-                let number = match self.arithmetic_operand(first)? {
+                let number = match self.checked_math_number("math.sqrt", args, 0, false)? {
                     Value::Integer(number) => number as f64,
                     Value::Float(bits) => f64::from_bits(bits),
-                    _ => return Err(FlowError::TypeError),
+                    _ => return Err(FlowError::InvalidBytecode),
                 };
                 Ok(Value::Float(number.sqrt().to_bits()))
             }
             // luaL_checkinteger accepts exactly integral floats and numeric
             // strings; unsigned ordering uses the full 64-bit Lua integer.
             Builtin::MathUlt => {
-                let left = self.exact_integer_operand(self.arithmetic_operand(first)?)?;
-                let right = self.exact_integer_operand(
-                    self.arithmetic_operand(*args.get(1).ok_or(FlowError::TypeError)?)?,
-                )?;
+                let left = self.checked_math_number("math.ult", args, 0, true)?;
+                let right = self.checked_math_number("math.ult", args, 1, true)?;
+                let (Value::Integer(left), Value::Integer(right)) = (left, right) else {
+                    return Err(FlowError::InvalidBytecode);
+                };
                 Ok(Value::Boolean((left as u64) < (right as u64)))
             }
             Builtin::MathAbs => match self.arithmetic_operand(first)? {
