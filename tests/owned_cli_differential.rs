@@ -381,6 +381,18 @@ fn owned_table_move_overlap_and_destination_match_lua54() {
 }
 
 #[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
     for source in [
         "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",

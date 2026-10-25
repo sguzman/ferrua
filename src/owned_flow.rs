@@ -4559,11 +4559,6 @@ impl Execution<'_> {
         let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
             return Err(FlowError::TypeError);
         };
-        let comparator = match args.get(1).copied().unwrap_or(Value::Nil) {
-            Value::Nil => None,
-            callback @ (Value::Function(_) | Value::Builtin(_)) => Some(callback),
-            _ => return Err(FlowError::TypeError),
-        };
         let Value::Integer(length) = self.raw_len(Value::Table(handle))? else {
             return Err(FlowError::InvalidBytecode);
         };
@@ -4571,6 +4566,17 @@ impl Execution<'_> {
         if length > MAX_TABLE_FIELDS {
             return Err(FlowError::TooLarge);
         }
+        // Lua's table.sort returns without inspecting comp for lists of
+        // length zero or one. For nontrivial lists the argument must be an
+        // actual function (callable tables are not accepted).
+        if length <= 1 {
+            return Ok(Vec::new());
+        }
+        let comparator = match args.get(1).copied().unwrap_or(Value::Nil) {
+            Value::Nil => None,
+            callback @ (Value::Function(_) | Value::Builtin(_)) => Some(callback),
+            _ => return Err(FlowError::TypeError),
+        };
         let mut sorted = Vec::with_capacity(length);
         for index in 1..=length {
             sorted.push(self.read_table(handle, TableKey::Positive(index))?);
