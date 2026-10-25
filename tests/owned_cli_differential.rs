@@ -324,7 +324,11 @@ fn owned_callable_table_finalizers_match_lua54() {
         ),
     ] {
         let owned = run_fer(true, source);
-        assert!(owned.status.success(), "{source}: {}", String::from_utf8_lossy(&owned.stderr));
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
         assert_eq!(owned.stdout, expected, "{source}");
         if let Some(reference) = reference_output(source) {
             assert!(reference.status.success(), "{source}");
