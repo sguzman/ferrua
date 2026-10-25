@@ -4702,6 +4702,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T456",
+              "emoji": "🔗",
+              "name": "Automatic string quota recovery at rooted Lua concatenation boundaries",
+              "checks": [
+                {
+                  "text": "Retry bounded full collection for direct Lua concatenation when string handle or byte quotas would reject a new string",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: intern_concat_string, concat_with_metamethod direct byte concat route"
+                },
+                {
+                  "text": "Pin concatenation operands and active/suspended Lua roots while collecting, preserve retained strings, and enforce stop-mode quota rejection",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: concatenation_retries_string_quota_after_rooted_collection unit cases; collect_root_tables in-flight operand roots"
+                },
+                {
+                  "text": "Match production fer and upstream Lua 5.4 for 19,000 ephemeral concatenations, retained strings and nested caller arguments in full five-job CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40208874043: five jobs successful on c0141d9b7ddf1009f54c2bb701f1dda4682166ff; tests/owned_cli_differential.rs: owned_concat_string_pressure_gc_matches_lua54"
+                },
+                {
+                  "text": "Synchronize README, owned-engine scope docs, machine ledger and generated roadmap with passing CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5693,7 +5720,8 @@
             "T452",
             "T453",
             "T454",
-            "T455"
+            "T455",
+            "T456"
           ]
         }
       ]

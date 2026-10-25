@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 184 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 185 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -846,6 +846,11 @@
   - [x] Retire unreachable execution-only byte strings and safely reuse their handles without breaching string pool limits — src/owned_flow.rs: free_strings, retired_strings, collect_root_tables string sweep, intern_string recycled-slot logic; gc_reclaims_runtime_strings_and_reuses_handles_after_explicit_passes
   - [x] Verify two string allocation/explicit sweep epochs and retention through both regular and weak hash entries against production fer and Lua 5.4 in five-job CI — GitHub Actions 40208289872: all five jobs passed on 0d90a8f9c34cc51e0a292fb601edd035534f08c4; tests/owned_cli_differential.rs: owned_explicit_string_collection_matches_lua54_after_two_epochs
   - [x] Synchronize README, owned-engine docs, ledger and generated roadmap under all-green CI — GitHub Actions 40208501876: five jobs passed on 1cfd7b026b78011026d4bd629567779a25772348; README, owned-engine docs, machine ledger and generated roadmap synchronized
+- 🔗 **T456** Automatic string quota recovery at rooted Lua concatenation boundaries — `████████░░ 75%`
+  - [x] Retry bounded full collection for direct Lua concatenation when string handle or byte quotas would reject a new string — src/owned_flow.rs: intern_concat_string, concat_with_metamethod direct byte concat route
+  - [x] Pin concatenation operands and active/suspended Lua roots while collecting, preserve retained strings, and enforce stop-mode quota rejection — src/owned_flow.rs: concatenation_retries_string_quota_after_rooted_collection unit cases; collect_root_tables in-flight operand roots
+  - [x] Match production fer and upstream Lua 5.4 for 19,000 ephemeral concatenations, retained strings and nested caller arguments in full five-job CI — GitHub Actions 40208874043: five jobs successful on c0141d9b7ddf1009f54c2bb701f1dda4682166ff; tests/owned_cli_differential.rs: owned_concat_string_pressure_gc_matches_lua54
+  - [ ] Synchronize README, owned-engine scope docs, machine ledger and generated roadmap with passing CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -987,5 +992,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 98%`
 
