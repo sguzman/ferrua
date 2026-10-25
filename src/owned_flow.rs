@@ -3635,9 +3635,7 @@ impl Execution<'_> {
             }
             Value::Builtin(Builtin::StringByte) => self.string_byte_builtin(&arguments),
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
-            Value::Builtin(Builtin::TablePack) => {
-                Ok(vec![self.table_pack_builtin(&arguments)?])
-            }
+            Value::Builtin(Builtin::TablePack) => Ok(vec![self.table_pack_builtin(&arguments)?]),
             Value::Builtin(Builtin::TableConcat) => {
                 Ok(vec![self.table_concat_builtin(&arguments)?])
             }
