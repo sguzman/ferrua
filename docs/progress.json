@@ -4618,6 +4618,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T453",
+              "emoji": "🗝️",
+              "name": "Lua weak-key, double-weak and ephemeron fixpoint collection",
+              "checks": [
+                {
+                  "text": "Trace weak-key tables using dependent-value ephemerons, retaining values only when their collectable keys become independently marked",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: table_weakness; collect_root_tables ephemerons/activated iterative worklist"
+                },
+                {
+                  "text": "Remove unreachable weak keys or values after a complete fixpoint, keeping primitives and preserving two-sided weak semantics within budget",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: weak_clears, weak_value_unreachable; owned_gc_weak_keys_and_ephemeron_fixpoint_preserve_lua_reachability"
+                },
+                {
+                  "text": "Verify cycle removal, reachable key retention, primitive keys, ephemeron chains, and double-weak tables against production fer and upstream Lua 5.4",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40206193452: five jobs passed on b0e738cbfe6c34026e928e95019dc3608540aff3; tests/owned_cli_differential.rs: owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54"
+                },
+                {
+                  "text": "Synchronize README, owned-engine documentation, evidence ledger and generated roadmap under successful CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5606,7 +5633,8 @@
             "T449",
             "T450",
             "T451",
-            "T452"
+            "T452",
+            "T453"
           ]
         }
       ]
