@@ -5402,6 +5402,33 @@
                   "evidence": "GitHub Actions 40236693747: all five jobs passed on e8ae997805094d4c1a0a40474cc88624e7327b61, including README, owned-engine docs, machine ledger and regenerated roadmap"
                 }
               ]
+            },
+            {
+              "id": "T481",
+              "emoji": "🔤",
+              "name": "Lua 5.4.6 utf8.offset byte navigation, errors and negative positions",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Implement byte-oriented utf8.offset with positive, negative, and zero-relative character navigation, sentinel end position, continuation-byte error and bounded scans",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: Utf8Offset, UTF8_GLOBALS, utf8_offset_builtin, direct and protected call routes"
+                },
+                {
+                  "text": "Cover multibyte strings, continuation positions, empty strings, negative indices, beyond-end navigation, numeric arguments and mutable library identity",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: utf8_offset_counts_byte_beginnings_and_reports_continuation_errors; tests/owned_cli_differential.rs: owned_utf8_offset_byte_boundaries_and_continuations_match_lua54"
+                },
+                {
+                  "text": "Pass upstream Lua 5.4.6 differential, Rust checks, Rust 1.96 and downstream consumer tests",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40237098499: five jobs green at f697937a0773c445d40dceed349f5dfc29b53729"
+                },
+                {
+                  "text": "Synchronize machine acceptance ledger, generated roadmap, README, and scoped owned-engine documentation with passing CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -6442,7 +6469,8 @@
           "emoji": "🔤",
           "name": "Bounded first-party Lua 5.4 UTF-8 standard-library compatibility",
           "task_ids": [
-            "T480"
+            "T480",
+            "T481"
           ]
         }
       ]
