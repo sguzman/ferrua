@@ -283,6 +283,24 @@ fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
 }
 
 #[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
 fn owned_weak_mode_nul_termination_matches_lua54_6() {
     // The pinned production luna-core backend scans the bytes beyond NUL;
     // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather

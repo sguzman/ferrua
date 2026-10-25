@@ -8542,6 +8542,29 @@ mod tests {
     }
 
     #[test]
+    fn gc_weak_mode_accepts_long_strings_in_pinned_lua54_6() {
+        // Lua 5.4.6 traversetable checks ttisstring, not ttisshrstring.
+        // A long mode string with flags is therefore still effective.
+        for (mode, expected) in [
+            (format!("v{}", "x".repeat(64)), b"false\ttrue\n".as_slice()),
+            (format!("k{}", "x".repeat(64)), b"true\tfalse\n".as_slice()),
+            (format!("x{}kv", "x".repeat(64)), b"true\ttrue\n".as_slice()),
+        ] {
+            let source = format!(
+                "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+                 do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+                 collectgarbage('collect'); \
+                 local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+                 print(key_gone,w[1]==nil)"
+            );
+            let program = compile_flow_chunk(&source).unwrap();
+            let outcome = execute_flow_capture(&program, 30_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+    }
+
+    #[test]
     fn gc_weak_mode_stops_scanning_at_embedded_nul() {
         for (mode, expected) in [
             ("v\\0k", b"false\ttrue\n".as_slice()),
