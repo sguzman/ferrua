@@ -1666,6 +1666,10 @@ struct Execution<'a> {
     tables: Vec<TableStorage>,
     free_tables: Vec<usize>,
     retired_tables: HashSet<usize>,
+    /// Registration order for objects with __gc at metatable assignment.
+    gc_registrations: Vec<usize>,
+    gc_finalized: HashSet<usize>,
+    running_finalizers: bool,
     table_cells: usize,
     closures: Vec<Option<Closure>>,
     free_closures: Vec<usize>,
@@ -1831,6 +1835,30 @@ impl Execution<'_> {
         })
     }
 
+    /// The __gc field is sampled for registration when a metatable is
+    /// assigned, then looked up again when that object is finalized. Merely
+    /// installing __gc into an already assigned metatable must not register
+    /// the earlier table retroactively.
+    fn table_finalizer(&self, handle: usize) -> Result<Option<Value>, FlowError> {
+        let meta = self
+            .tables
+            .get(handle)
+            .ok_or(FlowError::InvalidBytecode)?
+            .metatable;
+        let Some(meta) = meta else {
+            return Ok(None);
+        };
+        let Some(&key) = self.string_index.get(b"__gc".as_slice()) else {
+            return Ok(None);
+        };
+        let metatable = self.tables.get(meta).ok_or(FlowError::InvalidBytecode)?;
+        Ok(metatable
+            .hashed
+            .get(&Value::String(key))
+            .copied()
+            .filter(|value| *value != Value::Nil))
+    }
+
     /// Bounded mark-and-sweep across active Lua call frames. Each suspended
     /// caller retains its pre-instruction stack and prepared table targets;
     /// ancestor cell allocations are conservatively retained as extra roots.
@@ -1840,6 +1868,12 @@ impl Execution<'_> {
         slots: &[usize],
         prepared: &[PendingTarget],
     ) -> Result<(), FlowError> {
+        // Reentrant full collections from a finalizer are outside this
+        // bounded stop-the-world preview. Never recurse through a partially
+        // swept heap or call the same finalizer twice.
+        if self.running_finalizers {
+            return Err(FlowError::TooLarge);
+        }
         if self.frame_allocations.is_empty()
             || self.frame_allocations.len() != self.gc_frame_roots.len()
         {
@@ -2001,6 +2035,23 @@ impl Execution<'_> {
                 break;
             }
         }
+        // Determine the objects whose first finalization is due this cycle.
+        // Registration order is observable in Lua: last registered, first
+        // finalized. Delay freeing *any* object in a cycle that invokes
+        // callbacks so finalizer closures and their referenced graphs remain
+        // accessible, even if not strongly marked.
+        let pending_finalizers: Vec<usize> = self
+            .gc_registrations
+            .iter()
+            .rev()
+            .copied()
+            .filter(|&handle| {
+                marked_tables.get(handle) == Some(&false)
+                    && !self.retired_tables.contains(&handle)
+                    && !self.gc_finalized.contains(&handle)
+            })
+            .collect();
+
         // Prepare weak-reference removal without changing the heap. All
         // candidate handles are validated before the budget gate, so even a
         // failed ephemeron cycle leaves the original table entries intact.
@@ -2029,7 +2080,11 @@ impl Execution<'_> {
             }
             let mut hash_keys = Vec::new();
             for (&key, &value) in &table.hashed {
-                let dead_key = if weak_keys {
+                let pending_finalizer_key = matches!(
+                    key,
+                    Value::Table(handle) if pending_finalizers.contains(&handle)
+                );
+                let dead_key = if weak_keys && !pending_finalizer_key {
                     weak_value_unreachable(key, &marked_tables, &marked_closures)?
                 } else {
                     false
@@ -2080,6 +2135,28 @@ impl Execution<'_> {
                     self.table_cells -= 1;
                 }
             }
+        }
+
+        if !pending_finalizers.is_empty() {
+            // Lua makes tables with a queued finalizer available to callbacks
+            // for at least this collection. Preserve the entire bounded heap
+            // until the next explicit cycle; completed callbacks cannot be
+            // scheduled a second time even if they resurrect their object.
+            self.running_finalizers = true;
+            let outcome = (|| -> Result<(), FlowError> {
+                for handle in pending_finalizers {
+                    self.gc_finalized.insert(handle);
+                    if let Some(method) = self.table_finalizer(handle)? {
+                        match self.protected_target(method, &[Value::Table(handle)]) {
+                            Ok(_) | Err(FlowError::Thrown(_)) | Err(FlowError::TypeError) => {}
+                            Err(error) => return Err(error),
+                        }
+                    }
+                }
+                Ok(())
+            })();
+            self.running_finalizers = false;
+            return outcome;
         }
 
         // Drop unreachable execution-only interned byte strings. Tombstone
@@ -2156,6 +2233,8 @@ impl Execution<'_> {
                 };
                 self.retired_tables.insert(handle);
                 self.free_tables.push(handle);
+                self.gc_finalized.remove(&handle);
+                self.gc_registrations.retain(|&item| item != handle);
             }
         }
         Ok(())
@@ -2186,6 +2265,8 @@ impl Execution<'_> {
 
     fn insert_table(&mut self, table: TableStorage) -> Result<usize, FlowError> {
         if let Some(handle) = self.free_tables.pop() {
+            self.gc_finalized.remove(&handle);
+            self.gc_registrations.retain(|&item| item != handle);
             if !self.retired_tables.remove(&handle) {
                 return Err(FlowError::InvalidBytecode);
             }
@@ -2697,6 +2778,12 @@ impl Execution<'_> {
             .get_mut(handle)
             .ok_or(FlowError::InvalidBytecode)?
             .metatable = metatable;
+        if self.table_finalizer(handle)?.is_some()
+            && !self.gc_finalized.contains(&handle)
+            && !self.gc_registrations.contains(&handle)
+        {
+            self.gc_registrations.push(handle);
+        }
         Ok(Value::Table(handle))
     }
 
@@ -4497,6 +4584,9 @@ pub fn execute_flow_capture_with_args<'a>(
         tables: Vec::new(),
         free_tables: Vec::new(),
         retired_tables: HashSet::new(),
+        gc_registrations: Vec::new(),
+        gc_finalized: HashSet::new(),
+        running_finalizers: false,
         table_cells: 0,
         closures: Vec::new(),
         free_closures: Vec::new(),
@@ -7903,6 +7993,37 @@ mod tests {
         for (source, expected) in cases {
             let program = compile_flow_chunk(source).unwrap();
             let outcome = execute_flow_capture(&program, 3_000_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+    }
+
+    #[test]
+    fn explicit_gc_finalizes_registered_tables_once_in_reverse_order() {
+        for (source, expected) in [
+            (
+                "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+                b"BA\nBA\n".as_slice(),
+            ),
+            (
+                "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+                b"false\n".as_slice(),
+            ),
+            (
+                "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+                b"42\nonce\n".as_slice(),
+            ),
+            (
+                "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+                b"true\n".as_slice(),
+            ),
+            (
+                "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+                b"true\ntrue\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 250_000);
             assert_eq!(outcome.result, Ok(vec![]), "{source}");
             assert_eq!(outcome.stdout, expected, "{source}");
         }

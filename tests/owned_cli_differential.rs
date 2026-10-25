@@ -294,6 +294,19 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
     let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
     let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
