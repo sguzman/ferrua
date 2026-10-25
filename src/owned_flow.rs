@@ -4810,9 +4810,8 @@ impl Execution<'_> {
                 body = &body[1..];
                 anchored_start = true;
             }
-            // Lua treats an unescaped terminal '$' as the end anchor.
-            // Count preceding escapes so '%$' stays a literal dollar while
-            // '%%$' denotes a literal percent followed by an end anchor.
+            // A terminal '$' is an anchor only after an even number of
+            // consecutive %-escapes (otherwise the dollar is literal).
             if body.last() == Some(&b'$') {
                 let escaped = body[..body.len() - 1]
                     .iter()
@@ -4827,53 +4826,117 @@ impl Execution<'_> {
                 }
             }
         }
-        // Each pattern atom consumes exactly one subject byte. A (byte,true)
-        // entry represents Lua's %-escaped classes/punctuation; quantifiers,
-        // sets, frontier/balanced constructs and captures are still gated.
+        // Atom: byte, escaped flag, repetition operator (0 = exactly one).
+        // The parser never creates captures or bracket classes silently.
         let mut atoms = Vec::with_capacity(body.len());
         let mut index = 0;
         while index < body.len() {
-            let byte = body[index];
-            if !plain && byte == b'%' {
-                let escaped = *body.get(index + 1).ok_or(FlowError::TypeError)?;
-                atoms.push((escaped, true));
+            let (byte, escaped) = if !plain && body[index] == b'%' {
+                let quoted = *body.get(index + 1).ok_or(FlowError::TypeError)?;
                 index += 2;
+                (quoted, true)
             } else {
-                if !plain && b"()[]*+-?".contains(&byte) {
+                let value = body[index];
+                if !plain && b"()[]*+-?".contains(&value) {
                     return Err(FlowError::Unsupported(
-                        "Lua pattern quantifiers, sets and captures are not implemented".into(),
+                        "Lua bracket classes or captures are not implemented".into(),
                     ));
                 }
-                atoms.push((byte, false));
                 index += 1;
-            }
+                (value, false)
+            };
+            let repetition = if !plain
+                && index < body.len()
+                && b"*+?-".contains(&body[index])
+            {
+                let operator = body[index];
+                index += 1;
+                operator
+            } else {
+                0
+            };
+            atoms.push((byte, escaped, repetition));
         }
         let start = Self::string_offset(initial, source.len() as i64).max(1);
         if start > source.len() as i64 + 1 {
             return Ok(None);
         }
         let offset = (start - 1) as usize;
-        if atoms.len() > source.len() - offset {
-            return Ok(None);
-        }
-        for begin in offset..=source.len() - atoms.len() {
-            let cost = atoms.len().max(1);
-            if self.steps.saturating_add(cost) > self.budget {
+        for begin in offset..=source.len() {
+            if self.steps >= self.budget {
                 return Err(FlowError::StepBudgetExceeded);
             }
-            self.steps += cost;
-            if (!anchored_end || begin + atoms.len() == source.len())
-                && source[begin..begin + atoms.len()].iter().zip(&atoms).all(
-                    |(&actual, &(atom, escaped))| {
-                        if escaped {
-                            Self::simple_pattern_escape_matches(atom, actual)
+            self.steps += 1;
+            // Explicit DFS replaces recursive Lua pattern backtracking.
+            // Branch order is greedy for *, + and ?, lazy for -.
+            let mut states = vec![(0usize, begin)];
+            while let Some((atom_index, position)) = states.pop() {
+                if self.steps >= self.budget {
+                    return Err(FlowError::StepBudgetExceeded);
+                }
+                self.steps += 1;
+                if atom_index == atoms.len() {
+                    if !anchored_end || position == source.len() {
+                        return Ok(Some((begin, position)));
+                    }
+                    continue;
+                }
+                let (atom, escaped, repetition) = atoms[atom_index];
+                let matches = |at: usize| {
+                    at < source.len()
+                        && if escaped {
+                            Self::simple_pattern_escape_matches(atom, source[at])
                         } else {
-                            actual == atom || (!plain && atom == b'.')
+                            source[at] == atom || (!plain && atom == b'.')
                         }
-                    },
-                )
-            {
-                return Ok(Some((begin, begin + atoms.len())));
+                };
+                match repetition {
+                    0 => {
+                        if matches(position) {
+                            states.push((atom_index + 1, position + 1));
+                        }
+                    }
+                    b'?' => {
+                        // Stack is LIFO: evaluate consuming before skipping.
+                        states.push((atom_index + 1, position));
+                        if matches(position) {
+                            states.push((atom_index + 1, position + 1));
+                        }
+                    }
+                    b'*' | b'+' | b'-' => {
+                        let mut maximum = position;
+                        while maximum < source.len() {
+                            if self.steps >= self.budget {
+                                return Err(FlowError::StepBudgetExceeded);
+                            }
+                            self.steps += 1;
+                            if !matches(maximum) {
+                                break;
+                            }
+                            maximum += 1;
+                        }
+                        let minimum = position + usize::from(repetition == b'+');
+                        if minimum <= maximum {
+                            let alternatives = maximum - minimum + 1;
+                            if states.len().saturating_add(alternatives) > MAX_STACK {
+                                return Err(FlowError::TooLarge);
+                            }
+                            if repetition == b'-' {
+                                for at in (minimum..=maximum).rev() {
+                                    states.push((atom_index + 1, at));
+                                }
+                            } else {
+                                for at in minimum..=maximum {
+                                    states.push((atom_index + 1, at));
+                                }
+                            }
+                        }
+                    }
+                    _ => return Err(FlowError::InvalidBytecode),
+                }
+                if states.len() > MAX_STACK {
+                    return Err(FlowError::TooLarge);
+                }
             }
             if anchored_start {
                 break;

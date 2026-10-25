@@ -382,6 +382,27 @@ fn owned_lua_pattern_ascii_classes_and_escapes_match_lua54() {
 }
 
 #[test]
+fn owned_lua_pattern_quantifiers_use_bounded_backtracking_like_lua54() {
+    for source in [
+        "print(string.match('a123b','%d+'),string.find('a123b','%d+'))",
+        "print(string.match('aaaab','a*b'),string.match('aaaab','a+b'))",
+        "print(string.match('b','a*b')=='b',string.match('b','a+b')==nil)",
+        "print(string.match('aaab','a-b')=='aaab',string.match('aaaa','a-')=='')",
+        "print(string.match('abc','.?')=='a',string.match('abc','a.?c')=='abc')",
+        "print(string.match('abc','a.*c')=='abc',string.match('abc','a.-c')=='abc')",
+        "print(string.match('aaaa','a+')=='aaaa',string.match('aaaa','a*')=='aaaa')",
+        "print(string.match('123a','^%d+%a$')=='123a',string.find('a123a456','%d+',6))",
+        "print(string.match('abc','a.*d')==nil,string.match('abc','^%d+')==nil)",
+        "print(string.find('a*b','*',1,true),string.find('a+b','+',1,true),string.find('a-b','-',1,true))",
+        "print(string.match('x+++y','%++')=='+++',string.match('x???y','%?+')=='???')",
+        "print(string.match('123abc','%d*%a+')=='123abc',string.match('bbb','a?b+')=='bbb')",
+        "print(string.match('abb','a.-b')=='ab',string.match('abb','a.*b')=='abb')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
