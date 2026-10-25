@@ -8532,7 +8532,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn protected_error_strings_recover_quota_with_rooted_arguments() {
         for (operation, message) in [
