@@ -4730,6 +4730,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T457",
+              "emoji": "🖨️",
+              "name": "Recover Lua tostring/print string-pool pressure with explicit builtin roots",
+              "checks": [
+                {
+                  "text": "Generalize quota-triggered string interning to accept explicit root lists and use it for tostring/print conversion without broadening arbitrary interners",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: intern_rooted_string; tostring_builtin root argument; print_builtin passes complete argument list; concat_with_metamethod shares rooted path"
+                },
+                {
+                  "text": "Protect all builtin arguments across heap collection, including nested Lua call operands, and preserve stop-mode hard limits",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: tostring_and_print_recover_string_quota_with_rooted_builtin_arguments; preflight collects only with rooted operands and automatic_gc"
+                },
+                {
+                  "text": "Compare 19,000 conversions, surviving string values and nested print arguments against production fer and upstream Lua 5.4 with five green CI jobs",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40209516272: all five jobs passed on 251a508b560f901dc303ab869da02f0dbe609de1; tests/owned_cli_differential.rs: owned_tostring_and_print_string_pressure_match_lua54"
+                },
+                {
+                  "text": "Synchronize README, owned-engine docs, progress ledger and generated roadmap under all-green CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5722,7 +5749,8 @@
             "T453",
             "T454",
             "T455",
-            "T456"
+            "T456",
+            "T457"
           ]
         }
       ]
