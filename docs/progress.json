@@ -4674,6 +4674,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T455",
+              "emoji": "🧵",
+              "name": "Reclaim unreachable runtime-interned Lua strings after bounded full collection",
+              "checks": [
+                {
+                  "text": "Preserve permanent compiler string handles while marking runtime strings from frames, globals, table keys/values, and weak-reference primitive entries",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: marked_strings, immutable FlowProgram string roots, Value::String reachability and weak table string traversal"
+                },
+                {
+                  "text": "Retire unreachable execution-only byte strings and safely reuse their handles without breaching string pool limits",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: free_strings, retired_strings, collect_root_tables string sweep, intern_string recycled-slot logic; gc_reclaims_runtime_strings_and_reuses_handles_after_explicit_passes"
+                },
+                {
+                  "text": "Verify two string allocation/explicit sweep epochs and retention through both regular and weak hash entries against production fer and Lua 5.4 in five-job CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40208289872: all five jobs passed on 0d90a8f9c34cc51e0a292fb601edd035534f08c4; tests/owned_cli_differential.rs: owned_explicit_string_collection_matches_lua54_after_two_epochs"
+                },
+                {
+                  "text": "Synchronize README, owned-engine docs, ledger and generated roadmap under all-green CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5664,7 +5691,8 @@
             "T451",
             "T452",
             "T453",
-            "T454"
+            "T454",
+            "T455"
           ]
         }
       ]

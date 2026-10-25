@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 183 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 184 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -841,6 +841,11 @@
   - [x] Verify fixed-point activation, later release of weak keys and first-party closure keys after explicit collection — tests/owned_cli_differential.rs: generated_ephemeron_chains_match_lua54_across_insertion_orders, includes function-key backreference
   - [x] Pass generated owned CLI comparisons against production fer and upstream Lua 5.4 in full five-job CI — GitHub Actions 40206664620: five jobs successful on d6a070f3c6d868e065f24a39051c18fe0c68b51a
   - [x] Synchronize evidence docs, task ledger and generated roadmap under successful CI — GitHub Actions 40206842745: five jobs passed on d217fbef4fca2f737038f76f9e14427ddaeebd07; README, owned-engine docs, machine ledger and generated roadmap accepted
+- 🧵 **T455** Reclaim unreachable runtime-interned Lua strings after bounded full collection — `████████░░ 75%`
+  - [x] Preserve permanent compiler string handles while marking runtime strings from frames, globals, table keys/values, and weak-reference primitive entries — src/owned_flow.rs: marked_strings, immutable FlowProgram string roots, Value::String reachability and weak table string traversal
+  - [x] Retire unreachable execution-only byte strings and safely reuse their handles without breaching string pool limits — src/owned_flow.rs: free_strings, retired_strings, collect_root_tables string sweep, intern_string recycled-slot logic; gc_reclaims_runtime_strings_and_reuses_handles_after_explicit_passes
+  - [x] Verify two string allocation/explicit sweep epochs and retention through both regular and weak hash entries against production fer and Lua 5.4 in five-job CI — GitHub Actions 40208289872: all five jobs passed on 0d90a8f9c34cc51e0a292fb601edd035534f08c4; tests/owned_cli_differential.rs: owned_explicit_string_collection_matches_lua54_after_two_epochs
+  - [ ] Synchronize README, owned-engine docs, ledger and generated roadmap under all-green CI
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -982,5 +987,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 98%`
 
