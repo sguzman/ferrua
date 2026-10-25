@@ -22,6 +22,7 @@ const MAX_CALL_DEPTH: usize = 16;
 const MAX_CELLS_TOTAL: usize = 65_536;
 const MAX_STRING_POOL_BYTES: usize = 65_536;
 const MAX_PRINT_OUTPUT_BYTES: usize = 65_536;
+const MAX_WARNING_OUTPUT_BYTES: usize = 65_536;
 const MAX_STRINGS: usize = 16_384;
 pub const DEFAULT_STEP_BUDGET: usize = 100_000;
 
@@ -45,6 +46,7 @@ pub enum Value {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Builtin {
     Print,
+    Warn,
     Type,
     ToString,
     ToNumber,
@@ -85,6 +87,7 @@ const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"print", Builtin::Print),
+    (b"warn", Builtin::Warn),
     (b"type", Builtin::Type),
     (b"tostring", Builtin::ToString),
     (b"tonumber", Builtin::ToNumber),
@@ -1691,6 +1694,8 @@ struct Execution<'a> {
     free_strings: Vec<usize>,
     retired_strings: HashSet<usize>,
     stdout: Vec<u8>,
+    stderr: Vec<u8>,
+    warnings_enabled: bool,
     script_name: &'a str,
     script_args: &'a [String],
     arg_handle: Option<usize>,
@@ -1866,6 +1871,64 @@ impl Execution<'_> {
             .filter(|value| *value != Value::Nil))
     }
 
+    /// Lua 5.4's standard warning callback starts disabled.
+    fn emit_warning(&mut self, message: &[u8]) -> Result<(), FlowError> {
+        if !self.warnings_enabled {
+            return Ok(());
+        }
+        const PREFIX: &[u8] = b"Lua warning: ";
+        let additional = PREFIX.len().saturating_add(message.len()).saturating_add(1);
+        if self.stderr.len().saturating_add(additional) > MAX_WARNING_OUTPUT_BYTES {
+            return Err(FlowError::TooLarge);
+        }
+        self.stderr.extend_from_slice(PREFIX);
+        self.stderr.extend_from_slice(message);
+        self.stderr.push(b'\n');
+        Ok(())
+    }
+
+    fn warn_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        if args.is_empty() {
+            return Err(FlowError::TypeError);
+        }
+        let mut message = Vec::new();
+        for &value in args {
+            let Value::String(handle) = value else {
+                return Err(FlowError::TypeError);
+            };
+            let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
+            if message.len().saturating_add(bytes.len()) > MAX_WARNING_OUTPUT_BYTES {
+                return Err(FlowError::TooLarge);
+            }
+            message.extend_from_slice(bytes);
+        }
+        if args.len() == 1 && message.starts_with(b"@") {
+            match message.as_slice() {
+                b"@on" => self.warnings_enabled = true,
+                b"@off" => self.warnings_enabled = false,
+                _ => {}
+            }
+            return Ok(Vec::new());
+        }
+        self.emit_warning(&message)?;
+        Ok(Vec::new())
+    }
+
+    fn warn_finalizer_error(&mut self, error: &FlowError) -> Result<(), FlowError> {
+        if !self.warnings_enabled {
+            return Ok(());
+        }
+        let detail = if let FlowError::Thrown(Value::String(handle)) = error {
+            self.strings.get(*handle).ok_or(FlowError::InvalidBytecode)?.clone()
+        } else {
+            b"error object is not a string".to_vec()
+        };
+        let mut message = b"error in __gc metamethod (".to_vec();
+        message.extend_from_slice(&detail);
+        message.push(b')');
+        self.emit_warning(&message)
+    }
+
     /// Closing the Lua state must finalize even reachable registered tables.
     /// Take a reverse-registration snapshot: objects registered by finalizers
     /// during shutdown are not finalized in this closing pass. Leave their
@@ -1893,7 +1956,10 @@ impl Execution<'_> {
                 self.gc_finalized.insert(handle);
                 if let Some(method) = self.table_finalizer(handle)? {
                     match self.protected_target(method, &[Value::Table(handle)]) {
-                        Ok(_) | Err(FlowError::Thrown(_)) | Err(FlowError::TypeError) => {}
+                        Ok(_) => {}
+                        Err(error @ (FlowError::Thrown(_) | FlowError::TypeError)) => {
+                            self.warn_finalizer_error(&error)?;
+                        }
                         Err(error) => return Err(error),
                     }
                 }
@@ -2198,7 +2264,10 @@ impl Execution<'_> {
                     self.gc_finalized.insert(handle);
                     if let Some(method) = self.table_finalizer(handle)? {
                         match self.protected_target(method, &[Value::Table(handle)]) {
-                            Ok(_) | Err(FlowError::Thrown(_)) | Err(FlowError::TypeError) => {}
+                            Ok(_) => {}
+                        Err(error @ (FlowError::Thrown(_) | FlowError::TypeError)) => {
+                            self.warn_finalizer_error(&error)?;
+                        }
                             Err(error) => return Err(error),
                         }
                     }
@@ -3388,6 +3457,7 @@ impl Execution<'_> {
             Value::Function(handle) => self.call_owned_function(handle, &arguments),
             Value::Builtin(Builtin::Error) => Err(self.error_builtin(&arguments)),
             Value::Builtin(Builtin::Print) => self.print_builtin(&arguments),
+            Value::Builtin(Builtin::Warn) => self.warn_builtin(&arguments),
             Value::Builtin(Builtin::CollectGarbage) => {
                 Ok(vec![self.collectgarbage_builtin(&arguments)?])
             }
@@ -3936,6 +4006,7 @@ impl Execution<'_> {
                                 builtin,
                                 Builtin::Error
                                     | Builtin::Print
+                                    | Builtin::Warn
                                     | Builtin::Pcall
                                     | Builtin::Xpcall
                                     | Builtin::Assert
@@ -3952,6 +4023,7 @@ impl Execution<'_> {
                         if matches!(
                             builtin,
                             Builtin::Print
+                                | Builtin::Warn
                                 | Builtin::Select
                                 | Builtin::Assert
                                 | Builtin::Next
@@ -3963,6 +4035,7 @@ impl Execution<'_> {
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
+                                Builtin::Warn => self.warn_builtin(&args)?,
                                 Builtin::Select => self.select_builtin(&args)?,
                                 Builtin::Pcall => self.pcall_builtin(&args)?,
                                 Builtin::Xpcall => self.xpcall_builtin(&args)?,
@@ -4027,6 +4100,7 @@ impl Execution<'_> {
                             Builtin::SetMetatable => self.setmetatable_builtin(&args)?,
                             Builtin::Error
                             | Builtin::Print
+                            | Builtin::Warn
                             | Builtin::Pcall
                             | Builtin::Xpcall
                             | Builtin::Select
@@ -4643,6 +4717,8 @@ impl Execution<'_> {
 pub struct FlowOutcome {
     pub result: Result<Vec<Value>, FlowError>,
     pub stdout: Vec<u8>,
+    /// Captured Lua warning stream independent from script errors.
+    pub stderr: Vec<u8>,
     /// Error object captured before execution-local string storage is freed.
     pub error_text: Option<Vec<u8>>,
 }
@@ -4689,6 +4765,8 @@ pub fn execute_flow_capture_with_args<'a>(
         free_strings: Vec::new(),
         retired_strings: HashSet::new(),
         stdout: Vec::new(),
+        stderr: Vec::new(),
+        warnings_enabled: false,
         script_name,
         script_args,
         arg_handle: None,
@@ -4724,6 +4802,7 @@ pub fn execute_flow_capture_with_args<'a>(
     FlowOutcome {
         result,
         stdout: execution.stdout,
+        stderr: execution.stderr,
         error_text,
     }
 }
