@@ -141,6 +141,8 @@ pub enum Op {
     ReadGlobal(usize),
     AssignLocals(Vec<usize>),
     DeclareLocals(Vec<usize>),
+    /// Clear uncaptured block locals after their lexical lifetime ends.
+    ClearLocals(Vec<usize>),
     RenewLocal(usize),
     PrepareLocal(usize),
     PrepareGlobal(usize),
@@ -775,10 +777,15 @@ impl<'a> Compiler<'a> {
         self.frames.push(HashMap::new());
         self.depth += 1;
         let result = self.statements(body);
+        let exited = self.active_locals[active..].to_vec();
         self.depth -= 1;
         self.frames.pop();
         self.active_locals.truncate(active);
-        result
+        result?;
+        if !exited.is_empty() {
+            self.push(Op::ClearLocals(exited))?;
+        }
+        Ok(())
     }
 
     fn resolve_gotos(&mut self) -> Result<(), FlowError> {
@@ -4057,6 +4064,18 @@ impl Execution<'_> {
                     for (index, value) in indices.iter().zip(values) {
                         let cell = self.iteration_cell(&mut slots, *index)?;
                         *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
+                    }
+                }
+                Op::ClearLocals(indices) => {
+                    // The old cell can be held by a captured closure after
+                    // the lexical scope exits. Keep those captured cells,
+                    // but stop ordinary block variables from pinning their
+                    // otherwise unreachable table/function/string values.
+                    for &slot in indices {
+                        let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
+                        if !self.captured_cells.contains(&cell) {
+                            *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = None;
+                        }
                     }
                 }
                 Op::RenewLocal(slot) => {
@@ -7996,6 +8015,15 @@ mod tests {
             assert_eq!(outcome.result, Ok(vec![]), "{source}");
             assert_eq!(outcome.stdout, expected, "{source}");
         }
+    }
+
+    #[test]
+    fn block_local_gc_lifetime_ends_without_breaking_live_captures() {
+        let source = "local w=setmetatable({}, {__mode='v'}); do local t={answer=42}; w[1]=t end; collectgarbage('collect'); print(w[1]==nil); local f; do local x={answer=17}; f=function() return x.answer end end; collectgarbage('collect'); print(f())";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 25_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"true\n17\n");
     }
 
     #[test]
