@@ -283,6 +283,20 @@ fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
 }
 
 #[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    for mode in ["v\\0k", "k\\0v", "kv\\0x", "x\\0kv"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
 fn owned_weak_mode_flag_characters_match_lua54() {
     for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
         let source = format!(

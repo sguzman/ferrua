@@ -1839,9 +1839,11 @@ impl Execution<'_> {
             return Ok((false, false));
         };
         let mode = self.strings.get(*value).ok_or(FlowError::InvalidBytecode)?;
-        // Lua 5.4 treats 'k' and 'v' as flags anywhere in __mode.
-        // Duplicate letters and unrelated characters are ignored.
-        Ok((mode.contains(&b'k'), mode.contains(&b'v')))
+        // Lua 5.4.6 checks mode flags using strchr on the string bytes.
+        // Repeated/unrelated characters are ignored, but a NUL terminates
+        // the scan even when the Lua string has additional bytes after it.
+        let prefix = mode.split(|&byte| byte == 0).next().unwrap_or_default();
+        Ok((prefix.contains(&b'k'), prefix.contains(&b'v')))
     }
 
     /// The __gc field is sampled for registration when a metatable is
@@ -8537,6 +8539,28 @@ mod tests {
         let outcome = execute_flow_capture(&program, 5_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"22222\t33333\n");
+    }
+
+    #[test]
+    fn gc_weak_mode_stops_scanning_at_embedded_nul() {
+        for (mode, expected) in [
+            ("v\\0k", b"false\ttrue\n".as_slice()),
+            ("k\\0v", b"true\tfalse\n".as_slice()),
+            ("kv\\0x", b"true\ttrue\n".as_slice()),
+            ("x\\0kv", b"false\tfalse\n".as_slice()),
+        ] {
+            let source = format!(
+                "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+                 do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+                 collectgarbage('collect'); \
+                 local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+                 print(key_gone,w[1]==nil)"
+            );
+            let program = compile_flow_chunk(&source).unwrap();
+            let outcome = execute_flow_capture(&program, 30_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
     }
 
     #[test]
