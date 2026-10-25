@@ -5005,10 +5005,11 @@
                 },
                 {
                   "text": "Synchronize README, owned-engine documentation, machine evidence ledger and generated roadmap under all-green CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40222612434: all five jobs passed on ec4ca1c68064d58555d60fbfd3e571af2e4ecb3c; documentation, evidence ledger and generated roadmap accepted"
                 }
               ],
-              "progress": 75
+              "progress": 100
             }
           ]
         }

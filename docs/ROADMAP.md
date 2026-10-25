@@ -896,11 +896,11 @@
   - [x] Check callback receiver/argument propagation, state shutdown, and changed __gc values after registration — src/owned_flow.rs: gc_callable_table_finalizers_follow_lua54_registration_and_shutdown, three scenarios
   - [x] Require upstream Lua 5.4 exact stdout parity, Rust unit tests, Rust 1.96 compatibility and downstream CI — GitHub Actions 40221523648: five successful jobs on 6d7e48649dcbc4ba47fb1c19dcd91e4c4dec4376; tests/owned_cli_differential.rs: owned_callable_table_finalizers_match_lua54
   - [x] Synchronize machine ledger, generated roadmap, README and owned-engine docs under passing CI — GitHub Actions 40221747885: all five jobs passed on 45f08bd1d3611ed7328b1020398690d7c0e1e123, including README, owned-engine docs, ledger and generated roadmap
-- 🧬 **T466** Match Lua 5.4.6 weak-table mode NUL and long-string semantics — `████████░░ 75%`
+- 🧬 **T466** Match Lua 5.4.6 weak-table mode NUL and long-string semantics — `██████████ 100%`
   - [x] Use the embedded-NUL terminator when scanning k/v weak-mode flags, preserving pre-NUL mode semantics — src/owned_flow.rs: table_weakness prefix split at NUL, gc_weak_mode_stops_scanning_at_embedded_nul
   - [x] Retain long-mode string flags as implemented by pinned Lua 5.4.6 (ttisstring) rather than newer short-string-only behavior — src/owned_flow.rs: gc_weak_mode_accepts_long_strings_in_pinned_lua54_6; pinned Lua v5.4.6 lgc.c traversetable
   - [x] Require exact owned stdout plus upstream Lua 5.4 differential output and separately preserve the known pinned luna-core divergence, in five-job CI — GitHub Actions 40222402112: five jobs passed on bb2b0fa7b1289f933e1752d85055c3d8a31a250a; tests/owned_cli_differential.rs: owned_weak_mode_nul_termination_matches_lua54_6 and owned_long_weak_mode_strings_match_pinned_lua54_6
-  - [ ] Synchronize README, owned-engine documentation, machine evidence ledger and generated roadmap under all-green CI
+  - [x] Synchronize README, owned-engine documentation, machine evidence ledger and generated roadmap under all-green CI — GitHub Actions 40222612434: all five jobs passed on ec4ca1c68064d58555d60fbfd3e571af2e4ecb3c; documentation, evidence ledger and generated roadmap accepted
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1042,5 +1042,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 99%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 
