@@ -307,7 +307,9 @@ fn owned_finalizer_suppresses_nested_collection_like_lua54() {
         (
             "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
             b"body\nclosing\ttrue\t0\n",
-            b"body\nclosing\ttrue\t0\n",
+            // At state close, production returns nil from the suppressed
+            // request; this differs from the owned integer return.
+            b"body\nclosing\ttrue\tnil\n",
         ),
     ];
     for (source, expected, production_expected) in cases {
