@@ -2695,16 +2695,11 @@ impl Execution<'_> {
             return Ok(Value::Float(fraction.to_bits()));
         }
         if args.len() > 2 {
-            let message = self.intern_rooted_string(
-                b"wrong number of arguments".to_vec(),
-                args,
-            )?;
+            let message = self.intern_rooted_string(b"wrong number of arguments".to_vec(), args)?;
             return Err(FlowError::Thrown(message));
         }
         let (low, up) = if args.len() == 1 {
-            let Value::Integer(up) =
-                self.checked_math_number("math.random", args, 0, true)?
-            else {
+            let Value::Integer(up) = self.checked_math_number("math.random", args, 0, true)? else {
                 return Err(FlowError::InvalidBytecode);
             };
             if up == 0 {
@@ -2712,14 +2707,11 @@ impl Execution<'_> {
             }
             (1_i64, up)
         } else {
-            let Value::Integer(low) =
-                self.checked_math_number("math.random", args, 0, true)?
+            let Value::Integer(low) = self.checked_math_number("math.random", args, 0, true)?
             else {
                 return Err(FlowError::InvalidBytecode);
             };
-            let Value::Integer(up) =
-                self.checked_math_number("math.random", args, 1, true)?
-            else {
+            let Value::Integer(up) = self.checked_math_number("math.random", args, 1, true)? else {
                 return Err(FlowError::InvalidBytecode);
             };
             (low, up)
@@ -4009,9 +4001,7 @@ impl Execution<'_> {
             }
             // Multi-result math.modf must precede the generic math guard.
             Value::Builtin(Builtin::MathModf) => self.math_modf_builtin(&arguments),
-            Value::Builtin(Builtin::MathRandomSeed) => {
-                self.math_randomseed_builtin(&arguments)
-            }
+            Value::Builtin(Builtin::MathRandomSeed) => self.math_randomseed_builtin(&arguments),
             Value::Builtin(builtin) if MATH_GLOBALS.iter().any(|&(_, item)| item == builtin) => {
                 Ok(vec![self.math_builtin(builtin, &arguments)?])
             }
