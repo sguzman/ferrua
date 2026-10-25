@@ -4042,24 +4042,19 @@ impl Execution<'_> {
             self.depth += 1;
             let called = self.protected_target(callback, &[left, right]);
             self.depth -= 1;
-            return Ok(called?
-                .first()
-                .copied()
-                .unwrap_or(Value::Nil)
-                .truthy());
+            return Ok(called?.first().copied().unwrap_or(Value::Nil).truthy());
         }
         match (left, right) {
-            (
-                Value::Integer(_) | Value::Float(_),
-                Value::Integer(_) | Value::Float(_),
-            ) => Ok(numeric_order(left, right) == Some(std::cmp::Ordering::Less)),
-            (Value::String(a), Value::String(b)) => Ok(
-                self.strings
-                    .get(a)
-                    .ok_or(FlowError::InvalidBytecode)?
-                    < self.strings.get(b).ok_or(FlowError::InvalidBytecode)?,
-            ),
-            _ => Ok(self.ordering_with_metamethod(Binary::Less, left, right)?.truthy()),
+            (Value::Integer(_) | Value::Float(_), Value::Integer(_) | Value::Float(_)) => {
+                Ok(numeric_order(left, right) == Some(std::cmp::Ordering::Less))
+            }
+            (Value::String(a), Value::String(b)) => {
+                Ok(self.strings.get(a).ok_or(FlowError::InvalidBytecode)?
+                    < self.strings.get(b).ok_or(FlowError::InvalidBytecode)?)
+            }
+            _ => Ok(self
+                .ordering_with_metamethod(Binary::Less, left, right)?
+                .truthy()),
         }
     }
 
