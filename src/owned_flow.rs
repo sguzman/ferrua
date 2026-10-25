@@ -1843,8 +1843,10 @@ impl Execution<'_> {
         // cells, removing them from frame cleanup bookkeeping to avoid a
         // duplicate free when the root frame finally returns.
         let active_slots: HashSet<usize> = slots.iter().copied().collect();
-        let abandoned: Vec<usize> = self.captured_cells
-            .iter().copied()
+        let abandoned: Vec<usize> = self
+            .captured_cells
+            .iter()
+            .copied()
             .filter(|cell| !live_captures.contains(cell))
             .collect();
         for cell in abandoned {
