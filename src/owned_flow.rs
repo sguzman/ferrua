@@ -2752,7 +2752,7 @@ impl Execution<'_> {
                     _ => return Err(FlowError::InvalidBytecode),
                 };
                 let second = match builtin {
-                    Builtin::MathAtan if args.get(1).is_some() => {
+                    Builtin::MathAtan if args.get(1).is_some_and(|v| *v != Value::Nil) => {
                         Some(self.checked_math_number(function, args, 1, false)?)
                     }
                     Builtin::MathLog if args.get(1).is_some_and(|v| *v != Value::Nil) => {
@@ -10189,7 +10189,7 @@ mod tests {
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(
             outcome.stdout,
-            b"float\\tfloat\\tfloat\\tfloat\\tfloat\\ntrue\\ttrue\\ttrue\\ttrue\\ntrue\\ttrue\\ttrue\\ttrue\\ntrue\\ttrue\\ttrue\\ttrue\\ntrue\\ttrue\\nfalse\\tbad argument #1 to 'math.exp' (number expected, got boolean)\\nfalse\\tbad argument #2 to 'math.atan' (number expected, got boolean)\\n"
+            b"float\tfloat\tfloat\tfloat\tfloat\ntrue\ttrue\ttrue\ttrue\ntrue\ttrue\ttrue\ttrue\ntrue\ttrue\ttrue\ttrue\ntrue\ttrue\nfalse\tbad argument #1 to 'math.exp' (number expected, got boolean)\nfalse\tbad argument #2 to 'math.atan' (number expected, got boolean)\n"
         );
     }
 
