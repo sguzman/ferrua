@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 97%` across 172 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 97%` across 175 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -786,6 +786,21 @@
   - [x] Reclaim cyclic allocations across multiple sweeps while preserving captured closures and retaining strict reachable-heap limits — tests/owned_cli_differential.rs: owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure (40,000 tables); src/owned_flow.rs unit tests for live-table retention
   - [x] Pass Linux formatting/lint/tests, pinned upstream Lua 5.4 differentials, Rust 1.96, Arch userspace, and downstream action consumer — GitHub Actions 40138156924: all five acceptance jobs passed on fe227c107c0fe1c87cc5b2659d1d005348177480
   - [x] Synchronize README, evidence docs, machine ledger and generator-derived roadmap under passing CI — GitHub Actions 40138337238: all five jobs successful for synchronized README, machine progress and generator-derived roadmap at ea54227dca60e30e504fdc37b9dc71424cff0370
+- ♻️ **T444** Mark-and-sweep unreachable Lua closures and captured cells — `████████░░ 75%`
+  - [x] Trace retained closures through table contents, active Lua roots and shared lexical captures — src/owned_flow.rs: collect_root_tables live_closures and live_captures reachability trace
+  - [x] Recycle unreachable function handles and abandoned capture cells without double-freeing frame allocations — src/owned_flow.rs: free_closures, captured_cells, frame_allocations cleanup; root_gc_recycles_short_lived_closures_and_captured_cells (42,000 closures)
+  - [x] Pass Linux tests, Rust 1.96, upstream Lua 5.4, Arch installation, and downstream consumer — GitHub Actions 40197239081: all five jobs passed on 14d4146c7d9ffa46f758ead15095a0b169de080c
+  - [ ] Synchronize feature scope, README, machine ledger and generated roadmap under green CI
+- 🪆 **T445** Protect suspended Lua call-frame roots during garbage collection — `████████░░ 75%`
+  - [x] Capture caller operands and prepared table targets before recursive or metamethod dispatch — src/owned_flow.rs: GcFrameRoots snapshots, per-op update, ancestor root trace
+  - [x] Collect during nested calls without recycling live tables, closure captures or lexical slot values — src/owned_flow.rs: nested_gc_preserves_suspended_caller_stack_and_closure_values; tests/owned_cli_differential.rs: owned_nested_and_field_pressure_gc_matches_lua54
+  - [x] Pass Linux tests, Rust 1.96, upstream Lua 5.4, Arch installation, and downstream consumer — GitHub Actions 40197714330 and 40198348836: five jobs successful on nested-frame changes and upstream reference regressions
+  - [ ] Synchronize feature scope, README, machine ledger and generated roadmap under green CI
+- 🗃️ **T446** Reclaim unreachable Lua table fields on indexed-write quota pressure — `████████░░ 75%`
+  - [x] Detect array/hash growth before mutating the target and retry after bounded collection — src/owned_flow.rs: write_table and collect_table_write
+  - [x] Pin the destination table, key and value while collecting, and reject truly retained over-quota heaps — src/owned_flow.rs: gc_reclaims_unreachable_table_fields_at_write_pressure (72,000 writes); tests/owned_cli_differential.rs: owned_nested_and_field_pressure_gc_matches_lua54
+  - [x] Pass Linux tests, Rust 1.96, upstream Lua 5.4, Arch installation, and downstream consumer — GitHub Actions 40198119296 and 40198348836: all five jobs passed including Lua 5.4 differential
+  - [ ] Synchronize feature scope, README, machine ledger and generated roadmap under green CI
 
 **Feature inventory** (computed from associated atomic task progress):
 

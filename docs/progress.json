@@ -4366,6 +4366,87 @@
                   "evidence": "GitHub Actions 40138337238: all five jobs successful for synchronized README, machine progress and generator-derived roadmap at ea54227dca60e30e504fdc37b9dc71424cff0370"
                 }
               ]
+            },
+            {
+              "id": "T444",
+              "emoji": "♻️",
+              "name": "Mark-and-sweep unreachable Lua closures and captured cells",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Trace retained closures through table contents, active Lua roots and shared lexical captures",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: collect_root_tables live_closures and live_captures reachability trace"
+                },
+                {
+                  "text": "Recycle unreachable function handles and abandoned capture cells without double-freeing frame allocations",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: free_closures, captured_cells, frame_allocations cleanup; root_gc_recycles_short_lived_closures_and_captured_cells (42,000 closures)"
+                },
+                {
+                  "text": "Pass Linux tests, Rust 1.96, upstream Lua 5.4, Arch installation, and downstream consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40197239081: all five jobs passed on 14d4146c7d9ffa46f758ead15095a0b169de080c"
+                },
+                {
+                  "text": "Synchronize feature scope, README, machine ledger and generated roadmap under green CI",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T445",
+              "emoji": "🪆",
+              "name": "Protect suspended Lua call-frame roots during garbage collection",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Capture caller operands and prepared table targets before recursive or metamethod dispatch",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: GcFrameRoots snapshots, per-op update, ancestor root trace"
+                },
+                {
+                  "text": "Collect during nested calls without recycling live tables, closure captures or lexical slot values",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: nested_gc_preserves_suspended_caller_stack_and_closure_values; tests/owned_cli_differential.rs: owned_nested_and_field_pressure_gc_matches_lua54"
+                },
+                {
+                  "text": "Pass Linux tests, Rust 1.96, upstream Lua 5.4, Arch installation, and downstream consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40197714330 and 40198348836: five jobs successful on nested-frame changes and upstream reference regressions"
+                },
+                {
+                  "text": "Synchronize feature scope, README, machine ledger and generated roadmap under green CI",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T446",
+              "emoji": "🗃️",
+              "name": "Reclaim unreachable Lua table fields on indexed-write quota pressure",
+              "progress": 75,
+              "checks": [
+                {
+                  "text": "Detect array/hash growth before mutating the target and retry after bounded collection",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: write_table and collect_table_write"
+                },
+                {
+                  "text": "Pin the destination table, key and value while collecting, and reject truly retained over-quota heaps",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: gc_reclaims_unreachable_table_fields_at_write_pressure (72,000 writes); tests/owned_cli_differential.rs: owned_nested_and_field_pressure_gc_matches_lua54"
+                },
+                {
+                  "text": "Pass Linux tests, Rust 1.96, upstream Lua 5.4, Arch installation, and downstream consumer",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40198119296 and 40198348836: all five jobs passed including Lua 5.4 differential"
+                },
+                {
+                  "text": "Synchronize feature scope, README, machine ledger and generated roadmap under green CI",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
