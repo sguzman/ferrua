@@ -4954,6 +4954,33 @@
                 }
               ],
               "progress": 100
+            },
+            {
+              "id": "T465",
+              "emoji": "🪄",
+              "name": "Verify callable-table Lua finalizers through explicit GC and shutdown",
+              "checks": [
+                {
+                  "text": "Exercise __gc finalizers that are tables whose own metatable supplies a callable __call method",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: gc_callable_table_finalizers_follow_lua54_registration_and_shutdown, explicit collector case"
+                },
+                {
+                  "text": "Check callback receiver/argument propagation, state shutdown, and changed __gc values after registration",
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: gc_callable_table_finalizers_follow_lua54_registration_and_shutdown, three scenarios"
+                },
+                {
+                  "text": "Require upstream Lua 5.4 exact stdout parity, Rust unit tests, Rust 1.96 compatibility and downstream CI",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40221523648: five successful jobs on 6d7e48649dcbc4ba47fb1c19dcd91e4c4dec4376; tests/owned_cli_differential.rs: owned_callable_table_finalizers_match_lua54"
+                },
+                {
+                  "text": "Synchronize machine ledger, generated roadmap, README and owned-engine docs under passing CI",
+                  "passed": false
+                }
+              ],
+              "progress": 75
             }
           ]
         }
@@ -5954,7 +5981,8 @@
             "T461",
             "T462",
             "T463",
-            "T464"
+            "T464",
+            "T465"
           ]
         }
       ]
