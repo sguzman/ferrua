@@ -206,3 +206,39 @@ fn owned_nested_and_field_pressure_gc_matches_lua54() {
         }
     }
 }
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
