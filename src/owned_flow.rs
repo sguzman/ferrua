@@ -1939,8 +1939,7 @@ impl Execution<'_> {
                                 work.push(key);
                             }
                             if !weak_values {
-                                if weak_keys
-                                    && matches!(key, Value::Table(_) | Value::Function(_))
+                                if weak_keys && matches!(key, Value::Table(_) | Value::Function(_))
                                 {
                                     ephemerons.push((key, value));
                                     activated.push(false);
