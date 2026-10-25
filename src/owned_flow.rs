@@ -1990,11 +1990,8 @@ impl Execution<'_> {
                 .capacity()
                 .saturating_mul(size_of::<Option<Value>>()),
         );
-        bytes = bytes.saturating_add(
-            self.strings
-                .capacity()
-                .saturating_mul(size_of::<Vec<u8>>()),
-        );
+        let string_slots = self.strings.capacity().saturating_mul(size_of::<Vec<u8>>());
+        bytes = bytes.saturating_add(string_slots);
         for table in &self.tables {
             bytes = bytes.saturating_add(
                 table
@@ -2010,12 +2007,11 @@ impl Execution<'_> {
             );
         }
         for closure in self.closures.iter().flatten() {
-            bytes = bytes.saturating_add(
-                closure
-                    .captures
-                    .capacity()
-                    .saturating_mul(size_of::<(usize, usize)>()),
-            );
+            let captures = closure
+                .captures
+                .capacity()
+                .saturating_mul(size_of::<(usize, usize)>());
+            bytes = bytes.saturating_add(captures);
         }
         for string in &self.strings {
             bytes = bytes.saturating_add(string.capacity());
