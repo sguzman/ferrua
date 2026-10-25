@@ -8768,7 +8768,7 @@ mod tests {
                 b"true\t0\t65\t66\t67\n".as_slice(),
             ),
             (
-                "print(string.byte('é',1,2),string.byte('abcdef',-2,-1),select('#',string.byte('abc',0)))",
+                "local a,b=string.byte('é',1,2); local c,d=string.byte('abcdef',-2,-1); print(a,b,c,d,select('#',string.byte('abc',0)))",
                 b"195\t169\t101\t102\t0\n".as_slice(),
             ),
             (
@@ -8776,7 +8776,7 @@ mod tests {
                 b"true\t121\t0\t0\n".as_slice(),
             ),
             (
-                "local joined=string.char(0,97,255); print(#joined,string.byte(joined,1,3),string.sub(joined,2,2)=='a')",
+                "local joined=string.char(0,97,255); local a,b,c=string.byte(joined,1,3); print(#joined,a,b,c,string.sub(joined,2,2)=='a')",
                 b"3\t0\t97\t255\ttrue\n".as_slice(),
             ),
             (
