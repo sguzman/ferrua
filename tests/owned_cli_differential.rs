@@ -283,6 +283,14 @@ fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
 }
 
 #[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
 fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
     for (source, expected) in [
         (

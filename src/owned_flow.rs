@@ -1968,9 +1968,64 @@ impl Execution<'_> {
         Ok(handle)
     }
 
+    /// Approximate retained storage in the bounded owned heap. Lua's count
+    /// reports allocator usage; this independently managed VM can report only
+    /// its own primary table, closure, lexical-cell and string pools. Keep the
+    /// result numeric and responsive to reclamation, without claiming
+    /// byte-for-byte parity with an upstream Lua allocator.
+    fn tracked_heap_kib(&self) -> f64 {
+        use std::mem::size_of;
+
+        let mut bytes = self
+            .tables
+            .capacity()
+            .saturating_mul(size_of::<TableStorage>());
+        bytes = bytes.saturating_add(
+            self.closures
+                .capacity()
+                .saturating_mul(size_of::<Option<Closure>>()),
+        );
+        bytes = bytes.saturating_add(
+            self.cells
+                .capacity()
+                .saturating_mul(size_of::<Option<Value>>()),
+        );
+        bytes = bytes.saturating_add(
+            self.strings
+                .capacity()
+                .saturating_mul(size_of::<Vec<u8>>()),
+        );
+        for table in &self.tables {
+            bytes = bytes.saturating_add(
+                table
+                    .array
+                    .capacity()
+                    .saturating_mul(size_of::<Option<Value>>()),
+            );
+            bytes = bytes.saturating_add(
+                table
+                    .hashed
+                    .capacity()
+                    .saturating_mul(size_of::<(Value, Value)>()),
+            );
+        }
+        for closure in self.closures.iter().flatten() {
+            bytes = bytes.saturating_add(
+                closure
+                    .captures
+                    .capacity()
+                    .saturating_mul(size_of::<(usize, usize)>()),
+            );
+        }
+        for string in &self.strings {
+            bytes = bytes.saturating_add(string.capacity());
+        }
+        bytes as f64 / 1024.0
+    }
+
     /// Lua 5.4 collector controls available in the owned bounded preview:
     /// explicit full cycles, stop/restart of automatic quota collection,
-    /// and querying the current automatic-collection state.
+    /// querying automatic-collection state, and estimated managed-heap size.
     fn collectgarbage_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
         let mode = match args.first().copied() {
             None => b"collect".to_vec(),
@@ -1982,6 +2037,7 @@ impl Execution<'_> {
             Some(_) => return Err(FlowError::TypeError),
         };
         match mode.as_slice() {
+            b"count" => Ok(Value::Float(self.tracked_heap_kib().to_bits())),
             b"isrunning" => Ok(Value::Boolean(self.automatic_gc)),
             b"stop" => {
                 self.automatic_gc = false;
@@ -2004,7 +2060,7 @@ impl Execution<'_> {
                 Ok(Value::Integer(0))
             }
             _ => Err(FlowError::Unsupported(
-                "owned collector supports collect, stop, restart and isrunning".into(),
+                "owned collector supports collect, count, stop, restart and isrunning".into(),
             )),
         }
     }
@@ -7546,12 +7602,21 @@ mod tests {
     }
 
     #[test]
-    fn explicit_collectgarbage_supports_bounded_full_collection_only() {
-        let source = "local keep={v=42}; for i=1,2000 do local t={}; t.self=t end; print(type(collectgarbage()), type(collectgarbage('collect')),keep.v); local ok=pcall(collectgarbage,'count'); print(ok)";
+    fn explicit_collectgarbage_reports_numeric_full_collection_and_count() {
+        let source = "local keep={v=42}; for i=1,2000 do local t={}; t.self=t end; print(type(collectgarbage()), type(collectgarbage('collect')),keep.v); local ok,used=pcall(collectgarbage,'count'); print(ok,type(used),used>=0)";
         let program = compile_flow_chunk(source).unwrap();
         let outcome = execute_flow_capture(&program, 200_000);
         assert_eq!(outcome.result, Ok(vec![]));
-        assert_eq!(outcome.stdout, b"number\tnumber\t42\nfalse\n");
+        assert_eq!(outcome.stdout, b"number\tnumber\t42\ntrue\tnumber\ttrue\n");
+    }
+
+    #[test]
+    fn gc_count_reflects_unreachable_table_storage_reclamation() {
+        let source = "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))";
+        let program = compile_flow_chunk(source).unwrap();
+        let outcome = execute_flow_capture(&program, 150_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"number\ttrue\ttrue\tfalse\n");
     }
 
     #[test]
