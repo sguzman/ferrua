@@ -2005,10 +2005,16 @@ impl Execution<'_> {
             }
             let mut hash_keys = Vec::new();
             for (&key, &value) in &table.hashed {
-                let dead_key = weak_keys
-                    && weak_value_unreachable(key, &marked_tables, &marked_closures)?;
-                let dead_value = weak_values
-                    && weak_value_unreachable(value, &marked_tables, &marked_closures)?;
+                let dead_key = if weak_keys {
+                    weak_value_unreachable(key, &marked_tables, &marked_closures)?
+                } else {
+                    false
+                };
+                let dead_value = if weak_values {
+                    weak_value_unreachable(value, &marked_tables, &marked_closures)?
+                } else {
+                    false
+                };
                 if dead_key || dead_value {
                     hash_keys.push(key);
                 }
