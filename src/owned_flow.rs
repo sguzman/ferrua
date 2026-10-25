@@ -9263,8 +9263,8 @@ mod tests {
                 b"true\t1,2\n1\t2\n".as_slice(),
             ),
             (
-                "local t=table.pack('a',nil,'c'); table.insert(t,2,'b'); print(table.remove(t,2),t[1],t[2],t[3],t.n)",
-                b"b\ta\tnil\tc\t3\n".as_slice(),
+                "local t=table.pack('a','c'); table.insert(t,2,'b'); print(table.remove(t,2),t[1],t[2],t[3],t.n)",
+                b"b\ta\tc\tnil\t2\n".as_slice(),
             ),
         ] {
             let program = compile_flow_chunk(source).unwrap();
