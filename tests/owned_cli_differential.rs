@@ -120,6 +120,21 @@ fn owned_math_atan_argument_label_matches_lua54_with_backend_alias_variation() {
 }
 
 #[test]
+fn owned_utf8_char_len_codepoint_and_lax_modes_match_lua54() {
+    for source in [
+        "local u=utf8; print(_G.utf8==u,type(u.char),type(u.len),type(u.codepoint),type(u.charpattern)); local old=u.char; u.char=function() return 'override' end; print(utf8.char()); u.char=old",
+        "local s=utf8.char(65,0,0x1F600); print(string.len(s),utf8.len(s),utf8.codepoint(s,1,6)); print(utf8.len(''),utf8.len('abc',4))",
+        "local x=utf8.char(0x110000); local n,p=utf8.len(x); print(n==nil,p,utf8.len(x,1,-1,true),utf8.codepoint(x,1,1,true))",
+        "local x=utf8.char(0x7FFFFFFF); print(string.len(x),utf8.len(x,1,-1,true),utf8.codepoint(x,1,1,true)); local n,p=utf8.len(x); print(n==nil,p)",
+        "local x=string.char(0xC0,0x80); local a,b=utf8.len(x,1,-1,true); print(a==nil,b); local ok=pcall(utf8.codepoint,x,1,1,true); print(ok)",
+        "local a,b=utf8.len('é',2,2); print(a==nil,b); print(select('#',utf8.codepoint('abc',2,1))); print(utf8.codepoint('abc',2,3))",
+        "print(utf8.char()=='' ,pcall(utf8.char,0x80000000),pcall(utf8.char,-1)); local ok,code=pcall(utf8.codepoint,'ABC'); print(ok,code)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_seeded_random_sequences_match_pinned_lua54() {
     for source in [
         "math.randomseed(123,-456); print(math.random(0),math.random(0),math.random(0),math.random(0))",

@@ -89,6 +89,9 @@ pub enum Builtin {
     MathAtan,
     MathRandom,
     MathRandomSeed,
+    Utf8Char,
+    Utf8Len,
+    Utf8Codepoint,
     StringLen,
     StringSub,
     StringByte,
@@ -130,6 +133,12 @@ const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"atan", Builtin::MathAtan),
     (b"random", Builtin::MathRandom),
     (b"randomseed", Builtin::MathRandomSeed),
+];
+
+const UTF8_GLOBALS: &[(&[u8], Builtin)] = &[
+    (b"char", Builtin::Utf8Char),
+    (b"len", Builtin::Utf8Len),
+    (b"codepoint", Builtin::Utf8Codepoint),
 ];
 
 const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -1756,6 +1765,80 @@ fn lua_random_seed(state: &mut [u64; 4], a: u64, b: u64) {
     }
 }
 
+// Lua 5.4.6 decodes original 1..6-byte UTF-8, including non-scalar
+// codepoints in lax mode. Strict mode disallows surrogates and >U+10FFFF.
+fn lua_utf8_decode(bytes: &[u8], strict: bool) -> Option<(i64, usize)> {
+    let first = *bytes.first()?;
+    if first < 0x80 {
+        return Some((i64::from(first), 1));
+    }
+    let width = first.leading_ones() as usize;
+    if !(2..=6).contains(&width) || bytes.len() < width {
+        return None;
+    }
+    let mask = (1_u32 << (7 - width)) - 1;
+    let mut code = u32::from(first) & mask;
+    for &byte in &bytes[1..width] {
+        if byte & 0xC0 != 0x80 {
+            return None;
+        }
+        code = (code << 6) | u32::from(byte & 0x3F);
+    }
+    let minimum = match width {
+        2 => 0x80,
+        3 => 0x800,
+        4 => 0x10000,
+        5 => 0x200000,
+        6 => 0x4000000,
+        _ => return None,
+    };
+    if code < minimum || code > 0x7FFF_FFFF {
+        return None;
+    }
+    if strict && (code > 0x10FFFF || (0xD800..=0xDFFF).contains(&code)) {
+        return None;
+    }
+    Some((i64::from(code), width))
+}
+
+fn lua_utf8_encode(code: u32, into: &mut Vec<u8>) {
+    let width = match code {
+        0..=0x7F => 1,
+        0x80..=0x7FF => 2,
+        0x800..=0xFFFF => 3,
+        0x10000..=0x1FFFFF => 4,
+        0x200000..=0x3FFFFFF => 5,
+        _ => 6,
+    };
+    if width == 1 {
+        into.push(code as u8);
+        return;
+    }
+    let mut buffer = [0_u8; 6];
+    let mut remainder = code;
+    for index in (1..width).rev() {
+        buffer[index] = 0x80 | ((remainder & 0x3F) as u8);
+        remainder >>= 6;
+    }
+    let header = match width {
+        2 => 0xC0,
+        3 => 0xE0,
+        4 => 0xF0,
+        5 => 0xF8,
+        _ => 0xFC,
+    };
+    buffer[0] = header | remainder as u8;
+    into.extend_from_slice(&buffer[..width]);
+}
+
+fn lua_utf8_pos(pos: i64, length: usize) -> i64 {
+    if pos >= 0 {
+        pos
+    } else {
+        ((length as i128) + (pos as i128) + 1).max(0) as i64
+    }
+}
+
 struct Execution<'a> {
     program: &'a FlowProgram,
     budget: usize,
@@ -1796,6 +1879,7 @@ struct Execution<'a> {
     math_table: Option<usize>,
     random_state: [u64; 4],
     string_table: Option<usize>,
+    utf8_table: Option<usize>,
     table_library: Option<usize>,
 }
 
@@ -2161,6 +2245,7 @@ impl Execution<'_> {
             self.global_table,
             self.math_table,
             self.string_table,
+            self.utf8_table,
             self.table_library,
         ]
         .into_iter()
@@ -3050,6 +3135,32 @@ impl Execution<'_> {
         Ok(handle)
     }
 
+    /// Lazily root a mutable Lua 5.4.6 byte-oriented UTF-8 table.
+    fn materialize_utf8_table(&mut self, pending: &[Value]) -> Result<usize, FlowError> {
+        if let Some(handle) = self.utf8_table {
+            return Ok(handle);
+        }
+        self.reserve_lazy_table_slot(pending)?;
+        let handle = self.insert_table(TableStorage {
+            array: Vec::new(),
+            hashed: HashMap::new(),
+            metatable: None,
+        })?;
+        self.utf8_table = Some(handle);
+        for &(name, builtin) in UTF8_GLOBALS {
+            let key = self.intern_rooted_string(name.to_vec(), pending)?;
+            self.write_table(handle, TableKey::Hashed(key), Value::Builtin(builtin))?;
+        }
+        // Matches lutf8lib.c's literal charpattern byte range, including NUL.
+        let pattern = self.intern_rooted_string(
+            b"[\0-\x7F\xC2-\xFD][\x80-\xBF]*".to_vec(),
+            pending,
+        )?;
+        let key = self.intern_rooted_string(b"charpattern".to_vec(), &[pattern])?;
+        self.write_table(handle, TableKey::Hashed(key), pattern)?;
+        Ok(handle)
+    }
+
     /// Create the bounded table library only when first accessed. Root its
     /// partially populated table while interning builtin field-name strings.
     fn materialize_table_library(&mut self, pending: &[Value]) -> Result<usize, FlowError> {
@@ -3101,6 +3212,9 @@ impl Execution<'_> {
         let string_key = self.intern_rooted_string(b"string".to_vec(), &[])?;
         let string = self.materialize_string_table(&[string_key])?;
         self.write_table(handle, TableKey::Hashed(string_key), Value::Table(string))?;
+        let utf8_key = self.intern_rooted_string(b"utf8".to_vec(), &[])?;
+        let utf8 = self.materialize_utf8_table(&[utf8_key])?;
+        self.write_table(handle, TableKey::Hashed(utf8_key), Value::Table(utf8))?;
         let table_key = self.intern_rooted_string(b"table".to_vec(), &[])?;
         let table = self.materialize_table_library(&[table_key])?;
         self.write_table(handle, TableKey::Hashed(table_key), Value::Table(table))?;
@@ -3138,6 +3252,9 @@ impl Execution<'_> {
         }
         if name == b"string" {
             return Ok(Value::Table(self.materialize_string_table(&[])?));
+        }
+        if name == b"utf8" {
+            return Ok(Value::Table(self.materialize_utf8_table(&[])?));
         }
         if name == b"table" {
             return Ok(Value::Table(self.materialize_table_library(&[])?));
@@ -4005,6 +4122,9 @@ impl Execution<'_> {
             Value::Builtin(builtin) if MATH_GLOBALS.iter().any(|&(_, item)| item == builtin) => {
                 Ok(vec![self.math_builtin(builtin, &arguments)?])
             }
+            Value::Builtin(Builtin::Utf8Char) => Ok(vec![self.utf8_char_builtin(&arguments)?]),
+            Value::Builtin(Builtin::Utf8Len) => self.utf8_len_builtin(&arguments),
+            Value::Builtin(Builtin::Utf8Codepoint) => self.utf8_codepoint_builtin(&arguments),
             Value::Builtin(Builtin::StringByte) => self.string_byte_builtin(&arguments),
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
             Value::Builtin(Builtin::TablePack) => Ok(vec![self.table_pack_builtin(&arguments)?]),
@@ -4585,6 +4705,122 @@ impl Execution<'_> {
             .collect())
     }
 
+    fn utf8_optional_integer(
+        &mut self,
+        args: &[Value],
+        index: usize,
+        default: i64,
+        name: &str,
+    ) -> Result<i64, FlowError> {
+        if args.get(index).is_none_or(|value| *value == Value::Nil) {
+            return Ok(default);
+        }
+        let Value::Integer(value) = self.checked_math_number(name, args, index, true)? else {
+            return Err(FlowError::InvalidBytecode);
+        };
+        Ok(value)
+    }
+
+    fn utf8_argument_error(
+        &mut self,
+        args: &[Value],
+        name: &str,
+        index: usize,
+        detail: &str,
+    ) -> Result<FlowError, FlowError> {
+        let message = format!("bad argument #{} to '{name}' ({detail})", index + 1);
+        let value = self.intern_rooted_string(message.into_bytes(), args)?;
+        Ok(FlowError::Thrown(value))
+    }
+
+    fn utf8_char_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        let mut output = Vec::new();
+        for (index, _) in args.iter().enumerate() {
+            let Value::Integer(code) = self.checked_math_number("utf8.char", args, index, true)?
+            else {
+                return Err(FlowError::InvalidBytecode);
+            };
+            if !(0..=0x7FFF_FFFF).contains(&code) {
+                return Err(self.utf8_argument_error(args, "utf8.char", index, "value out of range")?);
+            }
+            lua_utf8_encode(code as u32, &mut output);
+            if output.len() > MAX_STRING_POOL_BYTES {
+                return Err(FlowError::TooLarge);
+            }
+        }
+        self.intern_rooted_string(output, args)
+    }
+
+    fn utf8_len_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let text = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
+        let initial = self.utf8_optional_integer(args, 1, 1, "utf8.len")?;
+        let final_pos = self.utf8_optional_integer(args, 2, -1, "utf8.len")?;
+        let lax = args.get(3).copied().unwrap_or(Value::Nil).truthy();
+        let start = lua_utf8_pos(initial, text.len());
+        let end = lua_utf8_pos(final_pos, text.len());
+        if start < 1 || start > text.len() as i64 + 1 {
+            return Err(self.utf8_argument_error(args, "utf8.len", 1, "initial position out of bounds")?);
+        }
+        if end > text.len() as i64 {
+            return Err(self.utf8_argument_error(args, "utf8.len", 2, "final position out of bounds")?);
+        }
+        let mut cursor = (start - 1) as usize;
+        let mut count = 0_i64;
+        let last = end.max(0) as usize;
+        while cursor < last {
+            if self.steps >= self.budget {
+                return Err(FlowError::StepBudgetExceeded);
+            }
+            self.steps += 1;
+            let Some((_, width)) = lua_utf8_decode(&text[cursor..], !lax) else {
+                return Ok(vec![Value::Nil, Value::Integer(cursor as i64 + 1)]);
+            };
+            cursor += width;
+            count += 1;
+        }
+        Ok(vec![Value::Integer(count)])
+    }
+
+    fn utf8_codepoint_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let text = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
+        let initial = self.utf8_optional_integer(args, 1, 1, "utf8.codepoint")?;
+        let start = lua_utf8_pos(initial, text.len());
+        let final_pos = self.utf8_optional_integer(args, 2, start, "utf8.codepoint")?;
+        let end = if args.get(2).is_some_and(|v| *v != Value::Nil) {
+            lua_utf8_pos(final_pos, text.len())
+        } else {
+            final_pos
+        };
+        let lax = args.get(3).copied().unwrap_or(Value::Nil).truthy();
+        if start < 1 {
+            return Err(self.utf8_argument_error(args, "utf8.codepoint", 1, "out of bounds")?);
+        }
+        if end > text.len() as i64 {
+            return Err(self.utf8_argument_error(args, "utf8.codepoint", 2, "out of bounds")?);
+        }
+        if start > end {
+            return Ok(Vec::new());
+        }
+        if (end - start + 1) as usize > MAX_STACK {
+            return Err(FlowError::TooLarge);
+        }
+        let mut cursor = (start - 1) as usize;
+        let mut values = Vec::new();
+        while cursor < end as usize {
+            if self.steps >= self.budget {
+                return Err(FlowError::StepBudgetExceeded);
+            }
+            self.steps += 1;
+            let Some((code, width)) = lua_utf8_decode(&text[cursor..], !lax) else {
+                let error = self.intern_rooted_string(b"invalid UTF-8 code".to_vec(), args)?;
+                return Err(FlowError::Thrown(error));
+            };
+            values.push(Value::Integer(code));
+            cursor += width;
+        }
+        Ok(values)
+    }
+
     /// First-party bounded byte-string functions. Root the complete argument
     /// list if the operation allocates under a string-pool quota.
     fn string_builtin(&mut self, builtin: Builtin, args: &[Value]) -> Result<Value, FlowError> {
@@ -5029,6 +5265,7 @@ impl Execution<'_> {
                                     | Builtin::MathRandom
                                     | Builtin::MathRandomSeed
                                     | Builtin::StringChar
+                                    | Builtin::Utf8Char
                                     | Builtin::TablePack
                                     | Builtin::CollectGarbage
                             )
@@ -5051,6 +5288,8 @@ impl Execution<'_> {
                                 | Builtin::Pcall
                                 | Builtin::Xpcall
                                 | Builtin::StringByte
+                                | Builtin::Utf8Len
+                                | Builtin::Utf8Codepoint
                                 | Builtin::TableUnpack
                                 | Builtin::TableInsert
                                 | Builtin::TableSort
@@ -5075,6 +5314,8 @@ impl Execution<'_> {
                                 }
                                 Builtin::IpairsIterator => self.ipairs_iterator(&args)?,
                                 Builtin::StringByte => self.string_byte_builtin(&args)?,
+                                Builtin::Utf8Len => self.utf8_len_builtin(&args)?,
+                                Builtin::Utf8Codepoint => self.utf8_codepoint_builtin(&args)?,
                                 Builtin::TableUnpack => self.table_unpack_builtin(&args)?,
                                 Builtin::TableInsert => self.table_insert_builtin(&args)?,
                                 Builtin::TableSort => self.table_sort_builtin(&args)?,
@@ -5140,6 +5381,8 @@ impl Execution<'_> {
                             | Builtin::Ipairs
                             | Builtin::IpairsIterator
                             | Builtin::StringByte
+                            | Builtin::Utf8Len
+                            | Builtin::Utf8Codepoint
                             | Builtin::TableUnpack
                             | Builtin::TableInsert
                             | Builtin::TableSort
@@ -5179,6 +5422,7 @@ impl Execution<'_> {
                             | Builtin::StringUpper
                             | Builtin::StringReverse
                             | Builtin::StringRep => self.string_builtin(builtin, &args)?,
+                            Builtin::Utf8Char => self.utf8_char_builtin(&args)?,
                             Builtin::TableConcat => self.table_concat_builtin(&args)?,
                             Builtin::TablePack => self.table_pack_builtin(&args)?,
                             Builtin::TableRemove => self.table_remove_builtin(&args)?,
@@ -5837,6 +6081,7 @@ pub fn execute_flow_capture_with_args<'a>(
         math_table: None,
         random_state: [0, 0xff, 0, 0],
         string_table: None,
+        utf8_table: None,
         table_library: None,
     };
     // Lua's default seed is intentionally weak/noncryptographic; explicit
@@ -10336,6 +10581,20 @@ mod tests {
         assert_eq!(
             outcome.stdout,
             b"123\t-456\t2\ninteger\ttrue\tfloat\ttrue\ntrue\ttrue\ttrue\n1\t0\n1\tinteger\nfalse\n"
+        );
+    }
+
+    #[test]
+    fn utf8_char_len_and_codepoint_support_strict_and_lax_bytes() {
+        let program = compile_flow_chunk(
+            "local u=utf8; assert(_G.utf8==u); local s=utf8.char(65,0,0x1F600); print(string.len(s),utf8.len(s),utf8.codepoint(s,1,6)); local extended=utf8.char(0x110000); local count,bad=utf8.len(extended); print(count==nil,bad,utf8.len(extended,1,-1,true),utf8.codepoint(extended,1,1,true)); local overlong=string.char(0xC0,0x80); local n,p=utf8.len(overlong,1,-1,true); print(n==nil,p); local a,b=utf8.len('é',2,2); print(a==nil,b); print(select('#',utf8.codepoint('abc',2,1)),utf8.len('abc',4)); local ok=pcall(utf8.char,0x80000000); print(ok)",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 10000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(
+            outcome.stdout,
+            b"6\t3\t65\t0\t128512\ntrue\t1\t1\t1114112\ntrue\t1\ntrue\t2\n0\t0\nfalse\n"
         );
     }
 
