@@ -1896,12 +1896,7 @@ impl Execution<'_> {
             .len()
             .saturating_add(marked_closures.len())
             .saturating_add(self.captured_cells.len())
-            .saturating_add(
-                self.frame_allocations
-                    .iter()
-                    .map(Vec::len)
-                    .sum::<usize>(),
-            );
+            .saturating_add(self.frame_allocations.iter().map(Vec::len).sum::<usize>());
         if self.steps.saturating_add(sweep_cost) > self.budget {
             return Err(FlowError::StepBudgetExceeded);
         }
