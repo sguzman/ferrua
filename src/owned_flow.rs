@@ -4951,7 +4951,11 @@ impl Execution<'_> {
                 }
                 let (atom, repetition) = &atoms[atom_index];
                 if let Atom::Frontier(contents) = atom {
-                    let previous = if position == 0 { 0 } else { source[position - 1] };
+                    let previous = if position == 0 {
+                        0
+                    } else {
+                        source[position - 1]
+                    };
                     let next = source.get(position).copied().unwrap_or(0);
                     if !Self::simple_pattern_bracket_matches(contents, previous)
                         && Self::simple_pattern_bracket_matches(contents, next)
