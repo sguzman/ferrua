@@ -349,10 +349,27 @@ fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
         "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
         "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
         "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
-        "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))",
     ] {
         assert_parity(source, true);
     }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
 }
 
 #[test]
