@@ -4767,14 +4767,9 @@ impl Execution<'_> {
         self.intern_rooted_string(output, args)
     }
 
-    /// First-party bounded Lua 5.4 string.find **literal** subset.
-    /// With plain=true, arbitrary bytes (including pattern punctuation) are
-    /// searched literally. Without plain mode, only patterns containing no
-    /// Lua pattern magic are accepted; full Lua pattern/capture semantics
-    /// remain outside this opt-in owned-engine subset.
-    ///
-    /// Match indices are inclusive, one-based byte positions. A missing
-    /// match returns one nil; a found literal returns two integers.
+    /// Bounded Lua 5.4 string.find subset. Plain mode matches arbitrary
+    /// literal bytes; pattern mode supports literal bytes, '.', '^' and '$'.
+    /// Quantifiers, captures, escapes and character classes remain gated.
     fn string_find_literal_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
         let source = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         let pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
@@ -4785,48 +4780,71 @@ impl Execution<'_> {
             _ => 1,
         };
         let plain = args.get(3).copied().unwrap_or(Value::Nil).truthy();
-        if !plain && pattern.iter().any(|byte| b"^$()%.[]*+-?".contains(byte)) {
-            return Err(FlowError::Unsupported(
-                "Lua pattern expressions in string.find are not implemented".into(),
-            ));
-        }
-        let Some(position) = self.literal_match_position(&source, &pattern, initial)? else {
+        let Some((begin, end)) =
+            self.simple_pattern_match(&source, &pattern, initial, plain)?
+        else {
             return Ok(vec![Value::Nil]);
         };
         Ok(vec![
-            Value::Integer(position as i64 + 1),
-            Value::Integer((position + pattern.len()) as i64),
+            Value::Integer(begin as i64 + 1),
+            Value::Integer(end as i64),
         ])
     }
 
-    /// Search for an exact byte sequence from a Lua 1-based initial index.
-    /// The result is a zero-based offset; all candidate comparisons are
-    /// charged to the shared VM step budget. Used by find and match.
-    fn literal_match_position(
+    /// Search a bounded byte string using only the implemented Lua-pattern
+    /// atoms: any byte ('.'), initial anchor ('^') and final anchor ('$').
+    /// Empty patterns match the current position. The return value holds
+    /// zero-based [begin,end) byte bounds; each candidate consumes the
+    /// shared execution budget before it can match.
+    fn simple_pattern_match(
         &mut self,
         source: &[u8],
         pattern: &[u8],
         initial: i64,
-    ) -> Result<Option<usize>, FlowError> {
+        plain: bool,
+    ) -> Result<Option<(usize, usize)>, FlowError> {
+        let mut body = pattern;
+        let mut anchored_start = false;
+        let mut anchored_end = false;
+        if !plain {
+            if body.iter().any(|byte| b"()%[]*+-?".contains(byte)) {
+                return Err(FlowError::Unsupported(
+                    "Lua pattern quantifiers, classes and captures are not implemented".into(),
+                ));
+            }
+            if body.first() == Some(&b'^') {
+                body = &body[1..];
+                anchored_start = true;
+            }
+            if body.last() == Some(&b'$') {
+                body = &body[..body.len() - 1];
+                anchored_end = true;
+            }
+        }
         let start = Self::string_offset(initial, source.len() as i64).max(1);
         if start > source.len() as i64 + 1 {
             return Ok(None);
         }
         let offset = (start - 1) as usize;
-        if pattern.is_empty() {
-            return Ok(Some(offset));
-        }
-        if pattern.len() > source.len() - offset {
+        if body.len() > source.len() - offset {
             return Ok(None);
         }
-        for position in offset..=source.len() - pattern.len() {
-            let cost = pattern.len().max(1);
+        for begin in offset..=source.len() - body.len() {
+            let cost = body.len().max(1);
             if self.steps.saturating_add(cost) > self.budget {
                 return Err(FlowError::StepBudgetExceeded);
             }
             self.steps += cost;
-            if source[position..].starts_with(pattern) {
-                return Ok(Some(position));
+            if (!anchored_end || begin + body.len() == source.len())
+                && source[begin..begin + body.len()]
+                    .iter()
+                    .zip(body)
+                    .all(|(&actual, &atom)| actual == atom || (!plain && atom == b'.'))
+            {
+                return Ok(Some((begin, begin + body.len())));
+            }
+            if anchored_start {
+                break;
             }
         }
         Ok(None)
@@ -5178,25 +5196,19 @@ impl Execution<'_> {
         let text = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         match builtin {
             Builtin::StringMatch => {
-                // A capture-free, literal Lua pattern returns exactly one
-                // string result, or one nil if no literal occurs.
+                // Without captures, Lua returns the entire matched byte
+                // slice as one string, including embedded NULs.
                 let pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
-                if pattern.iter().any(|byte| b"^$()%.[]*+-?".contains(byte)) {
-                    return Err(FlowError::Unsupported(
-                        "Lua pattern expressions in string.match are not implemented".into(),
-                    ));
-                }
                 let initial = match args.get(2).copied() {
                     Some(index) if index != Value::Nil => self
                         .exact_integer_operand(index)
                         .or_else(|_| self.integer_operand(index))?,
                     _ => 1,
                 };
-                match self.literal_match_position(&text, &pattern, initial)? {
-                    Some(position) => self.intern_rooted_string(
-                        text[position..position + pattern.len()].to_vec(),
-                        args,
-                    ),
+                match self.simple_pattern_match(&text, &pattern, initial, false)? {
+                    Some((begin, end)) => {
+                        self.intern_rooted_string(text[begin..end].to_vec(), args)
+                    }
                     None => Ok(Value::Nil),
                 }
             }

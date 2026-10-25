@@ -346,6 +346,10353 @@ fn owned_string_match_capture_free_literals_match_lua54() {
 }
 
 #[test]
+fn owned_string_simple_lua_anchors_and_wildcard_match_lua54() {
+    for source in [
+        "print(string.find('abc','b.'),string.find('abc','^ab'),string.find('abc','bc {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+    ] {
+        assert_parity(source, true);
+    }
+
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
+}
+
+#[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
+}
+
+#[test]
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
+    for source in [
+        "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
+        "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
+        "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
+        "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
+        "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
+        "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_branch_and_environment_interactions_match_lua54() {
+    for seed in 0_i64..48 {
+        let base = (seed * 11) % 23 - 8;
+        let add = seed % 7 + 1;
+        let source = format!(
+            "counter={seed}; function bump(x) counter=counter+x; return counter end; \
+             local box={{base={base}}}; function box:plus(x) return self.base+x end; \
+             if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
+             print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_value_gc_matches_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+        "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
+    // Both the pinned production backend and Lua 5.4 suppress a nested GC
+    // request from __gc and return one nil value in this calling context.
+    let cases: [(&str, &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(owned.status.success(), "{source}");
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\tnil\n",
+            b"body\nclosing\ttrue\tnil\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
+fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+        "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+))",
+        "print(string.match('abc','b.'),string.match('abc','^ab'),string.match('abc','bc {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+    ] {
+        assert_parity(source, true);
+    }
+
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
+}
+
+#[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
+}
+
+#[test]
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
+    for source in [
+        "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
+        "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
+        "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
+        "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
+        "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
+        "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_branch_and_environment_interactions_match_lua54() {
+    for seed in 0_i64..48 {
+        let base = (seed * 11) % 23 - 8;
+        let add = seed % 7 + 1;
+        let source = format!(
+            "counter={seed}; function bump(x) counter=counter+x; return counter end; \
+             local box={{base={base}}}; function box:plus(x) return self.base+x end; \
+             if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
+             print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_value_gc_matches_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+        "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
+    // Both the pinned production backend and Lua 5.4 suppress a nested GC
+    // request from __gc and return one nil value in this calling context.
+    let cases: [(&str, &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(owned.status.success(), "{source}");
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\tnil\n",
+            b"body\nclosing\ttrue\tnil\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
+fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+        "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+))",
+        "print(string.find('abc','^z')==nil,string.find('abc','zz {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+    ] {
+        assert_parity(source, true);
+    }
+
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
+}
+
+#[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
+}
+
+#[test]
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
+    for source in [
+        "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
+        "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
+        "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
+        "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
+        "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
+        "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_branch_and_environment_interactions_match_lua54() {
+    for seed in 0_i64..48 {
+        let base = (seed * 11) % 23 - 8;
+        let add = seed % 7 + 1;
+        let source = format!(
+            "counter={seed}; function bump(x) counter=counter+x; return counter end; \
+             local box={{base={base}}}; function box:plus(x) return self.base+x end; \
+             if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
+             print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_value_gc_matches_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+        "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
+    // Both the pinned production backend and Lua 5.4 suppress a nested GC
+    // request from __gc and return one nil value in this calling context.
+    let cases: [(&str, &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(owned.status.success(), "{source}");
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\tnil\n",
+            b"body\nclosing\ttrue\tnil\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
+fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+        "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+)==nil,string.match('abc','^z')==nil)",
+        "print(string.find('abc','^'),string.find('abc',' {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+    ] {
+        assert_parity(source, true);
+    }
+
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
+}
+
+#[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
+}
+
+#[test]
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
+    for source in [
+        "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
+        "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
+        "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
+        "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
+        "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
+        "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_branch_and_environment_interactions_match_lua54() {
+    for seed in 0_i64..48 {
+        let base = (seed * 11) % 23 - 8;
+        let add = seed % 7 + 1;
+        let source = format!(
+            "counter={seed}; function bump(x) counter=counter+x; return counter end; \
+             local box={{base={base}}}; function box:plus(x) return self.base+x end; \
+             if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
+             print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_value_gc_matches_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+        "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
+    // Both the pinned production backend and Lua 5.4 suppress a nested GC
+    // request from __gc and return one nil value in this calling context.
+    let cases: [(&str, &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(owned.status.success(), "{source}");
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\tnil\n",
+            b"body\nclosing\ttrue\tnil\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
+fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+        "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+),string.find('',' {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+    ] {
+        assert_parity(source, true);
+    }
+
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
+}
+
+#[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
+}
+
+#[test]
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
+    for source in [
+        "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
+        "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
+        "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
+        "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
+        "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
+        "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_branch_and_environment_interactions_match_lua54() {
+    for seed in 0_i64..48 {
+        let base = (seed * 11) % 23 - 8;
+        let add = seed % 7 + 1;
+        let source = format!(
+            "counter={seed}; function bump(x) counter=counter+x; return counter end; \
+             local box={{base={base}}}; function box:plus(x) return self.base+x end; \
+             if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
+             print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_value_gc_matches_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+        "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
+    // Both the pinned production backend and Lua 5.4 suppress a nested GC
+    // request from __gc and return one nil value in this calling context.
+    let cases: [(&str, &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(owned.status.success(), "{source}");
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\tnil\n",
+            b"body\nclosing\ttrue\tnil\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
+fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+        "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+))",
+        "print(string.match('abc','^')=='',string.match('abc',' {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+    ] {
+        assert_parity(source, true);
+    }
+
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
+}
+
+#[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
+}
+
+#[test]
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
+    for source in [
+        "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
+        "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
+        "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
+        "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
+        "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
+        "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_branch_and_environment_interactions_match_lua54() {
+    for seed in 0_i64..48 {
+        let base = (seed * 11) % 23 - 8;
+        let add = seed % 7 + 1;
+        let source = format!(
+            "counter={seed}; function bump(x) counter=counter+x; return counter end; \
+             local box={{base={base}}}; function box:plus(x) return self.base+x end; \
+             if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
+             print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_value_gc_matches_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+        "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
+    // Both the pinned production backend and Lua 5.4 suppress a nested GC
+    // request from __gc and return one nil value in this calling context.
+    let cases: [(&str, &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(owned.status.success(), "{source}");
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\tnil\n",
+            b"body\nclosing\ttrue\tnil\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
+fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+        "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+)=='',string.match('',' {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+    ] {
+        assert_parity(source, true);
+    }
+
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
+}
+
+#[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
+}
+
+#[test]
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
+    for source in [
+        "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
+        "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
+        "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
+        "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
+        "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
+        "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_branch_and_environment_interactions_match_lua54() {
+    for seed in 0_i64..48 {
+        let base = (seed * 11) % 23 - 8;
+        let add = seed % 7 + 1;
+        let source = format!(
+            "counter={seed}; function bump(x) counter=counter+x; return counter end; \
+             local box={{base={base}}}; function box:plus(x) return self.base+x end; \
+             if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
+             print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_value_gc_matches_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+        "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
+    // Both the pinned production backend and Lua 5.4 suppress a nested GC
+    // request from __gc and return one nil value in this calling context.
+    let cases: [(&str, &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(owned.status.success(), "{source}");
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\tnil\n",
+            b"body\nclosing\ttrue\tnil\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
+fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+        "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+)=='')",
+        "print(string.find('a.b','.',1,true),string.find('abc','.',1,false),string.find('abc','^',1,true)==nil)",
+        "print(string.find('abc {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+    ] {
+        assert_parity(source, true);
+    }
+
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
+}
+
+#[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
+}
+
+#[test]
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
+    for source in [
+        "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
+        "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
+        "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
+        "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
+        "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
+        "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_branch_and_environment_interactions_match_lua54() {
+    for seed in 0_i64..48 {
+        let base = (seed * 11) % 23 - 8;
+        let add = seed % 7 + 1;
+        let source = format!(
+            "counter={seed}; function bump(x) counter=counter+x; return counter end; \
+             local box={{base={base}}}; function box:plus(x) return self.base+x end; \
+             if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
+             print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_value_gc_matches_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+        "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
+    // Both the pinned production backend and Lua 5.4 suppress a nested GC
+    // request from __gc and return one nil value in this calling context.
+    let cases: [(&str, &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(owned.status.success(), "{source}");
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\tnil\n",
+            b"body\nclosing\ttrue\tnil\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
+fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+        "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+, ' {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+    ] {
+        assert_parity(source, true);
+    }
+
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
+}
+
+#[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
+}
+
+#[test]
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
+    for source in [
+        "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
+        "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
+        "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
+        "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
+        "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
+        "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_branch_and_environment_interactions_match_lua54() {
+    for seed in 0_i64..48 {
+        let base = (seed * 11) % 23 - 8;
+        let add = seed % 7 + 1;
+        let source = format!(
+            "counter={seed}; function bump(x) counter=counter+x; return counter end; \
+             local box={{base={base}}}; function box:plus(x) return self.base+x end; \
+             if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
+             print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_value_gc_matches_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+        "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
+    // Both the pinned production backend and Lua 5.4 suppress a nested GC
+    // request from __gc and return one nil value in this calling context.
+    let cases: [(&str, &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(owned.status.success(), "{source}");
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\tnil\n",
+            b"body\nclosing\ttrue\tnil\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
+fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+        "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+, 1, true),string.match('abc','. {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+    ] {
+        assert_parity(source, true);
+    }
+
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
+}
+
+#[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
+}
+
+#[test]
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
+    for source in [
+        "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
+        "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
+        "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
+        "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
+        "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
+        "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_branch_and_environment_interactions_match_lua54() {
+    for seed in 0_i64..48 {
+        let base = (seed * 11) % 23 - 8;
+        let add = seed % 7 + 1;
+        let source = format!(
+            "counter={seed}; function bump(x) counter=counter+x; return counter end; \
+             local box={{base={base}}}; function box:plus(x) return self.base+x end; \
+             if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
+             print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_value_gc_matches_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+        "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
+    // Both the pinned production backend and Lua 5.4 suppress a nested GC
+    // request from __gc and return one nil value in this calling context.
+    let cases: [(&str, &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(owned.status.success(), "{source}");
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\tnil\n",
+            b"body\nclosing\ttrue\tnil\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
+fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+        "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+),string.find('abc','^abc {
+    for source in [
+        "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
+        "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
+        "print(string.rep('',1000000)=='',string.rep('',4,'.')=='...',string.reverse('abc')=='cba')",
+        "local s=string.char(0,65,255); local r=string.reverse(s); local a,b,c=string.byte(r,1,3); print(a,b,c,string.upper(string.char(97,0,122))=='A\\0Z')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+    ] {
+        assert_parity(source, true);
+    }
+
+    // luaL_len also accepts strings. Integer indexing a Lua string has
+    // no elements, so a four-byte string unpacks into four nil results.
+    assert_parity(
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local ok,a,b,c,d=pcall(table.unpack,'text'); print(good,bad,ok,a,b,c,d)",
+        true,
+    );
+}
+
+#[test]
+fn owned_table_concat_and_unpack_observe_index_fallbacks_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,nil,3},{__index=function(_,k) if k==2 then return 2 end end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,':',1,3))",
+        "local fallback={[2]='B'}; local t=setmetatable({'A',nil,'C'},{__index=fallback}); print(table.concat(t,'|',1,3)); local a,b,c=table.unpack(t,1,3); print(a,b,c)",
+        "local hits=0; local t=setmetatable({[1]='a',[3]='c'},{__index=function(_,k) hits=hits+1; return k==2 and 'b' or nil end}); print(table.concat(t,':',1,3),hits); print(table.unpack(t,1,3),hits)",
+        "local t=setmetatable({[1]=1},{__index=function() error(27) end}); local ok,e=pcall(table.unpack,t,1,2); local good,f=pcall(table.concat,t,',',1,2); print(ok,e,good,f)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_unpack_roots_index_results_across_gc_despite_pinned_backend_divergence() {
+    // luna-core 4.0.2 fails to retain the first two temporary Lua strings:
+    // it reports the last value three times under forced collection.
+    // The owned VM must instead match the reference Lua 5.4.6 result.
+    let source = "local t=setmetatable({}, {__index=function(_,i) collectgarbage('collect'); return tostring(i) end}); local a,b,c=table.unpack(t,1,3); print(a,b,c,table.concat(t,',',1,3))";
+    let owned = run_fer(true, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert_eq!(owned.stdout, b"1\t2\t3\t1,2,3\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+    let production = run_fer(false, source);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(production.stdout, b"3\t3\t3\t1,2,3\n");
+}
+
+#[test]
+fn owned_table_concat_eager_len_and_unpack_optional_len_match_lua54() {
+    for source in [
+        "local t=setmetatable({10,20,30},{__len=function() return 2 end}); print(select('#',table.unpack(t)),table.unpack(t)); print(select('#',table.unpack(t,1,3)))",
+        "local t=setmetatable({'a','b','c'},{__len=function() return 2 end}); print(table.concat(t,'|'),table.concat(t,'|',1,3))",
+        "local n=0; local t=setmetatable({1,2,3},{__len=function() n=n+1; return 2 end}); print(table.concat(t,','),n); print(select('#',table.unpack(t)),n); print(table.concat(t,',',1,3),n)",
+        "local t=setmetatable({8,9},{__len=function() return 2.0 end}); print(table.concat(t,','),select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() return 0 end}); print(table.concat(t,'|')=='',select('#',table.unpack(t)))",
+        "local t=setmetatable({7,8,9},{__len=function() error(27) end}); local ok,e=pcall(table.concat,t,','); local good,f=pcall(table.unpack,t); local explicit,g=pcall(table.concat,t,',',1,3); local unpacked,h=pcall(table.unpack,t,1,3); print(ok,e,good,f,explicit,g,unpacked,h)",
+        "local t=setmetatable({2,3},{__len=function() return 'broken' end}); local ok=pcall(table.concat,t); local good=pcall(table.unpack,t); print(ok,good)",
+        "local t=setmetatable({5,6},{__len=function() collectgarbage('collect'); return 2 end}); print(table.concat(t,','),table.unpack(t))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_pack_nil_holes_and_argument_count_match_lua54() {
+    for source in [
+        "local t=table.pack(1,nil,3); print(t.n,t[1],t[2],t[3],select('#',table.unpack(t,1,t.n)))",
+        "local empty=table.pack(); local nils=table.pack(nil,nil); print(empty.n,nils.n,nils[1]==nil,nils[2]==nil,select('#',table.unpack(nils,1,nils.n)))",
+        "local orig=table.pack; table.pack=function(...) return {n=99} end; print(_G.table.pack().n); table.pack=orig; print(table.pack('a').n)",
+        "local t=table.pack(1,false,3.25); print(t.n,t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_mutation_and_bounds_match_lua54() {
+    for source in [
+        "local t={1,3}; table.insert(t,2,2); table.insert(t,4); print(table.concat(t,',')); print(table.remove(t,2),table.concat(t,',')); print(table.remove(t),table.concat(t,','))",
+        "local t={}; print(table.remove(t)==nil); table.insert(t,'a'); print(t[1],select('#',table.insert(t,nil)),#t)",
+        "local t={1,2}; local a=pcall(table.insert,t,0,3); local b=pcall(table.remove,t,0); local c=pcall(table.insert,t,3,4); print(a,b,c,table.concat(t,','))",
+        "local t={1,2}; print(table.remove(t,3)==nil,table.concat(t,',')); print(table.remove(t,1),table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_overlap_and_destination_match_lua54() {
+    for source in [
+        "local t={1,2,3}; print(table.move(t,1,3,2)==t,t[1],t[2],t[3],t[4])",
+        "local t={1,2,3}; table.move(t,2,3,1); print(t[1],t[2],t[3])",
+        "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
+        "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
+        "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_and_remove_observe_len_metamethods_like_lua54() {
+    for source in [
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,99); print(t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); print(table.remove(t),t[1],t[2],t[3])",
+        "local t=setmetatable({1,2,3},{__len=function() return 2 end}); table.insert(t,2,42); print(t[1],t[2],t[3]); print(table.remove(t,2),t[1],t[2],t[3])",
+        "local n=0; local t=setmetatable({1,2},{__len=function() n=n+1; return 2 end}); table.insert(t,3); print(n,t[3]); print(table.remove(t),n)",
+        "local t=setmetatable({1,2},{__len=function() error(28) end}); local a,b=pcall(table.insert,t,3); local c,d=pcall(table.remove,t); print(a,b,c,d)",
+        "local t=setmetatable({1,2},{__len=function() return 'bad' end}); local a=pcall(table.insert,t,3); local b=pcall(table.remove,t); print(a,b)",
+        "local t=setmetatable({4,6},{__len=function() return 2.0 end}); table.insert(t,5); print(t[1],t[2],t[3]); print(table.remove(t),t[1],t[2],t[3])",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_insert_remove_use_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local seen={}; local t={10,20}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.insert(t,30); print(table.concat(t,','),seen[1])",
+        "local seen={}; local t={11,22}; setmetatable(t,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.insert(t,33); print(t[3]==nil,seen[1])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 2 end,__index=function(_,k) if k==2 then return 20 end end}); table.insert(t,2,15); print(t[1],t[2],t[3])",
+        "local t={[1]=10}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==2 and 20 or 30 end}); print(table.remove(t,1),t[1],t[2],t[3])",
+        "local writes={}; local t={[1]=7,[3]=9}; setmetatable(t,{__len=function() return 3 end,__newindex=function(_,k,v) writes[#writes+1]=k end}); print(table.remove(t,1),writes[1],t[1],t[2],t[3])",
+        "local t={[1]=1}; setmetatable(t,{__len=function() return 2 end,__index=function() error(27) end}); local a,b=pcall(table.insert,t,2,10); local c,d=pcall(table.remove,t,1); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_move_uses_index_and_newindex_metamethods_like_lua54() {
+    for source in [
+        "local src={[1]='a',[3]='c'}; setmetatable(src,{__index=function(_,k) return k==2 and 'b' end}); local dst={}; table.move(src,1,3,1,dst); print(table.concat(dst,','))",
+        "local dest={}; local seen={}; setmetatable(dest,{__newindex=function(_,k,v) seen[#seen+1]=k; rawset(dest,k,v) end}); local src={11,22,33}; table.move(src,1,3,1,dest); print(dest[1],dest[2],dest[3],table.concat(seen,','))",
+        "local d={}; local seen={}; setmetatable(d,{__newindex=function(_,k,v) seen[#seen+1]=k end}); table.move({5,6},1,2,1,d); print(d[1]==nil,d[2]==nil,table.concat(seen,','))",
+        "local t={[1]=1,[3]=3}; setmetatable(t,{__index=function(_,k) if k==2 then return 2 end end}); table.move(t,1,3,2); print(t[1],t[2],t[3],t[4])",
+        "local src={[1]=7}; setmetatable(src,{__index=function() error(47) end}); local good,e=pcall(table.move,src,1,2,1,{}); print(good,e)",
+        "local target={}; setmetatable(target,{__newindex=function() error(55) end}); local ok,e=pcall(table.move,{9},1,1,1,target); print(ok,e)",
+        "local src={[1]='one'}; setmetatable(src,{__index=function(_,i) return tostring(i) end}); local t={}; table.move(src,1,3,1,t); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_observes_index_and_newindex_like_lua54() {
+    for source in [
+        "local t={[1]=3,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) if k==2 then return 2 end end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local seen={}; local t={[1]=3,[2]=2}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) return k==3 and 1 end,__newindex=function(_,k,v) seen[#seen+1]=k; rawset(t,k,v) end}); table.sort(t); print(t[1],t[2],t[3],seen[1])",
+        "local n=0; local t={[1]=2,[3]=1}; setmetatable(t,{__len=function() return 3 end,__index=function(_,k) n=n+1; return 3 end}); table.sort(t); print(t[1],t[2],t[3],n>0)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() error(41) end}); local a,b=pcall(table.sort,t); print(a,b)",
+        "local t={[1]=2}; setmetatable(t,{__len=function() return 2 end,__index=function() return 1 end,__newindex=function() error(43) end}); local a,b=pcall(table.sort,t); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_uses_len_metamethod_for_sort_boundaries_like_lua54() {
+    for source in [
+        "local t=setmetatable({3,1,2},{__len=function() return 2 end}); table.sort(t); print(t[1],t[2],t[3],#t)",
+        "local t=setmetatable({9,2,1},{__len=function() return 0 end}); table.sort(t,false); print(t[1],t[2],t[3])",
+        "local t=setmetatable({4,1,3},{__len=function() return 2.0 end}); table.sort(t); print(t[1],t[2],t[3])",
+        "local t=setmetatable({3,2,1},{__len=function() return 2 end}); table.sort(t,function(a,b) return a>b end); print(t[1],t[2],t[3])",
+        "local called=0; local t=setmetatable({3,2,1},{__len=function() called=called+1; collectgarbage('collect'); return 2 end}); table.sort(t); print(called,t[1],t[2],t[3])",
+        "local t=setmetatable({2,1},{__len=function() return 'bad' end}); local ok=pcall(table.sort,t); print(ok)",
+        "local t=setmetatable({2,1},{__len=function() error(27) end}); local ok,e=pcall(table.sort,t); print(ok,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_ignores_comparator_on_trivial_lists_like_lua54() {
+    for source in [
+        "local a={}; print(select('#',table.sort(a,false)),#a); local b={7}; print(select('#',table.sort(b,23)),b[1])",
+        "local a={8}; local never=function() error(42) end; table.sort(a,never); print(a[1]); print(select('#',table.sort({},'no function')))",
+        "local f=setmetatable({}, {__call=function() error('unexpected') end}); table.sort({},f); table.sort({2},f); print('ok')",
+        "local ok=pcall(table.sort,{},false); local yes=pcall(table.sort,{1},false); local fail=pcall(table.sort,{1,2},false); print(ok,yes,fail)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54() {
+    for source in [
+        "local t={3,1,2}; print(select('#',table.sort(t)),table.concat(t,','))",
+        "local t={'b','a','c'}; table.sort(t); print(table.concat(t,'|'))",
+        "local t={1,4,3,2}; table.sort(t,function(a,b) return a>b end); print(table.concat(t,','))",
+        "local t={0,3.5,-1,2}; table.sort(t); print(table.concat(t,','))",
+        "local t={}; print(select('#',table.sort(t)),#t); local q={5}; table.sort(q); print(q[1])",
+        "local t={3,2,1}; local a=pcall(table.sort,t,42); local b=pcall(table.sort,3); print(a,b,table.concat(t,','))",
+        "local mt={__lt=function(a,b) return a.x<b.x end}; local t={setmetatable({x=3},mt),setmetatable({x=1},mt),setmetatable({x=2},mt)}; table.sort(t); print(t[1].x,t[2].x,t[3].x)",
+        "local t={3,1,2}; table.sort(t,function(a,b) local temp=tostring(a)..':'..tostring(b); return a<b end); print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_branch_and_environment_interactions_match_lua54() {
+    for seed in 0_i64..48 {
+        let base = (seed * 11) % 23 - 8;
+        let add = seed % 7 + 1;
+        let source = format!(
+            "counter={seed}; function bump(x) counter=counter+x; return counter end; \
+             local box={{base={base}}}; function box:plus(x) return self.base+x end; \
+             if {seed}%2==0 then _G.counter=bump({add}) else counter=bump({add}) end; \
+             print(counter, box:plus(3), type(_G), _VERSION)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_lexical_environment_closure_cases_match_lua54() {
+    for seed in 0_i64..24 {
+        let original = (seed * 7) % 17 - 4;
+        let step = seed % 5 + 1;
+        let source = format!(
+            "local outer=_ENV; local e={{print=print,n={original}}}; \
+             do local _ENV=e; function inc(x) n=n+x; return n end; \
+             if {seed}%2==0 then n=inc({step}) else n=inc({step})+1 end; \
+             print(n) end; print(e.inc(1),e.n)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn generated_numeric_math_cases_match_lua54() {
+    for seed in -64_i64..=64 {
+        let source = format!(
+            "local n={seed}/7; print(math.floor(n),math.ceil(n),math.abs({seed}),math.max({seed},5,-3),math.min({seed},5,-3),math.type(math.floor(n)),math.tointeger(n)==nil)"
+        );
+        assert_parity(&source, true);
+    }
+    for source in [
+        "print(math.min('alpha','beta'),math.max('alpha','beta'))",
+        "print(math.tointeger('0x10'),math.type(4.0),math.type('4')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+    for source in [
+        "math.max()",
+        "math.min(1,true)",
+        "math.floor({})",
+        "math.abs('invalid')",
+    ] {
+        assert_parity(source, false);
+    }
+}
+
+#[test]
+fn owned_root_table_collection_matches_lua_after_repeated_cyclic_pressure() {
+    let source = "local getter; do local hidden=setmetatable({answer=42}, {__index=function() return 7 end}); getter=function() return hidden.answer,hidden.missing end end; for i=1,40000 do local t={}; t.self=t end; print(getter())";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    assert_eq!(owned.stdout, b"42\t7\n");
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_nested_and_field_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "local function p() for i=1,21000 do local t={}; t.self=t end return 7 end; local function plus(t,n) return t.v+n end; print(plus({v=35},p()))",
+            "42\n",
+        ),
+        (
+            "local function p() for i=1,21000 do local f=function() return i end end return 4 end; local function plus(f,n) return f()+n end; local function make() local v=38; return function() return v end end; print(plus(make(),p()))",
+            "42\n",
+        ),
+        (
+            "for i=1,1800 do local t={}; for j=1,40 do t[j]=j end end; print('ok')",
+            "ok\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            production.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&production.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes());
+        assert_eq!(owned.stdout, production.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(
+                upstream.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_full_gc_mode_matches_lua54() {
+    for (source, output) in [
+        (
+            "local t={value=42}; print(type(collectgarbage()),type(collectgarbage('collect')),t.value)",
+            "number\tnumber\t42\n",
+        ),
+        (
+            "local okay=pcall(collectgarbage,'invalid'); print(okay)",
+            "false\n",
+        ),
+        (
+            "local function worker() for i=1,21000 do local t={}; t.self=t end; collectgarbage('collect'); return 42 end; print(worker())",
+            "42\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=2000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, output.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(lua) = reference_output(source) {
+            assert!(lua.status.success());
+            assert_eq!(owned.stdout, lua.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_long_weak_mode_strings_match_pinned_lua54_6() {
+    for mode in [
+        format!("v{}", "x".repeat(64)),
+        format!("k{}", "x".repeat(64)),
+        format!("x{}kv", "x".repeat(64)),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_mode_nul_termination_matches_lua54_6() {
+    // The pinned production luna-core backend scans the bytes beyond NUL;
+    // Lua 5.4.6 uses strchr and stops. Keep the divergence visible rather
+    // than making the owned engine reproduce a production-backend bug.
+    for (mode, expected) in [
+        ("v\\0k", b"false\ttrue\n".as_slice()),
+        ("k\\0v", b"true\tfalse\n".as_slice()),
+        ("kv\\0x", b"true\ttrue\n".as_slice()),
+        ("x\\0kv", b"false\tfalse\n".as_slice()),
+    ] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, &source);
+        assert!(production.status.success(), "{source}");
+        if mode == "v\\0k" {
+            // Evidence that the existing production backend differs.
+            assert_eq!(production.stdout, b"true\ttrue\n", "{source}");
+        }
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_weak_mode_flag_characters_match_lua54() {
+    for mode in ["kvv", "xxvkx", "kkx", "vvx", "xyz"] {
+        let source = format!(
+            "local w=setmetatable({{}}, {{__mode='{mode}'}}); \
+             do local key={{}}; local value={{}}; w[key]=17; w[1]=value end; \
+             collectgarbage('collect'); \
+             local key_gone=true; for k,v in pairs(w) do if type(k)=='table' then key_gone=false end end; \
+             print(key_gone,w[1]==nil)"
+        );
+        assert_parity(&source, true);
+    }
+}
+
+#[test]
+fn owned_weak_value_gc_matches_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+        "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_callable_table_finalizers_match_lua54() {
+    for (source, expected) in [
+        (
+            "local count=0; local callback=setmetatable({}, {__call=function(self, v) count=count+v.n end}); do local t=setmetatable({n=7}, {__gc=callback}) end; collectgarbage('collect'); print(count)",
+            b"7\n".as_slice(),
+        ),
+        (
+            "local callback=setmetatable({}, {__call=function(self, v) print('closing',v.n) end}); local t=setmetatable({n=9}, {__gc=callback}); print('body')",
+            b"body\nclosing\t9\n".as_slice(),
+        ),
+        (
+            "local first=setmetatable({}, {__call=function(self, v) print('old') end}); local mt={__gc=first}; do local t=setmetatable({},mt) end; mt.__gc=function() print('new') end; collectgarbage('collect')",
+            b"new\n".as_slice(),
+        ),
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_noncallable_finalizer_warnings_match_lua54() {
+    for finalizer in ["12", "true", "'not callable'", "{}"] {
+        let source = format!(
+            "warn('@on'); do local t=setmetatable({{}}, {{__gc={finalizer}}}) end; collectgarbage('collect'); print('alive')"
+        );
+        let owned = run_fer(true, &source);
+        assert!(owned.status.success(), "{source}");
+        if let Some(reference) = reference_output(&source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_warning_stream_matches_upstream_lua54() {
+    for source in [
+        "warn('muted'); warn('@on'); warn('hello',' world'); warn('@off'); warn('muted'); warn('@on'); print(select('#',warn('restored')))",
+        "warn('@on'); do local t=setmetatable({}, {__gc=function() error('gc-failed',0) end}) end; collectgarbage('collect'); print('alive')",
+        "warn('@on'); local t=setmetatable({}, {__gc=function() error('shutdown-failed',0) end}); print('body')",
+        "do local t=setmetatable({}, {__gc=function() error('muted',0) end}) end; collectgarbage('collect'); print('alive')",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+            assert_eq!(owned.stderr, reference.stderr, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_collectgarbage_nil_arity_matches_lua54() {
+    // Both the pinned production backend and Lua 5.4 suppress a nested GC
+    // request from __gc and return one nil value in this calling context.
+    let cases: [(&str, &[u8]); 2] = [
+        (
+            "local count=-1; do local t=setmetatable({}, {__gc=function() count=select('#',collectgarbage('collect')) end}) end; collectgarbage('collect'); print(count,select('#',collectgarbage('collect')))",
+            b"1\t1\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() print('close',select('#',collectgarbage('collect'))) end}); print('body')",
+            b"body\nclose\t1\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(owned.status.success(), "{source}");
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_finalizer_suppresses_nested_collection_like_lua54() {
+    let cases: [(&str, &[u8], &[u8]); 2] = [
+        (
+            "local called=false; do local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); called=ok and v==nil end}) end; collectgarbage('collect'); print(called)",
+            b"true\n",
+            // Both interpreters suppress nested collection; pcall
+            // succeeds with a nil second result in scalar context.
+            b"true\n",
+        ),
+        (
+            "local t=setmetatable({}, {__gc=function() local ok,v=pcall(collectgarbage,'collect'); print('closing',ok,v) end}); print('body')",
+            b"body\nclosing\ttrue\tnil\n",
+            b"body\nclosing\ttrue\tnil\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_lua_state_shutdown_finalizers_match_lua54() {
+    // The pinned production backend currently closes live marked tables in
+    // registration order, while Lua 5.4 explicitly requires reverse order.
+    // Keep that divergence visible, without teaching the owned VM the bug.
+    let cases: [(&str, &[u8], &[u8]); 4] = [
+        (
+            "local a=setmetatable({id='A'}, {__gc=function(v) print('close',v.id) end}); local b=setmetatable({id='B'}, {__gc=function(v) print('close',v.id) end}); print('body',a.id,b.id)",
+            b"body\tA\tB\nclose\tB\nclose\tA\n",
+            b"body\tA\tB\nclose\tA\nclose\tB\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() print('once') end}); a=nil; collectgarbage('collect'); print('body')",
+            b"once\nbody\n",
+            b"once\nbody\n",
+        ),
+        (
+            "local original=setmetatable({}, {__gc=function() print('original'); setmetatable({}, {__gc=function() print('new') end}) end}); print('body')",
+            b"body\noriginal\n",
+            b"body\noriginal\n",
+        ),
+        (
+            "local a=setmetatable({}, {__gc=function() error('finalizer failure') end}); print('body')",
+            b"body\n",
+            b"body\n",
+        ),
+    ];
+    for (source, expected, production_expected) in cases {
+        let owned = run_fer(true, source);
+        let production = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(production.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(production.stdout, production_expected, "{source}");
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}");
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+}
+
+#[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
+    for source in [
+        "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",
+        "local called=false; local mt={}; do local t=setmetatable({},mt); mt.__gc=function() called=true end end; collectgarbage('collect'); print(called)",
+        "local rescued; do local t=setmetatable({answer=42},{__gc=function(v) rescued=v end}) end; collectgarbage('collect'); print(rescued.answer); rescued=nil; collectgarbage('collect'); print('once')",
+        "local weak=setmetatable({}, {__mode='v'}); local cleared=false; do local x=setmetatable({}, {__gc=function(v) cleared=weak[1]==nil end}); weak[1]=x end; collectgarbage('collect'); print(cleared)",
+        "local weak=setmetatable({}, {__mode='k'}); local seen=false; do local x=setmetatable({}, {__gc=function(v) seen=weak[v]==42 end}); weak[x]=42 end; collectgarbage('collect'); print(seen); collectgarbage('collect'); print(next(weak)==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_lazy_standard_tables_survive_string_pressure_like_lua54() {
+    let source = "local keep=tostring(123456789); for i=1,19000 do local s=tostring(i) end; local g=_G; print(g._VERSION,type(g.arg),type(g.math),keep)";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=3000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert_eq!(owned.stdout, b"Lua 5.4\ttable\ttable\t123456789\n");
+    let production = run_fer(false, source);
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_type_and_math_type_under_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; print(type(hold),math.type(7),hold)",
+            b"string\tinteger\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); local function stress() for i=1,19000 do local x=tostring(i) end return 17 end; print(type(hold,stress()),math.type(1.5),hold)",
+            b"string\tfloat\t123456789\n".as_slice(),
+        ),
+        (
+            "local hold=tostring(123456789); for i=1,19000 do local x=tostring(i) end; local ok1,t=pcall(type,hold); local ok2,n=pcall(math.type,7); print(ok1,t,ok2,n,hold)",
+            b"true\tstring\ttrue\tinteger\t123456789\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_tostring_and_print_string_pressure_match_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s=tostring(i) end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved=tostring(99999); for i=1,19000 do local s=tostring(i) end; print(saved)",
+            b"99999\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s=tostring(i) end return 7 end; print(tostring(123456),pressure())",
+            b"123456\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
+fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
+    assert_parity(
+        "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
+        true,
+    );
+    assert_parity(
+        "local keep={}; local weak=setmetatable({}, {__mode='kv'}); local key=tostring(11111); keep[1]=tostring(22222); weak[key]=tostring(33333); key=nil; collectgarbage('collect'); print(keep[1],weak['11111'])",
+        true,
+    );
+}
+
+#[test]
+fn owned_weak_key_ephemeron_and_double_weak_gc_match_upstream_lua54() {
+    for source in [
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={back=key}; key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local key={}; w[key]={n=42}; collectgarbage('collect'); print(w[key].n); key=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); w['name']={n=42}; collectgarbage('collect'); print(w['name'].n)",
+        "local w=setmetatable({}, {__mode='k'}); local seed={}; local key2={}; w[seed]={child=key2}; w[key2]={n=42}; key2=nil; collectgarbage('collect'); print(w[w[seed].child].n); seed=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='kv'}); local key={}; w[key]=42; key=nil; w[1]={}; w[2]='still'; collectgarbage('collect'); print(w[1]==nil,w[2],next(w)~=nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
+fn generated_ephemeron_chains_match_lua54_across_insertion_orders() {
+    // The weak-key hash iteration order is unspecified; every insertion
+    // order must reach the same ephemeron marking fixpoint.
+    for length in 2..=10 {
+        for reverse in [false, true] {
+            let insert = if reverse {
+                format!("for i={length}-1,1,-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            } else {
+                format!("for i=1,{length}-1 do weak[keys[i]]={{next=keys[i+1]}} end")
+            };
+            let source = format!(
+                "local weak=setmetatable({{}},{{__mode='k'}}); local keys={{}}; \
+                 for i=1,{length} do keys[i]={{}} end; \
+                 {insert}; weak[keys[{length}]]={{answer=42}}; \
+                 local root=keys[1]; keys=nil; collectgarbage('collect'); \
+                 local cursor=root; for i=1,{length}-1 do cursor=weak[cursor].next end; \
+                 print(weak[cursor].answer); root=nil; cursor=nil; \
+                 collectgarbage('collect'); print(next(weak)==nil)"
+            );
+            assert_parity(&source, true);
+        }
+    }
+
+    assert_parity(
+        "local weak=setmetatable({}, {__mode='k'}); local key=function() end; weak[key]={back=key}; key=nil; collectgarbage('collect'); print(next(weak)==nil)",
+        true,
+    );
+}
+
+#[test]
+fn owned_gc_count_reports_live_heap_growth_and_reclamation_like_lua54() {
+    assert_parity(
+        "collectgarbage('stop'); local before=collectgarbage('count'); for i=1,1400 do local t={1,2,3,4,5,6,7,8,9,10,11,12} end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); print(type(low),high>before,low<high,collectgarbage('isrunning'))",
+        true,
+    );
+}
+
+#[test]
+fn owned_lazily_materialized_lua_tables_survive_recycled_heap_pressure() {
+    let source = "collectgarbage('stop'); for i=1,16384 do local t={} end; collectgarbage('restart'); print(type(_G),type(math),type(arg))";
+    let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+        .args(["--engine=owned", "--budget=2000000", "-e", source])
+        .output()
+        .expect("launch owned fer");
+    let production = run_fer(false, source);
+    assert!(
+        owned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&owned.stderr)
+    );
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"table\ttable\ttable\n");
+    assert_eq!(owned.stdout, production.stdout);
+    if let Some(upstream) = reference_output(source) {
+        assert!(upstream.status.success());
+        assert_eq!(owned.stdout, upstream.stdout);
+    }
+}
+
+#[test]
+fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
+    for (source, expected) in [
+        (
+            "local before=collectgarbage('isrunning'); collectgarbage('stop'); local during=collectgarbage('isrunning'); collectgarbage('collect'); collectgarbage('restart'); print(before,during,collectgarbage('isrunning'))",
+            "true\tfalse\ttrue\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('manual')",
+            "manual\n",
+        ),
+        (
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('restart')",
+            "restart\n",
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(
+            reference.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert_eq!(owned.stdout, expected.as_bytes(), "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
+))",
+        "print(string.match('a\\0b','a.b')=='a\\0b',string.find('a\\0b','a.b'))",
+        "print(string.find('éé','..'),string.len(string.match('éé','..')))",
+        "print(string.match('abc','.^')==nil,string.match('abc','a$b')==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
