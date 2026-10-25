@@ -1641,6 +1641,7 @@ struct Execution<'a> {
     budget: usize,
     steps: usize,
     depth: usize,
+    automatic_gc: bool,
     tables: Vec<TableStorage>,
     free_tables: Vec<usize>,
     retired_tables: HashSet<usize>,
@@ -1744,7 +1745,9 @@ impl Execution<'_> {
                 usize::from(value != Value::Nil && !table.hashed.contains_key(&field))
             }
         };
-        if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+        if self.automatic_gc
+            && self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL
+        {
             self.collect_table_write(handle, key, value)?;
         }
         if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
@@ -1967,30 +1970,45 @@ impl Execution<'_> {
         Ok(handle)
     }
 
-    /// An explicitly requested complete pass is supported; other Lua 5.4
-    /// collector modes are not simulated by the bounded preview VM.
+    /// Lua 5.4 collector controls available in the owned bounded preview:
+    /// explicit full cycles, stop/restart of automatic quota collection,
+    /// and querying the current automatic-collection state.
     fn collectgarbage_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
-        if let Some(option) = args.first() {
-            let Value::String(handle) = *option else {
-                return Err(FlowError::TypeError);
-            };
-            let mode = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
-            if mode != b"collect" {
-                return Err(FlowError::Unsupported(
-                    "owned collector only supports the 'collect' mode".into(),
-                ));
+        let mode = match args.first().copied() {
+            None => b"collect".to_vec(),
+            Some(Value::String(handle)) => self
+                .strings
+                .get(handle)
+                .ok_or(FlowError::InvalidBytecode)?
+                .clone(),
+            Some(_) => return Err(FlowError::TypeError),
+        };
+        match mode.as_slice() {
+            b"isrunning" => Ok(Value::Boolean(self.automatic_gc)),
+            b"stop" => {
+                self.automatic_gc = false;
+                Ok(Value::Integer(0))
             }
+            b"restart" => {
+                self.automatic_gc = true;
+                Ok(Value::Integer(0))
+            }
+            b"collect" => {
+                // Explicit full passes run even while automatic GC is
+                // stopped; snapshots preserve roots of suspended callers.
+                let frame = self
+                    .gc_frame_roots
+                    .last()
+                    .ok_or(FlowError::InvalidBytecode)?;
+                let slots = frame.slots.clone();
+                let prepared = frame.prepared.clone();
+                self.collect_root_tables(args, &slots, &prepared)?;
+                Ok(Value::Integer(0))
+            }
+            _ => Err(FlowError::Unsupported(
+                "owned collector supports collect, stop, restart and isrunning".into(),
+            )),
         }
-        // Called from a live bytecode frame; the root snapshots were taken
-        // before the Call opcode consumed the function and arguments.
-        let frame = self
-            .gc_frame_roots
-            .last()
-            .ok_or(FlowError::InvalidBytecode)?;
-        let slots = frame.slots.clone();
-        let prepared = frame.prepared.clone();
-        self.collect_root_tables(args, &slots, &prepared)?;
-        Ok(Value::Integer(0))
     }
 
     /// A small first-party Lua 5.4 numeric library. Unsupported math
@@ -3357,7 +3375,10 @@ impl Execution<'_> {
                     if *index >= self.program.functions.len() {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    if self.closures.len() >= MAX_CLOSURES && self.free_closures.is_empty() {
+                    if self.automatic_gc
+                        && self.closures.len() >= MAX_CLOSURES
+                        && self.free_closures.is_empty()
+                    {
                         self.collect_root_tables(&stack, &slots, &prepared)?;
                     }
                     if self.closures.len() >= MAX_CLOSURES && self.free_closures.is_empty() {
@@ -3719,7 +3740,9 @@ impl Execution<'_> {
                         .array
                         .len();
                     let growth = end.saturating_sub(existing);
-                    if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
+                    if self.automatic_gc
+                        && self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL
+                    {
                         // Tail expansion bypasses ordinary indexed writes.
                         // Preserve all vararg/multi-return objects while the
                         // collector traverses otherwise unreachable tables.
@@ -3754,8 +3777,9 @@ impl Execution<'_> {
                     if arity > MAX_TABLE_FIELDS || stack.len() < arity {
                         return Err(FlowError::TooLarge);
                     }
-                    if (self.tables.len() >= MAX_TABLES && self.free_tables.is_empty())
-                        || self.table_cells.saturating_add(arity) > MAX_TABLE_CELLS_TOTAL
+                    if self.automatic_gc
+                        && ((self.tables.len() >= MAX_TABLES && self.free_tables.is_empty())
+                            || self.table_cells.saturating_add(arity) > MAX_TABLE_CELLS_TOTAL)
                     {
                         self.collect_root_tables(&stack, &slots, &prepared)?;
                     }
@@ -4143,6 +4167,7 @@ pub fn execute_flow_capture_with_args<'a>(
         budget,
         steps: 0,
         depth: 0,
+        automatic_gc: true,
         tables: Vec::new(),
         free_tables: Vec::new(),
         retired_tables: HashSet::new(),
@@ -7529,6 +7554,42 @@ mod tests {
         let outcome = execute_flow_capture(&program, 200_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"number\tnumber\t42\nfalse\n");
+    }
+
+    #[test]
+    fn owned_gc_stop_restart_and_manual_collect_preserve_quota_safety() {
+        let program = compile_flow_chunk(
+            "print(collectgarbage('isrunning')); collectgarbage('stop'); print(collectgarbage('isrunning')); collectgarbage('collect'); collectgarbage('restart'); print(collectgarbage('isrunning'))",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&program, 4000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"true\nfalse\ntrue\n");
+
+        let stopped = compile_flow_chunk(
+            "collectgarbage('stop'); for i=1,17000 do local t={} end",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_capture(&stopped, 1_000_000).result,
+            Err(FlowError::TooLarge)
+        );
+
+        let manually_cleared = compile_flow_chunk(
+            "collectgarbage('stop'); for i=1,15000 do local t={} end; collectgarbage('collect'); for i=1,15000 do local t={} end; print('ok')",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&manually_cleared, 2_000_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"ok\n");
+
+        let restarted = compile_flow_chunk(
+            "collectgarbage('stop'); for i=1,1000 do local t={} end; collectgarbage('restart'); for i=1,20000 do local t={} end; print('ok')",
+        )
+        .unwrap();
+        let outcome = execute_flow_capture(&restarted, 2_000_000);
+        assert_eq!(outcome.result, Ok(vec![]));
+        assert_eq!(outcome.stdout, b"ok\n");
     }
 
     #[test]
