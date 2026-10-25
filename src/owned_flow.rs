@@ -81,6 +81,8 @@ pub enum Builtin {
     StringUpper,
     StringReverse,
     StringRep,
+    TableConcat,
+    TableUnpack,
 }
 
 const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -103,6 +105,9 @@ const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"reverse", Builtin::StringReverse),
     (b"rep", Builtin::StringRep),
 ];
+
+const TABLE_GLOBALS: &[(&[u8], Builtin)] =
+    &[(b"concat", Builtin::TableConcat), (b"unpack", Builtin::TableUnpack)];
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"print", Builtin::Print),
@@ -1722,6 +1727,7 @@ struct Execution<'a> {
     global_table: Option<usize>,
     math_table: Option<usize>,
     string_table: Option<usize>,
+    table_library: Option<usize>,
 }
 
 impl Execution<'_> {
@@ -2082,6 +2088,7 @@ impl Execution<'_> {
             self.global_table,
             self.math_table,
             self.string_table,
+            self.table_library,
         ]
         .into_iter()
         .flatten()
@@ -2670,6 +2677,26 @@ impl Execution<'_> {
         Ok(handle)
     }
 
+    /// Create the bounded table library only when first accessed. Root its
+    /// partially populated table while interning builtin field-name strings.
+    fn materialize_table_library(&mut self, pending: &[Value]) -> Result<usize, FlowError> {
+        if let Some(handle) = self.table_library {
+            return Ok(handle);
+        }
+        self.reserve_lazy_table_slot(pending)?;
+        let handle = self.insert_table(TableStorage {
+            array: Vec::new(),
+            hashed: HashMap::new(),
+            metatable: None,
+        })?;
+        self.table_library = Some(handle);
+        for &(name, builtin) in TABLE_GLOBALS {
+            let key = self.intern_rooted_string(name.to_vec(), pending)?;
+            self.write_table(handle, TableKey::Hashed(key), Value::Builtin(builtin))?;
+        }
+        Ok(handle)
+    }
+
     /// Lazily expose the real global environment as a writable Lua table.
     /// Prior global overrides are folded in before the table becomes visible.
     fn materialize_global_table(&mut self) -> Result<usize, FlowError> {
@@ -2701,6 +2728,9 @@ impl Execution<'_> {
         let string_key = self.intern_rooted_string(b"string".to_vec(), &[])?;
         let string = self.materialize_string_table(&[string_key])?;
         self.write_table(handle, TableKey::Hashed(string_key), Value::Table(string))?;
+        let table_key = self.intern_rooted_string(b"table".to_vec(), &[])?;
+        let table = self.materialize_table_library(&[table_key])?;
+        self.write_table(handle, TableKey::Hashed(table_key), Value::Table(table))?;
         for (key, value) in std::mem::take(&mut self.globals) {
             self.write_table(handle, TableKey::Hashed(Value::String(key)), value)?;
         }
@@ -2735,6 +2765,9 @@ impl Execution<'_> {
         }
         if name == b"string" {
             return Ok(Value::Table(self.materialize_string_table(&[])?));
+        }
+        if name == b"table" {
+            return Ok(Value::Table(self.materialize_table_library(&[])?));
         }
         if name == b"_VERSION" {
             return self.intern_rooted_string(b"Lua 5.4".to_vec(), &[]);
@@ -3597,6 +3630,10 @@ impl Execution<'_> {
                 Ok(vec![self.math_builtin(builtin, &arguments)?])
             }
             Value::Builtin(Builtin::StringByte) => self.string_byte_builtin(&arguments),
+            Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
+            Value::Builtin(Builtin::TableConcat) => {
+                Ok(vec![self.table_concat_builtin(&arguments)?])
+            },
             Value::Builtin(builtin) if STRING_GLOBALS.iter().any(|&(_, item)| item == builtin) => {
                 Ok(vec![self.string_builtin(builtin, &arguments)?])
             }
@@ -3760,6 +3797,98 @@ impl Execution<'_> {
             _ => return Err(FlowError::TypeError),
         };
         Ok(Value::Integer(length as i64))
+    }
+
+    /// A bounded Lua table slice. The initial library handles raw array
+    /// indices only; metamethod-derived sequence lengths are not yet accepted.
+    fn table_library_range(
+        &self,
+        args: &[Value],
+        start_argument: usize,
+        end_argument: usize,
+    ) -> Result<(usize, i64, usize), FlowError> {
+        let Value::Table(handle) = *args.first().ok_or(FlowError::TypeError)? else {
+            return Err(FlowError::TypeError);
+        };
+        let start = match args.get(start_argument).copied() {
+            Some(value) if value != Value::Nil => self
+                .exact_integer_operand(value)
+                .or_else(|_| self.integer_operand(value))?,
+            _ => 1,
+        };
+        let end = match args.get(end_argument).copied() {
+            Some(value) if value != Value::Nil => self
+                .exact_integer_operand(value)
+                .or_else(|_| self.integer_operand(value))?,
+            _ => match self.raw_len(Value::Table(handle))? {
+                Value::Integer(length) => length,
+                _ => return Err(FlowError::InvalidBytecode),
+            },
+        };
+        if end < start {
+            return Ok((handle, start, 0));
+        }
+        let size = end
+            .checked_sub(start)
+            .and_then(|width| width.checked_add(1))
+            .ok_or(FlowError::TooLarge)?;
+        let size = usize::try_from(size).map_err(|_| FlowError::TooLarge)?;
+        if size > MAX_STACK {
+            return Err(FlowError::TooLarge);
+        }
+        Ok((handle, start, size))
+    }
+
+    /// table.unpack exposes genuine zero-or-more results from raw array slots.
+    fn table_unpack_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let (handle, start, count) = self.table_library_range(args, 1, 2)?;
+        if self.steps.saturating_add(count) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += count;
+        let mut result = Vec::with_capacity(count);
+        for offset in 0..count {
+            let index = start
+                .checked_add(offset as i64)
+                .ok_or(FlowError::TooLarge)?;
+            let key = self.table_key(Value::Integer(index))?;
+            result.push(self.read_table(handle, key)?);
+        }
+        Ok(result)
+    }
+
+    /// table.concat accepts byte strings and numeric entries. Host-side
+    /// joining doesn't create Lua values until the explicitly rooted result
+    /// is interned, avoiding intermediate GC-root hazards.
+    fn table_concat_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        let separator = match args.get(1).copied() {
+            Some(value) if value != Value::Nil => self.string_bytes(value)?,
+            _ => Vec::new(),
+        };
+        let (handle, start, count) = self.table_library_range(args, 2, 3)?;
+        let mut output = Vec::new();
+        for offset in 0..count {
+            let index = start
+                .checked_add(offset as i64)
+                .ok_or(FlowError::TooLarge)?;
+            let key = self.table_key(Value::Integer(index))?;
+            let value = self.read_table(handle, key)?;
+            let bytes = self.string_bytes(value)?;
+            let extra = bytes.len()
+                + if offset > 0 { separator.len() } else { 0 };
+            if output.len().saturating_add(extra) > MAX_STRING_POOL_BYTES {
+                return Err(FlowError::TooLarge);
+            }
+            if self.steps.saturating_add(extra.saturating_add(1)) > self.budget {
+                return Err(FlowError::StepBudgetExceeded);
+            }
+            self.steps += extra + 1;
+            if offset > 0 {
+                output.extend_from_slice(&separator);
+            }
+            output.extend_from_slice(&bytes);
+        }
+        self.intern_rooted_string(output, args)
     }
 
     /// Lua string offsets are one-based bytes; negatives count from the end.
@@ -4257,6 +4386,7 @@ impl Execution<'_> {
                                 | Builtin::Pcall
                                 | Builtin::Xpcall
                                 | Builtin::StringByte
+                                | Builtin::TableUnpack
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
@@ -4276,6 +4406,7 @@ impl Execution<'_> {
                                 }
                                 Builtin::IpairsIterator => self.ipairs_iterator(&args)?,
                                 Builtin::StringByte => self.string_byte_builtin(&args)?,
+                                Builtin::TableUnpack => self.table_unpack_builtin(&args)?,
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
@@ -4335,7 +4466,8 @@ impl Execution<'_> {
                             | Builtin::Pairs
                             | Builtin::Ipairs
                             | Builtin::IpairsIterator
-                            | Builtin::StringByte => {
+                            | Builtin::StringByte
+                            | Builtin::TableUnpack => {
                                 unreachable!(
                                     "iteration/selection builtins handled as multiple results"
                                 )
@@ -4356,6 +4488,7 @@ impl Execution<'_> {
                             | Builtin::StringUpper
                             | Builtin::StringReverse
                             | Builtin::StringRep => self.string_builtin(builtin, &args)?,
+                            Builtin::TableConcat => self.table_concat_builtin(&args)?,
                         };
                         if matches!(
                             instructions[pc],
@@ -5008,6 +5141,7 @@ pub fn execute_flow_capture_with_args<'a>(
         global_table: None,
         math_table: None,
         string_table: None,
+        table_library: None,
     };
     let mut result = execution.run(&program.instructions, program.slots, &[], &[], &[]);
     // Lua closes its state after evaluating the chunk, even after errors.
@@ -8894,6 +9028,45 @@ mod tests {
             execute_flow_capture(&too_large, 3_000_000).result,
             Err(FlowError::TooLarge)
         );
+    }
+
+    #[test]
+    fn owned_table_concat_unpack_cover_binary_sequences_and_result_arity() {
+        for (source, expected) in [
+            (
+                "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+                b"a-b-c\t2,3\ttrue\n".as_slice(),
+            ),
+            (
+                "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+                b"a\tnil\tc\t3\n".as_slice(),
+            ),
+            (
+                "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+                b"true\ttrue\t0\n".as_slice(),
+            ),
+            (
+                "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+                b"99\n12\n".as_slice(),
+            ),
+            (
+                "print(table.unpack({1,2,3}))",
+                b"1\t2\t3\n".as_slice(),
+            ),
+            (
+                "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local bad2=pcall(table.unpack,'text'); print(good,bad,bad2)",
+                b"true\tfalse\tfalse\n".as_slice(),
+            ),
+            (
+                "local t={string.char(65,0,66)}; for i=1,19000 do local s=tostring(i) end; print(table.concat(t)==string.char(65,0,66))",
+                b"true\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 3_000_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
     }
 
     #[test]

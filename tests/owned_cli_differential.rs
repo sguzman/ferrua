@@ -126,6 +126,20 @@ fn owned_string_case_reverse_and_repeat_match_lua54() {
 }
 
 #[test]
+fn owned_table_concat_unpack_sequence_results_match_lua54() {
+    for source in [
+        "print(table.concat({'a','b','c'},'-'),table.concat({1,2,3},',',2,3),table.concat({})=='')",
+        "local t={'a',nil,'c'}; local a,b,c=table.unpack(t,1,3); print(a,b,c,select('#',table.unpack(t,1,3)))",
+        "print(table.concat({'a\\0','b'},':')=='a\\0:b',table.concat({'a','b'},'-',2,1)=='',select('#',table.unpack({})))",
+        "local lib=table; assert(_G.table==lib); local saved=lib.concat; lib.concat=function() return 99 end; print(table.concat({1,2})); lib.concat=saved; print(table.concat({1,2}))",
+        "print(table.unpack({1,2,3}))",
+        "local good=pcall(table.concat,{'a','b'}); local bad=pcall(table.concat,{'a',true}); local bad2=pcall(table.unpack,'text'); print(good,bad,bad2)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn generated_branch_and_environment_interactions_match_lua54() {
     for seed in 0_i64..48 {
         let base = (seed * 11) % 23 - 8;
