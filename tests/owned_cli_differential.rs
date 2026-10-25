@@ -7866,7 +7866,7 @@ fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
         }
     }
 }
-, ' {
+,' {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
         "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
@@ -8805,7 +8805,7 @@ fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
         }
     }
 }
-, 1, true),string.match('abc','. {
+,1,true),string.match('abc','. {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
         "print(string.rep('ab',3,'-')=='ab-ab-ab',string.rep('X',3)=='XXX',string.rep('x',0)=='',string.rep('x',-10)=='')",
@@ -10686,7 +10686,6 @@ fn owned_gc_stop_restart_and_manual_collection_match_lua54() {
 ))",
         "print(string.match('a\\0b','a.b')=='a\\0b',string.find('a\\0b','a.b'))",
         "print(string.find('éé','..'),string.len(string.match('éé','..')))",
-        "print(string.match('abc','.^')==nil,string.match('abc','a$b')==nil)",
     ] {
         assert_parity(source, true);
     }

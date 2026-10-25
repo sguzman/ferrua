@@ -4780,8 +4780,7 @@ impl Execution<'_> {
             _ => 1,
         };
         let plain = args.get(3).copied().unwrap_or(Value::Nil).truthy();
-        let Some((begin, end)) =
-            self.simple_pattern_match(&source, &pattern, initial, plain)?
+        let Some((begin, end)) = self.simple_pattern_match(&source, &pattern, initial, plain)?
         else {
             return Ok(vec![Value::Nil]);
         };
