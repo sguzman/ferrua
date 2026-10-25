@@ -4833,6 +4833,7 @@ impl Execution<'_> {
             Byte(u8, bool),
             Bracket(Vec<u8>),
             Frontier(Vec<u8>),
+            Balanced(u8, u8),
         }
         if self.steps.saturating_add(body.len()) > self.budget {
             return Err(FlowError::StepBudgetExceeded);
@@ -4865,7 +4866,13 @@ impl Execution<'_> {
                 }
             } else if !plain && body[index] == b'%' {
                 let quoted = *body.get(index + 1).ok_or(FlowError::TypeError)?;
-                if quoted == b'f' {
+                if quoted == b'b' {
+                    // %bxy consumes one nested, balanced delimiter span.
+                    let opening = *body.get(index + 2).ok_or(FlowError::TypeError)?;
+                    let closing = *body.get(index + 3).ok_or(FlowError::TypeError)?;
+                    index += 4;
+                    Atom::Balanced(opening, closing)
+                } else if quoted == b'f' {
                     // %f[set] asserts a transition from outside to inside
                     // the set, without consuming any source byte.
                     let bracket = index + 2;
@@ -4893,9 +4900,9 @@ impl Execution<'_> {
                         }
                     }
                 } else {
-                    if matches!(quoted, b'b' | b'0'..=b'9') {
+                    if matches!(quoted, b'0'..=b'9') {
                         return Err(FlowError::Unsupported(
-                            "Lua balanced and backreference patterns are not implemented".into(),
+                            "Lua backreference patterns are not implemented".into(),
                         ));
                     }
                     index += 2;
@@ -4918,9 +4925,11 @@ impl Execution<'_> {
             } else {
                 0
             };
-            if repetition != 0 && matches!(&atom, Atom::Frontier(_)) {
+            if repetition != 0
+                && matches!(&atom, Atom::Frontier(_) | Atom::Balanced(_, _))
+            {
                 return Err(FlowError::Unsupported(
-                    "Lua frontier repetition is not implemented".into(),
+                    "Lua structural-pattern repetition is not implemented".into(),
                 ));
             }
             atoms.push((atom, repetition));
@@ -4964,6 +4973,29 @@ impl Execution<'_> {
                     }
                     continue;
                 }
+                if let Atom::Balanced(opening, closing) = atom {
+                    if source.get(position) != Some(opening) {
+                        continue;
+                    }
+                    let mut depth = 1usize;
+                    for cursor in position + 1..source.len() {
+                        if self.steps >= self.budget {
+                            return Err(FlowError::StepBudgetExceeded);
+                        }
+                        self.steps += 1;
+                        let byte = source[cursor];
+                        if byte == *closing {
+                            depth -= 1;
+                            if depth == 0 {
+                                states.push((atom_index + 1, cursor + 1));
+                                break;
+                            }
+                        } else if byte == *opening {
+                            depth = depth.checked_add(1).ok_or(FlowError::TooLarge)?;
+                        }
+                    }
+                    continue;
+                }
                 let matches = |at: usize| {
                     at < source.len()
                         && match atom {
@@ -4976,7 +5008,7 @@ impl Execution<'_> {
                             Atom::Bracket(contents) => {
                                 Self::simple_pattern_bracket_matches(contents, source[at])
                             }
-                            Atom::Frontier(_) => false,
+                            Atom::Frontier(_) | Atom::Balanced(_, _) => false,
                         }
                 };
                 match *repetition {
