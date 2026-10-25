@@ -1600,6 +1600,27 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
     }
 }
 
+/// Values with explicit Lua heap identities can be removed from a weak-value
+/// table when no strong mark reaches them. Strings, numbers, booleans and
+/// native builtins have value-like semantics and remain in weak tables.
+fn weak_value_unreachable(
+    value: Value,
+    marked_tables: &[bool],
+    marked_closures: &[bool],
+) -> Result<bool, FlowError> {
+    match value {
+        Value::Table(handle) => marked_tables
+            .get(handle)
+            .map(|&live| !live)
+            .ok_or(FlowError::InvalidBytecode),
+        Value::Function(handle) => marked_closures
+            .get(handle)
+            .map(|&live| !live)
+            .ok_or(FlowError::InvalidBytecode),
+        _ => Ok(false),
+    }
+}
+
 #[derive(Clone, Copy)]
 enum TableKey {
     Positive(usize),
@@ -1779,6 +1800,30 @@ impl Execution<'_> {
         Ok(())
     }
 
+    /// Lua's __mode="v" makes table/function values weak, but retains keys
+    /// and value-like primitives. Weak-key and ephemeron semantics remain
+    /// outside the owned engine's accepted subset.
+    fn table_uses_weak_values(&self, table: &TableStorage) -> Result<bool, FlowError> {
+        let Some(meta_handle) = table.metatable else {
+            return Ok(false);
+        };
+        let Some(&name) = self.string_index.get(b"__mode".as_slice()) else {
+            return Ok(false);
+        };
+        if self.retired_tables.contains(&meta_handle) {
+            return Err(FlowError::InvalidBytecode);
+        }
+        let meta = self
+            .tables
+            .get(meta_handle)
+            .ok_or(FlowError::InvalidBytecode)?;
+        let Some(Value::String(value)) = meta.hashed.get(&Value::String(name)) else {
+            return Ok(false);
+        };
+        let mode = self.strings.get(*value).ok_or(FlowError::InvalidBytecode)?;
+        Ok(mode == b"v")
+    }
+
     /// Bounded mark-and-sweep across active Lua call frames. Each suspended
     /// caller retains its pre-instruction stack and prepared table targets;
     /// ancestor cell allocations are conservatively retained as extra roots.
@@ -1860,10 +1905,15 @@ impl Execution<'_> {
                     if let Some(meta) = table.metatable {
                         work.push(Value::Table(meta));
                     }
-                    work.extend(table.array.iter().flatten().copied());
+                    let weak_values = self.table_uses_weak_values(table)?;
+                    if !weak_values {
+                        work.extend(table.array.iter().flatten().copied());
+                    }
                     for (&key, &value) in &table.hashed {
                         work.push(key);
-                        work.push(value);
+                        if !weak_values {
+                            work.push(value);
+                        }
                     }
                 }
                 Value::Function(handle) => {
@@ -1888,6 +1938,38 @@ impl Execution<'_> {
                 _ => {}
             }
         }
+        // Prepare weak-value removal without changing the heap. All values
+        // and keys are validated before the budget gate, so a failed pass
+        // cannot leave half-cleared weak tables.
+        let mut weak_clears = Vec::new();
+        let mut weak_scan_cost = 0_usize;
+        for (handle, &live) in marked_tables.iter().enumerate() {
+            if !live {
+                continue;
+            }
+            let table = &self.tables[handle];
+            if !self.table_uses_weak_values(table)? {
+                continue;
+            }
+            weak_scan_cost = weak_scan_cost
+                .saturating_add(table.array.len())
+                .saturating_add(table.hashed.len());
+            let mut array_positions = Vec::new();
+            for (index, &value) in table.array.iter().enumerate() {
+                if let Some(value) = value {
+                    if weak_value_unreachable(value, &marked_tables, &marked_closures)? {
+                        array_positions.push(index);
+                    }
+                }
+            }
+            let mut hash_keys = Vec::new();
+            for (&key, &value) in &table.hashed {
+                if weak_value_unreachable(value, &marked_tables, &marked_closures)? {
+                    hash_keys.push(key);
+                }
+            }
+            weak_clears.push((handle, array_positions, hash_keys));
+        }
         // A full sweep traverses heap slots and captured-cell bookkeeping
         // even when every object is unreachable and marking is cheap.
         // Charge that bounded work before mutating any heap entry, so
@@ -1896,11 +1978,33 @@ impl Execution<'_> {
             .len()
             .saturating_add(marked_closures.len())
             .saturating_add(self.captured_cells.len())
+            .saturating_add(weak_scan_cost)
             .saturating_add(self.frame_allocations.iter().map(Vec::len).sum::<usize>());
         if self.steps.saturating_add(sweep_cost) > self.budget {
             return Err(FlowError::StepBudgetExceeded);
         }
         self.steps += sweep_cost;
+
+        // Clear dead weak values before the corresponding objects are
+        // recycled. Positive array slots keep their reserved capacity; hash
+        // entries actually release their accounted cell.
+        for (handle, array_positions, hash_keys) in weak_clears {
+            let table = self
+                .tables
+                .get_mut(handle)
+                .ok_or(FlowError::InvalidBytecode)?;
+            for index in array_positions {
+                *table
+                    .array
+                    .get_mut(index)
+                    .ok_or(FlowError::InvalidBytecode)? = None;
+            }
+            for key in hash_keys {
+                if table.hashed.remove(&key).is_some() {
+                    self.table_cells -= 1;
+                }
+            }
+        }
 
         // Build live captured cells before retiring any closure; a single
         // lexical cell can be shared by many surviving closures.
@@ -7637,6 +7741,30 @@ mod tests {
         let outcome = execute_flow_capture(&program, 200_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"number\tnumber\t42\ntrue\tnumber\ttrue\n");
+    }
+
+    #[test]
+    fn owned_gc_weak_value_tables_collect_dead_tables_and_closures() {
+        let cases = [
+            (
+                "local w=setmetatable({}, {__mode='v'}); local keep={id=42}; local gone={}; w[1]=keep; w[2]=gone; w.named=function() return 7 end; w.plain=23; w.words='hello'; gone=nil; collectgarbage('collect'); print(w[1].id,w[2]==nil,w.named==nil,w.plain,w.words); keep=nil; collectgarbage('collect'); print(w[1]==nil)",
+                b"42\ttrue\ttrue\t23\thello\ntrue\n".as_slice(),
+            ),
+            (
+                "local w=setmetatable({}, {__mode='v'}); do local key={}; w[key]=99 end; collectgarbage('collect'); local key,value=next(w); print(type(key),value)",
+                b"table\t99\n".as_slice(),
+            ),
+            (
+                "local meta={__mode='v'}; local w=setmetatable({},meta); meta.__mode=nil; local t={n=7}; w[1]=t; t=nil; collectgarbage('collect'); print(w[1].n)",
+                b"7\n".as_slice(),
+            ),
+        ];
+        for (source, expected) in cases {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 20_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
     }
 
     #[test]
