@@ -4900,7 +4900,7 @@ impl Execution<'_> {
                         }
                     }
                 } else {
-                    if matches!(quoted, b'0'..=b'9') {
+                    if quoted.is_ascii_digit() {
                         return Err(FlowError::Unsupported(
                             "Lua backreference patterns are not implemented".into(),
                         ));
@@ -4976,12 +4976,11 @@ impl Execution<'_> {
                         continue;
                     }
                     let mut depth = 1usize;
-                    for cursor in position + 1..source.len() {
+                    for (cursor, &byte) in source.iter().enumerate().skip(position + 1) {
                         if self.steps >= self.budget {
                             return Err(FlowError::StepBudgetExceeded);
                         }
                         self.steps += 1;
-                        let byte = source[cursor];
                         if byte == *closing {
                             depth -= 1;
                             if depth == 0 {
