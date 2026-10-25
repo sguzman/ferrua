@@ -866,11 +866,11 @@
   - [x] Root partial arg tables before allocating argument strings and use safe interning for _G, math and script arguments without exposing transient string handles — src/owned_flow.rs: argument_table(pending), early arg_handle, intern_rooted_string at lazy library construction
   - [x] Verify near-quota stopped/restarted collection, retained globals, argv values, _G math fields and reference Lua observable output in green five-job CI — GitHub Actions 40212415339: all five jobs passed on 0d16541ce91dc2cf517c56ce2205c5cf8cc8dcec; src/owned_flow.rs lazy_standard_tables_root_pending_keys_during_string_collection; tests/owned_cli_differential.rs owned_lazy_standard_tables_survive_string_pressure_like_lua54
   - [x] Synchronize machine ledger and generator-derived roadmap, README and owned-engine documentation under all-green CI — GitHub Actions 40212608995: all five jobs passed on be89f620a62abfd3651c5fbe82d1b9be7b908506; evidence ledger and generated documentation accepted
-- 🕯️ **T460** Bounded Lua table finalization during explicit GC and state shutdown — `████████░░ 75%`
+- 🕯️ **T460** Bounded Lua table finalization during explicit GC and state shutdown — `██████████ 100%`
   - [x] Register __gc at metatable assignment, invoke reverse-ordered once-only finalizers on explicit collection, preserve resurrection and weak-table interactions — src/owned_flow.rs: table_finalizer, gc_registrations/gc_finalized, collect_root_tables; explicit_gc_finalizes_registered_tables_once_in_reverse_order; CI 40213665645
   - [x] Finalize all remaining registered tables, including reachable ones, at state shutdown in reverse registration order without repeating earlier finalization or scheduling new registrations — src/owned_flow.rs: finalize_on_shutdown; execute_flow_capture_with_args; closing_owned_state_finalizes_live_tables_in_reverse_order
   - [x] Require official Lua 5.4 output parity for shutdown and explicit-GC lifecycle, recording pinned production backend's observed different shutdown ordering instead of hiding it — tests/owned_cli_differential.rs: owned_lua_state_shutdown_finalizers_match_lua54, owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases; five-job CI 40216318382 on b64c506ad894aad85b5658a8ab92a6eac7969021
-  - [ ] Synchronize README, owned-engine docs, machine ledger and generated roadmap with all-green CI
+  - [x] Synchronize README, owned-engine docs, machine ledger and generated roadmap with all-green CI — GitHub Actions 40216560547: all five jobs passed on 5e2750525962a9e112f4be75247ba5c221ec06fa; README, owned-engine docs, evidence ledger and generated roadmap accepted
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1012,5 +1012,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 99%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 
