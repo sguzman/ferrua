@@ -101,6 +101,19 @@ fn owned_string_len_sub_byte_offsets_match_lua54() {
 }
 
 #[test]
+fn owned_string_byte_char_binary_and_return_arity_match_lua54() {
+    for source in [
+        "print(string.char(65,0,255)=='A\\0\\255',select('#',string.byte('')),string.byte('ABC',1,3))",
+        "print(string.byte('é',1,2),string.byte('abcdef',-2,-1),select('#',string.byte('abc',0)))",
+        "print(string.char()=='',string.byte('xyz',2),select('#',string.byte('xyz',5)),select('#',string.byte('xyz',3,2)))",
+        "local joined=string.char(0,97,255); print(#joined,string.byte(joined,1,3),string.sub(joined,2,2)=='a')",
+        "local good=pcall(string.char,65,66); local bad1=pcall(string.char,256); local bad2=pcall(string.char,-1); print(good,bad1,bad2)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn generated_branch_and_environment_interactions_match_lua54() {
     for seed in 0_i64..48 {
         let base = (seed * 11) % 23 - 8;

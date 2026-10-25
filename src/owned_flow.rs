@@ -75,6 +75,8 @@ pub enum Builtin {
     MathToInteger,
     StringLen,
     StringSub,
+    StringByte,
+    StringChar,
 }
 
 const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -87,8 +89,12 @@ const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"tointeger", Builtin::MathToInteger),
 ];
 
-const STRING_GLOBALS: &[(&[u8], Builtin)] =
-    &[(b"len", Builtin::StringLen), (b"sub", Builtin::StringSub)];
+const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
+    (b"len", Builtin::StringLen),
+    (b"sub", Builtin::StringSub),
+    (b"byte", Builtin::StringByte),
+    (b"char", Builtin::StringChar),
+];
 
 const BUILTIN_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"print", Builtin::Print),
@@ -3582,6 +3588,7 @@ impl Execution<'_> {
             Value::Builtin(builtin) if MATH_GLOBALS.iter().any(|&(_, item)| item == builtin) => {
                 Ok(vec![self.math_builtin(builtin, &arguments)?])
             }
+            Value::Builtin(Builtin::StringByte) => self.string_byte_builtin(&arguments),
             Value::Builtin(builtin) if STRING_GLOBALS.iter().any(|&(_, item)| item == builtin) => {
                 Ok(vec![self.string_builtin(builtin, &arguments)?])
             }
@@ -3756,9 +3763,60 @@ impl Execution<'_> {
         }
     }
 
+    /// string.byte returns zero or more raw byte values and therefore cannot
+    /// be collapsed into the scalar builtin dispatch until after Lua adjusts
+    /// the multiple results at the call site.
+    fn string_byte_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let bytes = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
+        let start = match args.get(1).copied() {
+            Some(value) if value != Value::Nil => self
+                .exact_integer_operand(value)
+                .or_else(|_| self.integer_operand(value))?,
+            _ => 1,
+        };
+        let end = match args.get(2).copied() {
+            Some(value) if value != Value::Nil => self
+                .exact_integer_operand(value)
+                .or_else(|_| self.integer_operand(value))?,
+            _ => start,
+        };
+        let length = bytes.len() as i64;
+        let start = Self::string_offset(start, length).max(1);
+        let end = Self::string_offset(end, length).min(length);
+        if start > end {
+            return Ok(Vec::new());
+        }
+        let count = (end - start + 1) as usize;
+        if count > MAX_STACK {
+            return Err(FlowError::TooLarge);
+        }
+        if self.steps.saturating_add(count) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += count;
+        Ok(bytes[(start - 1) as usize..end as usize]
+            .iter()
+            .map(|&byte| Value::Integer(i64::from(byte)))
+            .collect())
+    }
+
     /// First-party bounded byte-string functions. Root the complete argument
-    /// list if slicing must allocate under a string-pool quota.
+    /// list if the operation allocates under a string-pool quota.
     fn string_builtin(&mut self, builtin: Builtin, args: &[Value]) -> Result<Value, FlowError> {
+        if builtin == Builtin::StringChar {
+            let mut bytes = Vec::with_capacity(args.len().min(MAX_STRING_POOL_BYTES + 1));
+            for &value in args {
+                let number = self
+                    .exact_integer_operand(value)
+                    .or_else(|_| self.integer_operand(value))?;
+                let byte = u8::try_from(number).map_err(|_| FlowError::TypeError)?;
+                bytes.push(byte);
+                if bytes.len() > MAX_STRING_POOL_BYTES {
+                    return Err(FlowError::TooLarge);
+                }
+            }
+            return self.intern_rooted_string(bytes, args);
+        }
         let text = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         match builtin {
             Builtin::StringLen => Ok(Value::Integer(text.len() as i64)),
@@ -4116,6 +4174,7 @@ impl Execution<'_> {
                                     | Builtin::Assert
                                     | Builtin::MathType
                                     | Builtin::MathToInteger
+                                    | Builtin::StringChar
                                     | Builtin::CollectGarbage
                             )
                         {
@@ -4136,6 +4195,7 @@ impl Execution<'_> {
                                 | Builtin::IpairsIterator
                                 | Builtin::Pcall
                                 | Builtin::Xpcall
+                                | Builtin::StringByte
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
@@ -4154,6 +4214,7 @@ impl Execution<'_> {
                                     self.pairs_ipairs_builtin(builtin, &args)?
                                 }
                                 Builtin::IpairsIterator => self.ipairs_iterator(&args)?,
+                                Builtin::StringByte => self.string_byte_builtin(&args)?,
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
@@ -4212,7 +4273,8 @@ impl Execution<'_> {
                             | Builtin::Next
                             | Builtin::Pairs
                             | Builtin::Ipairs
-                            | Builtin::IpairsIterator => {
+                            | Builtin::IpairsIterator
+                            | Builtin::StringByte => {
                                 unreachable!(
                                     "iteration/selection builtins handled as multiple results"
                                 )
@@ -4226,7 +4288,7 @@ impl Execution<'_> {
                             | Builtin::MathMin
                             | Builtin::MathType
                             | Builtin::MathToInteger => self.math_builtin(builtin, &args)?,
-                            Builtin::StringLen | Builtin::StringSub => {
+                            Builtin::StringLen | Builtin::StringSub | Builtin::StringChar => {
                                 self.string_builtin(builtin, &args)?
                             }
                         };
@@ -8689,6 +8751,41 @@ mod tests {
             (
                 "local saved=string.sub('kept'..42,1); for i=1,19000 do local s=tostring(i) end; print(saved,string.sub('abc',-1))",
                 b"kept42\tc\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 3_000_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+    }
+
+    #[test]
+    fn byte_string_byte_and_char_preserve_binary_data_and_lua_return_arity() {
+        for (source, expected) in [
+            (
+                "print(string.char(65,0,255)=='A\\0\\255',select('#',string.byte('')),string.byte('ABC',1,3))",
+                b"true\t0\t65\t66\t67\n".as_slice(),
+            ),
+            (
+                "print(string.byte('é',1,2),string.byte('abcdef',-2,-1),select('#',string.byte('abc',0)))",
+                b"195\t169\t101\t102\t0\n".as_slice(),
+            ),
+            (
+                "print(string.char()=='',string.byte('xyz',2),select('#',string.byte('xyz',5)),select('#',string.byte('xyz',3,2)))",
+                b"true\t121\t0\t0\n".as_slice(),
+            ),
+            (
+                "local joined=string.char(0,97,255); print(#joined,string.byte(joined,1,3),string.sub(joined,2,2)=='a')",
+                b"3\t0\t97\t255\ttrue\n".as_slice(),
+            ),
+            (
+                "local good=pcall(string.char,65,66); local bad1=pcall(string.char,256); local bad2=pcall(string.char,-1); print(good,bad1,bad2)",
+                b"true\tfalse\tfalse\n".as_slice(),
+            ),
+            (
+                "local hold=string.char(65,0,66); for i=1,19000 do local s=tostring(i) end; print(string.len(hold),string.byte(hold,1,3))",
+                b"3\t65\t0\t66\n".as_slice(),
             ),
         ] {
             let program = compile_flow_chunk(source).unwrap();
