@@ -158,11 +158,11 @@
 - 📡 Aggregate acceptance through GitHub commit statuses — `██████████ 100%`
 - 🔐 Automated prepublication stable-release acceptance guard — `██████████ 100%`
 
-## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 98%`
+## 🔩 M2 — Independent Ferrua VM and compatibility — `██████████ 99%`
 
 **Acceptance gate:** Ferrua-owned parser/compiler/bytecode VM runs a documented Lua compatibility suite without external VM implementation.
 
-### 🔣 P3 — Ferrua-owned language engine — `██████████ 98%`
+### 🔣 P3 — Ferrua-owned language engine — `██████████ 99%`
 
 - 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
   - [ ] Implement owned lexer/parser
@@ -971,11 +971,11 @@
   - [x] Expose mutable lazy utf8 library through _G and direct globals with GC rooting and correct protected/multi-return dispatch — src/owned_flow.rs: Execution.utf8_table, materialize_utf8_table, read_global, gc roots and protected/direct dispatch
   - [x] Check malformed/overlong input, strict/lax codepoint behavior, byte offsets, return arity and argument boundaries against Lua 5.4.6 — src/owned_flow.rs: utf8_char_len_and_codepoint_support_strict_and_lax_bytes; tests/owned_cli_differential.rs: owned_utf8_char_len_codepoint_and_lax_modes_match_lua54; GitHub Actions 40236014165 five green jobs on 7b64ea2fd63f34e745ce2c423e0494f2fee52940
   - [x] Synchronize evidence ledger, generated roadmap, README and owned-engine scope under a green documentation CI — GitHub Actions 40236693747: all five jobs passed on e8ae997805094d4c1a0a40474cc88624e7327b61, including README, owned-engine docs, machine ledger and regenerated roadmap
-- 🔤 **T481** Lua 5.4.6 utf8.offset byte navigation, errors and negative positions — `████████░░ 75%`
+- 🔤 **T481** Lua 5.4.6 utf8.offset byte navigation, errors and negative positions — `██████████ 100%`
   - [x] Implement byte-oriented utf8.offset with positive, negative, and zero-relative character navigation, sentinel end position, continuation-byte error and bounded scans — src/owned_flow.rs: Utf8Offset, UTF8_GLOBALS, utf8_offset_builtin, direct and protected call routes
   - [x] Cover multibyte strings, continuation positions, empty strings, negative indices, beyond-end navigation, numeric arguments and mutable library identity — src/owned_flow.rs: utf8_offset_counts_byte_beginnings_and_reports_continuation_errors; tests/owned_cli_differential.rs: owned_utf8_offset_byte_boundaries_and_continuations_match_lua54
   - [x] Pass upstream Lua 5.4.6 differential, Rust checks, Rust 1.96 and downstream consumer tests — GitHub Actions 40237098499: five jobs green at f697937a0773c445d40dceed349f5dfc29b53729
-  - [ ] Synchronize machine acceptance ledger, generated roadmap, README, and scoped owned-engine documentation with passing CI
+  - [x] Synchronize machine acceptance ledger, generated roadmap, README, and scoped owned-engine documentation with passing CI — GitHub Actions 40237334267: all five CI jobs passed on a2b816d01fc265b7eed7e02e7488f4bee89afc58; README, owned-engine documentation, evidence ledger and generated roadmap synchronized
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1121,5 +1121,5 @@
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
 - 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
 - 🧮 Bounded first-party Lua numeric math extensions — `██████████ 100%`
-- 🔤 Bounded first-party Lua 5.4 UTF-8 standard-library compatibility — `█████████░ 88%`
+- 🔤 Bounded first-party Lua 5.4 UTF-8 standard-library compatibility — `██████████ 100%`
 

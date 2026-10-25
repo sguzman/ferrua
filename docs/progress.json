@@ -5407,7 +5407,7 @@
               "id": "T481",
               "emoji": "🔤",
               "name": "Lua 5.4.6 utf8.offset byte navigation, errors and negative positions",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Implement byte-oriented utf8.offset with positive, negative, and zero-relative character navigation, sentinel end position, continuation-byte error and bounded scans",
@@ -5426,7 +5426,8 @@
                 },
                 {
                   "text": "Synchronize machine acceptance ledger, generated roadmap, README, and scoped owned-engine documentation with passing CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40237334267: all five CI jobs passed on a2b816d01fc265b7eed7e02e7488f4bee89afc58; README, owned-engine documentation, evidence ledger and generated roadmap synchronized"
                 }
               ]
             }
