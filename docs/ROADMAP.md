@@ -2,7 +2,7 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 202 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Overall:** `██████████ 98%` across 203 atomic tasks. This describes recorded work, not full Lua compatibility.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
@@ -936,6 +936,11 @@
   - [x] Support sparse values and hashed negative indices while bounding transfer size, arithmetic and instruction budget without relaxing protected-call resource limits — src/owned_flow.rs: checked_sub/checked_add, MAX_TABLE_FIELDS, shared budget, table_key and write_table; hard resource test table_move_large_transfer_preserves_uncatchable_resource_limit; CI 40229278754
   - [x] Prove upstream Lua 5.4 and production CLI parity for overlapping moves, distinct destinations, nil holes, negative indices and empty range — tests/owned_cli_differential.rs: owned_table_move_overlap_and_destination_match_lua54; GitHub Actions 40229278754 five successful jobs on 0acb52a32049476ac219843c8379087fe9c22032
   - [x] Synchronize README, owned-engine limitations, machine ledger and generated ROADMAP under five successful CI jobs — GitHub Actions 40229455976: all five jobs green on 9974d8632221cc82fd7d30fb81e160f57ab6250b; README, owned-engine docs, ledger and generated roadmap synchronized
+- 🔢 **T474** Bounded Lua table.sort with function comparators and GC-safe snapshots — `████████░░ 75%`
+  - [x] Provide Lua table.sort with zero return values, numeric and byte-string ordering, and table __lt metamethod comparison — src/owned_flow.rs: Builtin::TableSort, table_sort_less and table_sort_builtin; Rust unit table_sort_orders_numbers_strings_callbacks_and_table_metamethods; CI 40229910177
+  - [x] Support Lua function comparators, protected invalid-argument behavior, and bounded sorting work without mutating the source before successful comparisons — src/owned_flow.rs: table_sort_less callback dispatch; insertion-sort snapshot and shared step budget; Rust unit tests; CI 40229910177
+  - [x] Root all intermediate sort values during callback GC, and prove real CLI parity with pinned production and upstream Lua 5.4 across supported sorting scenarios — src/owned_flow.rs: GcFrameRoots snapshot push/pop, protected_target; tests/owned_cli_differential.rs: owned_table_sort_numbers_strings_callbacks_and_metamethods_match_lua54; GitHub Actions 40229910177 five green jobs on b2aa3f67f4c1266aed4d024fa49d6ff2a0c68787
+  - [ ] Synchronize README, owned-engine limitations, machine ledger and generated roadmap under five successful CI jobs
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1079,5 +1084,5 @@
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
 - ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 - 🧵 Bounded first-party Lua byte-string standard library subset — `██████████ 100%`
-- 🧺 Bounded first-party Lua table standard-library subset — `██████████ 100%`
+- 🧺 Bounded first-party Lua table standard-library subset — `██████████ 95%`
 
