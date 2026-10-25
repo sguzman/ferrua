@@ -876,11 +876,11 @@
   - [x] Ensure that re-registration cannot cause duplicate callbacks within the current collection or shutdown snapshot and that ordinary one-time finalization is unchanged — src/owned_flow.rs: finalized_tables_may_be_registered_again_for_a_later_collection; frozen pending callback list
   - [x] Pass upstream Lua 5.4 differential coverage for re-registration inside a finalizer and after resurrection, with five-job green CI — GitHub Actions 40218621025 five jobs passed on 525848cc64dcd9051b56054a885818e261f9b640; tests/owned_cli_differential.rs: owned_reregistered_finalizers_match_lua54_on_later_gc_cycles
   - [x] Synchronize README, engine docs, machine ledger and generated roadmap under passing CI — GitHub Actions 40218826543: five jobs passed on ffde667129a3d10d63f0ad55f203521ea6ef1e30; README, engine documentation, machine ledger and generated roadmap accepted
-- ⚠️ **T462** Capture Lua warning controls and nonfatal finalizer error messages — `████████░░ 75%`
+- ⚠️ **T462** Capture Lua warning controls and nonfatal finalizer error messages — `██████████ 100%`
   - [x] Implement Lua warn global with default-off @on/@off controls, multipart messages, and bounded stderr capture separated from normal print — src/owned_flow.rs: Builtin::Warn, warn_builtin, emit_warning, FlowOutcome.stderr; src/main.rs owned output stderr forwarding
   - [x] Report ordinary string-valued __gc callback errors through warning stderr during explicit collection and shutdown without propagating exceptions — src/owned_flow.rs: warn_finalizer_error in both finalizer loops; warn_controls_and_finalizer_errors_follow_lua54
   - [x] Verify exact warning text and stdout/stderr parity with pinned Lua 5.4, including disabled warnings, ordinary warnings and __gc errors in green five-job CI — GitHub Actions 40219670624: all five jobs passed on f564bcc6b1b16ea1971a1de43d48ee2c7c160405; tests/owned_cli_differential.rs: owned_finalizer_warning_stream_matches_upstream_lua54
-  - [ ] Synchronize README, engine docs, evidence ledger and generated roadmap under CI
+  - [x] Synchronize README, engine docs, evidence ledger and generated roadmap under CI — GitHub Actions 40219894676: all five jobs passed on 000901bcfd21693cb18359d863563e327e8ac5e0, with generated roadmap, README, owned-engine documentation and ledger accepted
 
 **Feature inventory** (computed from associated atomic task progress):
 
@@ -1022,5 +1022,5 @@
 - 🧪 End-to-end owned CLI versus Lua 5.4 differential matrix — `██████████ 100%`
 - 🔐 Lexical _ENV redirection and captured environment parity — `██████████ 100%`
 - 🗣️ Original Lua error object preservation in owned CLI diagnostics — `██████████ 100%`
-- ♻️ Bounded garbage collection and observable heap controls — `██████████ 99%`
+- ♻️ Bounded garbage collection and observable heap controls — `██████████ 100%`
 

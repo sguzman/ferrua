@@ -4893,10 +4893,11 @@
                 },
                 {
                   "text": "Synchronize README, engine docs, evidence ledger and generated roadmap under CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40219894676: all five jobs passed on 000901bcfd21693cb18359d863563e327e8ac5e0, with generated roadmap, README, owned-engine documentation and ledger accepted"
                 }
               ],
-              "progress": 75
+              "progress": 100
             }
           ]
         }
