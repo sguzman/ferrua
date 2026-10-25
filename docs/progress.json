@@ -4371,7 +4371,7 @@
               "id": "T444",
               "emoji": "♻️",
               "name": "Mark-and-sweep unreachable Lua closures and captured cells",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Trace retained closures through table contents, active Lua roots and shared lexical captures",
@@ -4390,7 +4390,8 @@
                 },
                 {
                   "text": "Synchronize feature scope, README, machine ledger and generated roadmap under green CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40198609569: all five jobs successful on a132d32c8c22b20284ea7556918ad1ccafe177fb; README, owned-engine docs, machine ledger and generator-derived roadmap passed integrity checks"
                 }
               ]
             },
@@ -4398,7 +4399,7 @@
               "id": "T445",
               "emoji": "🪆",
               "name": "Protect suspended Lua call-frame roots during garbage collection",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Capture caller operands and prepared table targets before recursive or metamethod dispatch",
@@ -4417,7 +4418,8 @@
                 },
                 {
                   "text": "Synchronize feature scope, README, machine ledger and generated roadmap under green CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40198609569: all five jobs successful on a132d32c8c22b20284ea7556918ad1ccafe177fb; README, owned-engine docs, machine ledger and generator-derived roadmap passed integrity checks"
                 }
               ]
             },
@@ -4425,7 +4427,7 @@
               "id": "T446",
               "emoji": "🗃️",
               "name": "Reclaim unreachable Lua table fields on indexed-write quota pressure",
-              "progress": 75,
+              "progress": 100,
               "checks": [
                 {
                   "text": "Detect array/hash growth before mutating the target and retry after bounded collection",
@@ -4444,7 +4446,8 @@
                 },
                 {
                   "text": "Synchronize feature scope, README, machine ledger and generated roadmap under green CI",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40198609569: all five jobs successful on a132d32c8c22b20284ea7556918ad1ccafe177fb; README, owned-engine docs, machine ledger and generator-derived roadmap passed integrity checks"
                 }
               ]
             }
