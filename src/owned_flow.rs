@@ -9367,10 +9367,9 @@ mod tests {
 
     #[test]
     fn table_move_large_transfer_preserves_uncatchable_resource_limit() {
-        let program = compile_flow_chunk(
-            "local ok=pcall(table.move,{1},1,math.maxinteger,1); print(ok)",
-        )
-        .unwrap();
+        let program =
+            compile_flow_chunk("local ok=pcall(table.move,{1},1,math.maxinteger,1); print(ok)")
+                .unwrap();
         assert_eq!(
             execute_flow_capture(&program, 30_000).result,
             Err(FlowError::TooLarge)
