@@ -1956,10 +1956,10 @@ impl Execution<'_> {
                 .saturating_add(table.hashed.len());
             let mut array_positions = Vec::new();
             for (index, &value) in table.array.iter().enumerate() {
-                if let Some(value) = value {
-                    if weak_value_unreachable(value, &marked_tables, &marked_closures)? {
-                        array_positions.push(index);
-                    }
+                if let Some(value) = value
+                    && weak_value_unreachable(value, &marked_tables, &marked_closures)?
+                {
+                    array_positions.push(index);
                 }
             }
             let mut hash_keys = Vec::new();
