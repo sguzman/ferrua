@@ -401,6 +401,16 @@ fn owned_lua_state_shutdown_finalizers_match_lua54() {
 }
 
 #[test]
+fn owned_reregistered_finalizers_match_lua54_on_later_gc_cycles() {
+    for source in [
+        "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+        "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_explicit_table_finalizers_match_lua54_on_lifecycle_cases() {
     for source in [
         "local log=''; do local a=setmetatable({id='A'},{__gc=function(v) log=log..v.id end}); local b=setmetatable({id='B'},{__gc=function(v) log=log..v.id end}) end; collectgarbage('collect'); print(log); collectgarbage('collect'); print(log)",

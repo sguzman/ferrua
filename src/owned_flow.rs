@@ -2837,11 +2837,18 @@ impl Execution<'_> {
             .get_mut(handle)
             .ok_or(FlowError::InvalidBytecode)?
             .metatable = metatable;
-        if self.table_finalizer(handle)?.is_some()
-            && !self.gc_finalized.contains(&handle)
-            && !self.gc_registrations.contains(&handle)
-        {
-            self.gc_registrations.push(handle);
+        if self.table_finalizer(handle)?.is_some() {
+            if self.gc_finalized.remove(&handle) {
+                // Lua allows a finalizing or resurrected object to be
+                // registered again for a later collection. Reinsert at the
+                // newest registration position; the active pass already
+                // captured its pending list, so it cannot finalize twice
+                // within one collection or shutdown snapshot.
+                self.gc_registrations.retain(|&item| item != handle);
+                self.gc_registrations.push(handle);
+            } else if !self.gc_registrations.contains(&handle) {
+                self.gc_registrations.push(handle);
+            }
         }
         Ok(Value::Table(handle))
     }
@@ -8156,6 +8163,25 @@ mod tests {
         ] {
             let program = compile_flow_chunk(source).unwrap();
             let outcome = execute_flow_capture(&program, 100_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+    }
+
+    #[test]
+    fn finalized_tables_may_be_registered_again_for_a_later_collection() {
+        for (source, expected) in [
+            (
+                "local calls=0; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then setmetatable(v,mt) end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+                b"1\n2\n2\n".as_slice(),
+            ),
+            (
+                "local calls=0; local saved; local mt={}; mt.__gc=function(v) calls=calls+1; if calls==1 then saved=v end end; do local t=setmetatable({},mt) end; collectgarbage('collect'); print(calls,saved~=nil); setmetatable(saved,mt); saved=nil; collectgarbage('collect'); print(calls); collectgarbage('collect'); print(calls)",
+                b"1\ttrue\n2\n2\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 200_000);
             assert_eq!(outcome.result, Ok(vec![]), "{source}");
             assert_eq!(outcome.stdout, expected, "{source}");
         }
