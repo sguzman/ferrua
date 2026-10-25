@@ -242,3 +242,42 @@ fn owned_explicit_full_gc_mode_matches_lua54() {
         }
     }
 }
+
+#[test]
+fn owned_gc_tail_constructor_matches_lua54_across_heap_pressure() {
+    let numbers = (1..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let after_table = (2..=40)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sources = [
+        format!(
+            "local function values() return {numbers} end; for i=1,1800 do local t={{tag=i,values()}} end; print('ok')"
+        ),
+        format!(
+            "local function values() return {{value=42}},{after_table} end; local saved; for i=1,1800 do local t={{tag=i,values()}}; if i==1800 then saved=t[1] end end; print(saved.value)"
+        ),
+    ];
+    for (source, expected) in sources.iter().zip([b"ok\n".as_slice(), b"42\n".as_slice()]) {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        let reference = run_fer(false, source);
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert!(reference.status.success(), "{source}");
+        assert_eq!(owned.stdout, expected, "{source}");
+        assert_eq!(owned.stdout, reference.stdout, "{source}");
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success(), "{source}");
+            assert_eq!(owned.stdout, upstream.stdout, "{source}");
+        }
+    }
+}
