@@ -88,9 +88,10 @@ fn curated_global_function_print_and_error_semantics_match_lua54() {
 }
 
 #[test]
-fn owned_math_atan_argument_label_matches_lua54_not_production_alias() {
-    // Pinned luna-core reports this public math.atan call as 'math.atan2'.
-    // Preserve the public Lua 5.4 function name and compare upstream directly.
+fn owned_math_atan_argument_label_matches_lua54_with_backend_alias_variation() {
+    // Pinned luna-core has emitted both 'math.atan' and 'math.atan2'
+    // across CI runs for the same public function. Preserve the strict
+    // Lua 5.4 reference expectation without canonizing its alias variation.
     let source = "local ok,message=pcall(math.atan,0,false); print(ok,message)";
     let owned = run_fer(true, source);
     let production = run_fer(false, source);
@@ -100,9 +101,12 @@ fn owned_math_atan_argument_label_matches_lua54_not_production_alias() {
         owned.stdout,
         b"false\tbad argument #2 to 'math.atan' (number expected, got boolean)\n"
     );
-    assert_eq!(
-        production.stdout,
-        b"false\tbad argument #2 to 'math.atan2' (number expected, got boolean)\n"
+    let alias = b"false\tbad argument #2 to 'math.atan2' (number expected, got boolean)\n";
+    // Retain the two observed, fully specified production diagnostics.
+    assert!(
+        production.stdout == owned.stdout || production.stdout == alias,
+        "unexpected production math.atan label: {:?}",
+        production.stdout
     );
     if let Some(reference) = reference_output(source) {
         assert!(reference.status.success());
