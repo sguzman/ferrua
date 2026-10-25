@@ -9354,8 +9354,8 @@ mod tests {
                 b"x\n".as_slice(),
             ),
             (
-                "local t={1,2}; local ok=pcall(table.move,t,1,math.maxinteger,1); local d={3}; print(ok,table.move(t,5,4,1,d)==d,d[1])",
-                b"false\ttrue\t3\n".as_slice(),
+                "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
+                b"true\t3\n".as_slice(),
             ),
         ] {
             let program = compile_flow_chunk(source).unwrap();
@@ -9363,6 +9363,18 @@ mod tests {
             assert_eq!(outcome.result, Ok(vec![]), "{source}");
             assert_eq!(outcome.stdout, expected, "{source}");
         }
+    }
+
+    #[test]
+    fn table_move_large_transfer_preserves_uncatchable_resource_limit() {
+        let program = compile_flow_chunk(
+            "local ok=pcall(table.move,{1},1,math.maxinteger,1); print(ok)",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_capture(&program, 30_000).result,
+            Err(FlowError::TooLarge)
+        );
     }
 
     #[test]

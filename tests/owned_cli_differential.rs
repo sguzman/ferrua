@@ -177,7 +177,7 @@ fn owned_table_move_overlap_and_destination_match_lua54() {
         "local t={1,2}; local d={9}; print(table.move(t,1,2,2,d)==d,d[1],d[2],d[3],t[1])",
         "local t={1,nil,3}; local d={7,8,9}; table.move(t,1,3,1,d); print(d[1],d[2],d[3])",
         "local t={}; t[-1]='x'; local d={}; table.move(t,-1,-1,1,d); print(d[1])",
-        "local t={1,2}; local ok=pcall(table.move,t,1,math.maxinteger,1); local d={3}; print(ok,table.move(t,5,4,1,d)==d,d[1])",
+        "local t={1,2}; local d={3}; print(table.move(t,5,4,1,d)==d,d[1])",
     ] {
         assert_parity(source, true);
     }
