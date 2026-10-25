@@ -2935,7 +2935,7 @@ impl Execution<'_> {
             Ok(bytes)
         });
         match direct {
-            Ok(bytes) => self.intern_string(bytes),
+            Ok(bytes) => self.intern_concat_string(bytes, left, right),
             Err(FlowError::TypeError) => self.binary_metamethod(b"__concat", left, right),
             Err(error) => Err(error),
         }
@@ -3466,6 +3466,34 @@ impl Execution<'_> {
             Value::Float(bits) => Ok(format!("{:?}", f64::from_bits(bits)).into_bytes()),
             _ => Err(FlowError::TypeError),
         }
+    }
+
+    /// Only the direct concat opcode may collect on dynamic string quota
+    /// pressure: both operands are explicit roots while the new byte string
+    /// is still being assembled. Other interners can hold intermediate Rust
+    /// values not yet rooted in Lua and must retain their current hard limit.
+    fn intern_concat_string(
+        &mut self,
+        bytes: Vec<u8>,
+        left: Value,
+        right: Value,
+    ) -> Result<Value, FlowError> {
+        let pool_full = (self.strings.len() >= MAX_STRINGS && self.free_strings.is_empty())
+            || self.string_bytes.saturating_add(bytes.len()) > MAX_STRING_POOL_BYTES;
+        if self.automatic_gc
+            && bytes.len() <= MAX_STRING_POOL_BYTES
+            && pool_full
+            && !self.string_index.contains_key(bytes.as_slice())
+        {
+            let frame = self
+                .gc_frame_roots
+                .last()
+                .ok_or(FlowError::InvalidBytecode)?;
+            let slots = frame.slots.clone();
+            let prepared = frame.prepared.clone();
+            self.collect_root_tables(&[left, right], &slots, &prepared)?;
+        }
+        self.intern_string(bytes)
     }
 
     fn intern_string(&mut self, bytes: Vec<u8>) -> Result<Value, FlowError> {
@@ -7849,6 +7877,37 @@ mod tests {
         let outcome = execute_flow_capture(&program, 200_000);
         assert_eq!(outcome.result, Ok(vec![]));
         assert_eq!(outcome.stdout, b"number\tnumber\t42\ntrue\tnumber\ttrue\n");
+    }
+
+    #[test]
+    fn concatenation_retries_string_quota_after_rooted_collection() {
+        for (source, expected) in [
+            (
+                "for i=1,19000 do local s='v'..i end; print('ok')",
+                b"ok\n".as_slice(),
+            ),
+            (
+                "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+                b"v777\n".as_slice(),
+            ),
+            (
+                "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+                b"sentinel42\t7\n".as_slice(),
+            ),
+        ] {
+            let program = compile_flow_chunk(source).unwrap();
+            let outcome = execute_flow_capture(&program, 3_000_000);
+            assert_eq!(outcome.result, Ok(vec![]), "{source}");
+            assert_eq!(outcome.stdout, expected, "{source}");
+        }
+        let stopped = compile_flow_chunk(
+            "collectgarbage('stop'); for i=1,19000 do local s='v'..i end",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_capture(&stopped, 3_000_000).result,
+            Err(FlowError::TooLarge)
+        );
     }
 
     #[test]

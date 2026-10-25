@@ -294,6 +294,42 @@ fn owned_weak_value_gc_matches_upstream_lua54() {
 }
 
 #[test]
+fn owned_concat_string_pressure_gc_matches_lua54() {
+    for (source, expected) in [
+        (
+            "for i=1,19000 do local s='v'..i end; print('ok')",
+            b"ok\n".as_slice(),
+        ),
+        (
+            "local saved={'v'..777}; for i=1,19000 do local s='v'..i end; collectgarbage('collect'); print(saved[1])",
+            b"v777\n".as_slice(),
+        ),
+        (
+            "local function pressure() for i=1,19000 do local s='v'..i end; return 7 end; local function use(s,n) print(s,n) end; use('sentinel'..42,pressure())",
+            b"sentinel42\t7\n".as_slice(),
+        ),
+    ] {
+        let owned = Command::new(env!("CARGO_BIN_EXE_fer"))
+            .args(["--engine=owned", "--budget=3000000", "-e", source])
+            .output()
+            .expect("launch owned fer");
+        assert!(
+            owned.status.success(),
+            "{source}: {}",
+            String::from_utf8_lossy(&owned.stderr)
+        );
+        assert_eq!(owned.stdout, expected, "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success());
+        assert_eq!(owned.stdout, production.stdout);
+        if let Some(upstream) = reference_output(source) {
+            assert!(upstream.status.success());
+            assert_eq!(owned.stdout, upstream.stdout);
+        }
+    }
+}
+
+#[test]
 fn owned_explicit_string_collection_matches_lua54_after_two_epochs() {
     assert_parity(
         "collectgarbage('stop'); local literal='stable'; for i=1,3200 do local s=tostring(i) end; local high=collectgarbage('count'); collectgarbage('collect'); local low=collectgarbage('count'); for i=3201,6400 do local s=tostring(i) end; collectgarbage('collect'); print(high>low,literal,'stable',tostring(42))",
