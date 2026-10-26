@@ -7798,10 +7798,7 @@ impl Execution<'_> {
         if id == MAIN_THREAD_ID {
             return Ok(vec![
                 Value::Boolean(false),
-                self.intern_rooted_string(
-                    b"cannot resume non-suspended coroutine".to_vec(),
-                    args,
-                )?,
+                self.intern_rooted_string(b"cannot resume non-suspended coroutine".to_vec(), args)?,
             ]);
         }
         let inputs = args.get(1..).unwrap_or_default();
