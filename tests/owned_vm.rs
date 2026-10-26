@@ -66,7 +66,11 @@ fn register_dynamic_concatenation_and_string_operations_match_lua54() {
         ("true or ('a'..nil)", RegisterValue::Boolean(true)),
     ] {
         let program = compile_integer_expression(expression).unwrap();
-        assert_eq!(execute_register_program(&program), Ok(expected), "{expression}");
+        assert_eq!(
+            execute_register_program(&program),
+            Ok(expected),
+            "{expression}"
+        );
         for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
             if executable == "lua5.4" && !compare_lua {
                 continue;
@@ -88,11 +92,7 @@ fn register_dynamic_concatenation_and_string_operations_match_lua54() {
             assert_eq!(output.stdout, actual.as_bytes(), "{expression}");
         }
     }
-    for chunk in [
-        "return 'a'..nil",
-        "return 'a'..false",
-        "return nil..'a'",
-    ] {
+    for chunk in ["return 'a'..nil", "return 'a'..false", "return nil..'a'"] {
         let program = compile_integer_chunk(chunk).unwrap();
         assert_eq!(
             execute_register_program_with_strings(&program),
@@ -100,9 +100,7 @@ fn register_dynamic_concatenation_and_string_operations_match_lua54() {
             "{chunk}"
         );
     }
-    let quota = compile_integer_chunk(
-        "local x='a'; for i=1,18 do x=x..x end return x",
-    ).unwrap();
+    let quota = compile_integer_chunk("local x='a'; for i=1,18 do x=x..x end return x").unwrap();
     assert_eq!(
         execute_register_program_with_strings(&quota),
         Err(Error::TooLarge)
