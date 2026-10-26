@@ -5950,6 +5950,7 @@ impl Execution<'_> {
             CapturePosition,
             InvalidClose,
             InvalidBracket,
+            InvalidEscape,
             Backreference(u8),
         }
         if self.steps.saturating_add(body.len()) > self.budget {
@@ -6012,46 +6013,67 @@ impl Execution<'_> {
                     }
                 }
             } else if !plain && body[index] == b'%' {
-                let quoted = *body.get(index + 1).ok_or(FlowError::TypeError)?;
-                if quoted == b'b' {
-                    // %bxy consumes one nested, balanced delimiter span.
-                    let opening = *body.get(index + 2).ok_or(FlowError::TypeError)?;
-                    let closing = *body.get(index + 3).ok_or(FlowError::TypeError)?;
-                    index += 4;
-                    Atom::Balanced(opening, closing)
-                } else if quoted == b'f' {
-                    // %f[set] asserts a transition from outside to inside
-                    // the set, without consuming any source byte.
-                    let bracket = index + 2;
-                    if body.get(bracket) != Some(&b'[') {
-                        return Err(FlowError::TypeError);
+                // Upstream matches pattern atoms lazily. A malformed escape
+                // after a literal that never matches must not error during
+                // pre-parsing; surface it only if the VM reaches that atom.
+                match body.get(index + 1).copied() {
+                    None => {
+                        index = body.len();
+                        Atom::InvalidEscape
                     }
-                    let start = bracket + 1;
-                    let mut cursor = start;
-                    if body.get(cursor) == Some(&b'^') {
-                        cursor += 1;
-                    }
-                    if body.get(cursor) == Some(&b']') {
-                        cursor += 1;
-                    }
-                    loop {
-                        match body.get(cursor) {
-                            None => return Err(FlowError::TypeError),
-                            Some(b'%') if cursor + 1 < body.len() => cursor += 2,
-                            Some(b']') => {
-                                let inside = body[start..cursor].to_vec();
-                                index = cursor + 1;
-                                break Atom::Frontier(inside);
+                    Some(b'b') => {
+                        // %bxy requires two delimiter bytes.
+                        match (body.get(index + 2), body.get(index + 3)) {
+                            (Some(&opening), Some(&closing)) => {
+                                index += 4;
+                                Atom::Balanced(opening, closing)
                             }
-                            Some(_) => cursor += 1,
+                            _ => {
+                                index = body.len();
+                                Atom::InvalidEscape
+                            }
                         }
                     }
-                } else {
-                    index += 2;
-                    if quoted.is_ascii_digit() {
-                        Atom::Backreference(quoted)
-                    } else {
-                        Atom::Byte(quoted, true)
+                    Some(b'f') => {
+                        // %f[set] asserts a byte-class frontier without
+                        // consuming a source byte.
+                        let bracket = index + 2;
+                        if body.get(bracket) != Some(&b'[') {
+                            index = body.len();
+                            Atom::InvalidEscape
+                        } else {
+                            let start = bracket + 1;
+                            let mut cursor = start;
+                            if body.get(cursor) == Some(&b'^') {
+                                cursor += 1;
+                            }
+                            if body.get(cursor) == Some(&b']') {
+                                cursor += 1;
+                            }
+                            loop {
+                                match body.get(cursor) {
+                                    None => {
+                                        index = body.len();
+                                        break Atom::InvalidEscape;
+                                    }
+                                    Some(b'%') if cursor + 1 < body.len() => cursor += 2,
+                                    Some(b']') => {
+                                        let inside = body[start..cursor].to_vec();
+                                        index = cursor + 1;
+                                        break Atom::Frontier(inside);
+                                    }
+                                    Some(_) => cursor += 1,
+                                }
+                            }
+                        }
+                    }
+                    Some(quoted) => {
+                        index += 2;
+                        if quoted.is_ascii_digit() {
+                            Atom::Backreference(quoted)
+                        } else {
+                            Atom::Byte(quoted, true)
+                        }
                     }
                 }
             } else {
@@ -6119,7 +6141,7 @@ impl Execution<'_> {
                 }
                 let (atom, repetition) = &atoms[atom_index];
                 match atom {
-                    Atom::InvalidClose | Atom::InvalidBracket => {
+                    Atom::InvalidClose | Atom::InvalidBracket | Atom::InvalidEscape => {
                         return Err(FlowError::TypeError);
                     }
                     Atom::CapturePosition => {
@@ -6227,6 +6249,7 @@ impl Execution<'_> {
                             | Atom::CapturePosition
                             | Atom::InvalidClose
                             | Atom::InvalidBracket
+                            | Atom::InvalidEscape
                             | Atom::Backreference(_) => false,
                         }
                 };

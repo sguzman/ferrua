@@ -515,6 +515,28 @@ fn owned_pattern_malformed_bracket_is_rejected_only_when_reached_like_lua54() {
 }
 
 #[test]
+fn owned_pattern_incomplete_escapes_are_rejected_only_when_reached_like_lua54() {
+    // Lua processes malformed '%' escapes and %b/%f structural patterns
+    // only on traversal. A mismatching literal prefix prevents the error.
+    for source in [
+        "print(string.match('abc','z%')==nil)",
+        "print(string.match('abc','z%b')==nil)",
+        "print(string.match('abc','z%f')==nil)",
+        "print(string.match('abc','z%f[')==nil)",
+        "print(string.find('abc','z%')==nil)",
+        "local out,n=string.gsub('abc','z%','X'); print(out,n)",
+        "local it=string.gmatch('abc','z%f'); print(it()==nil)",
+        "local ok=pcall(string.match,'abc','a%'); print(ok)",
+        "local ok=pcall(string.match,'abc','a%b'); print(ok)",
+        "local ok=pcall(string.find,'abc','a%f'); print(ok)",
+        "local ok=pcall(string.gsub,'abc','a%f[','X'); print(ok)",
+        "local it=string.gmatch('abc','a%'); local ok=pcall(it); print(ok)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_pattern_unfinished_opening_capture_checks_reachable_paths_like_lua54() {
     for source in [
         "print(string.match('abc','z(')==nil)",
