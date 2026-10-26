@@ -756,10 +756,7 @@ fn emit<'a>(
                     key,
                 },
             )?;
-            emit_instruction(
-                program,
-                Instruction::PushArgument { source: receiver },
-            )?;
+            emit_instruction(program, Instruction::PushArgument { source: receiver })?;
             let expand_tail = matches!(arguments.last(), Some(Expr::Call { .. }));
             for (index, argument) in arguments.iter().enumerate() {
                 let source = emit(program, argument, depth + 1, locals)?;
