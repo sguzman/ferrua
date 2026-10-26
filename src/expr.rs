@@ -463,18 +463,17 @@ fn check_block_labels<'a>(
     ancestors: &[&'a str],
 ) -> Result<(), &'static str> {
     let mut visible = ancestors.to_vec();
-    // Collect first: later labels are still visible to preceding nested
-    // blocks, per Lua 5.4's whole-block label visibility rule.
-    for statement in statements {
-        if let Statement::Label(name) = statement {
-            if visible.contains(name) {
-                return Err("duplicate label visible from enclosing block");
-            }
-            visible.push(name);
-        }
-    }
+    // Lua checks ancestor labels already declared at the point the
+    // nested block is parsed. Later outer labels do not retroactively
+    // invalidate a label in an earlier inner block.
     for statement in statements {
         match statement {
+            Statement::Label(name) => {
+                if visible.contains(name) {
+                    return Err("duplicate label visible from enclosing block");
+                }
+                visible.push(name);
+            }
             Statement::Local { initializers, .. } | Statement::Return(initializers) => {
                 for value in initializers {
                     check_expression_labels(value)?;
@@ -530,7 +529,7 @@ fn check_block_labels<'a>(
                     check_block_labels(body, &visible)?;
                 }
             }
-            Statement::Break | Statement::Label(_) | Statement::Goto(_) => {}
+            Statement::Break | Statement::Goto(_) => {}
         }
     }
     Ok(())
@@ -1202,11 +1201,11 @@ mod tests {
         let compact = parse_chunk("goto done ::done:: return 9").unwrap();
         assert!(matches!(compact[0], Statement::Goto("done")));
         assert!(matches!(compact[1], Statement::Label("done")));
-        let nested = parse_chunk("do ::inner:: local x=2 end; ::outer:: return 3").unwrap();
+        let nested = parse_chunk("do ::name:: local x=2 end; ::name:: return 3").unwrap();
         assert!(
-            matches!(&nested[0], Statement::Block(body) if matches!(&body[0], Statement::Label("inner")))
+            matches!(&nested[0], Statement::Block(body) if matches!(&body[0], Statement::Label("name")))
         );
-        assert!(matches!(nested[1], Statement::Label("outer")));
+        assert!(matches!(nested[1], Statement::Label("name")));
         // Label name scope resolution and jump-over-local checks remain
         // explicit compiler/conformance work, not silent parser guarantees.
         assert!(matches!(

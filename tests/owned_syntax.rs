@@ -70,7 +70,7 @@ fn owned_goto_label_grammar_accepts_valid_lua_syntax() {
     for source in [
         "::first:: goto done; ::done:: return 4",
         "goto done ::done:: return 3",
-        "do ::inner:: local x=2 end; ::outer:: return 5",
+        "do ::inner:: local x=2 end; ::inner:: return 5",
         "local n=1; ::mark:: n=n+1; if n<3 then goto mark end; return n",
     ] {
         let syntax = parse_chunk(source).unwrap_or_else(|error| {
@@ -89,7 +89,7 @@ fn owned_goto_label_grammar_accepts_valid_lua_syntax() {
         "goto 3",
         "::named:",
         "::dup:: ::dup:: return 1",
-        "do ::dup:: end ::dup:: return 1",
+        "::dup:: do ::dup:: end return 1",
     ] {
         assert!(
             parse_chunk(source).is_err(),
@@ -99,14 +99,17 @@ fn owned_goto_label_grammar_accepts_valid_lua_syntax() {
 }
 
 #[test]
-fn lua_label_visibility_rejects_ancestor_shadowing_even_when_forward_declared() {
-    // Labels are visible throughout their lexical block, except across
-    // function boundaries. Sibling scopes may reuse the same label.
+fn lua_label_visibility_respects_declaration_order_and_function_boundaries() {
+    // A previously declared ancestor label is visible inside later nested
+    // blocks. Earlier inner labels may be reused by a later outer label.
+    // Distinct sibling blocks and function scopes may also reuse names.
     let cases = [
         ("::outer:: do ::outer:: end", false),
-        ("do ::outer:: end ::outer::", false),
+        ("do ::outer:: end ::outer::", true),
         ("::outer:: if true then ::outer:: end", false),
         ("::outer:: while false do ::outer:: end", false),
+        ("do ::outer:: end if true then ::outer:: end", true),
+        ("::outer:: do ::inner:: end ::outer::", false),
         ("function f() ::mark:: do ::mark:: end end", false),
         ("do ::a:: end do ::a:: end", true),
         ("::outer:: do ::inner:: end", true),

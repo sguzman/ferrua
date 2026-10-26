@@ -11768,7 +11768,7 @@ mod tests {
             ),
             ("do goto finish; local x=8 end; ::finish:: return 11", 11),
             (
-                "local x=0; do goto inner; ::inner:: x=x+1 end; ::outer:: return x",
+                "local x=0; do goto mark; ::mark:: x=x+1 end; ::mark:: return x",
                 1,
             ),
         ] {
@@ -11781,7 +11781,6 @@ mod tests {
             "do goto a end; do ::a:: end; return 1",
             "goto done; local x=2; ::done:: return x",
             "do ::a:: ::a:: end; return 1",
-            "local x=0; do goto mark; ::mark:: x=x+1 end; ::mark:: return x",
             "local function f() goto outside end ::outside:: return f()",
         ] {
             assert!(compile_flow_chunk(script).is_err(), "{script}");
