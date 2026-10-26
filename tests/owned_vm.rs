@@ -259,6 +259,54 @@ fn register_while_loops_match_production_and_upstream_lua54() {
 }
 
 #[test]
+fn register_repeat_until_matches_production_and_lua_54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("local n=0; repeat n=n+1 until n>=4; return n", 4),
+        ("local n=0; repeat n=n+1 until true; return n", 1),
+        (
+            "local n=0; repeat local next=n+1; n=next until next>=4; return n",
+            4,
+        ),
+        (
+            "local n=0; repeat if n<2 then n=n+1 else n=n+2 end until n>=4; return n",
+            4,
+        ),
+        (
+            "local n=0; repeat local i=0; while i<2 do n=n+1; i=i+1 end until n>=6; return n",
+            6,
+        ),
+    ] {
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        let code = format!("print((function() {source} end)())");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let result = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                result.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&result.stdout).trim(),
+                expected.to_string(),
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
 fn integer_register_guard_clauses_match_fer_and_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
