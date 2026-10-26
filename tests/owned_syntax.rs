@@ -220,6 +220,36 @@ fn lua_c_locale_unicode_identifier_rules_match_upstream_when_requested() {
 }
 
 #[test]
+fn lua_c_locale_intertoken_vertical_tabs_match_upstream_when_requested() {
+    for (source, valid) in [
+        ("local\x0bx=1; return x", true),
+        ("return 1\x0b+\x0b2", true),
+        ("local\x0cx=2; return x", true),
+        ("\x0breturn\x0b7\x0b", true),
+        ("return 1\x0b2", false),
+    ] {
+        let owned = parse_chunk(source).is_ok();
+        assert_eq!(owned, valid, "owned source whitespace: {source:?}");
+        if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
+            let upstream = std::process::Command::new("lua5.4")
+                .args(["-e", source])
+                .output()
+                .expect("pinned Lua 5.4");
+            assert_eq!(
+                upstream.status.success(),
+                valid,
+                "upstream source whitespace: {source:?}: {}",
+                String::from_utf8_lossy(&upstream.stderr)
+            );
+        }
+    }
+}
+
+#[test]
 fn malformed_unicode_and_numeric_corners_do_not_panic() {
     for source in [
         "local x='café'",

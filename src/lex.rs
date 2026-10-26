@@ -294,7 +294,9 @@ pub fn tokenize(source: &str) -> Result<Vec<Token<'_>>, LexError> {
         }
     }
     while let Some(b) = scan.peek(0) {
-        if b.is_ascii_whitespace() {
+        // Lua 5.4's C-locale isspace also includes VT (0x0B),
+        // which Rust's is_ascii_whitespace does not recognize.
+        if matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c) {
             scan.bump();
             continue;
         }
@@ -463,6 +465,18 @@ mod tests {
         for source in ["'unterminated", "[==[unfinished ]=]", "0x", "1e+"] {
             assert!(tokenize(source).is_err(), "{source}");
         }
+    }
+    #[test]
+    fn lua_c_locale_intertoken_whitespace_includes_vertical_tab() {
+        assert_eq!(
+            spellings("local\x0bx=1; return\x0bx"),
+            ["local", "x", "=", "1", ";", "return", "x"]
+        );
+        assert_eq!(
+            spellings("return 1\x0b+\x0b2"),
+            ["return", "1", "+", "2"]
+        );
+        assert!(tokenize("return 1\x0b2").is_ok());
     }
     #[test]
     fn lua_z_escape_skips_whitespace_and_tracks_line() {
