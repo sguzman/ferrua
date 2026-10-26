@@ -5919,10 +5919,8 @@ impl Execution<'_> {
                                     "Lua format flags or precision invalid for directive".into(),
                                 ));
                             }
-                            if matches!(specifier, b'a' | b'A') && precision.is_some() {
-                                return Err(FlowError::Unsupported(
-                                    "Lua format flags or precision invalid for directive".into(),
-                                ));
+                            if matches!(specifier, b'a' | b'A') && precision.is_some_and(|p| p > 99) {
+                                return Err(FlowError::TooLarge);
                             }
                             let value = *args.get(argument).ok_or(FlowError::TypeError)?;
                             argument += 1;
@@ -5946,6 +5944,8 @@ impl Execution<'_> {
                                         } else {
                                             b"inf".to_vec()
                                         }
+                                    } else if let Some(digits) = precision {
+                                        Self::formatted_hex_float_precision(number.to_bits(), digits)?
                                     } else {
                                         Self::quoted_lua_float(number.to_bits())
                                     };
@@ -6343,6 +6343,59 @@ impl Execution<'_> {
             out.make_ascii_uppercase();
         }
         Ok(out.into_bytes())
+    }
+
+    /// Render an explicit-precision C/Lua hexadecimal float without libc.
+    /// Binary64 has 13 hexadecimal fraction digits. For fewer digits, round
+    /// discarded bits to nearest with ties to even, allowing the leading
+    /// hex digit to carry from 1 to 2 without changing the printed exponent.
+    /// For more digits, append exact trailing zeroes. This is bounded by the
+    /// source format parser's two-digit precision cap.
+    fn formatted_hex_float_precision(bits: u64, precision: usize) -> Result<Vec<u8>, FlowError> {
+        if precision > 99 {
+            return Err(FlowError::TooLarge);
+        }
+        let number = f64::from_bits(bits);
+        if !number.is_finite() {
+            return Err(FlowError::InvalidBytecode);
+        }
+        let exponent_bits = ((bits >> 52) & 0x7ff) as i32;
+        let fraction = bits & ((1u64 << 52) - 1);
+        let leading = u64::from(exponent_bits != 0);
+        let exponent = if exponent_bits == 0 {
+            if fraction == 0 { 0 } else { -1022 }
+        } else {
+            exponent_bits - 1023
+        };
+        let mut output = if precision <= 13 {
+            let kept_bits = precision * 4;
+            let shift = 52 - kept_bits;
+            let significand = (leading << 52) | fraction;
+            let mut rounded = significand >> shift;
+            if shift != 0 {
+                let remainder = significand & ((1u64 << shift) - 1);
+                let half = 1u64 << (shift - 1);
+                if remainder > half || (remainder == half && rounded & 1 == 1) {
+                    rounded += 1;
+                }
+            }
+            let integer_digit = rounded >> kept_bits;
+            if precision == 0 {
+                format!("0x{integer_digit:x}p{exponent:+}")
+            } else {
+                let fractional = rounded & ((1u64 << kept_bits) - 1);
+                format!("0x{integer_digit:x}.{fractional:0width$x}p{exponent:+}", width = precision)
+            }
+        } else {
+            format!(
+                "0x{leading:x}.{fraction:013x}{}p{exponent:+}",
+                "0".repeat(precision - 13)
+            )
+        };
+        if number.is_sign_negative() {
+            output.insert(0, '-');
+        }
+        Ok(output.into_bytes())
     }
 
     /// Lua 5.4 %q emits a round-trippable float constant. The common

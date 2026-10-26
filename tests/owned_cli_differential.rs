@@ -783,6 +783,28 @@ fn owned_string_format_hex_float_flags_and_width_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_hex_float_precision_matches_lua54() {
+    for source in [
+        "print(string.format('%.0a',1.0),string.format('%.1a',1.0),string.format('%.13a',1.0))",
+        "print(string.format('%.0a',1.5),string.format('%.1a',1.5),string.format('%.2A',1.5))",
+        "print(string.format('%.0a',1.9),string.format('%.2a',1.9),string.format('%.4A',1.9))",
+        "print(string.format('%.0a',0.0),string.format('%.3a',-0.0),string.format('%#.0a',1.0))",
+        "print(string.format('%010.1a',1.5),string.format('%+012.2A',1.5))",
+        "print(string.format('%.13a',3.5),string.format('%.14a',3.5))",
+        "print(string.format('%.2a',0.125),string.format('%.4a',0.125))",
+        "print(string.format('%.1a',1.09375),string.format('%.0a',1.25))",
+        "print(string.format('%.1a',1.9375),string.format('%.0a',1.9999999999999998))",
+        "print(string.format('%.13a',1e100),string.format('%.14A',1e100))",
+        "print(string.format('%.2a',math.huge),string.format('%.2A',-math.huge))",
+        "print(string.format('%.1a',2.2250738585072014e-308))",
+        "print(string.format('%.1a',1.7976931348623157e308))",
+        "print(string.format('%#.0a',-1.0),string.format('%.0A',-1.0))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_general_significant_digits_match_lua54() {
     for source in [
         "print(string.format('%g',12.3400)=='12.34',string.format('%G',12.3400)=='12.34')",
