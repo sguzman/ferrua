@@ -2263,7 +2263,12 @@ pub fn execute_register_program_with_strings_and_budget(
                 let value = if let Some(value) = globals.get(&name) {
                     *value
                 } else {
-                    match program.strings.get(name).ok_or(Error::InvalidBytecode)?.as_slice() {
+                    match program
+                        .strings
+                        .get(name)
+                        .ok_or(Error::InvalidBytecode)?
+                        .as_slice()
+                    {
                         b"type" => RegisterValue::Builtin(RegisterBuiltin::Type),
                         b"tostring" => RegisterValue::Builtin(RegisterBuiltin::ToString),
                         b"select" => RegisterValue::Builtin(RegisterBuiltin::Select),
@@ -2556,8 +2561,7 @@ fn register_select_integer(value: RegisterValue, strings: &[Vec<u8>]) -> Result<
     fn exact_integer(number: f64) -> Option<i64> {
         if !number.is_finite()
             || number.fract() != 0.0
-            || !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
-                .contains(&number)
+            || !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&number)
         {
             return None;
         }
@@ -2566,9 +2570,7 @@ fn register_select_integer(value: RegisterValue, strings: &[Vec<u8>]) -> Result<
 
     match value {
         RegisterValue::Integer(number) => Ok(number),
-        RegisterValue::Float(bits) => {
-            exact_integer(f64::from_bits(bits)).ok_or(Error::TypeError)
-        }
+        RegisterValue::Float(bits) => exact_integer(f64::from_bits(bits)).ok_or(Error::TypeError),
         RegisterValue::String(index) => {
             let bytes = strings.get(index).ok_or(Error::InvalidBytecode)?;
             let source = std::str::from_utf8(bytes)
