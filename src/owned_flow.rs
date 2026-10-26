@@ -5919,7 +5919,8 @@ impl Execution<'_> {
                                     "Lua format flags or precision invalid for directive".into(),
                                 ));
                             }
-                            if matches!(specifier, b'a' | b'A') && precision.is_some_and(|p| p > 99) {
+                            if matches!(specifier, b'a' | b'A') && precision.is_some_and(|p| p > 99)
+                            {
                                 return Err(FlowError::TooLarge);
                             }
                             let value = *args.get(argument).ok_or(FlowError::TypeError)?;
@@ -5945,7 +5946,10 @@ impl Execution<'_> {
                                             b"inf".to_vec()
                                         }
                                     } else if let Some(digits) = precision {
-                                        Self::formatted_hex_float_precision(number.to_bits(), digits)?
+                                        Self::formatted_hex_float_precision(
+                                            number.to_bits(),
+                                            digits,
+                                        )?
                                     } else {
                                         Self::quoted_lua_float(number.to_bits())
                                     };
@@ -6384,7 +6388,10 @@ impl Execution<'_> {
                 format!("0x{integer_digit:x}p{exponent:+}")
             } else {
                 let fractional = rounded & ((1u64 << kept_bits) - 1);
-                format!("0x{integer_digit:x}.{fractional:0width$x}p{exponent:+}", width = precision)
+                format!(
+                    "0x{integer_digit:x}.{fractional:0width$x}p{exponent:+}",
+                    width = precision
+                )
             }
         } else {
             format!(
