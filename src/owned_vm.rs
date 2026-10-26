@@ -2892,11 +2892,23 @@ mod tests {
             ("local x,y=3,4; x,y=8; return x", RegisterValue::Integer(8)),
             ("local x,y=3,4; x=9,10; return x", RegisterValue::Integer(9)),
             ("local x; x=5; return x", RegisterValue::Integer(5)),
-            ("local x=1; local x,y=x+1; return x", RegisterValue::Integer(2)),
+            (
+                "local x=1; local x,y=x+1; return x",
+                RegisterValue::Integer(2),
+            ),
             ("local x=1; local x,y=x+1; return y", RegisterValue::Nil),
-            ("local x,y; if x==nil then y=7 end; return y", RegisterValue::Integer(7)),
-            ("local x,y=0; while x<3 do x=x+1 end; return y", RegisterValue::Nil),
-            ("local x,y=3,4; x,y=y,x; return x", RegisterValue::Integer(4)),
+            (
+                "local x,y; if x==nil then y=7 end; return y",
+                RegisterValue::Integer(7),
+            ),
+            (
+                "local x,y=0; while x<3 do x=x+1 end; return y",
+                RegisterValue::Nil,
+            ),
+            (
+                "local x,y=3,4; x,y=y,x; return x",
+                RegisterValue::Integer(4),
+            ),
         ] {
             let program = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_register_program(&program), Ok(expected), "{source}");
