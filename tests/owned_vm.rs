@@ -269,7 +269,10 @@ fn register_break_exits_match_production_and_upstream_lua54() {
         ("local x=0; while x<9 do x=x+1; if x==4 then break end end; return x", 4),
         ("local x=0; repeat x=x+1; if x==3 then break end until x>99; return x", 3),
         ("local x=0; repeat local i=x+1; x=i; if i>2 then break end until x>99; return x", 3),
-        ("local a=0; local b=0; while a<5 do a=a+1; while true do b=b+1; break end; if a==3 then break end end; return a*10+b", 33),
+        (
+            "local a=0; local b=0; while a<5 do a=a+1; while true do b=b+1; break end; if a==3 then break end end; return a*10+b",
+            33,
+        ),
         ("local x=1; while true do if true then x=x+4; break else x=90 end end; return x", 5),
         ("local x=0; while true do do x=x+7; break end; x=99 end; return x", 7),
         ("local x=0; while false do break end; return x", 0),
@@ -286,8 +289,16 @@ fn register_break_exits_match_production_and_upstream_lua54() {
                 command.arg("--lua=5.4");
             }
             let output = command.args(["-e", &lua]).output().unwrap();
-            assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
-            assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), expected.to_string(), "{source}");
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                expected.to_string(),
+                "{source}"
+            );
         }
     }
 }
