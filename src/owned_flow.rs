@@ -7763,6 +7763,7 @@ impl Execution<'_> {
             ]);
         }
 
+        state.status = CoroutineStatus::Running;
         let previous_depth = self.depth;
         let previous_coroutine = self.current_coroutine;
         let retained_depth = 1 + state.scheduler.as_ref().map_or(0, |s| s.active.len());
