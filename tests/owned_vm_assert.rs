@@ -20,7 +20,9 @@ fn owned_result(chunk: &str) -> Result<String, Error> {
             }
             RegisterValue::String(_) => {
                 rendered.push_str(&String::from_utf8_lossy(
-                    output.value_string_bytes(value).expect("valid string handle"),
+                    output
+                        .value_string_bytes(value)
+                        .expect("valid string handle"),
                 ));
             }
             RegisterValue::Table(_) => rendered.push_str("table"),
