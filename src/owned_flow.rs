@@ -7745,14 +7745,23 @@ impl Execution<'_> {
         let Value::Thread(id) = *args.first().ok_or(FlowError::TypeError)? else {
             return Err(FlowError::TypeError);
         };
-        if id == MAIN_THREAD_ID
-            || self.current_coroutine == Some(id)
-            || self
-                .saved_call_contexts
-                .iter()
-                .any(|context| context.coroutine_id == Some(id))
+        if id == MAIN_THREAD_ID || self.current_coroutine == Some(id) {
+            let message = self.intern_rooted_string(
+                b"cannot close a running coroutine".to_vec(),
+                args,
+            )?;
+            return Err(FlowError::Thrown(message));
+        }
+        if self
+            .saved_call_contexts
+            .iter()
+            .any(|context| context.coroutine_id == Some(id))
         {
-            return Err(FlowError::TypeError);
+            let message = self.intern_rooted_string(
+                b"cannot close a normal coroutine".to_vec(),
+                args,
+            )?;
+            return Err(FlowError::Thrown(message));
         }
         let state = self
             .coroutines
