@@ -820,8 +820,22 @@ pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     };
     let mut scopes = vec![HashMap::new()];
     let mut loops = Vec::new();
-    let value = compile_statements(&statements, &mut program, &mut scopes, &mut loops, 0)?
-        .ok_or_else(|| Error::Unsupported("chunk requires one final return value".into()))?;
+    let value = match compile_statements(&statements, &mut program, &mut scopes, &mut loops, 0)? {
+        Some(value) => value,
+        None => {
+            // A Lua chunk or function may run off the end without returning
+            // values. In this scalar register API, the observable result is
+            // nil; the epilogue also anchors all fallthrough branch targets.
+            if program.registers >= MAX_REGISTERS {
+                return Err(Error::TooLarge);
+            }
+            let register = program.registers;
+            program.registers += 1;
+            emit_instruction(&mut program, Instruction::LoadNil { dest: register })?;
+            emit_instruction(&mut program, Instruction::Return { source: register })?;
+            register
+        }
+    };
     if program.code.len() > MAX_REGISTERS {
         return Err(Error::TooLarge);
     }
@@ -2916,6 +2930,25 @@ mod tests {
             execute_integer_program_with_budget(&invalid, 0),
             Err(Error::InvalidBytecode)
         );
+    }
+
+    #[test]
+    fn register_implicit_fallthrough_returns_nil_in_scalar_context() {
+        for (source, expected) in [
+            ("", RegisterValue::Nil),
+            ("local x=3", RegisterValue::Nil),
+            ("do local x=3 end", RegisterValue::Nil),
+            ("if true then return 7 end", RegisterValue::Integer(7)),
+            ("if false then return 7 end", RegisterValue::Nil),
+            ("if true then local x=3 else return 7 end", RegisterValue::Nil),
+            ("if false then return 7 else local x=3 end", RegisterValue::Nil),
+            ("local n=0; while n<3 do n=n+1 end", RegisterValue::Nil),
+            ("local n=0; repeat n=n+1 until n==3", RegisterValue::Nil),
+            ("for i=1,3 do end", RegisterValue::Nil),
+        ] {
+            let program = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_register_program(&program), Ok(expected), "{source}");
+        }
     }
 
     #[test]
