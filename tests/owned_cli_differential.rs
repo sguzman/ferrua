@@ -615,6 +615,26 @@ fn owned_string_portable_binary_pack_unpack_and_packsize_match_lua54() {
 }
 
 #[test]
+fn owned_string_variable_binary_formats_match_lua54() {
+    for source in [
+        "local p=string.pack('z','hello'); print(#p,string.byte(p,6)); local s,n=string.unpack('z',p); print(s,n)",
+        "local p=string.pack('<s2','ab\\0c'); local s,n=string.unpack('<s2',p); print(#p,s=='ab\\0c',n)",
+        "local p=string.pack('>s2','abc'); print(string.byte(p,1,2)); local s,n=string.unpack('>s2',p); print(s,n)",
+        "local p=string.pack('zs1','ok','xyz'); print(string.unpack('zs1',p))",
+        "local p=string.pack('<I2s2z',42,'A\\0B','end'); print(string.unpack('<I2s2z',p))",
+        "local p=string.pack('z',''); print(#p,string.byte(p,1),string.unpack('z',p))",
+        "local p=string.pack('s','hey'); print(#p,string.unpack('s',p))",
+        "local a=pcall(string.packsize,'z'); local b=pcall(string.packsize,'s2'); print(a,b)",
+        "local a=pcall(string.pack,'z','a\\0b'); local b=pcall(string.pack,'s1',string.rep('a',256)); print(a,b)",
+        "local a=pcall(string.unpack,'z','abc'); local b=pcall(string.unpack,'<s2','\\5\\0x'); print(a,b)",
+        "local p=string.pack('>s4','test'); local s,n=string.unpack('>s4',p); print(s,n)",
+        "local p=string.pack('s1','a'); print(string.byte(p,1,2),string.unpack('s1',p))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",

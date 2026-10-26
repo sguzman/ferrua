@@ -1886,14 +1886,20 @@ enum PackField {
         little: bool,
     },
     FixedString(usize),
+    NullTerminated,
+    LengthPrefixed { size: usize, little: bool },
     Padding,
 }
 
 impl PackField {
     fn size(self) -> usize {
         match self {
-            Self::Integer { size, .. } | Self::Float { size, .. } | Self::FixedString(size) => size,
+            Self::Integer { size, .. }
+            | Self::Float { size, .. }
+            | Self::FixedString(size)
+            | Self::LengthPrefixed { size, .. } => size,
             Self::Padding => 1,
+            Self::NullTerminated => 0,
         }
     }
 }
@@ -5206,6 +5212,26 @@ impl Execution<'_> {
                         size: if code == b'f' { 4 } else { 8 },
                         little,
                     },
+                    b'z' => PackField::NullTerminated,
+                    b's' => {
+                        let mut size = 8usize;
+                        if index < format.len() && format[index].is_ascii_digit() {
+                            size = 0;
+                            while index < format.len() && format[index].is_ascii_digit() {
+                                size = size
+                                    .checked_mul(10)
+                                    .and_then(|n| n.checked_add(usize::from(format[index] - b'0')))
+                                    .ok_or(FlowError::TooLarge)?;
+                                index += 1;
+                            }
+                        }
+                        if !matches!(size, 1 | 2 | 4 | 8) {
+                            return Err(FlowError::Unsupported(
+                                "pack supports 1-, 2-, 4- and 8-byte string lengths".into(),
+                            ));
+                        }
+                        PackField::LengthPrefixed { size, little }
+                    }
                     b'c' => {
                         if index >= format.len() || !format[index].is_ascii_digit() {
                             return Err(FlowError::TypeError);
@@ -5251,6 +5277,12 @@ impl Execution<'_> {
         }
         self.steps += cost;
         if builtin == Builtin::StringPackSize {
+            if fields.iter().any(|field| matches!(
+                field,
+                PackField::NullTerminated | PackField::LengthPrefixed { .. }
+            )) {
+                return Err(FlowError::TypeError);
+            }
             return Ok(vec![Value::Integer(total as i64)]);
         }
         if builtin == Builtin::StringPack {
@@ -5259,6 +5291,43 @@ impl Execution<'_> {
             for field in fields {
                 match field {
                     PackField::Padding => output.push(0),
+                    PackField::NullTerminated | PackField::LengthPrefixed { .. } => {
+                        let bytes = self.string_bytes(
+                            *args.get(argument).ok_or(FlowError::TypeError)?,
+                        )?;
+                        argument += 1;
+                        let overhead = match field {
+                            PackField::NullTerminated => {
+                                if bytes.contains(&0) {
+                                    return Err(FlowError::TypeError);
+                                }
+                                output.extend_from_slice(&bytes);
+                                output.push(0);
+                                bytes.len() + 1
+                            }
+                            PackField::LengthPrefixed { size, little } => {
+                                if size < 8 && bytes.len() as u64 >= (1u64 << (size * 8)) {
+                                    return Err(FlowError::TypeError);
+                                }
+                                let length = bytes.len() as u64;
+                                if little {
+                                    output.extend_from_slice(&length.to_le_bytes()[..size]);
+                                } else {
+                                    output.extend_from_slice(&length.to_be_bytes()[8 - size..]);
+                                }
+                                output.extend_from_slice(&bytes);
+                                bytes.len()
+                            }
+                            _ => unreachable!("dynamic field guarded above"),
+                        };
+                        if self.steps.saturating_add(overhead) > self.budget {
+                            return Err(FlowError::StepBudgetExceeded);
+                        }
+                        self.steps += overhead;
+                        if output.len() > MAX_STRING_POOL_BYTES {
+                            return Err(FlowError::TooLarge);
+                        }
+                    }
                     PackField::FixedString(size) => {
                         let bytes =
                             self.string_bytes(*args.get(argument).ok_or(FlowError::TypeError)?)?;
@@ -5346,6 +5415,47 @@ impl Execution<'_> {
                 cursor = end;
                 let value = match field {
                     PackField::Padding => continue,
+                    PackField::NullTerminated | PackField::LengthPrefixed { .. } => {
+                        let (begin, end) = match field {
+                            PackField::NullTerminated => {
+                                let remaining = bytes.get(cursor..).ok_or(FlowError::TypeError)?;
+                                let count = remaining.iter().position(|&byte| byte == 0)
+                                    .ok_or(FlowError::TypeError)?;
+                                let start = cursor;
+                                let end = cursor + count;
+                                cursor = end + 1;
+                                (start, end)
+                            }
+                            PackField::LengthPrefixed { size, little } => {
+                                let mut length = 0u64;
+                                for (index, &byte) in chunk.iter().enumerate() {
+                                    if little {
+                                        length |= u64::from(byte) << (index * 8);
+                                    } else {
+                                        length = (length << 8) | u64::from(byte);
+                                    }
+                                }
+                                let length = usize::try_from(length).map_err(|_| FlowError::TooLarge)?;
+                                if length > MAX_STRING_POOL_BYTES {
+                                    return Err(FlowError::TooLarge);
+                                }
+                                let start = cursor;
+                                let end = cursor.checked_add(length).ok_or(FlowError::TooLarge)?;
+                                bytes.get(start..end).ok_or(FlowError::TypeError)?;
+                                cursor = end;
+                                (start, end)
+                            }
+                            _ => unreachable!("dynamic field guarded above"),
+                        };
+                        let consumed = end - begin + usize::from(matches!(field, PackField::NullTerminated));
+                        if self.steps.saturating_add(consumed) > self.budget {
+                            return Err(FlowError::StepBudgetExceeded);
+                        }
+                        self.steps += consumed;
+                        let roots = self.gc_temporary_roots.last()
+                            .ok_or(FlowError::InvalidBytecode)?.clone();
+                        self.intern_rooted_string(bytes[begin..end].to_vec(), &roots)?
+                    }
                     PackField::FixedString(_) => {
                         let roots = self
                             .gc_temporary_roots
