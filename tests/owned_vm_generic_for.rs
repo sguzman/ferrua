@@ -81,6 +81,34 @@ fn bounded_generic_for_pairs_and_next_match_lua54() {
             "local t={x=2};local n=0;for k,v in pairs(t) do for i=1,2 do n=n+v end end return n",
             4,
         ),
+        (
+            "local t={2,3,4};local n=0;for i,v in ipairs(t) do n=n+v end return n",
+            9,
+        ),
+        (
+            "local t={[1]=2,[3]=5};local n=0;for i,v in ipairs(t) do n=n+v end return n",
+            2,
+        ),
+        (
+            "local t={false,3};local n=0;for i,v in ipairs(t) do if v==false then n=n+1 else n=n+v end end return n",
+            4,
+        ),
+        (
+            "local t={};local n=0;for i,v in ipairs(t) do n=n+v end return n",
+            0,
+        ),
+        (
+            "local t={4,5};local n=0;for i,v in ipairs(t) do n=n+i*v end return n",
+            14,
+        ),
+        (
+            "local t={4,5};local n=0;for i,v in ipairs(t) do if i==1 then break end n=n+v end return n",
+            0,
+        ),
+        (
+            "local t={4,5};for i,v in ipairs(t) do return i+v end return 0",
+            5,
+        ),
     ] {
         assert_eq!(
             run_scalar(chunk),
