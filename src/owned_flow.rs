@@ -3687,11 +3687,11 @@ impl Execution<'_> {
                     .wrapping_mul(base as u64)
                     .wrapping_add(u64::from(digit));
             }
-            Ok(Value::Integer(if negative {
+            return Ok(Value::Integer(if negative {
                 number.wrapping_neg() as i64
             } else {
                 number as i64
-            }))
+            }));
         }
         match value {
             Value::Integer(_) | Value::Float(_) => Ok(value),
