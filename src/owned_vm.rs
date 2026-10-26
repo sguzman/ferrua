@@ -1842,7 +1842,10 @@ fn compile_statements<'a>(
                     program.registers += 1;
                     emit_instruction(
                         program,
-                        Instruction::LoopCopy { dest, input: source },
+                        Instruction::LoopCopy {
+                            dest,
+                            input: source,
+                        },
                     )?;
                     scopes
                         .get_mut(level)
@@ -1901,10 +1904,7 @@ fn compile_statements<'a>(
                         }
                         let dest = program.registers;
                         program.registers += 1;
-                        emit_instruction(
-                            program,
-                            Instruction::ReadCallResult { dest, index },
-                        )?;
+                        emit_instruction(program, Instruction::ReadCallResult { dest, index })?;
                         dest
                     };
                     loop_scope.insert(
