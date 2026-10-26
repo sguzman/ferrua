@@ -718,6 +718,20 @@ fn owned_binary_format_nul_termination_and_whitespace_match_lua54() {
 }
 
 #[test]
+fn owned_binary_unpack_start_position_bounds_match_lua54() {
+    // Lua 5.4 rejects position zero and negative indices beyond the
+    // data string; these must not be clamped like string.sub indices.
+    for source in [
+        "local s=string.char(7,42,9); local a,pos=string.unpack('B',s,-2); print(a,pos)",
+        "local s=string.char(7); local a,pos=string.unpack('B',s,-1); print(a,pos)",
+        "local s=string.char(7); print(string.unpack('',s,2))",
+        "local s=string.char(7); local a=pcall(string.unpack,'B',s,0); local b=pcall(string.unpack,'B',s,-2); local c=pcall(string.unpack,'',s,0); local d=pcall(string.unpack,'',s,-2); local e=pcall(string.unpack,'',s,3); print(a,b,c,d,e)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",
