@@ -5195,7 +5195,7 @@ impl Execution<'_> {
                                 index += 1;
                             }
                         }
-                        if !(1..=8).contains(&limit) {
+                        if !(1..=16).contains(&limit) {
                             return Err(FlowError::TypeError);
                         }
                         maxalign = limit;
