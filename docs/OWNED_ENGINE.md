@@ -314,7 +314,7 @@ The experimental engine now exposes `tostring` as a first-class, lexically shado
 
 ### Bounded first-class Lua tonumber conversion
 
-The owned runtime now exposes `tonumber` as a pure, lexically shadowable callable. Numeric inputs remain numeric; decimal and hex integer strings and bounded decimal/hex floating forms parse to VM numbers, and nonnumeric input yields nil. The optional explicit base supports signed 64-bit strings in bases 2 through 36, with invalid digits producing nil. A missing argument yields nil. Full Lua overflow/wrap semantics for extremely large base-number strings, locale-sensitive parsing and every Lua 5.4 conversion corner case remain unsupported. Both production `fer` and Lua 5.4.6 differential fixtures cover the accepted subset.
+The owned runtime exposes `tonumber` as a pure, lexically shadowable callable. Numeric inputs remain numeric; supported decimal and hexadecimal integer and float strings convert to VM numbers, and malformed numeric text returns nil. Explicit bases 2–36 support unsigned 64-bit modular accumulation, returning Lua signed integer bit patterns even when the input exceeds `i64::MAX` or wraps past `u64::MAX`; negative signs also wrap. The optional base itself accepts precisely integral Lua numeric strings (including exponent and hexadecimal forms), with invalid bases raising a type/range error. Ordinary `tonumber(text)` also accepts signed hexadecimal floats and wrapped hexadecimal integer strings through the independently tested shared conversion routine. Only Lua's six C-locale ASCII whitespace characters are stripped around numeric text; Unicode whitespace and malformed UTF-8 do not become valid numbers. A missing argument is an error, not a successful numeric conversion. These behaviors have targeted upstream Lua 5.4.6 differential fixtures; this remains a bounded subset, not exhaustive numeral or locale conformance.
 
 ### First-class raw table functions
 
@@ -329,6 +329,11 @@ The owned stack VM now exposes a first-class, lexically shadowable `rawlen` buil
 - [CI #40014074135](https://github.com/sguzman/ferrua/actions/runs/40014074135): first-class, shadowable `type` passed all four CI jobs.
 - [CI #40014718963](https://github.com/sguzman/ferrua/actions/runs/40014718963): bounded `tostring` value formatting passed all four jobs.
 - [CI #40015672831](https://github.com/sguzman/ferrua/actions/runs/40015672831): first-class `tonumber` plus `rawequal`, `rawget`, and `rawset` passed all four jobs, after correcting the missing-argument error semantics and maintaining upstream Lua differential parity.
+
+- [CI #40324018852](https://github.com/sguzman/ferrua/actions/runs/40324018852): modular 64-bit conversion for explicit bases 2–36, including negative and overflow inputs.
+- [CI #40324349799](https://github.com/sguzman/ferrua/actions/runs/40324349799): signed hexadecimal floats and wrapped hexadecimal integer strings for ordinary `tonumber`.
+- [CI #40324679113](https://github.com/sguzman/ferrua/actions/runs/40324679113): exact numeric-string bases, including decimal exponent and hexadecimal forms.
+- [CI #40325028948](https://github.com/sguzman/ferrua/actions/runs/40325028948): ASCII-only numeric whitespace and invalid UTF-8 / Unicode whitespace validation.
 - [CI #40016120064](https://github.com/sguzman/ferrua/actions/runs/40016120064): bounded `rawlen`, using the shared underlying Lua byte-string and table-border length handler, passed all four jobs.
 
 These checks cover only the recorded, bounded first-party runtime subsets. There is still no full Lua standard library, garbage-collected production VM, metatable implementation, or accepted engine migration.
