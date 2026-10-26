@@ -4412,12 +4412,8 @@ impl Execution<'_> {
             Value::Builtin(Builtin::CoroutineIsYieldable) => {
                 Ok(vec![self.coroutine_isyieldable(&arguments)?])
             }
-            Value::Builtin(Builtin::CoroutineWrap) => {
-                Ok(vec![self.coroutine_wrap(&arguments)?])
-            }
-            Value::Builtin(Builtin::CoroutineWrapped(id)) => {
-                self.coroutine_wrapped(id, &arguments)
-            }
+            Value::Builtin(Builtin::CoroutineWrap) => Ok(vec![self.coroutine_wrap(&arguments)?]),
+            Value::Builtin(Builtin::CoroutineWrapped(id)) => self.coroutine_wrapped(id, &arguments),
             Value::Builtin(Builtin::Error) => Err(self.error_builtin(&arguments)),
             Value::Builtin(Builtin::Print) => self.print_builtin(&arguments),
             Value::Builtin(Builtin::Warn) => self.warn_builtin(&arguments),
@@ -7743,11 +7739,7 @@ impl Execution<'_> {
 
     /// Unlike resume, wrap removes the success flag and throws the failure
     /// object. Suspended frames are kept by coroutine_resume, not replayed.
-    fn coroutine_wrapped(
-        &mut self,
-        id: usize,
-        args: &[Value],
-    ) -> Result<Vec<Value>, FlowError> {
+    fn coroutine_wrapped(&mut self, id: usize, args: &[Value]) -> Result<Vec<Value>, FlowError> {
         let mut inputs = Vec::with_capacity(args.len().saturating_add(1));
         inputs.push(Value::Thread(id));
         inputs.extend_from_slice(args);
