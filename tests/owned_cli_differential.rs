@@ -587,6 +587,26 @@ fn owned_pattern_standalone_repetition_markers_and_closing_bracket_match_lua54()
 }
 
 #[test]
+fn owned_pattern_structural_atoms_leave_repetition_markers_literal_like_lua54() {
+    // Lua match() handles captures, %b, %f and %1-%9 before its
+    // singlematch() quantifier path, so a following marker is literal.
+    for source in [
+        "print(string.match('a*','(a)*')=='a')",
+        "print(string.match('ab*','(ab)*')=='ab')",
+        "print(string.match('a+','(a)+')=='a')",
+        "print(string.match('a?','(a)?')=='a')",
+        "print(string.match('aa','(a)*')==nil)",
+        "print(string.match('(x)?','%b()?')=='(x)?')",
+        "print(string.match('aa*','(a)%1*')=='a')",
+        "print(string.match('*ab','%f[%p]*')=='*')",
+        "local s,n=string.gsub('a*a*','(a)*','X'); print(s,n)",
+        "local matches={}; for v in string.gmatch('a*a*','(a)*') do matches[#matches+1]=v end; print(table.concat(matches,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_pattern_unsupported_structural_escapes_never_silently_match() {
     let source = "local a=pcall(string.find,'abc','%b('); local b=pcall(string.match,'abc','%f'); local c=pcall(string.find,'abc','%1'); print(a,b,c)";
     assert_parity(source, true);

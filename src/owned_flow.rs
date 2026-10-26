@@ -6084,28 +6084,22 @@ impl Execution<'_> {
                 index += 1;
                 Atom::Byte(value, false)
             };
-            let repetition = if !plain && index < body.len() && b"*+?-".contains(&body[index]) {
+            // Lua interprets repetition suffixes only after ordinary
+            // single-byte or bracket-class atoms. After captures, %b,
+            // %f, and %1-%9 backreferences, the same punctuation begins
+            // a separate literal atom instead of repeating the construct.
+            let can_repeat = matches!(&atom, Atom::Byte(_, _) | Atom::Bracket(_));
+            let repetition = if !plain
+                && can_repeat
+                && index < body.len()
+                && b"*+?-".contains(&body[index])
+            {
                 let operator = body[index];
                 index += 1;
                 operator
             } else {
                 0
             };
-            if repetition != 0
-                && matches!(
-                    &atom,
-                    Atom::Frontier(_)
-                        | Atom::Balanced(_, _)
-                        | Atom::CaptureOpen
-                        | Atom::CaptureClose
-                        | Atom::CapturePosition
-                        | Atom::Backreference(_)
-                )
-            {
-                return Err(FlowError::Unsupported(
-                    "Lua structural-pattern repetition is not implemented".into(),
-                ));
-            }
             atoms.push((atom, repetition));
         }
         // An unfinished '(' raises an error only when the matching
