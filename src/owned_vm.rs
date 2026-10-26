@@ -158,6 +158,9 @@ pub enum Instruction {
         dest: usize,
         callee: usize,
         argc: usize,
+        /// Expand the previous call's complete result vector into this
+        /// call's final argument position, as required by Lua.
+        expand_tail: bool,
     },
     /// Read one value from the most recent call, padding with nil.
     ReadCallResult {
@@ -548,14 +551,18 @@ fn emit<'a>(
                 return Err(Error::TooLarge);
             }
             let callee = emit(program, callee, depth + 1, locals)?;
-            for argument in arguments {
+            let expand_tail = matches!(arguments.last(), Some(Expr::Call { .. }));
+            for (index, argument) in arguments.iter().enumerate() {
                 let source = emit(program, argument, depth + 1, locals)?;
-                emit_instruction(program, Instruction::PushArgument { source })?;
+                if !(expand_tail && index + 1 == arguments.len()) {
+                    emit_instruction(program, Instruction::PushArgument { source })?;
+                }
             }
             Instruction::Call {
                 dest: program.registers,
                 callee,
-                argc: arguments.len(),
+                argc: arguments.len() - usize::from(expand_tail),
+                expand_tail,
             }
         }
         Expr::Unary { op: "#", right } => {
@@ -1804,9 +1811,9 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             Instruction::PushArgument { source } => register(source),
             Instruction::ReadCallResult { dest, .. } => register(dest),
             Instruction::AppendReturnExpansion => true,
-            Instruction::Call { dest, callee, argc } => {
-                register(dest) && register(callee) && argc <= MAX_CALL_ARGUMENTS
-            }
+            Instruction::Call {
+                dest, callee, argc, ..
+            } => register(dest) && register(callee) && argc <= MAX_CALL_ARGUMENTS,
             Instruction::Load { dest, .. }
             | Instruction::LoadBoolean { dest, .. }
             | Instruction::LoadFloat { dest, .. }
@@ -2195,13 +2202,25 @@ pub fn execute_register_program_with_strings_and_budget(
             Instruction::LoadFloat { dest, bits } => (dest, RegisterValue::Float(bits)),
             Instruction::LoadString { dest, index } => (dest, RegisterValue::String(index)),
             Instruction::LoadBuiltin { dest, builtin } => (dest, RegisterValue::Builtin(builtin)),
-            Instruction::Call { dest, callee, argc } => {
+            Instruction::Call {
+                dest,
+                callee,
+                argc,
+                expand_tail,
+            } => {
                 let function = read(&registers, callee)?;
                 let start = call_arguments
                     .len()
                     .checked_sub(argc)
                     .ok_or(Error::InvalidBytecode)?;
-                let arguments = &call_arguments[start..];
+                let mut evaluated = call_arguments[start..].to_vec();
+                if expand_tail {
+                    if evaluated.len().saturating_add(last_call_results.len()) > MAX_CALL_ARGUMENTS {
+                        return Err(Error::TooLarge);
+                    }
+                    evaluated.extend_from_slice(&last_call_results);
+                }
+                let arguments = evaluated.as_slice();
                 let results = match function {
                     RegisterValue::Builtin(RegisterBuiltin::Type) => {
                         let first = arguments.first().ok_or(Error::TypeError)?;
