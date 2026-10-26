@@ -662,7 +662,7 @@ fn owned_string_pack_extended_9_to_16_byte_widths_match_lua54() {
         "local p=string.pack('>s9','ab\\0c'); local a,n=string.unpack('>s9',p); print(#p,a=='ab\\0c',n)",
         "local p=string.pack('<s16','end'); print(#p,string.unpack('<s16',p))",
         "local p=string.pack('>I9s9i9',100,'a\\0b',-99); local a,b,c,n=string.unpack('>I9s9i9',p); print(#p,a,b=='a\\0b',c,n)",
-        "local raw=string.char(1,0,0,0,0,0,0,0,1); print(pcall(string.unpack,'<I9',raw))",
+        "local raw=string.char(1,0,0,0,0,0,0,0,1); local ok,e=pcall(string.unpack,'<I9',raw); print(ok,type(e))",
         "local raw=string.char(1,0,0,0,0,0,0,0,255); local ok=pcall(string.unpack,'<i9',raw); print(ok)",
         "local a=pcall(string.packsize,'i17'); local b=pcall(string.packsize,'s17'); local c=pcall(string.packsize,'I0'); print(a,b,c)",
     ] {
