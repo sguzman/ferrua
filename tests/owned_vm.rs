@@ -152,7 +152,7 @@ fn bitwise_register_exact_float_to_integer_coercions_match_lua54() {
             );
             assert_eq!(
                 String::from_utf8_lossy(&output.stdout).trim(),
-                format!("{expected}\\tinteger"),
+                format!("{expected}\tinteger"),
                 "{source}"
             );
         }
