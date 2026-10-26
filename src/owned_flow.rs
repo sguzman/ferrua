@@ -6298,7 +6298,9 @@ impl Execution<'_> {
             b'g' => Some((33..=126).contains(&actual)),
             b'l' => Some(actual.is_ascii_lowercase()),
             b'p' => Some(actual.is_ascii_punctuation()),
-            b's' => Some(actual.is_ascii_whitespace()),
+            // C isspace includes VT (0x0B), which Rust's
+            // is_ascii_whitespace deliberately excludes.
+            b's' => Some(matches!(actual, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)),
             b'u' => Some(actual.is_ascii_uppercase()),
             b'w' => Some(actual.is_ascii_alphanumeric()),
             b'x' => Some(actual.is_ascii_hexdigit()),
