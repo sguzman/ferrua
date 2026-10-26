@@ -242,6 +242,21 @@ fn owned_math_fmod_modf_multi_return_and_failure_parity_match_lua54() {
 }
 
 #[test]
+fn owned_math_type_and_tointeger_missing_arguments_match_lua54() {
+    for source in [
+        "local ok,err=pcall(math.type); print(ok,type(err))",
+        "local ok,err=pcall(math.tointeger); print(ok,type(err))",
+        "local a=pcall(math.type); local b=pcall(math.tointeger); print(a,b)",
+        "print(math.type(nil)==nil,math.tointeger(nil)==nil)",
+        "print(math.type(false)==nil,math.tointeger(false)==nil)",
+        "print(math.type(7),math.type(7.0),math.tointeger(7.0))",
+        "local f=math.tointeger; print(pcall(f),pcall(f,nil))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_math_sqrt_and_unsigned_integer_order_match_lua54() {
     for source in [
         "print(math.sqrt(81)==9.0,math.type(math.sqrt(81)),math.sqrt('16')==4.0,math.sqrt(2)^2>1.999,math.sqrt(2)^2<2.001)",

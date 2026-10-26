@@ -3016,12 +3016,19 @@ impl Execution<'_> {
     fn math_builtin(&mut self, builtin: Builtin, args: &[Value]) -> Result<Value, FlowError> {
         let first = args.first().copied().unwrap_or(Value::Nil);
         match builtin {
-            Builtin::MathType => match first {
-                Value::Integer(_) => self.intern_rooted_string(b"integer".to_vec(), args),
-                Value::Float(_) => self.intern_rooted_string(b"float".to_vec(), args),
-                _ => Ok(Value::Nil),
-            },
+            Builtin::MathType => {
+                // Lua checks that argument #1 is present, but accepts nil
+                // as a supplied value and returns nil for its numeric type.
+                let value = *args.first().ok_or(FlowError::TypeError)?;
+                match value {
+                    Value::Integer(_) => self.intern_rooted_string(b"integer".to_vec(), args),
+                    Value::Float(_) => self.intern_rooted_string(b"float".to_vec(), args),
+                    _ => Ok(Value::Nil),
+                }
+            }
             Builtin::MathToInteger => {
+                // Missing argument is an error; explicitly passed nil is not.
+                let first = *args.first().ok_or(FlowError::TypeError)?;
                 // Lua's lua_tointegerx also recognizes hexadecimal numeric
                 // strings, including wrapped 64-bit integer spellings.
                 let operand = self.lua_numeric_operand(first);
