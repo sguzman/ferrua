@@ -96,7 +96,10 @@ fn register_string_locals_branches_and_loop_carried_values_match_lua54() {
         ("if 'a'<'b' then return 1 else return 0 end", 1),
         ("local s='é'; if #s==2 then return 7 else return 0 end", 7),
         ("local s='a'; if s=='a' then return 2 end; return 0", 2),
-        ("local s='a'; s='b'; if s~='a' then return 3 end; return 0", 3),
+        (
+            "local s='a'; s='b'; if s~='a' then return 3 end; return 0",
+            3,
+        ),
         ("local s='b'; while s=='b' do s='a' end; return #s", 1),
         ("local s='a'; repeat s='b' until s=='b'; return #s", 1),
     ] {
