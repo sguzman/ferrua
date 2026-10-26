@@ -3027,7 +3027,8 @@ mod tests {
     #[test]
     fn register_explicit_instruction_budget_is_exact_and_cannot_bypass_hard_cap() {
         let chunk = compile_integer_chunk("return 7").unwrap();
-        assert_eq!(chunk.code.len(), 2);
+        // Loading, recording the result, and returning each spend a step.
+        assert_eq!(chunk.code.len(), 3);
         assert_eq!(
             execute_integer_program_with_budget(&chunk, 0),
             Err(Error::StepBudgetExceeded)
@@ -3036,7 +3037,11 @@ mod tests {
             execute_integer_program_with_budget(&chunk, 1),
             Err(Error::StepBudgetExceeded)
         );
-        assert_eq!(execute_integer_program_with_budget(&chunk, 2), Ok(7));
+        assert_eq!(
+            execute_integer_program_with_budget(&chunk, 2),
+            Err(Error::StepBudgetExceeded)
+        );
+        assert_eq!(execute_integer_program_with_budget(&chunk, 3), Ok(7));
         assert_eq!(
             execute_integer_program_with_budget(&chunk, usize::MAX),
             Ok(7)
@@ -3328,7 +3333,7 @@ mod tests {
     #[test]
     fn tagged_register_values_obey_exact_budgets_and_unreachable_validation() {
         let program = compile_integer_chunk("return nil").unwrap();
-        assert_eq!(program.code.len(), 2);
+        assert_eq!(program.code.len(), 3);
         assert_eq!(
             execute_register_program_with_budget(&program, 0),
             Err(Error::StepBudgetExceeded)
@@ -3339,6 +3344,10 @@ mod tests {
         );
         assert_eq!(
             execute_register_program_with_budget(&program, 2),
+            Err(Error::StepBudgetExceeded)
+        );
+        assert_eq!(
+            execute_register_program_with_budget(&program, 3),
             Ok(RegisterValue::Nil)
         );
         assert_eq!(
