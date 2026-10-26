@@ -4256,8 +4256,9 @@ impl Execution<'_> {
             Value::Integer(number) => {
                 self.intern_rooted_string(number.to_string().into_bytes(), roots)?
             }
-            Value::Float(bits) => self
-                .intern_rooted_string(lua_default_float_bytes(f64::from_bits(bits)), roots)?,
+            Value::Float(bits) => {
+                self.intern_rooted_string(lua_default_float_bytes(f64::from_bits(bits)), roots)?
+            }
             Value::Boolean(boolean) => {
                 self.intern_rooted_string(boolean.to_string().into_bytes(), roots)?
             }
