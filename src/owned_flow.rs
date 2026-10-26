@@ -2387,7 +2387,12 @@ impl Execution<'_> {
                         let marked = marked_gmatch
                             .get_mut(handle)
                             .ok_or(FlowError::InvalidBytecode)?;
-                        if self.gmatch_states.get(handle).and_then(Option::as_ref).is_none() {
+                        if self
+                            .gmatch_states
+                            .get(handle)
+                            .and_then(Option::as_ref)
+                            .is_none()
+                        {
                             return Err(FlowError::InvalidBytecode);
                         }
                         *marked = true;
@@ -2556,9 +2561,7 @@ impl Execution<'_> {
         // Lua string handles. After weak edges are cleared, release dead
         // snapshots and recycle their identities only when unreferenced.
         for (handle, live) in marked_gmatch.into_iter().enumerate() {
-            if !live
-                && let Some(state) = self.gmatch_states[handle].take()
-            {
+            if !live && let Some(state) = self.gmatch_states[handle].take() {
                 self.gmatch_bytes -= state.source.len().saturating_add(state.pattern.len());
                 self.free_gmatch_states.push(handle);
             }
@@ -5116,10 +5119,12 @@ impl Execution<'_> {
         let bytes = source.len().saturating_add(pattern.len());
         if self.automatic_gc
             && (self.gmatch_bytes.saturating_add(bytes) > MAX_STRING_POOL_BYTES
-                || (self.gmatch_states.len() >= MAX_STRINGS
-                    && self.free_gmatch_states.is_empty()))
+                || (self.gmatch_states.len() >= MAX_STRINGS && self.free_gmatch_states.is_empty()))
         {
-            let frame = self.gc_frame_roots.last().ok_or(FlowError::InvalidBytecode)?;
+            let frame = self
+                .gc_frame_roots
+                .last()
+                .ok_or(FlowError::InvalidBytecode)?;
             let slots = frame.slots.clone();
             let prepared = frame.prepared.clone();
             self.collect_root_tables(args, &slots, &prepared)?;
@@ -5141,7 +5146,10 @@ impl Execution<'_> {
             done: false,
         };
         let handle = if let Some(handle) = self.free_gmatch_states.pop() {
-            *self.gmatch_states.get_mut(handle).ok_or(FlowError::InvalidBytecode)? = Some(state);
+            *self
+                .gmatch_states
+                .get_mut(handle)
+                .ok_or(FlowError::InvalidBytecode)? = Some(state);
             handle
         } else {
             let handle = self.gmatch_states.len();
@@ -5195,9 +5203,10 @@ impl Execution<'_> {
             let mut roots = args.to_vec();
             roots.push(Value::Builtin(Builtin::StringGmatchIterator(handle)));
             return if captures.is_empty() {
-                Ok(vec![
-                    self.intern_rooted_string(source[begin..end].to_vec(), &roots)?,
-                ])
+                Ok(vec![self.intern_rooted_string(
+                    source[begin..end].to_vec(),
+                    &roots,
+                )?])
             } else {
                 self.simple_pattern_capture_values(&source, &captures, &roots)
             };
