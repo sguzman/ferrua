@@ -7,6 +7,114 @@ use ferrua::owned_vm::{
 use std::process::Command;
 
 #[test]
+fn register_dynamic_concatenation_and_string_operations_match_lua54() {
+    use ferrua::owned_vm::{
+        Error, execute_register_program_with_strings,
+        execute_register_program_with_strings_and_budget,
+    };
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+
+    for (chunk, expected) in [
+        ("return 'a'..'b'", "ab"),
+        ("return 'a'..'b'..'c'", "abc"),
+        ("return ('ab'..'cd')..'ef'", "abcdef"),
+        ("local x='a'; x=x..'b'; return x", "ab"),
+        ("local x='a'; while #x<5 do x=x..'a' end return x", "aaaaa"),
+        ("return 'number='..42", "number=42"),
+        ("return 'float='..2.5", "float=2.5"),
+        ("return 'a'..''..'b'", "ab"),
+        ("return ('ab'..'cd')..('e'..'f')", "abcdef"),
+    ] {
+        let program = compile_integer_chunk(chunk).unwrap();
+        let result = execute_register_program_with_strings(&program).unwrap();
+        assert_eq!(result.string_bytes(), Some(expected.as_bytes()), "{chunk}");
+        if program.string_bytes(result.value).is_none() {
+            assert!(matches!(
+                execute_register_program(&program),
+                Err(Error::Unsupported(_))
+            ));
+        }
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let code = format!("local function f() {chunk} end; io.write(f())");
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{executable} rejected {chunk}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, expected.as_bytes(), "{executable}: {chunk}");
+        }
+    }
+    for (expression, expected) in [
+        ("#('é'..'z')", RegisterValue::Integer(3)),
+        ("('a'..'b') == 'ab'", RegisterValue::Boolean(true)),
+        ("('a'..'b') ~= 'ab'", RegisterValue::Boolean(false)),
+        ("('a'..'b') < 'ac'", RegisterValue::Boolean(true)),
+        ("('b'..'a') >= 'az'", RegisterValue::Boolean(true)),
+        ("('a'..'b') == ('a'..'b')", RegisterValue::Boolean(true)),
+        ("false and ('a'..nil)", RegisterValue::Boolean(false)),
+        ("true or ('a'..nil)", RegisterValue::Boolean(true)),
+    ] {
+        let program = compile_integer_expression(expression).unwrap();
+        assert_eq!(execute_register_program(&program), Ok(expected), "{expression}");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command
+                .args(["-e", &format!("io.write(tostring({expression}))")])
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{executable}: {expression}");
+            let actual = match expected {
+                RegisterValue::Integer(n) => n.to_string(),
+                RegisterValue::Boolean(n) => n.to_string(),
+                _ => unreachable!(),
+            };
+            assert_eq!(output.stdout, actual.as_bytes(), "{expression}");
+        }
+    }
+    for chunk in [
+        "return 'a'..nil",
+        "return 'a'..false",
+        "return nil..'a'",
+    ] {
+        let program = compile_integer_chunk(chunk).unwrap();
+        assert_eq!(
+            execute_register_program_with_strings(&program),
+            Err(Error::TypeError),
+            "{chunk}"
+        );
+    }
+    let quota = compile_integer_chunk(
+        "local x='a'; for i=1,18 do x=x..x end return x",
+    ).unwrap();
+    assert_eq!(
+        execute_register_program_with_strings(&quota),
+        Err(Error::TooLarge)
+    );
+    let program = compile_integer_expression("'a'..'b'").unwrap();
+    assert_eq!(
+        execute_register_program_with_strings_and_budget(&program, 0),
+        Err(Error::StepBudgetExceeded)
+    );
+}
+
+#[test]
 fn register_adjusted_scalar_assignments_match_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
