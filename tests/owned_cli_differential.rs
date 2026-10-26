@@ -70,7 +70,10 @@ macro_rules! owned_first_party_conformance {
     };
 }
 
-owned_first_party_conformance!(owned_conformance_control_flow, "conformance/01-control-flow.lua");
+owned_first_party_conformance!(
+    owned_conformance_control_flow,
+    "conformance/01-control-flow.lua"
+);
 owned_first_party_conformance!(owned_conformance_closures, "conformance/02-closures.lua");
 owned_first_party_conformance!(owned_conformance_tables, "conformance/03-tables.lua");
 owned_first_party_conformance!(
@@ -78,8 +81,14 @@ owned_first_party_conformance!(
     "conformance/04-string-patterns.lua"
 );
 owned_first_party_conformance!(owned_conformance_upvalues, "conformance/05-upvalues.lua");
-owned_first_party_conformance!(owned_conformance_lexical_scopes, "conformance/06-scopes.lua");
-owned_first_party_conformance!(owned_conformance_metatables, "conformance/08-metatables.lua");
+owned_first_party_conformance!(
+    owned_conformance_lexical_scopes,
+    "conformance/06-scopes.lua"
+);
+owned_first_party_conformance!(
+    owned_conformance_metatables,
+    "conformance/08-metatables.lua"
+);
 owned_first_party_conformance!(
     owned_conformance_generic_iterators,
     "conformance/09-generic-iterators.lua"
