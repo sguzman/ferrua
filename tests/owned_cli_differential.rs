@@ -560,6 +560,25 @@ fn owned_string_gsub_function_replacements_and_capture_args_match_lua54() {
 }
 
 #[test]
+fn owned_string_gmatch_iterators_and_captures_match_lua54() {
+    for source in [
+        "local a={}; for x in string.gmatch('red green blue','%a+') do a[#a+1]=x end; print(table.concat(a,','))",
+        "local g=string.gmatch('one two','%a+'); print(type(g),g(),g(),g()==nil,g()==nil)",
+        "local a=string.gmatch('12','%d'); local b=string.gmatch('xy','%a'); print(a(),b(),a(),b(),a()==nil,b()==nil)",
+        "for a,b in string.gmatch('a=1,b=2','(%a)=(%d)') do print(a,b) end",
+        "local a={}; for pos in string.gmatch('abc','()b') do a[#a+1]=pos end; print(table.concat(a,','))",
+        "local a={}; for s in string.gmatch('aba','^a') do a[#a+1]=s end; print(table.concat(a,','))",
+        "local a={}; for s in string.gmatch('ab','') do a[#a+1]='['..s..']' end; print(table.concat(a,','))",
+        "local a={}; for s in string.gmatch('aba','a*') do a[#a+1]='['..s..']' end; print(table.concat(a,','))",
+        "local a={}; for s in string.gmatch('a\\0b','.') do a[#a+1]=#s end; print(table.concat(a,','))",
+        "local a={}; for s in string.gmatch('a b','%a+') do collectgarbage('collect'); a[#a+1]=s end; print(table.concat(a,','))",
+        "local iter=string.gmatch('xy','%a'); local good,x=pcall(iter); print(good,x,iter(),iter()==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",

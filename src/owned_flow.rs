@@ -106,6 +106,8 @@ pub enum Builtin {
     StringByte,
     StringFind,
     StringMatch,
+    StringGmatch,
+    StringGmatchIterator(usize),
     StringGsub,
     StringChar,
     StringLower,
@@ -162,6 +164,7 @@ const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"byte", Builtin::StringByte),
     (b"find", Builtin::StringFind),
     (b"match", Builtin::StringMatch),
+    (b"gmatch", Builtin::StringGmatch),
     (b"gsub", Builtin::StringGsub),
     (b"char", Builtin::StringChar),
     (b"lower", Builtin::StringLower),
@@ -1858,6 +1861,16 @@ fn lua_utf8_pos(pos: i64, length: usize) -> i64 {
     }
 }
 
+/// Independent closure-like state for each Lua string.gmatch iterator.
+/// Subject/pattern bytes are owned so GC cannot invalidate iterator inputs.
+struct GmatchState {
+    source: Vec<u8>,
+    pattern: Vec<u8>,
+    cursor: usize,
+    last_end: Option<usize>,
+    done: bool,
+}
+
 struct Execution<'a> {
     program: &'a FlowProgram,
     budget: usize,
@@ -1897,6 +1910,8 @@ struct Execution<'a> {
     global_table: Option<usize>,
     math_table: Option<usize>,
     random_state: [u64; 4],
+    gmatch_states: Vec<GmatchState>,
+    gmatch_bytes: usize,
     string_table: Option<usize>,
     utf8_table: Option<usize>,
     table_library: Option<usize>,
@@ -4151,6 +4166,12 @@ impl Execution<'_> {
             Value::Builtin(Builtin::StringByte) => self.string_byte_builtin(&arguments),
             Value::Builtin(Builtin::StringFind) => self.string_find_literal_builtin(&arguments),
             Value::Builtin(Builtin::StringMatch) => self.string_match_builtin(&arguments),
+            Value::Builtin(Builtin::StringGmatch) => {
+                Ok(vec![self.string_gmatch_builtin(&arguments)?])
+            }
+            Value::Builtin(Builtin::StringGmatchIterator(handle)) => {
+                self.string_gmatch_iterator(handle, &arguments)
+            }
             Value::Builtin(Builtin::StringGsub) => self.string_gsub_builtin(&arguments),
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
             Value::Builtin(Builtin::TablePack) => Ok(vec![self.table_pack_builtin(&arguments)?]),
@@ -5026,6 +5047,85 @@ impl Execution<'_> {
             Some((_, _, captures)) => self.simple_pattern_capture_values(&source, &captures, args),
             None => Ok(vec![Value::Nil]),
         }
+    }
+
+    /// Create a first-class, independent Lua iterator. The owned engine
+    /// limits total live iterator snapshots rather than letting repeated
+    /// gmatch calls allocate unbounded Rust-side memory.
+    fn string_gmatch_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        let source = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
+        let mut pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
+        // Lua 5.4 string.gmatch ignores a leading '^', unlike find/match.
+        if pattern.first() == Some(&b'^') {
+            pattern.remove(0);
+        }
+        let bytes = source.len().saturating_add(pattern.len());
+        if self.gmatch_states.len() >= MAX_STRINGS
+            || self.gmatch_bytes.saturating_add(bytes) > MAX_STRING_POOL_BYTES
+        {
+            return Err(FlowError::TooLarge);
+        }
+        if self.steps.saturating_add(bytes.max(1)) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += bytes.max(1);
+        let handle = self.gmatch_states.len();
+        self.gmatch_states.push(GmatchState {
+            source,
+            pattern,
+            cursor: 0,
+            last_end: None,
+            done: false,
+        });
+        self.gmatch_bytes += bytes;
+        Ok(Value::Builtin(Builtin::StringGmatchIterator(handle)))
+    }
+
+    /// The iterator preserves its own cursor, ignores ordinary Lua call
+    /// arguments, skips duplicate empty matches and returns captures (or
+    /// the whole match when no captures are present).
+    fn string_gmatch_iterator(
+        &mut self,
+        handle: usize,
+        args: &[Value],
+    ) -> Result<Vec<Value>, FlowError> {
+        let state = self.gmatch_states.get(handle).ok_or(FlowError::InvalidBytecode)?;
+        if state.done {
+            return Ok(Vec::new());
+        }
+        let source = state.source.clone();
+        let pattern = state.pattern.clone();
+        let mut cursor = state.cursor;
+        let previous_end = state.last_end;
+        while cursor <= source.len() {
+            if self.steps >= self.budget {
+                return Err(FlowError::StepBudgetExceeded);
+            }
+            self.steps += 1;
+            let result = self.simple_pattern_match(
+                &source,
+                &pattern,
+                cursor as i64 + 1,
+                false,
+            )?;
+            let Some((begin, end, captures)) = result else {
+                break;
+            };
+            if Some(end) == previous_end {
+                cursor = begin.saturating_add(1);
+                continue;
+            }
+            let state = self.gmatch_states.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
+            state.cursor = end;
+            state.last_end = Some(end);
+            return if captures.is_empty() {
+                Ok(vec![self.intern_rooted_string(source[begin..end].to_vec(), args)?])
+            } else {
+                self.simple_pattern_capture_values(&source, &captures, args)
+            };
+        }
+        self.gmatch_states.get_mut(handle).ok_or(FlowError::InvalidBytecode)?.done = true;
+        Ok(Vec::new())
     }
 
     /// Search a bounded byte string using only the implemented Lua-pattern
@@ -6789,6 +6889,7 @@ impl Execution<'_> {
                                     | Builtin::MathRandom
                                     | Builtin::MathRandomSeed
                                     | Builtin::StringChar
+                                    | Builtin::StringGmatchIterator(_)
                                     | Builtin::Utf8Char
                                     | Builtin::TablePack
                                     | Builtin::CollectGarbage
@@ -6814,6 +6915,8 @@ impl Execution<'_> {
                                 | Builtin::StringByte
                                 | Builtin::StringFind
                                 | Builtin::StringMatch
+                                | Builtin::StringGmatch
+                                | Builtin::StringGmatchIterator(_)
                                 | Builtin::StringGsub
                                 | Builtin::Utf8Len
                                 | Builtin::Utf8Codepoint
@@ -6846,6 +6949,10 @@ impl Execution<'_> {
                                 Builtin::StringByte => self.string_byte_builtin(&args)?,
                                 Builtin::StringFind => self.string_find_literal_builtin(&args)?,
                                 Builtin::StringMatch => self.string_match_builtin(&args)?,
+                                Builtin::StringGmatch => vec![self.string_gmatch_builtin(&args)?],
+                                Builtin::StringGmatchIterator(handle) => {
+                                    self.string_gmatch_iterator(handle, &args)?
+                                }
                                 Builtin::StringGsub => self.string_gsub_builtin(&args)?,
                                 Builtin::Utf8Len => self.utf8_len_builtin(&args)?,
                                 Builtin::Utf8Codepoint => self.utf8_codepoint_builtin(&args)?,
@@ -6923,6 +7030,8 @@ impl Execution<'_> {
                             | Builtin::StringByte
                             | Builtin::StringFind
                             | Builtin::StringMatch
+                            | Builtin::StringGmatch
+                            | Builtin::StringGmatchIterator(_)
                             | Builtin::StringGsub
                             | Builtin::Utf8Len
                             | Builtin::Utf8Codepoint
@@ -7628,6 +7737,8 @@ pub fn execute_flow_capture_with_args<'a>(
         global_table: None,
         math_table: None,
         random_state: [0, 0xff, 0, 0],
+        gmatch_states: Vec::new(),
+        gmatch_bytes: 0,
         string_table: None,
         utf8_table: None,
         table_library: None,
