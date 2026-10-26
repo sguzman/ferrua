@@ -40,7 +40,7 @@ cargo test --locked --all-targets
 cargo run --locked -- tools/roadmap.lua --check
 ```
 
-**Latest verified implementation CI:** [all five jobs green at `6323111` for first-party bounded `string.gmatch` iterators, capture propagation, independent state and empty-match/caret semantics](https://github.com/sguzman/ferrua/actions/runs/40259224775). Earlier hexadecimal float precision and nibble rounding remain verified at [CI #40257452885](https://github.com/sguzman/ferrua/actions/runs/40257452885). The production `luna-core` backend is unchanged. Comprehensive pattern/standard-library and whole-language conformance, native EndeavourOS/Hyprland QA, independent owned-engine graduation and stable tagged distribution remain unaccepted.
+**Latest verified implementation CI:** [all five jobs green at `92aa5fc` for GC-managed first-party `string.gmatch` iterator snapshots, weak references, and bounded recycling](https://github.com/sguzman/ferrua/actions/runs/40259936950). Initial iterator/capture semantics remain verified at [CI #40259224775](https://github.com/sguzman/ferrua/actions/runs/40259224775); hexadecimal-float precision at [CI #40257452885](https://github.com/sguzman/ferrua/actions/runs/40257452885). The production `luna-core` backend is unchanged. Complete Lua conformance, native EndeavourOS/Hyprland QA, first-party engine graduation and stable tagged distribution remain unaccepted.
 
 Project management follows the evidence-based style of Posthorn, Typefinch and Rust Age. [🗺️ Roadmap](docs/ROADMAP.md) · [🔢 Machine ledger](docs/progress.json) · [🏗️ Architecture and VM provenance](docs/ARCHITECTURE.md) · [🎨 Project color](docs/COLOR.md) · [📋 Tracking queue](docs/ISSUES.md) · [⚙️ GitHub Actions setup](docs/ACTIONS.md).
 
