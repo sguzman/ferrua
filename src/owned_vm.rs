@@ -2272,14 +2272,15 @@ pub fn execute_register_program_with_strings_and_budget(
                             {
                                 vec![RegisterValue::Integer(available as i64)]
                             }
-                            RegisterValue::Integer(position) => {
-                                if *position == 0 {
+                            _ => {
+                                let position = register_select_integer(*selector, &strings)?;
+                                if position == 0 {
                                     return Err(Error::TypeError);
                                 }
-                                let offset = if *position > 0 {
-                                    i128::from(*position) - 1
+                                let offset = if position > 0 {
+                                    i128::from(position) - 1
                                 } else {
-                                    available as i128 + i128::from(*position)
+                                    available as i128 + i128::from(position)
                                 };
                                 if offset < 0 {
                                     return Err(Error::TypeError);
@@ -2288,7 +2289,6 @@ pub fn execute_register_program_with_strings_and_budget(
                                     usize::try_from(offset).map_err(|_| Error::TooLarge)?;
                                 arguments[1 + offset.min(available)..].to_vec()
                             }
-                            _ => return Err(Error::TypeError),
                         }
                     }
                     _ => return Err(Error::TypeError),
@@ -2477,6 +2477,62 @@ pub fn execute_register_program_with_strings_and_budget(
         values: return_values,
         strings,
     })
+}
+
+/// Lua's integer argument coercion for the bounded `select` builtin.
+/// Numeric strings and exactly integral finite floats are accepted; fractional,
+/// overflowing, nonnumeric and non-scalar values are rejected.
+fn register_select_integer(value: RegisterValue, strings: &[Vec<u8>]) -> Result<i64, Error> {
+    fn exact_integer(number: f64) -> Option<i64> {
+        if !number.is_finite()
+            || number.fract() != 0.0
+            || !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
+                .contains(&number)
+        {
+            return None;
+        }
+        Some(number as i64)
+    }
+
+    match value {
+        RegisterValue::Integer(number) => Ok(number),
+        RegisterValue::Float(bits) => {
+            exact_integer(f64::from_bits(bits)).ok_or(Error::TypeError)
+        }
+        RegisterValue::String(index) => {
+            let bytes = strings.get(index).ok_or(Error::InvalidBytecode)?;
+            let source = std::str::from_utf8(bytes)
+                .map_err(|_| Error::TypeError)?
+                .trim_ascii();
+            if source.is_empty() {
+                return Err(Error::TypeError);
+            }
+            if let Ok(integer) = source.parse::<i64>() {
+                return Ok(integer);
+            }
+            let (negative, unsigned) = if let Some(unsigned) = source.strip_prefix('-') {
+                (true, unsigned)
+            } else {
+                (false, source.strip_prefix('+').unwrap_or(source))
+            };
+            if unsigned.starts_with("0x") || unsigned.starts_with("0X") {
+                if let Some(integer) = parse_lua_hex_integer_wrapping(unsigned) {
+                    return Ok(if negative {
+                        integer.wrapping_neg()
+                    } else {
+                        integer
+                    });
+                }
+                if let Some(float) = parse_lua_hex_float(unsigned) {
+                    return exact_integer(if negative { -float } else { float })
+                        .ok_or(Error::TypeError);
+                }
+            }
+            exact_integer(source.parse::<f64>().map_err(|_| Error::TypeError)?)
+                .ok_or(Error::TypeError)
+        }
+        _ => Err(Error::TypeError),
+    }
 }
 
 /// Intern execution-owned byte strings, preserving equality and quota
