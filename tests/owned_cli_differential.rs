@@ -725,9 +725,23 @@ fn owned_binary_unpack_start_position_bounds_match_lua54() {
         "local s=string.char(7,42,9); local a,pos=string.unpack('B',s,-2); print(a,pos)",
         "local s=string.char(7); local a,pos=string.unpack('B',s,-1); print(a,pos)",
         "local s=string.char(7); print(string.unpack('',s,2))",
-        "local s=string.char(7); local a=pcall(string.unpack,'B',s,0); local b=pcall(string.unpack,'B',s,-2); local c=pcall(string.unpack,'',s,0); local d=pcall(string.unpack,'',s,-2); local e=pcall(string.unpack,'',s,3); print(a,b,c,d,e)",
     ] {
         assert_parity(source, true);
+    }
+
+    // Pinned luna-core currently clamps zero/out-of-range negative starts
+    // to the first byte. Keep its known deviation visible, while requiring
+    // the owned engine to match upstream Lua's strict position bounds.
+    let source = "local s=string.char(7); local a=pcall(string.unpack,'B',s,0); local b=pcall(string.unpack,'B',s,-2); local c=pcall(string.unpack,'',s,0); local d=pcall(string.unpack,'',s,-2); local e=pcall(string.unpack,'',s,3); print(a,b,c,d,e)";
+    let owned = run_fer(true, source);
+    let production = run_fer(false, source);
+    assert!(owned.status.success());
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"false\\tfalse\\tfalse\\tfalse\\tfalse\\n");
+    assert_eq!(production.stdout, b"true\\ttrue\\ttrue\\ttrue\\tfalse\\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, reference.stdout);
     }
 }
 
