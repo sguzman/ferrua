@@ -243,6 +243,7 @@ fn register_global_environment_and_shadowing_match_lua54() {
                     ));
                 }
                 RegisterValue::Builtin(_) => actual.push_str("function"),
+                RegisterValue::Table(_) => actual.push_str("table"),
             }
         }
         assert_eq!(actual, expected, "{chunk}");
@@ -340,6 +341,7 @@ fn register_select_multireturn_adjustment_matches_lua54() {
                     String::from_utf8_lossy(owned.value_string_bytes(value).unwrap()).into_owned()
                 }
                 RegisterValue::Builtin(_) => "function".to_string(),
+                RegisterValue::Table(_) => "table".to_string(),
             };
             actual.push('|');
             actual.push_str(&text);
@@ -745,6 +747,7 @@ fn register_string_literals_have_upstream_lua54_output_parity() {
             RegisterValue::Float(bits) => format!("{:?}", f64::from_bits(bits)).into_bytes(),
             RegisterValue::String(_) => program.string_bytes(result).unwrap().to_vec(),
             RegisterValue::Builtin(_) => b"function: builtin".to_vec(),
+            RegisterValue::Table(_) => b"table: 0x0".to_vec(),
         };
         expected.push(b'\n');
         for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
