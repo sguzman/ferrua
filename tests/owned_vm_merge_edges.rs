@@ -422,3 +422,62 @@ fn scalar_return_fallthrough_through_nested_loops_matches_lua_54() {
         }
     }
 }
+
+#[test]
+fn scalar_register_multi_return_evaluates_discarded_expressions_like_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected, printed) in [
+        ("return 3, 4", RegisterValue::Integer(3), "number\t3\n"),
+        ("return nil, 7", RegisterValue::Nil, "nil\tnil\n"),
+        ("return true, false", RegisterValue::Boolean(true), "boolean\ttrue\n"),
+        ("local x=9; return x, x+3", RegisterValue::Integer(9), "number\t9\n"),
+        ("if true then return 5, 6 else return 7 end", RegisterValue::Integer(5), "number\t5\n"),
+        ("do return 8, 9 end", RegisterValue::Integer(8), "number\t8\n"),
+        ("return 1,2,3,4", RegisterValue::Integer(1), "number\t1\n"),
+        ("return 7, false and (1//0)", RegisterValue::Integer(7), "number\t7\n"),
+    ] {
+        let program = compile_integer_chunk(source).expect(source);
+        assert_eq!(execute_register_program(&program), Ok(expected), "{source}");
+        let lua = format!("local v=(function() {source} end)(); print(type(v),tostring(v))");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", &lua]).output().expect(executable);
+            assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(output.stdout, printed.as_bytes(), "{source}: {executable}");
+        }
+    }
+    for source in [
+        "return 7,1//0",
+        "return 7,true and (1//0)",
+        "return 1,2,1//0",
+    ] {
+        let program = compile_integer_chunk(source).expect(source);
+        assert_eq!(
+            execute_register_program(&program),
+            Err(Error::DivisionByZero),
+            "{source}"
+        );
+        let lua = format!("local ok=pcall(function() {source} end); print(ok)");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", &lua]).output().expect(executable);
+            assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(output.stdout, b"false\n", "{source}: {executable}");
+        }
+    }
+}

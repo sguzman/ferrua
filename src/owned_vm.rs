@@ -848,7 +848,7 @@ pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
 fn statements_definitely_return(statements: &[Statement<'_>]) -> bool {
     for statement in statements {
         match statement {
-            Statement::Return(values) if values.len() <= 1 => return true,
+            Statement::Return(_) => return true,
             Statement::Block(body) if statements_definitely_return(body) => return true,
             Statement::If {
                 branches,
@@ -1572,12 +1572,23 @@ fn compile_statements<'a>(
                 result = Some(0);
                 break;
             }
-            Statement::Return(values) if values.len() <= 1 => {
-                let value = if let Some(expression) = values.first() {
-                    emit(program, expression, 0, scopes)?
+            Statement::Return(values) => {
+                // Lua evaluates every return expression from left to right,
+                // even when the caller only consumes the first value. Do
+                // not skip side effects or errors from surplus scalar RHSs.
+                let mut first = None;
+                for expression in values {
+                    let register = emit(program, expression, 0, scopes)?;
+                    if first.is_none() {
+                        first = Some(register);
+                    }
+                }
+                let value = if let Some(first) = first {
+                    first
                 } else {
-                    // The scalar register API observes zero Lua results as nil.
-                    // The exact Lua result-count protocol remains future work.
+                    // This scalar register interface adjusts zero Lua
+                    // results to nil. Exact multiple-result transport is a
+                    // separate, still-unaccepted register VM capability.
                     if program.registers >= MAX_REGISTERS {
                         return Err(Error::TooLarge);
                     }
