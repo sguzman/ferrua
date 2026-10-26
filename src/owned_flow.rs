@@ -1709,13 +1709,14 @@ fn evaluate_binary(op: Binary, left: Value, right: Value) -> Result<Value, FlowE
     }
 }
 
-/// Values with explicit Lua heap identities can be removed from a weak-value
-/// table when no strong mark reaches them. Strings, numbers, booleans and
-/// native builtins have value-like semantics and remain in weak tables.
+/// Values with managed Lua heap identities can disappear from weak tables.
+/// Ordinary native builtins are permanent, but gmatch iterator builtins own
+/// recyclable snapshots and behave as collectible Lua closures.
 fn weak_value_unreachable(
     value: Value,
     marked_tables: &[bool],
     marked_closures: &[bool],
+    marked_gmatch: &[bool],
 ) -> Result<bool, FlowError> {
     match value {
         Value::Table(handle) => marked_tables
@@ -1723,6 +1724,10 @@ fn weak_value_unreachable(
             .map(|&live| !live)
             .ok_or(FlowError::InvalidBytecode),
         Value::Function(handle) => marked_closures
+            .get(handle)
+            .map(|&live| !live)
+            .ok_or(FlowError::InvalidBytecode),
+        Value::Builtin(Builtin::StringGmatchIterator(handle)) => marked_gmatch
             .get(handle)
             .map(|&live| !live)
             .ok_or(FlowError::InvalidBytecode),
@@ -1910,7 +1915,8 @@ struct Execution<'a> {
     global_table: Option<usize>,
     math_table: Option<usize>,
     random_state: [u64; 4],
-    gmatch_states: Vec<GmatchState>,
+    gmatch_states: Vec<Option<GmatchState>>,
+    free_gmatch_states: Vec<usize>,
     gmatch_bytes: usize,
     string_table: Option<usize>,
     utf8_table: Option<usize>,
@@ -2220,6 +2226,7 @@ impl Execution<'_> {
         }
         let mut marked_tables = vec![false; self.tables.len()];
         let mut marked_closures = vec![false; self.closures.len()];
+        let mut marked_gmatch = vec![false; self.gmatch_states.len()];
         let mut marked_strings = vec![false; self.strings.len()];
         // All compiler string handles are embedded in immutable bytecode and
         // must remain valid even if no executed path has referenced them.
@@ -2328,7 +2335,13 @@ impl Execution<'_> {
                                 work.push(key);
                             }
                             if !weak_values {
-                                if weak_keys && matches!(key, Value::Table(_) | Value::Function(_))
+                                if weak_keys
+                                    && matches!(
+                                        key,
+                                        Value::Table(_)
+                                            | Value::Function(_)
+                                            | Value::Builtin(Builtin::StringGmatchIterator(_))
+                                    )
                                 {
                                     ephemerons.push((key, value));
                                     activated.push(false);
@@ -2370,6 +2383,15 @@ impl Execution<'_> {
                             }
                         }
                     }
+                    Value::Builtin(Builtin::StringGmatchIterator(handle)) => {
+                        let marked = marked_gmatch
+                            .get_mut(handle)
+                            .ok_or(FlowError::InvalidBytecode)?;
+                        if self.gmatch_states.get(handle).and_then(Option::as_ref).is_none() {
+                            return Err(FlowError::InvalidBytecode);
+                        }
+                        *marked = true;
+                    }
                     _ => {}
                 }
             }
@@ -2380,7 +2402,14 @@ impl Execution<'_> {
                     return Err(FlowError::StepBudgetExceeded);
                 }
                 self.steps += 1;
-                if !*active && !weak_value_unreachable(key, &marked_tables, &marked_closures)? {
+                if !*active
+                    && !weak_value_unreachable(
+                        key,
+                        &marked_tables,
+                        &marked_closures,
+                        &marked_gmatch,
+                    )?
+                {
                     *active = true;
                     work.push(value);
                     changed = true;
@@ -2428,7 +2457,12 @@ impl Execution<'_> {
             for (index, &value) in table.array.iter().enumerate() {
                 if weak_values
                     && let Some(value) = value
-                    && weak_value_unreachable(value, &marked_tables, &marked_closures)?
+                    && weak_value_unreachable(
+                        value,
+                        &marked_tables,
+                        &marked_closures,
+                        &marked_gmatch,
+                    )?
                 {
                     array_positions.push(index);
                 }
@@ -2440,12 +2474,12 @@ impl Execution<'_> {
                     Value::Table(handle) if pending_finalizers.contains(&handle)
                 );
                 let dead_key = if weak_keys && !pending_finalizer_key {
-                    weak_value_unreachable(key, &marked_tables, &marked_closures)?
+                    weak_value_unreachable(key, &marked_tables, &marked_closures, &marked_gmatch)?
                 } else {
                     false
                 };
                 let dead_value = if weak_values {
-                    weak_value_unreachable(value, &marked_tables, &marked_closures)?
+                    weak_value_unreachable(value, &marked_tables, &marked_closures, &marked_gmatch)?
                 } else {
                     false
                 };
@@ -2462,6 +2496,7 @@ impl Execution<'_> {
         let sweep_cost = marked_tables
             .len()
             .saturating_add(marked_closures.len())
+            .saturating_add(marked_gmatch.len())
             .saturating_add(marked_strings.len())
             .saturating_add(self.captured_cells.len())
             .saturating_add(weak_scan_cost)
@@ -2515,6 +2550,18 @@ impl Execution<'_> {
             })();
             self.running_finalizers = false;
             return outcome;
+        }
+
+        // Gmatch iterator closures own Rust-side byte snapshots rather than
+        // Lua string handles. After weak edges are cleared, release dead
+        // snapshots and recycle their identities only when unreferenced.
+        for (handle, live) in marked_gmatch.into_iter().enumerate() {
+            if !live
+                && let Some(state) = self.gmatch_states[handle].take()
+            {
+                self.gmatch_bytes -= state.source.len().saturating_add(state.pattern.len());
+                self.free_gmatch_states.push(handle);
+            }
         }
 
         // Drop unreachable execution-only interned byte strings. Tombstone
@@ -2690,6 +2737,12 @@ impl Execution<'_> {
         for string in &self.strings {
             bytes = bytes.saturating_add(string.capacity());
         }
+        bytes = bytes.saturating_add(self.gmatch_bytes);
+        bytes = bytes.saturating_add(
+            self.gmatch_states
+                .capacity()
+                .saturating_mul(size_of::<Option<GmatchState>>()),
+        );
         bytes as f64 / 1024.0
     }
 
@@ -5061,7 +5114,17 @@ impl Execution<'_> {
             pattern.insert(0, b'%');
         }
         let bytes = source.len().saturating_add(pattern.len());
-        if self.gmatch_states.len() >= MAX_STRINGS
+        if self.automatic_gc
+            && (self.gmatch_bytes.saturating_add(bytes) > MAX_STRING_POOL_BYTES
+                || (self.gmatch_states.len() >= MAX_STRINGS
+                    && self.free_gmatch_states.is_empty()))
+        {
+            let frame = self.gc_frame_roots.last().ok_or(FlowError::InvalidBytecode)?;
+            let slots = frame.slots.clone();
+            let prepared = frame.prepared.clone();
+            self.collect_root_tables(args, &slots, &prepared)?;
+        }
+        if (self.gmatch_states.len() >= MAX_STRINGS && self.free_gmatch_states.is_empty())
             || self.gmatch_bytes.saturating_add(bytes) > MAX_STRING_POOL_BYTES
         {
             return Err(FlowError::TooLarge);
@@ -5070,14 +5133,21 @@ impl Execution<'_> {
             return Err(FlowError::StepBudgetExceeded);
         }
         self.steps += bytes.max(1);
-        let handle = self.gmatch_states.len();
-        self.gmatch_states.push(GmatchState {
+        let state = GmatchState {
             source,
             pattern,
             cursor: 0,
             last_end: None,
             done: false,
-        });
+        };
+        let handle = if let Some(handle) = self.free_gmatch_states.pop() {
+            *self.gmatch_states.get_mut(handle).ok_or(FlowError::InvalidBytecode)? = Some(state);
+            handle
+        } else {
+            let handle = self.gmatch_states.len();
+            self.gmatch_states.push(Some(state));
+            handle
+        };
         self.gmatch_bytes += bytes;
         Ok(Value::Builtin(Builtin::StringGmatchIterator(handle)))
     }
@@ -5093,6 +5163,7 @@ impl Execution<'_> {
         let state = self
             .gmatch_states
             .get(handle)
+            .and_then(Option::as_ref)
             .ok_or(FlowError::InvalidBytecode)?;
         if state.done {
             return Ok(Vec::new());
@@ -5117,19 +5188,23 @@ impl Execution<'_> {
             let state = self
                 .gmatch_states
                 .get_mut(handle)
+                .and_then(Option::as_mut)
                 .ok_or(FlowError::InvalidBytecode)?;
             state.cursor = end;
             state.last_end = Some(end);
+            let mut roots = args.to_vec();
+            roots.push(Value::Builtin(Builtin::StringGmatchIterator(handle)));
             return if captures.is_empty() {
                 Ok(vec![
-                    self.intern_rooted_string(source[begin..end].to_vec(), args)?,
+                    self.intern_rooted_string(source[begin..end].to_vec(), &roots)?,
                 ])
             } else {
-                self.simple_pattern_capture_values(&source, &captures, args)
+                self.simple_pattern_capture_values(&source, &captures, &roots)
             };
         }
         self.gmatch_states
             .get_mut(handle)
+            .and_then(Option::as_mut)
             .ok_or(FlowError::InvalidBytecode)?
             .done = true;
         Ok(Vec::new())
@@ -7745,6 +7820,7 @@ pub fn execute_flow_capture_with_args<'a>(
         math_table: None,
         random_state: [0, 0xff, 0, 0],
         gmatch_states: Vec::new(),
+        free_gmatch_states: Vec::new(),
         gmatch_bytes: 0,
         string_table: None,
         utf8_table: None,

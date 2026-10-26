@@ -580,6 +580,20 @@ fn owned_string_gmatch_iterators_and_captures_match_lua54() {
 }
 
 #[test]
+fn owned_string_gmatch_gc_reclaims_or_retains_iterator_snapshots() {
+    for source in [
+        "local f=string.gmatch('ab cd','%a+'); collectgarbage('collect'); print(f(),f(),f()==nil)",
+        "local w=setmetatable({}, {__mode='v'}); w[1]=string.gmatch('ab','%a'); collectgarbage('collect'); print(w[1]==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local f=string.gmatch('ab','%a'); w[f]=true; f=nil; collectgarbage('collect'); print(next(w)==nil)",
+        "local w=setmetatable({}, {__mode='k'}); local f=string.gmatch('ab','%a'); w[f]=42; collectgarbage('collect'); print(w[f]==42,f(),f())",
+        "local s=string.rep('a',800); for i=1,90 do local f=string.gmatch(s,'a'); if i%8==0 then collectgarbage('collect') end end; print('ok')",
+        "local f=string.gmatch('one two','%a+'); local g=string.gmatch('123','%d+'); collectgarbage('collect'); print(f(),g(),f())",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",
