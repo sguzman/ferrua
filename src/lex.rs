@@ -472,10 +472,7 @@ mod tests {
             spellings("local\x0bx=1; return\x0bx"),
             ["local", "x", "=", "1", ";", "return", "x"]
         );
-        assert_eq!(
-            spellings("return 1\x0b+\x0b2"),
-            ["return", "1", "+", "2"]
-        );
+        assert_eq!(spellings("return 1\x0b+\x0b2"), ["return", "1", "+", "2"]);
         assert!(tokenize("return 1\x0b2").is_ok());
     }
     #[test]
