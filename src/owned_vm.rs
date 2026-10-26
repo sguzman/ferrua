@@ -301,6 +301,11 @@ pub enum Instruction {
         condition: usize,
         target: usize,
     },
+    /// Generic Lua iteration ends on nil, not false.
+    BranchIfNil {
+        value: usize,
+        target: usize,
+    },
     Return {
         source: usize,
     },
@@ -1257,7 +1262,8 @@ fn assigned_names<'a>(body: &[Statement<'a>], names: &mut HashSet<&'a str>) {
                 Statement::Block(inner)
                 | Statement::While { body: inner, .. }
                 | Statement::Repeat { body: inner, .. }
-                | Statement::NumericFor { body: inner, .. } => pending.push(inner),
+                | Statement::NumericFor { body: inner, .. }
+                | Statement::GenericFor { body: inner, .. } => pending.push(inner),
                 Statement::If {
                     branches,
                     else_branch,
@@ -2157,6 +2163,9 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             Instruction::BranchIfFalse { condition, target } => {
                 register(condition) && target > pc && target < size
             }
+            Instruction::BranchIfNil { value, target } => {
+                register(value) && target > pc && target < size
+            }
             Instruction::Jump { target } => target > pc && target < size,
             Instruction::LoopReset { start, end } => start < end && end <= program.registers,
             Instruction::NumericForCheck {
@@ -2284,6 +2293,17 @@ pub fn execute_register_program_with_strings_and_budget(
                     return Err(Error::InvalidBytecode);
                 }
                 pc = if !read(&registers, condition)?.truthy() {
+                    target
+                } else {
+                    pc + 1
+                };
+                continue;
+            }
+            Instruction::BranchIfNil { value, target } => {
+                if target <= pc || target >= program.code.len() {
+                    return Err(Error::InvalidBytecode);
+                }
+                pc = if read(&registers, value)? == RegisterValue::Nil {
                     target
                 } else {
                     pc + 1
