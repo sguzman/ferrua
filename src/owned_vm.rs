@@ -2278,9 +2278,9 @@ mod tests {
             execute_integer_program(&float_return),
             Err(Error::TypeError)
         );
-        for source in ["do return 1, 2 end", "do return math.max(1,2) end"] {
-            assert!(compile_integer_chunk(source).is_err(), "{source}");
-        }
+        let scalar = compile_integer_chunk("do return 1, 2 end").unwrap();
+        assert_eq!(execute_integer_program(&scalar), Ok(1));
+        assert!(compile_integer_chunk("do return math.max(1,2) end").is_err());
     }
 
     #[test]
