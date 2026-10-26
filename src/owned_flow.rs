@@ -5432,7 +5432,7 @@ impl Execution<'_> {
                                 cursor = end + 1;
                                 (start, end)
                             }
-                            PackField::LengthPrefixed { size, little } => {
+                            PackField::LengthPrefixed { little, .. } => {
                                 let mut length = 0u64;
                                 for (index, &byte) in chunk.iter().enumerate() {
                                     if little {
