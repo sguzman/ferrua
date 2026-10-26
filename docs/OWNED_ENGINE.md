@@ -336,6 +336,7 @@ The owned stack VM now exposes a first-class, lexically shadowable `rawlen` buil
 - [CI #40325028948](https://github.com/sguzman/ferrua/actions/runs/40325028948): ASCII-only numeric whitespace and invalid UTF-8 / Unicode whitespace validation.
 - [CI #40325619361](https://github.com/sguzman/ferrua/actions/runs/40325619361): direct `tonumber()` missing-argument error and protected-call behavior, distinct from explicitly supplied `nil`.
 - [CI #40325867742](https://github.com/sguzman/ferrua/actions/runs/40325867742): `math.tointeger` reuses tested Lua numeric-string conversion for signed hexadecimal floats and wrapped integers, with strict nonintegral and Unicode-whitespace rejection.
+- [CI #40327793295](https://github.com/sguzman/ferrua/actions/runs/40327793295): `math.type()` and `math.tointeger()` reject omitted arguments, while explicit `nil` remains a valid argument; direct and `pcall` result/status paths were checked against Lua 5.4.
 - [CI #40016120064](https://github.com/sguzman/ferrua/actions/runs/40016120064): bounded `rawlen`, using the shared underlying Lua byte-string and table-border length handler, passed all four jobs.
 
 These checks cover only the recorded, bounded first-party runtime subsets. There is still no full Lua standard library, garbage-collected production VM, metatable implementation, or accepted engine migration.
@@ -644,6 +645,14 @@ The owned `src/lex.rs` scanner now rejects numeral tokens touching identifier ch
 Valid whitespace-separated `1 .. 2`, hexadecimal binary exponents, ordinary arithmetic after a numeral and decimal exponent signs remain accepted. The implementation has lexical and parser regressions plus six negative-path fixtures compared against production `fer` and the pinned Lua 5.4 reference. [CI #40116606712](https://github.com/sguzman/ferrua/actions/runs/40116606712) passed all five jobs, including Linux formatting/lint/tests, Rust 1.96, Lua differential smoke and the setup action consumer.
 
 This closes a specific T301 lexical gap, **not** the full grammar, source diagnostics or T301/T302 graduation gates. The production backend is unchanged.
+
+### C-locale identifier classes and Lua prefix expressions (T301)
+
+The independent `src/lex.rs` scanner now rejects non-ASCII identifier bytes under the pinned Lua 5.4 C-locale reference. Ordinary ASCII names remain accepted; UTF-8 is still preserved inside quoted/long strings and comments. A non-ASCII symbol adjacent to a numeral is reported at its own byte position as an unexpected symbol instead of being absorbed into the malformed-number diagnostic, while `7abc` remains a malformed numeral. The corpus includes positive and negative parser fixtures, original byte offsets and conditional `lua5.4` comparisons. [Identifier CI #40327439776](https://github.com/sguzman/ferrua/actions/runs/40327439776) · [numeric suffix CI #40328202421](https://github.com/sguzman/ferrua/actions/runs/40328202421).
+
+The first-party expression parser now follows Lua's `prefixexp` restriction: only variables and explicitly parenthesized expressions may initiate suffix calls, indexing, field access or method calls. `nil(1)`, `42()` and `{x=1}.x` are syntax errors, whereas `(nil)(1)` is valid syntax whose attempted call fails at runtime. The existing runtime-error fixture was **corrected** to `return (nil)(1)`, not deleted or weakened. Compile-only upstream cases preserve valid parenthesized, string-argument and chained-call grammar. [CI #40328962852](https://github.com/sguzman/ferrua/actions/runs/40328962852).
+
+These results cover bounded lexer/parser behavior only; complete T301 grammar and scope conformance are still unaccepted. Production `luna-core` and release gates have not changed.
 
 ### Parser end-of-file diagnostics use source positions
 
