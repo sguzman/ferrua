@@ -537,6 +537,29 @@ fn owned_string_gsub_table_replacements_and_metatables_match_lua54() {
 }
 
 #[test]
+fn owned_string_gsub_function_replacements_and_capture_args_match_lua54() {
+    for source in [
+        "local s,n=string.gsub('abc','.',function(m) return m..m end); print(s,n)",
+        "local s,n=string.gsub('abc','(%a)',function(x) return string.upper(x) end); print(s,n)",
+        "print(string.gsub('a1b2','(%a)(%d)',function(a,b) return b..a end))",
+        "local s,n=string.gsub('abc','.',function() return nil end); print(s,n)",
+        "local s,n=string.gsub('abc','.',function() return false end); print(s,n)",
+        "local s,n=string.gsub('abc','.',function() return 1 end); print(s,n)",
+        "local s,n=string.gsub('abc','.',function(x) return x,'ignored' end); print(s,n)",
+        "local s,n=string.gsub('abc','.',function() return 'Z' end,2); print(s,n)",
+        "local seen={}; local s,n=string.gsub('ab','()',function(i) seen[#seen+1]=i; return '('..i..')' end); print(s,n,table.concat(seen,','))",
+        "local callback=function(x) collectgarbage('collect'); return x..'!' end; print(string.gsub('abc','.',callback))",
+        "local callback=function(x) if x=='b' then return nil end; return string.upper(x) end; print(string.gsub('abc','.',callback))",
+        "local a,s,n=pcall(string.gsub,'abc','.',function() return 'Z' end); print(a,s,n)",
+        "local good,e=pcall(string.gsub,'abc','.',function() error(19) end); print(good,e)",
+        "local good,e=pcall(string.gsub,'abc','.',function() return true end); print(good,type(e))",
+        "local s,n=string.gsub('abc','.',string.upper); print(s,n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",

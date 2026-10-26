@@ -4811,12 +4811,8 @@ impl Execution<'_> {
             Value::String(_) | Value::Integer(_) | Value::Float(_) => {
                 Some(self.string_bytes(replacement_value)?)
             }
-            Value::Table(_) => None,
-            _ => {
-                return Err(FlowError::Unsupported(
-                    "Lua function string.gsub replacements are not implemented".into(),
-                ));
-            }
+            Value::Table(_) | Value::Function(_) | Value::Builtin(_) => None,
+            _ => return Err(FlowError::TypeError),
         };
         let limit = match args.get(3).copied() {
             Some(value) if value != Value::Nil => {
@@ -4902,6 +4898,32 @@ impl Execution<'_> {
                         .push(key);
                     let table_key = self.table_key(key)?;
                     let value = self.lookup_with_metatable(handle, table_key)?;
+                    let selected = if value == Value::Nil || value == Value::Boolean(false) {
+                        source[begin..end].to_vec()
+                    } else {
+                        self.string_bytes(value)?
+                    };
+                    if self.steps.saturating_add(selected.len()) > self.budget {
+                        return Err(FlowError::StepBudgetExceeded);
+                    }
+                    self.steps += selected.len();
+                    output.extend_from_slice(&selected);
+                } else if matches!(replacement_value, Value::Function(_) | Value::Builtin(_)) {
+                    // Lua callbacks receive each capture, or the entire
+                    // matched substring when the pattern has no captures.
+                    // Keep the temporary Lua strings reachable while their
+                    // callback executes and may trigger garbage collection.
+                    let parameters = if captures.is_empty() {
+                        vec![self.intern_rooted_string(source[begin..end].to_vec(), args)?]
+                    } else {
+                        self.simple_pattern_capture_values(&source, &captures, args)?
+                    };
+                    self.gc_temporary_roots
+                        .last_mut()
+                        .ok_or(FlowError::InvalidBytecode)?
+                        .extend_from_slice(&parameters);
+                    let returned = self.protected_target(replacement_value, &parameters)?;
+                    let value = returned.first().copied().unwrap_or(Value::Nil);
                     let selected = if value == Value::Nil || value == Value::Boolean(false) {
                         source[begin..end].to_vec()
                     } else {
