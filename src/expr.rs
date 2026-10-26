@@ -1039,7 +1039,7 @@ impl<'a> Parser<'a> {
                     .peek()
                     .is_some_and(|token| !terminators.contains(&token.spelling))
             {
-                return Err(self.error("return or break must be final statement in block"));
+                return Err(self.error("return must be final statement in block"));
             }
         }
         Ok(result)
