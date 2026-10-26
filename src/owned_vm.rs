@@ -2213,7 +2213,6 @@ mod tests {
             "return x",
             "x=1; return x",
             "local x=1; print(x); return x",
-
             "local x=1; return 1.5",
             "local x=1; x.y=2; return x",
         ] {
