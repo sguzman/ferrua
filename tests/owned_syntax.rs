@@ -115,7 +115,11 @@ fn lua_label_visibility_rejects_ancestor_shadowing_even_when_forward_declared() 
     for (source, valid) in cases {
         let parsed = parse_chunk(source).is_ok();
         assert_eq!(parsed, valid, "owned label scope: {source}");
-        if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() == Some("1") {
+        if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
             let reference = format!("assert(load([====[{source}]====]))");
             let output = std::process::Command::new("lua5.4")
                 .args(["-e", &reference])
