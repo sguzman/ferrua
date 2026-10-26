@@ -997,6 +997,84 @@ fn register_numeric_for_matches_production_and_upstream_lua54() {
 }
 
 #[test]
+fn mixed_float_numeric_for_register_controls_match_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("local n=0; for i=1.5,3.5 do n=n+1 end; return n", 3),
+        ("local n=0; for i=1,3.0 do n=n+1 end; return n", 3),
+        ("local n=0; for i=1,3,0.5 do n=n+1 end; return n", 5),
+        ("local n=0; for i=3,1.0,-0.5 do n=n+1 end; return n", 5),
+        ("local n=0; for i=1.0,3,1 do n=n+1 end; return n", 3),
+        ("local n=0; for i=1.25,0,-0.5 do n=n+1 end; return n", 3),
+        (
+            "local n=0; local limit=3.0; for i=1,limit do n=n+1 end; return n",
+            3,
+        ),
+        (
+            "local n=0; local step=0.5; for i=1,2,step do n=n+1 end; return n",
+            3,
+        ),
+        (
+            "local n=0; for i=1.5,3.5 do if i==2.5 then break end; n=n+1 end; return n",
+            1,
+        ),
+    ] {
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(
+            execute_register_program(&program),
+            Ok(RegisterValue::Integer(expected)),
+            "{source}"
+        );
+        for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if binary == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(binary);
+            if binary != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let lua = format!("print((function() {source} end)())");
+            let output = command.args(["-e", &lua]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                expected.to_string(),
+                "{source}"
+            );
+        }
+    }
+    for source in [
+        "for i=1.0,3,0.0 do end",
+        "for i=1,3.0,0 do end",
+    ] {
+        let program = compile_integer_chunk(&format!("{source}; return 1")).unwrap();
+        assert_eq!(
+            execute_register_program(&program),
+            Err(ferrua::owned_vm::Error::ZeroForStep),
+            "{source}"
+        );
+        for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if binary == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(binary);
+            if binary != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", source]).output().unwrap();
+            assert!(!output.status.success(), "{source}");
+        }
+    }
+}
+
+#[test]
 fn generated_numeric_for_steps_branches_and_breaks_match_reference_lua() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()

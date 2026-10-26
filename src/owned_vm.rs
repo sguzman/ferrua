@@ -1683,17 +1683,46 @@ pub fn execute_register_program_with_budget(
                 visible,
                 exit,
             } => {
-                let current = read_integer(&registers, counter)?;
-                let bound = read_integer(&registers, limit)?;
-                let stride = read_integer(&registers, step)?;
-                if stride == 0 {
-                    return Err(Error::ZeroForStep);
-                }
-                if (stride > 0 && current > bound) || (stride < 0 && current < bound) {
+                let current = read(&registers, counter)?;
+                let bound = read(&registers, limit)?;
+                let stride = read(&registers, step)?;
+                let (finished, exposed) = match (current, bound, stride) {
+                    (
+                        RegisterValue::Integer(value),
+                        RegisterValue::Integer(bound),
+                        RegisterValue::Integer(step),
+                    ) => {
+                        if step == 0 {
+                            return Err(Error::ZeroForStep);
+                        }
+                        (
+                            (step > 0 && value > bound) || (step < 0 && value < bound),
+                            RegisterValue::Integer(value),
+                        )
+                    }
+                    (value, bound, step) => {
+                        let value = value.number()?;
+                        let bound = bound.number()?;
+                        let step = step.number()?;
+                        if step == 0.0 {
+                            return Err(Error::ZeroForStep);
+                        }
+                        // Materialize floating induction in the private
+                        // counter; limit/step registers may alias outer locals
+                        // and must retain their original Lua numeric subtype.
+                        let float = RegisterValue::Float(value.to_bits());
+                        *registers.get_mut(counter).ok_or(Error::InvalidBytecode)? = Some(float);
+                        (
+                            (step > 0.0 && value > bound) || (step < 0.0 && value < bound),
+                            float,
+                        )
+                    }
+                };
+                if finished {
                     pc = exit;
                 } else {
                     let slot = registers.get_mut(visible).ok_or(Error::InvalidBytecode)?;
-                    if slot.replace(RegisterValue::Integer(current)).is_some() {
+                    if slot.replace(exposed).is_some() {
                         return Err(Error::InvalidBytecode);
                     }
                     pc += 1;
@@ -1705,14 +1734,24 @@ pub fn execute_register_program_with_budget(
                 step,
                 exit,
             } => {
-                let value = read_integer(&registers, counter)?;
-                let stride = read_integer(&registers, step)?;
-                if let Some(next) = value.checked_add(stride) {
-                    *registers.get_mut(counter).ok_or(Error::InvalidBytecode)? =
-                        Some(RegisterValue::Integer(next));
-                    pc += 1;
-                } else {
-                    pc = exit;
+                let value = read(&registers, counter)?;
+                let stride = read(&registers, step)?;
+                match (value, stride) {
+                    (RegisterValue::Integer(value), RegisterValue::Integer(stride)) => {
+                        if let Some(next) = value.checked_add(stride) {
+                            *registers.get_mut(counter).ok_or(Error::InvalidBytecode)? =
+                                Some(RegisterValue::Integer(next));
+                            pc += 1;
+                        } else {
+                            pc = exit;
+                        }
+                    }
+                    (value, stride) => {
+                        let next = value.number()? + stride.number()?;
+                        *registers.get_mut(counter).ok_or(Error::InvalidBytecode)? =
+                            Some(RegisterValue::Float(next.to_bits()));
+                        pc += 1;
+                    }
                 }
                 continue;
             }
