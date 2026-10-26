@@ -5971,7 +5971,7 @@ impl Execution<'_> {
                                     // tostring override.
                                     let converted = self.tostring_builtin(value, args)?;
                                     self.string_bytes(converted)?
-                                },
+                                }
                                 b'q' => match value {
                                     Value::Nil => b"nil".to_vec(),
                                     Value::Boolean(true) => b"true".to_vec(),
