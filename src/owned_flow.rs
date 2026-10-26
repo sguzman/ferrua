@@ -1643,7 +1643,9 @@ pub(crate) fn parse_lua_hex_float(source: &str) -> Option<f64> {
         // infinity or zero after range saturation. Parsing as i32 instead
         // incorrectly rejects otherwise valid Lua numeric literals.
         let magnitude = unsigned.bytes().fold(0_i32, |value, byte| {
-            value.saturating_mul(10).saturating_add(i32::from(byte - b'0'))
+            value
+                .saturating_mul(10)
+                .saturating_add(i32::from(byte - b'0'))
         });
         let exponent = if negative { -magnitude } else { magnitude };
         (body.get(..index)?, exponent)
