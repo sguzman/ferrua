@@ -147,7 +147,7 @@ fn lua_c_locale_unicode_identifier_rules_match_upstream_when_requested() {
         ("return naïve", false),
         ("local s='café'; return s", true),
         ("return [=[α😀]=]", true),
-        ("-- café, α and 😀 in comments\nreturn 1", true),
+        ("local n=1 -- café, α and 😀 in comments\nreturn n", true),
     ];
     for (source, valid) in cases {
         let accepted = tokenize(source).is_ok();
