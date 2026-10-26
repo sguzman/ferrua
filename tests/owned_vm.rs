@@ -458,6 +458,7 @@ fn register_string_literals_have_upstream_lua54_output_parity() {
             RegisterValue::Nil => b"nil".to_vec(),
             RegisterValue::Float(bits) => format!("{:?}", f64::from_bits(bits)).into_bytes(),
             RegisterValue::String(_) => program.string_bytes(result).unwrap().to_vec(),
+            RegisterValue::Builtin(_) => b"function: builtin".to_vec(),
         };
         expected.push(b'\n');
         for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
