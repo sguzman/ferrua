@@ -2949,8 +2949,14 @@ mod tests {
             ("do local x=3 end", RegisterValue::Nil),
             ("if true then return 7 end", RegisterValue::Integer(7)),
             ("if false then return 7 end", RegisterValue::Nil),
-            ("if true then local x=3 else return 7 end", RegisterValue::Nil),
-            ("if false then return 7 else local x=3 end", RegisterValue::Nil),
+            (
+                "if true then local x=3 else return 7 end",
+                RegisterValue::Nil,
+            ),
+            (
+                "if false then return 7 else local x=3 end",
+                RegisterValue::Nil,
+            ),
             ("local n=0; while n<3 do n=n+1 end", RegisterValue::Nil),
             ("local n=0; repeat n=n+1 until n==3", RegisterValue::Nil),
             ("for i=1,3 do end", RegisterValue::Nil),
