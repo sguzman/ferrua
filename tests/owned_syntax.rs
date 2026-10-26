@@ -251,6 +251,39 @@ fn goto_resolution_diagnostics_point_to_the_offending_source_token() {
 }
 
 #[test]
+fn function_goto_diagnostics_retain_inner_source_locations() {
+    for (source, name, expected_line) in [
+        ("local function f()\n goto missing\nend", "missing", 2),
+        ("local f=function()\r\n goto lost\r\nend", "lost", 2),
+        ("local t={f=function()\n goto lost\nend}", "lost", 2),
+        ("return (function() goto absent end)()", "absent", 1),
+        ("local function outer()\n local function inner()\n goto lost\n end\nend", "lost", 3),
+        (
+            "local function f()\n goto finish\n local x=1\n ::finish:: return x\nend",
+            "finish",
+            2,
+        ),
+    ] {
+        let error = parse_chunk(source).expect_err("invalid nested goto");
+        assert!(
+            matches!(
+                error.message,
+                "no visible label for goto" | "goto jumps into the scope of a local variable"
+            ),
+            "{source}: {error}"
+        );
+        assert_eq!(error.byte_offset, source.find(name).unwrap(), "{source}");
+        assert_eq!(error.line, expected_line, "{source}");
+    }
+    let expression = "function()\n goto unreachable\nend";
+    let error = ferrua::expr::parse_expression(expression).unwrap_err();
+    assert_eq!(error.byte_offset, expression.find("unreachable").unwrap());
+    assert_eq!(error.line, 2);
+    assert!(parse_chunk("local function f() goto done ::done:: return 1 end").is_ok());
+    assert!(parse_chunk("return function() goto done ::done:: return 2 end").is_ok());
+}
+
+#[test]
 fn lua_c_locale_unicode_identifier_rules_match_upstream_when_requested() {
     let cases = [
         ("local cafe_42=7; return cafe_42", true),
