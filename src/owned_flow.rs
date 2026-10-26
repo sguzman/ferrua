@@ -1448,7 +1448,7 @@ fn append_lua_utf8_escape(mut scalar: u32, result: &mut Vec<u8>) -> Result<(), F
     Ok(())
 }
 
-fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
+pub(crate) fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
     let bytes = spelling.as_bytes();
     if bytes.is_empty() {
         return Err(FlowError::InvalidBytecode);

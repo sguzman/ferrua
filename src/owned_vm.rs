@@ -2,12 +2,13 @@
 //! Not used by production fer; not a full Lua VM.
 
 use crate::expr::{Expr, LocalAttribute, Statement, parse_chunk, parse_expression};
-use crate::owned_flow::{parse_lua_hex_float, parse_lua_hex_integer_wrapping};
+use crate::owned_flow::{decode_lua_string, parse_lua_hex_float, parse_lua_hex_integer_wrapping};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 const MAX_REGISTERS: usize = 16384;
 const MAX_REGISTER_STEPS: usize = 100_000;
+const MAX_REGISTER_STRING_BYTES: usize = 65_536;
 
 /// Bounded register values; strings, tables and functions remain future work.
 /// Tagged booleans and nil no longer masquerade as Lua integers.
@@ -18,6 +19,8 @@ pub enum RegisterValue {
     Integer(i64),
     /// Raw IEEE-754 bits preserve Copy/Eq and signed-zero representation.
     Float(u64),
+    /// Index into this program's immutable Lua byte-string pool.
+    String(usize),
 }
 
 impl RegisterValue {
@@ -127,6 +130,14 @@ pub enum Instruction {
     LoadFloat {
         dest: usize,
         bits: u64,
+    },
+    LoadString {
+        dest: usize,
+        index: usize,
+    },
+    Length {
+        dest: usize,
+        input: usize,
     },
     Neg {
         dest: usize,
@@ -289,6 +300,7 @@ pub struct Program {
     code: Vec<Instruction>,
     registers: usize,
     result: usize,
+    strings: Vec<Vec<u8>>,
 }
 impl Program {
     pub fn instructions(&self) -> &[Instruction] {
@@ -296,6 +308,14 @@ impl Program {
     }
     pub fn register_count(&self) -> usize {
         self.registers
+    }
+
+    /// Decode a returned string handle against its originating program.
+    pub fn string_bytes(&self, value: RegisterValue) -> Option<&[u8]> {
+        match value {
+            RegisterValue::String(index) => self.strings.get(index).map(Vec::as_slice),
+            _ => None,
+        }
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -363,6 +383,29 @@ fn emit<'a>(
             dest: program.registers,
             value: matches!(expression, Expr::Atom("true")),
         },
+        Expr::Atom(text)
+            if text.starts_with('\'') || text.starts_with('"') || text.starts_with('[') =>
+        {
+            let bytes = decode_lua_string(text)
+                .map_err(|err| Error::Unsupported(err.to_string()))?;
+            let index = if let Some(existing) = program.strings.iter().position(|s| *s == bytes) {
+                existing
+            } else {
+                let used = program.strings.iter().map(Vec::len).sum::<usize>();
+                if program.strings.len() >= MAX_REGISTERS
+                    || used.saturating_add(bytes.len()) > MAX_REGISTER_STRING_BYTES
+                {
+                    return Err(Error::TooLarge);
+                }
+                let index = program.strings.len();
+                program.strings.push(bytes);
+                index
+            };
+            Instruction::LoadString {
+                dest: program.registers,
+                index,
+            }
+        }
         Expr::Atom(text) => {
             let hex = text.starts_with("0x") || text.starts_with("0X");
             let integer = if hex {
@@ -407,6 +450,13 @@ fn emit<'a>(
                             Error::Unsupported(format!("unbound or unsupported name: {text}"))
                         });
                 }
+            }
+        }
+        Expr::Unary { op: "#", right } => {
+            let input = emit(program, right, depth + 1, locals)?;
+            Instruction::Length {
+                dest: program.registers,
+                input,
             }
         }
         Expr::Unary { op, right } if matches!(*op, "-" | "~") => {
@@ -735,6 +785,7 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
         code: Vec::new(),
         registers: 0,
         result: 0,
+        strings: Vec::new(),
     };
     let result = emit(&mut program, &ast, 0, &[])?;
     program.result = result;
@@ -765,6 +816,7 @@ pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
         code: Vec::new(),
         registers: 0,
         result: 0,
+        strings: Vec::new(),
     };
     let mut scopes = vec![HashMap::new()];
     let mut loops = Vec::new();
@@ -1532,6 +1584,9 @@ pub(crate) fn shift(value: i64, distance: i64, left: bool) -> i64 {
 /// An untaken branch or early return must not conceal malformed bytecode.
 fn validate_integer_program(program: &Program) -> Result<(), Error> {
     let size = program.code.len();
+    if program.strings.iter().map(Vec::len).sum::<usize>() > MAX_REGISTER_STRING_BYTES {
+        return Err(Error::InvalidBytecode);
+    }
     if program.registers == 0
         || program.registers > MAX_REGISTERS
         || size == 0
@@ -1543,11 +1598,15 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
     let register = |index: usize| index < program.registers;
     for (pc, instruction) in program.code.iter().enumerate() {
         let valid = match *instruction {
+            Instruction::LoadString { dest, index } => {
+                register(dest) && index < program.strings.len()
+            }
             Instruction::Load { dest, .. }
             | Instruction::LoadBoolean { dest, .. }
             | Instruction::LoadFloat { dest, .. }
             | Instruction::LoadNil { dest } => register(dest),
             Instruction::Neg { dest, input }
+            | Instruction::Length { dest, input }
             | Instruction::LoopCopy { dest, input }
             | Instruction::BitNot { dest, input }
             | Instruction::NumericTruthy { dest, input }
@@ -1836,7 +1895,13 @@ pub fn execute_register_program_with_budget(
                         !equal
                     }
                 } else {
-                    let ordering = numeric_comparison(left, right)?;
+                    let ordering = match (left, right) {
+                        (RegisterValue::String(a), RegisterValue::String(b)) => Some(
+                            program.strings.get(a).ok_or(Error::InvalidBytecode)?
+                                .cmp(program.strings.get(b).ok_or(Error::InvalidBytecode)?),
+                        ),
+                        _ => numeric_comparison(left, right)?,
+                    };
                     match operation {
                         CompareOperation::Less => ordering == Some(Ordering::Less),
                         CompareOperation::LessEqual => {
@@ -1855,6 +1920,18 @@ pub fn execute_register_program_with_budget(
             Instruction::LoadNil { dest } => (dest, RegisterValue::Nil),
             Instruction::LoadBoolean { dest, value } => (dest, RegisterValue::Boolean(value)),
             Instruction::LoadFloat { dest, bits } => (dest, RegisterValue::Float(bits)),
+            Instruction::LoadString { dest, index } => (dest, RegisterValue::String(index)),
+            Instruction::Length { dest, input } => {
+                let length = match read(&registers, input)? {
+                    RegisterValue::String(index) => program
+                        .strings
+                        .get(index)
+                        .ok_or(Error::InvalidBytecode)?
+                        .len(),
+                    _ => return Err(Error::TypeError),
+                };
+                (dest, RegisterValue::Integer(length as i64))
+            }
             Instruction::Neg { dest, input } => {
                 let value = read(&registers, input)?;
                 (
@@ -2192,6 +2269,7 @@ mod tests {
             ],
             registers: 1,
             result: 0,
+            strings: Vec::new(),
         };
         assert_eq!(
             execute_integer_program(&invalid),
@@ -2352,6 +2430,7 @@ mod tests {
             code: vec![Instruction::Load { dest: 0, value: 0 }; MAX_REGISTERS],
             registers: 1,
             result: 0,
+            strings: Vec::new(),
         };
         assert_eq!(
             emit_instruction(&mut program, Instruction::Return { source: 0 }),
@@ -2770,6 +2849,7 @@ mod tests {
             code: vec![Instruction::Load { dest: 10, value: 7 }],
             registers: 1,
             result: 0,
+            strings: Vec::new(),
         };
         assert_eq!(
             execute_integer_program_with_budget(&invalid, 0),
@@ -2803,6 +2883,7 @@ mod tests {
             ],
             registers: 1,
             result: 0,
+            strings: Vec::new(),
         };
         assert_eq!(execute_integer_program(&valid), Ok(7));
 
@@ -2969,6 +3050,7 @@ mod tests {
             }],
             registers: 3,
             result: 0,
+            strings: Vec::new(),
         };
         assert_eq!(execute_integer_program(&p), Err(Error::InvalidBytecode));
         let p = Program {
@@ -2978,6 +3060,7 @@ mod tests {
             ],
             registers: 1,
             result: 0,
+            strings: Vec::new(),
         };
         assert_eq!(execute_integer_program(&p), Err(Error::InvalidBytecode));
     }

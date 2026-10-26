@@ -7,6 +7,39 @@ use ferrua::owned_vm::{
 use std::process::Command;
 
 #[test]
+fn register_immutable_lua_strings_use_byte_length_and_value_comparison() {
+    for (source, expected) in [
+        ("#'abc'", RegisterValue::Integer(3)),
+        ("#'é'", RegisterValue::Integer(2)),
+        ("#'a\\0b'", RegisterValue::Integer(3)),
+        ("'a'=='a'", RegisterValue::Boolean(true)),
+        ("'a'~='b'", RegisterValue::Boolean(true)),
+        ("'a'<'b'", RegisterValue::Boolean(true)),
+        ("'z'>='a'", RegisterValue::Boolean(true)),
+        ("'a'==nil", RegisterValue::Boolean(false)),
+        ("not ''", RegisterValue::Boolean(false)),
+    ] {
+        let compiled = compile_integer_expression(source).unwrap();
+        assert_eq!(execute_register_program(&compiled), Ok(expected), "{source}");
+        let chunk = compile_integer_chunk(&format!("return {source}")).unwrap();
+        assert_eq!(execute_register_program(&chunk), Ok(expected), "{source}");
+    }
+    for (source, expected) in [
+        ("'hello'", b"hello".as_slice()),
+        ("[[line one]]", b"line one".as_slice()),
+        ("'a\\0b'", b"a\0b".as_slice()),
+    ] {
+        let program = compile_integer_expression(source).unwrap();
+        let returned = execute_register_program(&program).unwrap();
+        assert_eq!(program.string_bytes(returned), Some(expected), "{source}");
+        assert_eq!(
+            execute_integer_program(&program),
+            Err(ferrua::owned_vm::Error::TypeError)
+        );
+    }
+}
+
+#[test]
 fn tagged_register_decimal_floats_and_mixed_number_order_match_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
