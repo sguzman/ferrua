@@ -322,6 +322,69 @@ fn register_break_exits_match_production_and_upstream_lua54() {
 }
 
 #[test]
+fn register_numeric_for_matches_production_and_upstream_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("local s=0; for i=1,5 do s=s+i end; return s", 15),
+        ("local s=0; for i=5,1,-2 do s=s+i end; return s", 9),
+        ("local s=0; for i=1,0 do s=s+i end; return s", 0),
+        ("local s=0; for i=0,3,-1 do s=s+1 end; return s", 0),
+        ("local i=100; local s=0; for i=1,3 do s=s+i end; return i+s", 106),
+        ("local limit=2; local s=0; for i=1,limit do limit=10; s=s+i end; return s", 3),
+        ("local i=2; local s=0; for i=i,4 do s=s+i end; return s", 9),
+        ("local s=0; for i=1,5 do if i==3 then break end; s=s+i end; return s", 3),
+        (
+            "local s=0; for i=9223372036854775807,9223372036854775807 do s=s+1 end; return s",
+            1,
+        ),
+        ("local x=0; local k=0; while k<2 do for i=1,2 do x=x+1 end; k=k+1 end; return x", 4),
+        ("local s=0; for i=1,2 do for j=1,3 do s=s+i*j end end; return s", 18),
+        ("local s=0; for i=1,5 do if i>2 then break else s=s+i end end; return s", 3),
+    ] {
+        let program = compile_integer_chunk(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        let lua = format!("print((function() {source} end)())");
+        for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if binary == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(binary);
+            if binary != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", &lua]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                expected.to_string(),
+                "{source}"
+            );
+        }
+    }
+    let source = "for i=1,3,0 do end";
+    let program = compile_integer_chunk(&format!("{source}; return 0")).unwrap();
+    assert_eq!(execute_integer_program(&program), Err(ferrua::owned_vm::Error::ZeroForStep));
+    for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+        if binary == "lua5.4" && !compare_lua {
+            continue;
+        }
+        let mut command = Command::new(binary);
+        if binary != "lua5.4" {
+            command.arg("--lua=5.4");
+        }
+        let output = command.args(["-e", source]).output().unwrap();
+        assert!(!output.status.success(), "zero-step loop should fail: {binary}");
+    }
+}
+
+#[test]
 fn register_repeat_until_matches_production_and_lua_54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
