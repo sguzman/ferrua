@@ -129,6 +129,22 @@ fn owned_string_method_library_identity_survives_gc_and_global_rebinding() {
 }
 
 #[test]
+fn owned_coroutine_golden_program_matches_lua54() {
+    assert_parity(include_str!("conformance/07-coroutines.lua"), true);
+}
+
+#[test]
+fn owned_coroutine_nested_yield_resume_values_and_status_match_lua54() {
+    for source in [
+        "local co=coroutine.create(function() local x=coroutine.yield(3,4); return x+1 end); print(type(co),coroutine.status(co)); print(coroutine.resume(co)); print(coroutine.status(co)); print(coroutine.resume(co,9)); print(coroutine.status(co))",
+        "local co=coroutine.create(function(a) local function inner() local x,y=coroutine.yield(a,a+1); return x,y end return inner() end); print(coroutine.resume(co,2)); print(coroutine.resume(co,7,8)); print(coroutine.status(co))",
+        "local co=coroutine.create(function() local t={n=4}; coroutine.yield(t.n); collectgarbage('collect'); return t.n+2 end); print(coroutine.resume(co)); print(coroutine.resume(co))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn curated_global_function_print_and_error_semantics_match_lua54() {
     for source in [
         "function first() return second() end; function second() return 7 end; print(first())",
