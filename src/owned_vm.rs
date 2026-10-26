@@ -803,13 +803,12 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 
 /// Compile a static subset of Lua chunks to Ferrua-owned register bytecode.
 ///
-/// Supports scalar locals with Lua nil-padding/value-discard adjustment, parallel assignments,
-/// nested do/end blocks, bounded integer/Boolean if/elseif/else branches
-/// with returning or continuing branches, SSA-like single-assignment
-/// integer merge copies, bounded while, repeat-until and integer numeric-for
-/// loops with loop-carried register values and lexical break targets, and a
-/// single integer return from an active block. Calls, general truthiness,
-/// generic iteration, globals, nil and closures remain unsupported.
+/// Supports typed scalar locals with Lua nil-padding/value-discard adjustment,
+/// parallel assignments, lexical blocks and branches, while/repeat/numeric-for
+/// loops, and first-result scalar return adjustment. Every surplus scalar
+/// return expression is still evaluated in Lua order, including errors.
+/// Exact multiple-result transport, arbitrary calls, tables, globals,
+/// generic iteration and closures remain unsupported in this register VM.
 pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
     let mut program = Program {
