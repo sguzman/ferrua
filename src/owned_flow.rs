@@ -6018,11 +6018,9 @@ impl Execution<'_> {
                 }
             } else {
                 let value = body[index];
-                if !plain && b"*+-?]".contains(&value) {
-                    return Err(FlowError::Unsupported(
-                        "Lua captures and malformed repetition are not implemented".into(),
-                    ));
-                }
+                // Lua's classend() treats a standalone repetition marker
+                // or closing bracket as an ordinary byte. These characters
+                // only have operator meaning *after* a preceding atom.
                 index += 1;
                 Atom::Byte(value, false)
             };

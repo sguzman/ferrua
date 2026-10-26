@@ -418,6 +418,23 @@ fn owned_lua_pattern_quantifiers_use_bounded_backtracking_like_lua54() {
 }
 
 #[test]
+fn owned_pattern_standalone_repetition_markers_and_closing_bracket_match_lua54() {
+    // Lua 5.4 classend() returns a one-byte pattern atom for these raw
+    // bytes; only a marker *after* another atom becomes a repetition suffix.
+    for source in [
+        "for _,c in ipairs({'*','+','-','?',']'}) do print(string.match(c,c),string.find('x'..c..'y',c)) end",
+        "for _,c in ipairs({'*','+','-','?',']'}) do print(string.match('x'..c..'y','.'..c..'.')) end",
+        "print(string.match('**','**'),string.match('++','++'),string.match('--','--'),string.match('??','??'))",
+        "print(string.match(']a',']a'),string.match('a]','a]'))",
+        "local x,n=string.gsub('*+?-]',']','X'); print(x,n)",
+        "local x,n=string.gsub('*+?-]', '*', 'Z'); print(x,n)",
+        "local matches={}; for v in string.gmatch('a*b*','*') do matches[#matches+1]=v end; print(table.concat(matches,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_pattern_unsupported_structural_escapes_never_silently_match() {
     let source = "local a=pcall(string.find,'abc','%b('); local b=pcall(string.match,'abc','%f'); local c=pcall(string.find,'abc','%1'); print(a,b,c)";
     assert_parity(source, true);
