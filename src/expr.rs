@@ -678,6 +678,133 @@ fn check_block_gotos<'a>(statements: &[Statement<'a>]) -> Result<(), &'static st
     check_block_gotos_detailed(statements).map_err(|(message, _)| message)
 }
 
+// Walk function bodies separately so a failed goto can retain its borrowed
+// source token rather than being flattened into an EOF-only grammar error.
+// Ordinary block-level gotos are checked by the enclosing function/root.
+fn check_nested_goto_expression<'a>(
+    expression: &Expr<'a>,
+) -> Result<(), (&'static str, &'a str)> {
+    match expression {
+        Expr::Atom(_) | Expr::Vararg => {}
+        Expr::Grouped(inner) | Expr::Unary { right: inner, .. } => {
+            check_nested_goto_expression(inner)?;
+        }
+        Expr::Binary { left, right, .. } => {
+            check_nested_goto_expression(left)?;
+            check_nested_goto_expression(right)?;
+        }
+        Expr::Call { callee, arguments } => {
+            check_nested_goto_expression(callee)?;
+            for argument in arguments {
+                check_nested_goto_expression(argument)?;
+            }
+        }
+        Expr::MethodCall {
+            object, arguments, ..
+        } => {
+            check_nested_goto_expression(object)?;
+            for argument in arguments {
+                check_nested_goto_expression(argument)?;
+            }
+        }
+        Expr::Field { object, .. } => check_nested_goto_expression(object)?,
+        Expr::Index { object, key } => {
+            check_nested_goto_expression(object)?;
+            check_nested_goto_expression(key)?;
+        }
+        Expr::Function { body, .. } => {
+            check_block_gotos_detailed(body)?;
+            check_nested_goto_statements(body)?;
+        }
+        Expr::Table(fields) => {
+            for field in fields {
+                match field {
+                    TableField::Named { value, .. } | TableField::Value(value) => {
+                        check_nested_goto_expression(value)?;
+                    }
+                    TableField::Indexed { key, value } => {
+                        check_nested_goto_expression(key)?;
+                        check_nested_goto_expression(value)?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn check_nested_goto_statements<'a>(
+    statements: &[Statement<'a>],
+) -> Result<(), (&'static str, &'a str)> {
+    for statement in statements {
+        match statement {
+            Statement::Local { initializers, .. } | Statement::Return(initializers) => {
+                for value in initializers {
+                    check_nested_goto_expression(value)?;
+                }
+            }
+            Statement::Assign { targets, values } => {
+                for value in targets.iter().chain(values) {
+                    check_nested_goto_expression(value)?;
+                }
+            }
+            Statement::Call(value) => check_nested_goto_expression(value)?,
+            Statement::Function { body, .. } => {
+                check_block_gotos_detailed(body)?;
+                check_nested_goto_statements(body)?;
+            }
+            Statement::Block(body) => check_nested_goto_statements(body)?,
+            Statement::While { condition, body } | Statement::Repeat { condition, body } => {
+                check_nested_goto_expression(condition)?;
+                check_nested_goto_statements(body)?;
+            }
+            Statement::NumericFor {
+                start, limit, step, body, ..
+            } => {
+                check_nested_goto_expression(start)?;
+                check_nested_goto_expression(limit)?;
+                if let Some(step) = step {
+                    check_nested_goto_expression(step)?;
+                }
+                check_nested_goto_statements(body)?;
+            }
+            Statement::GenericFor {
+                iterators, body, ..
+            } => {
+                for iterator in iterators {
+                    check_nested_goto_expression(iterator)?;
+                }
+                check_nested_goto_statements(body)?;
+            }
+            Statement::If {
+                branches, else_branch, ..
+            } => {
+                for (condition, body) in branches {
+                    check_nested_goto_expression(condition)?;
+                    check_nested_goto_statements(body)?;
+                }
+                if let Some(body) = else_branch {
+                    check_nested_goto_statements(body)?;
+                }
+            }
+            Statement::Break | Statement::Label(_) | Statement::Goto(_) => {}
+        }
+    }
+    Ok(())
+}
+
+fn goto_source_error(source: &str, (message, name): (&'static str, &str)) -> ParseError {
+    let byte_offset = (name.as_ptr() as usize)
+        .checked_sub(source.as_ptr() as usize)
+        .filter(|offset| *offset <= source.len())
+        .unwrap_or(source.len());
+    ParseError {
+        line: source_eof_line(&source[..byte_offset]),
+        byte_offset,
+        message,
+    }
+}
+
 pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
     let tokens = tokenize(source)?;
     let mut parser = Parser {
@@ -695,6 +822,7 @@ pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
     if parser.peek().is_some() {
         return Err(parser.error("unexpected trailing token"));
     }
+    check_nested_goto_expression(&result).map_err(|issue| goto_source_error(source, issue))?;
     check_expression_labels(&result).map_err(|message| parser.error(message))?;
     Ok(result)
 }
@@ -1209,20 +1337,9 @@ pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
         vararg_allowed: true,
     };
     let body = parser.block(&[], 0)?;
+    check_nested_goto_statements(&body).map_err(|issue| goto_source_error(source, issue))?;
     check_block_labels(&body, &[]).map_err(|message| parser.error(message))?;
-    check_block_gotos_detailed(&body).map_err(|(message, name)| {
-        // The offending goto name is a borrowed lexer slice of source.
-        // Report its original token position, not the parser's EOF cursor.
-        let byte_offset = (name.as_ptr() as usize)
-            .checked_sub(source.as_ptr() as usize)
-            .filter(|offset| *offset <= source.len())
-            .unwrap_or(source.len());
-        ParseError {
-            line: source_eof_line(&source[..byte_offset]),
-            byte_offset,
-            message,
-        }
-    })?;
+    check_block_gotos_detailed(&body).map_err(|issue| goto_source_error(source, issue))?;
     Ok(body)
 }
 
