@@ -2061,10 +2061,9 @@ pub fn execute_register_program_with_strings_and_budget(
             Instruction::LoadString { dest, index } => (dest, RegisterValue::String(index)),
             Instruction::Length { dest, input } => {
                 let length = match read(&registers, input)? {
-                    RegisterValue::String(index) => strings
-                        .get(index)
-                        .ok_or(Error::InvalidBytecode)?
-                        .len(),
+                    RegisterValue::String(index) => {
+                        strings.get(index).ok_or(Error::InvalidBytecode)?.len()
+                    }
                     _ => return Err(Error::TypeError),
                 };
                 (dest, RegisterValue::Integer(length as i64))
