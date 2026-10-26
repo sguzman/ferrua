@@ -24,6 +24,7 @@ pub enum RegisterBuiltin {
     RawLen,
     RawEqual,
     Assert,
+    ToNumber,
     Next,
     Pairs,
 }
@@ -2808,6 +2809,7 @@ pub fn execute_register_program_with_strings_and_budget(
                         b"rawlen" => RegisterValue::Builtin(RegisterBuiltin::RawLen),
                         b"rawequal" => RegisterValue::Builtin(RegisterBuiltin::RawEqual),
                         b"assert" => RegisterValue::Builtin(RegisterBuiltin::Assert),
+                        b"tonumber" => RegisterValue::Builtin(RegisterBuiltin::ToNumber),
                         b"next" => RegisterValue::Builtin(RegisterBuiltin::Next),
                         b"pairs" => RegisterValue::Builtin(RegisterBuiltin::Pairs),
                         _ => RegisterValue::Nil,
@@ -2907,6 +2909,11 @@ pub fn execute_register_program_with_strings_and_budget(
                                 arguments[1 + offset.min(available)..].to_vec()
                             }
                         }
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::ToNumber) => {
+                        let input = *arguments.first().ok_or(Error::TypeError)?;
+                        let base = arguments.get(1).copied().unwrap_or(RegisterValue::Nil);
+                        vec![register_tonumber(input, base, &strings)?]
                     }
                     RegisterValue::Builtin(RegisterBuiltin::Assert) => {
                         let condition = arguments.first().ok_or(Error::TypeError)?;
@@ -3284,6 +3291,114 @@ fn register_table_key_value(key: &TableKey) -> RegisterValue {
         TableKey::Table(index) => RegisterValue::Table(index),
         TableKey::Builtin(value) => RegisterValue::Builtin(value),
     }
+}
+
+/// Bounded Lua-style tonumber conversion. Numeric scalars retain their tag.
+/// An explicit base accepts integral numeric strings in 2..=36; a missing
+/// base accepts decimal and hexadecimal Lua numeric spellings.
+fn register_tonumber(
+    value: RegisterValue,
+    base: RegisterValue,
+    strings: &[Vec<u8>],
+) -> Result<RegisterValue, Error> {
+    if base == RegisterValue::Nil {
+        match value {
+            RegisterValue::Integer(_) | RegisterValue::Float(_) => return Ok(value),
+            RegisterValue::String(index) => {
+                let raw = strings.get(index).ok_or(Error::InvalidBytecode)?;
+                let Ok(raw) = std::str::from_utf8(raw) else {
+                    return Ok(RegisterValue::Nil);
+                };
+                let text = raw.trim_ascii();
+                if text.is_empty() {
+                    return Ok(RegisterValue::Nil);
+                }
+                let (sign, unsigned) = if let Some(rest) = text.strip_prefix('-') {
+                    (-1.0, rest)
+                } else if let Some(rest) = text.strip_prefix('+') {
+                    (1.0, rest)
+                } else {
+                    (1.0, text)
+                };
+                if unsigned.starts_with("0x") || unsigned.starts_with("0X") {
+                    if let Some(integer) = parse_lua_hex_integer_wrapping(unsigned) {
+                        return Ok(RegisterValue::Integer(if sign < 0.0 {
+                            integer.wrapping_neg()
+                        } else {
+                            integer
+                        }));
+                    }
+                    if let Some(number) = parse_lua_hex_float(unsigned) {
+                        return Ok(RegisterValue::Float((sign * number).to_bits()));
+                    }
+                    return Ok(RegisterValue::Nil);
+                }
+                if let Ok(integer) = text.parse::<i64>() {
+                    return Ok(RegisterValue::Integer(integer));
+                }
+                let valid_decimal = text.bytes().any(|byte| byte.is_ascii_digit())
+                    && text.bytes().all(|byte| {
+                        byte.is_ascii_digit()
+                            || matches!(byte, b'+' | b'-' | b'.' | b'e' | b'E')
+                    });
+                if valid_decimal {
+                    if let Ok(number) = text.parse::<f64>() {
+                        return Ok(RegisterValue::Float(number.to_bits()));
+                    }
+                }
+                return Ok(RegisterValue::Nil);
+            }
+            _ => return Ok(RegisterValue::Nil),
+        }
+    }
+
+    let radix = register_select_integer(base, strings)?;
+    if !(2..=36).contains(&radix) {
+        return Err(Error::TypeError);
+    }
+    let RegisterValue::String(index) = value else {
+        return Err(Error::TypeError);
+    };
+    let raw = strings.get(index).ok_or(Error::InvalidBytecode)?;
+    let Ok(raw) = std::str::from_utf8(raw) else {
+        return Ok(RegisterValue::Nil);
+    };
+    let trimmed = raw.trim_ascii();
+    let (negative, digits) = if let Some(rest) = trimmed.strip_prefix('-') {
+        (true, rest)
+    } else {
+        (false, trimmed.strip_prefix('+').unwrap_or(trimmed))
+    };
+    let digits = if radix == 16 {
+        digits
+            .strip_prefix("0x")
+            .or_else(|| digits.strip_prefix("0X"))
+            .unwrap_or(digits)
+    } else {
+        digits
+    };
+    if digits.is_empty() {
+        return Ok(RegisterValue::Nil);
+    }
+    let mut result = 0_u64;
+    for byte in digits.bytes() {
+        let digit = match byte {
+            b'0'..=b'9' => u32::from(byte - b'0'),
+            b'a'..=b'z' => u32::from(byte - b'a') + 10,
+            b'A'..=b'Z' => u32::from(byte - b'A') + 10,
+            _ => return Ok(RegisterValue::Nil),
+        };
+        if i64::from(digit) >= radix {
+            return Ok(RegisterValue::Nil);
+        }
+        result = result.wrapping_mul(radix as u64).wrapping_add(u64::from(digit));
+    }
+    let integer = result as i64;
+    Ok(RegisterValue::Integer(if negative {
+        integer.wrapping_neg()
+    } else {
+        integer
+    }))
 }
 
 /// Lua's integer argument coercion for the bounded `select` builtin.
