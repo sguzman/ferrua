@@ -7744,6 +7744,10 @@ impl Execution<'_> {
         if id != MAIN_THREAD_ID
             && self.coroutines.get(id).and_then(Option::as_ref).is_none()
             && self.current_coroutine != Some(id)
+            && !self
+                .saved_call_contexts
+                .iter()
+                .any(|context| context.coroutine_id == Some(id))
         {
             return Err(FlowError::InvalidBytecode);
         }
