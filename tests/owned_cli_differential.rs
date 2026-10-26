@@ -594,6 +594,27 @@ fn owned_string_gmatch_gc_reclaims_or_retains_iterator_snapshots() {
 }
 
 #[test]
+fn owned_string_portable_binary_pack_unpack_and_packsize_match_lua54() {
+    for source in [
+        "local p=string.pack('<i4I2',-12345,65535); local a,b,n=string.unpack('<i4I2',p); print(#p,a,b,n,string.packsize('<i4I2'))",
+        "local p=string.pack('>I4',0x12345678); print(string.byte(p,1,4)); local a,n=string.unpack('>I4',p); print(a,n)",
+        "local p=string.pack('>I2<I2',0x1234,0x1234); print(string.byte(p,1,4)); print(string.unpack('>I2<I2',p))",
+        "local p=string.pack('bBhHi4I4',-1,255,-123,65535,-100000,4000000000); print(string.unpack('bBhHi4I4',p))",
+        "local p=string.pack('<I8',-1); print(#p,string.unpack('<I8',p),string.packsize('<I8'))",
+        "local p=string.pack('c5','xy'); local v,n=string.unpack('c5',p); print(#p,v=='xy\\0\\0\\0',n)",
+        "local p=string.pack('xc3x','z'); print(#p,string.byte(p,1,5)); local value,pos=string.unpack('xc3x',p); print(value=='z\\0\\0',pos)",
+        "local p=string.pack('>f<d',1.5,-0.25); local a,b,n=string.unpack('>f<d',p); print(a,b,n,string.packsize('>f<d'))",
+        "local p=string.pack('<n',3.25); print(string.unpack('<n',p),string.packsize('<n'))",
+        "local p=string.pack('=iI',7,9); print(string.unpack('=iI',p),string.packsize('=iI'))",
+        "local p=string.pack('<I2I2',5,6); local a,n=string.unpack('<I2',p,3); print(a,n)",
+        "print(string.packsize(''),string.pack('')=='',string.unpack('', '') )",
+        "local a=pcall(string.pack,'B',256); local b=pcall(string.pack,'b',128); local c=pcall(string.unpack,'I4','\\1'); print(a,b,c)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",

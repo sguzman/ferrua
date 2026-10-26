@@ -115,6 +115,9 @@ pub enum Builtin {
     StringReverse,
     StringRep,
     StringFormat,
+    StringPack,
+    StringUnpack,
+    StringPackSize,
     TableConcat,
     TableUnpack,
     TablePack,
@@ -172,6 +175,9 @@ const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"reverse", Builtin::StringReverse),
     (b"rep", Builtin::StringRep),
     (b"format", Builtin::StringFormat),
+    (b"pack", Builtin::StringPack),
+    (b"unpack", Builtin::StringUnpack),
+    (b"packsize", Builtin::StringPackSize),
 ];
 
 const TABLE_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -1868,6 +1874,23 @@ fn lua_utf8_pos(pos: i64, length: usize) -> i64 {
 
 /// Independent closure-like state for each Lua string.gmatch iterator.
 /// Subject/pattern bytes are owned so GC cannot invalidate iterator inputs.
+#[derive(Clone, Copy)]
+enum PackField {
+    Integer { size: usize, signed: bool, little: bool },
+    Float { size: usize, little: bool },
+    FixedString(usize),
+    Padding,
+}
+
+impl PackField {
+    fn size(self) -> usize {
+        match self {
+            Self::Integer { size, .. } | Self::Float { size, .. } | Self::FixedString(size) => size,
+            Self::Padding => 1,
+        }
+    }
+}
+
 struct GmatchState {
     source: Vec<u8>,
     pattern: Vec<u8>,
@@ -4229,6 +4252,10 @@ impl Execution<'_> {
                 self.string_gmatch_iterator(handle, &arguments)
             }
             Value::Builtin(Builtin::StringGsub) => self.string_gsub_builtin(&arguments),
+            Value::Builtin(Builtin::StringPack | Builtin::StringUnpack | Builtin::StringPackSize) => {
+                let Value::Builtin(builtin) = callable else { unreachable!() };
+                self.string_pack_dispatch(builtin, &arguments)
+            }
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
             Value::Builtin(Builtin::TablePack) => Ok(vec![self.table_pack_builtin(&arguments)?]),
             Value::Builtin(Builtin::TableInsert) => self.table_insert_builtin(&arguments),
@@ -5103,6 +5130,243 @@ impl Execution<'_> {
             Some((_, _, captures)) => self.simple_pattern_capture_values(&source, &captures, args),
             None => Ok(vec![Value::Nil]),
         }
+    }
+
+    /// Parse a portable, byte-aligned subset of Lua 5.4 binary formats.
+    /// Native ABI-dependent alignment, variable-length strings and exotic
+    /// integer widths are intentionally rejected instead of misencoded.
+    fn parse_pack_fields(format: &[u8]) -> Result<Vec<PackField>, FlowError> {
+        let mut fields = Vec::new();
+        let mut index = 0;
+        let mut little = cfg!(target_endian = "little");
+        let mut total = 0usize;
+        while index < format.len() {
+            let code = format[index];
+            index += 1;
+            let field = match code {
+                b' ' | b'\t' | b'\n' => continue,
+                b'<' => {
+                    little = true;
+                    continue;
+                }
+                b'>' => {
+                    little = false;
+                    continue;
+                }
+                b'=' => {
+                    little = cfg!(target_endian = "little");
+                    continue;
+                }
+                b'x' => PackField::Padding,
+                b'b' | b'B' | b'h' | b'H' | b'l' | b'L' | b'j' | b'J'
+                | b'T' | b'i' | b'I' => {
+                    let signed = matches!(code, b'b' | b'h' | b'l' | b'j' | b'i');
+                    let mut size = match code {
+                        b'b' | b'B' => 1,
+                        b'h' | b'H' => 2,
+                        b'i' | b'I' => 4,
+                        _ => 8,
+                    };
+                    if matches!(code, b'i' | b'I') && index < format.len()
+                        && format[index].is_ascii_digit()
+                    {
+                        size = 0;
+                        while index < format.len() && format[index].is_ascii_digit() {
+                            size = size.checked_mul(10)
+                                .and_then(|n| n.checked_add(usize::from(format[index] - b'0')))
+                                .ok_or(FlowError::TooLarge)?;
+                            index += 1;
+                        }
+                    }
+                    if !matches!(size, 1 | 2 | 4 | 8) {
+                        return Err(FlowError::Unsupported(
+                            "pack supports 1-, 2-, 4- and 8-byte integers".into(),
+                        ));
+                    }
+                    PackField::Integer { size, signed, little }
+                }
+                b'f' | b'd' | b'n' => PackField::Float {
+                    size: if code == b'f' { 4 } else { 8 },
+                    little,
+                },
+                b'c' => {
+                    if index >= format.len() || !format[index].is_ascii_digit() {
+                        return Err(FlowError::TypeError);
+                    }
+                    let mut size = 0usize;
+                    while index < format.len() && format[index].is_ascii_digit() {
+                        size = size.checked_mul(10)
+                            .and_then(|n| n.checked_add(usize::from(format[index] - b'0')))
+                            .ok_or(FlowError::TooLarge)?;
+                        index += 1;
+                    }
+                    PackField::FixedString(size)
+                }
+                _ => return Err(FlowError::Unsupported(
+                    "Lua pack alignment, variable-length strings or directive not supported".into(),
+                )),
+            };
+            total = total.checked_add(field.size()).ok_or(FlowError::TooLarge)?;
+            if total > MAX_STRING_POOL_BYTES || fields.len() >= MAX_STACK {
+                return Err(FlowError::TooLarge);
+            }
+            fields.push(field);
+        }
+        Ok(fields)
+    }
+
+    /// Portable byte-aligned string.pack / unpack / packsize. All three share
+    /// the exact format parser, endianness and signedness bounds. This is a
+    /// bounded subset, not an implementation of native Lua's whole ABI.
+    fn string_pack_dispatch(
+        &mut self,
+        builtin: Builtin,
+        args: &[Value],
+    ) -> Result<Vec<Value>, FlowError> {
+        let format = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
+        let fields = Self::parse_pack_fields(&format)?;
+        let total: usize = fields.iter().map(|field| field.size()).sum();
+        let cost = format.len().saturating_add(total).max(1);
+        if self.steps.saturating_add(cost) > self.budget {
+            return Err(FlowError::StepBudgetExceeded);
+        }
+        self.steps += cost;
+        if builtin == Builtin::StringPackSize {
+            return Ok(vec![Value::Integer(total as i64)]);
+        }
+        if builtin == Builtin::StringPack {
+            let mut output = Vec::with_capacity(total);
+            let mut argument = 1usize;
+            for field in fields {
+                match field {
+                    PackField::Padding => output.push(0),
+                    PackField::FixedString(size) => {
+                        let bytes = self.string_bytes(
+                            *args.get(argument).ok_or(FlowError::TypeError)?,
+                        )?;
+                        argument += 1;
+                        if bytes.len() > size {
+                            return Err(FlowError::TypeError);
+                        }
+                        output.extend_from_slice(&bytes);
+                        output.resize(output.len() + size - bytes.len(), 0);
+                    }
+                    PackField::Integer { size, signed, little } => {
+                        let value = *args.get(argument).ok_or(FlowError::TypeError)?;
+                        argument += 1;
+                        let integer = self.exact_integer_operand(value)
+                            .or_else(|_| self.integer_operand(value))?;
+                        if size < 8 {
+                            let bits = size * 8;
+                            let fits = if signed {
+                                let limit = 1i64 << (bits - 1);
+                                (-limit..limit).contains(&integer)
+                            } else {
+                                integer >= 0 && (integer as u64) < (1u64 << bits)
+                            };
+                            if !fits {
+                                return Err(FlowError::TypeError);
+                            }
+                        }
+                        if little {
+                            output.extend_from_slice(&(integer as u64).to_le_bytes()[..size]);
+                        } else {
+                            output.extend_from_slice(&(integer as u64).to_be_bytes()[8 - size..]);
+                        }
+                    }
+                    PackField::Float { size, little } => {
+                        let value = *args.get(argument).ok_or(FlowError::TypeError)?;
+                        argument += 1;
+                        let number = match self.arithmetic_operand(value)? {
+                            Value::Integer(number) => number as f64,
+                            Value::Float(bits) => f64::from_bits(bits),
+                            _ => return Err(FlowError::TypeError),
+                        };
+                        let bits = if size == 4 {
+                            u64::from((number as f32).to_bits())
+                        } else {
+                            number.to_bits()
+                        };
+                        if little {
+                            output.extend_from_slice(&bits.to_le_bytes()[..size]);
+                        } else {
+                            output.extend_from_slice(&bits.to_be_bytes()[8 - size..]);
+                        }
+                    }
+                }
+            }
+            return Ok(vec![self.intern_rooted_string(output, args)?]);
+        }
+        if builtin != Builtin::StringUnpack {
+            return Err(FlowError::InvalidBytecode);
+        }
+        let bytes = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
+        let position = match args.get(2).copied() {
+            Some(value) if value != Value::Nil => self.exact_integer_operand(value)
+                .or_else(|_| self.integer_operand(value))?,
+            _ => 1,
+        };
+        let position = Self::string_offset(position, bytes.len() as i64).max(1);
+        if position > bytes.len() as i64 + 1 {
+            return Err(FlowError::TypeError);
+        }
+        let mut cursor = (position - 1) as usize;
+        let mut values = Vec::with_capacity(fields.len() + 1);
+        self.gc_temporary_roots.push(args.to_vec());
+        let outcome = (|| {
+            for field in fields {
+                let end = cursor.checked_add(field.size()).ok_or(FlowError::TooLarge)?;
+                let chunk = bytes.get(cursor..end).ok_or(FlowError::TypeError)?;
+                cursor = end;
+                let value = match field {
+                    PackField::Padding => continue,
+                    PackField::FixedString(_) => {
+                        let roots = self.gc_temporary_roots.last()
+                            .ok_or(FlowError::InvalidBytecode)?.clone();
+                        self.intern_rooted_string(chunk.to_vec(), &roots)?
+                    }
+                    PackField::Integer { size, signed, little } => {
+                        let mut integer = 0u64;
+                        for (index, &byte) in chunk.iter().enumerate() {
+                            if little {
+                                integer |= u64::from(byte) << (index * 8);
+                            } else {
+                                integer = (integer << 8) | u64::from(byte);
+                            }
+                        }
+                        if signed && size < 8 && integer & (1u64 << (size * 8 - 1)) != 0 {
+                            integer |= !0u64 << (size * 8);
+                        }
+                        Value::Integer(integer as i64)
+                    }
+                    PackField::Float { size, little } => {
+                        let mut raw = 0u64;
+                        for (index, &byte) in chunk.iter().enumerate() {
+                            if little {
+                                raw |= u64::from(byte) << (index * 8);
+                            } else {
+                                raw = (raw << 8) | u64::from(byte);
+                            }
+                        }
+                        let number = if size == 4 {
+                            f32::from_bits(raw as u32) as f64
+                        } else {
+                            f64::from_bits(raw)
+                        };
+                        Value::Float(number.to_bits())
+                    }
+                };
+                self.gc_temporary_roots
+                    .last_mut()
+                    .ok_or(FlowError::InvalidBytecode)?
+                    .push(value);
+                values.push(value);
+            }
+            values.push(Value::Integer(cursor as i64 + 1));
+            Ok(values)
+        })();
+        self.gc_temporary_roots.pop();
+        outcome
     }
 
     /// Create a first-class, independent Lua iterator. The owned engine
@@ -7009,6 +7273,7 @@ impl Execution<'_> {
                                 | Builtin::StringGmatch
                                 | Builtin::StringGmatchIterator(_)
                                 | Builtin::StringGsub
+                                | Builtin::StringUnpack
                                 | Builtin::Utf8Len
                                 | Builtin::Utf8Codepoint
                                 | Builtin::Utf8Codes
@@ -7045,6 +7310,7 @@ impl Execution<'_> {
                                     self.string_gmatch_iterator(handle, &args)?
                                 }
                                 Builtin::StringGsub => self.string_gsub_builtin(&args)?,
+                                Builtin::StringUnpack => self.string_pack_dispatch(builtin, &args)?, 
                                 Builtin::Utf8Len => self.utf8_len_builtin(&args)?,
                                 Builtin::Utf8Codepoint => self.utf8_codepoint_builtin(&args)?,
                                 Builtin::Utf8Codes => self.utf8_codes_builtin(&args)?,
@@ -7124,6 +7390,7 @@ impl Execution<'_> {
                             | Builtin::StringGmatch
                             | Builtin::StringGmatchIterator(_)
                             | Builtin::StringGsub
+                            | Builtin::StringUnpack
                             | Builtin::Utf8Len
                             | Builtin::Utf8Codepoint
                             | Builtin::Utf8Codes
@@ -7169,6 +7436,12 @@ impl Execution<'_> {
                             | Builtin::StringReverse
                             | Builtin::StringRep
                             | Builtin::StringFormat => self.string_builtin(builtin, &args)?,
+                            Builtin::StringPack | Builtin::StringPackSize => {
+                                self.string_pack_dispatch(builtin, &args)?
+                                    .into_iter()
+                                    .next()
+                                    .ok_or(FlowError::InvalidBytecode)?
+                            }
                             Builtin::Utf8Char => self.utf8_char_builtin(&args)?,
                             Builtin::Utf8Offset => self.utf8_offset_builtin(&args)?,
                             Builtin::TableConcat => self.table_concat_builtin(&args)?,
