@@ -1371,7 +1371,18 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
 /// Run the tiny integer register IR with initialized-register validation.
 /// Statically reject malformed instructions, including unreachable ones.
 pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
+    execute_integer_program_with_budget(program, MAX_REGISTER_STEPS)
+}
+
+/// Run the experimental register dispatcher with an explicit instruction
+/// budget. Callers can lower but never increase the hard process-safe cap.
+/// Validation always precedes budget execution, including when budget is 0.
+pub fn execute_integer_program_with_budget(
+    program: &Program,
+    budget: usize,
+) -> Result<i64, Error> {
     validate_integer_program(program)?;
+    let budget = budget.min(MAX_REGISTER_STEPS);
     let mut registers: Vec<Option<i64>> = vec![None; program.registers];
     fn read(registers: &[Option<i64>], at: usize) -> Result<i64, Error> {
         registers
@@ -1383,7 +1394,7 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
     let mut pc = 0;
     let mut steps = 0usize;
     while pc < program.code.len() {
-        if steps >= MAX_REGISTER_STEPS {
+        if steps >= budget {
             return Err(Error::StepBudgetExceeded);
         }
         steps += 1;
@@ -2271,6 +2282,51 @@ mod tests {
         assert_eq!(
             execute_integer_program(&loop_program),
             Err(Error::StepBudgetExceeded)
+        );
+    }
+
+    #[test]
+    fn register_explicit_instruction_budget_is_exact_and_cannot_bypass_hard_cap() {
+        let chunk = compile_integer_chunk("return 7").unwrap();
+        assert_eq!(chunk.code.len(), 2);
+        assert_eq!(
+            execute_integer_program_with_budget(&chunk, 0),
+            Err(Error::StepBudgetExceeded)
+        );
+        assert_eq!(
+            execute_integer_program_with_budget(&chunk, 1),
+            Err(Error::StepBudgetExceeded)
+        );
+        assert_eq!(execute_integer_program_with_budget(&chunk, 2), Ok(7));
+        assert_eq!(execute_integer_program_with_budget(&chunk, usize::MAX), Ok(7));
+
+        let expression = compile_integer_expression("1+2").unwrap();
+        assert_eq!(expression.code.len(), 3);
+        assert_eq!(
+            execute_integer_program_with_budget(&expression, 2),
+            Err(Error::StepBudgetExceeded)
+        );
+        assert_eq!(execute_integer_program_with_budget(&expression, 3), Ok(3));
+
+        let infinite =
+            compile_integer_chunk("while true do end; return 1").unwrap();
+        assert_eq!(
+            execute_integer_program_with_budget(&infinite, 19),
+            Err(Error::StepBudgetExceeded)
+        );
+        assert_eq!(
+            execute_integer_program_with_budget(&infinite, usize::MAX),
+            Err(Error::StepBudgetExceeded)
+        );
+
+        let invalid = Program {
+            code: vec![Instruction::Load { dest: 10, value: 7 }],
+            registers: 1,
+            result: 0,
+        };
+        assert_eq!(
+            execute_integer_program_with_budget(&invalid, 0),
+            Err(Error::InvalidBytecode)
         );
     }
 
