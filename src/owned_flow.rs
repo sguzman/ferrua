@@ -5838,7 +5838,8 @@ impl Execution<'_> {
                         if specifier == b'%' && !left_align && width == 0 && precision.is_none() {
                             output.push(b'%');
                         } else {
-                            if (left_align || width > 0 || precision.is_some()) && specifier != b's' {
+                            if (left_align || width > 0 || precision.is_some()) && specifier != b's'
+                            {
                                 return Err(FlowError::Unsupported(
                                     "Lua numeric width and precision are not implemented".into(),
                                 ));
