@@ -5560,10 +5560,10 @@ impl Execution<'_> {
                 .or_else(|_| self.integer_operand(value))?,
             _ => 1,
         };
-        // Unlike string.sub/string.byte, unpack rejects positions before
-        // the first byte; one past the end is valid for an empty format.
-        let position = Self::string_offset(position, bytes.len() as i64);
-        if position < 1 || position > bytes.len() as i64 + 1 {
+        // Lua 5.4's posrelatI clamps zero and excessively negative
+        // initial positions to 1; one past the end permits empty formats.
+        let position = Self::string_offset(position, bytes.len() as i64).max(1);
+        if position > bytes.len() as i64 + 1 {
             return Err(FlowError::TypeError);
         }
         let mut cursor = (position - 1) as usize;
