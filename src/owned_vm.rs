@@ -2237,7 +2237,11 @@ pub fn execute_register_program_with_strings_and_budget(
                             }
                             RegisterValue::Builtin(_) => b"function: builtin".to_vec(),
                         };
-                        vec![intern_register_string(bytes, &mut strings, &mut string_bytes_used)?]
+                        vec![intern_register_string(
+                            bytes,
+                            &mut strings,
+                            &mut string_bytes_used,
+                        )?]
                     }
                     RegisterValue::Builtin(RegisterBuiltin::Select) => {
                         let selector = arguments.first().ok_or(Error::TypeError)?;
@@ -2260,7 +2264,8 @@ pub fn execute_register_program_with_strings_and_budget(
                                 if offset < 0 {
                                     return Err(Error::TypeError);
                                 }
-                                let offset = usize::try_from(offset).map_err(|_| Error::TooLarge)?;
+                                let offset =
+                                    usize::try_from(offset).map_err(|_| Error::TooLarge)?;
                                 arguments[1 + offset.min(available)..].to_vec()
                             }
                             _ => return Err(Error::TypeError),
@@ -2278,7 +2283,10 @@ pub fn execute_register_program_with_strings_and_budget(
             }
             Instruction::ReadCallResult { dest, index } => (
                 dest,
-                last_call_results.get(index).copied().unwrap_or(RegisterValue::Nil),
+                last_call_results
+                    .get(index)
+                    .copied()
+                    .unwrap_or(RegisterValue::Nil),
             ),
             Instruction::Length { dest, input } => {
                 let length = match read(&registers, input)? {
