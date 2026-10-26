@@ -2215,7 +2215,8 @@ pub fn execute_register_program_with_strings_and_budget(
                     .ok_or(Error::InvalidBytecode)?;
                 let mut evaluated = call_arguments[start..].to_vec();
                 if expand_tail {
-                    if evaluated.len().saturating_add(last_call_results.len()) > MAX_CALL_ARGUMENTS {
+                    if evaluated.len().saturating_add(last_call_results.len()) > MAX_CALL_ARGUMENTS
+                    {
                         return Err(Error::TooLarge);
                     }
                     evaluated.extend_from_slice(&last_call_results);
