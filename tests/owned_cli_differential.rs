@@ -510,6 +510,28 @@ fn owned_pattern_unreachable_invalid_closer_is_deferred_like_lua54() {
 }
 
 #[test]
+fn owned_patterns_with_out_of_range_initial_position_skip_parsing_like_lua54() {
+    // Lua's find/match and gmatch's optional initial position return nil
+    // before traversing malformed atoms when the initial byte is > len + 1.
+    // Exactly len + 1 still traverses the zero-width boundary.
+    for source in [
+        "print(string.match('abc','[',100)==nil)",
+        "print(string.find('abc','%',100)==nil)",
+        "print(string.match('abc','%f',100)==nil)",
+        "print(string.find('abc','%b',100)==nil)",
+        "print(string.match('abc','%',5)==nil)",
+        "local it=string.gmatch('abc','%',5); print(it()==nil)",
+        "local it=string.gmatch('abc','%f',100); print(it()==nil)",
+        "local ok=pcall(string.match,'abc','%',4); print(ok)",
+        "local ok=pcall(string.find,'abc','%',4); print(ok)",
+        "local it=string.gmatch('abc','%',4); local ok=pcall(it); print(ok)",
+        "local ok=pcall(string.match,'abc','%',-100); print(ok)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_pattern_malformed_bracket_is_rejected_only_when_reached_like_lua54() {
     // Lua's classend() runs during matching, not while pre-parsing all
     // pattern atoms. An earlier mismatching byte leaves '[' unreachable.

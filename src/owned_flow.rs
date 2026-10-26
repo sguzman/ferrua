@@ -5914,6 +5914,13 @@ impl Execution<'_> {
         initial: i64,
         plain: bool,
     ) -> Result<Option<PatternMatch>, FlowError> {
+        // Lua returns no match before parsing pattern atoms when the
+        // initial byte position is already beyond the one-past-end sentinel.
+        // Even a malformed pattern is unreachable in that case.
+        let start = Self::string_offset(initial, source.len() as i64).max(1);
+        if start > source.len() as i64 + 1 {
+            return Ok(None);
+        }
         let mut body = pattern;
         let mut anchored_start = false;
         let mut anchored_end = false;
@@ -6098,10 +6105,6 @@ impl Execution<'_> {
         // An unfinished '(' raises an error only when the matching
         // traversal reaches the end with a still-open capture. A literal
         // prefix that never matches must not fail at parse time.
-        let start = Self::string_offset(initial, source.len() as i64).max(1);
-        if start > source.len() as i64 + 1 {
-            return Ok(None);
-        }
         let offset = (start - 1) as usize;
         for begin in offset..=source.len() {
             if self.steps >= self.budget {
