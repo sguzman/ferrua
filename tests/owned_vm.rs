@@ -113,6 +113,97 @@ fn register_dynamic_concatenation_and_string_operations_match_lua54() {
 }
 
 #[test]
+fn register_first_class_builtins_and_nested_calls_match_lua54() {
+    use ferrua::owned_vm::{Error, execute_register_program_with_strings};
+    let reference = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+
+    for (chunk, expected) in [
+        ("return type(4)", "number"),
+        ("return type(3.5)", "number"),
+        ("return type(nil)", "nil"),
+        ("return type(true)", "boolean"),
+        ("return type('hello')", "string"),
+        ("return type(type)", "function"),
+        ("return tostring(nil)", "nil"),
+        ("return tostring(false)", "false"),
+        ("return tostring(3.5)", "3.5"),
+        ("return tostring('abc')", "abc"),
+        ("return type(type(4))", "string"),
+        ("return tostring(type(4))", "number"),
+        ("return tostring(tostring(5))", "5"),
+        ("return type(7, 8)", "number"),
+        ("local f=type; return f('a')", "string"),
+        ("local f=tostring; return f(42)", "42"),
+        ("local type=tostring; return type(7)", "7"),
+        ("return 'x'..tostring(7)", "x7"),
+        ("return tostring(3 + 4)", "7"),
+    ] {
+        let program = compile_integer_chunk(chunk).unwrap();
+        let value = execute_register_program_with_strings(&program).unwrap();
+        assert_eq!(value.string_bytes(), Some(expected.as_bytes()), "{chunk}");
+        assert_eq!(value.values().len(), 1, "{chunk}");
+        for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if binary == "lua5.4" && !reference {
+                continue;
+            }
+            let mut command = Command::new(binary);
+            if binary != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let code = format!("local function f() {chunk} end; io.write(f())");
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(output.status.success(), "{binary}: {chunk}");
+            assert_eq!(output.stdout, expected.as_bytes(), "{binary}: {chunk}");
+        }
+    }
+    for source in [
+        "return type()",
+        "return tostring()",
+        "local type=7; return type(4)",
+        "local f=7; return f(4)",
+        "return tostring(2,1//0)",
+        "return type(1,1//0)",
+    ] {
+        let compiled = compile_integer_chunk(source).unwrap();
+        let error = execute_register_program_with_strings(&compiled).unwrap_err();
+        assert!(
+            matches!(error, Error::TypeError | Error::DivisionByZero),
+            "{source}: {error}"
+        );
+        for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if binary == "lua5.4" && !reference {
+                continue;
+            }
+            let mut command = Command::new(binary);
+            if binary != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", source]).output().unwrap();
+            assert!(!output.status.success(), "{binary}: {source}");
+        }
+    }
+    let no_call = compile_integer_chunk("return false and type()").unwrap();
+    assert_eq!(
+        execute_register_program(&no_call),
+        Ok(RegisterValue::Boolean(false))
+    );
+    let calls = compile_integer_chunk("return type(5), tostring(6)").unwrap();
+    let executed = execute_register_program_with_strings(&calls).unwrap();
+    assert_eq!(executed.values().len(), 2);
+    assert_eq!(
+        executed.value_string_bytes(executed.values()[0]),
+        Some(b"number".as_slice())
+    );
+    assert_eq!(
+        executed.value_string_bytes(executed.values()[1]),
+        Some(b"6".as_slice())
+    );
+}
+
+#[test]
 fn register_fixed_arity_returns_match_lua54() {
     use ferrua::owned_vm::{Error, execute_register_program_with_strings};
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
