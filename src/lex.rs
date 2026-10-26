@@ -137,10 +137,9 @@ impl Scanner<'_> {
                 b'z' => {
                     // Lua's z escape consumes subsequent whitespace including lines.
                     self.bump();
-                    while self
-                        .peek(0)
-                        .is_some_and(|next| matches!(next, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c))
-                    {
+                    while self.peek(0).is_some_and(|next| {
+                        matches!(next, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
+                    }) {
                         self.bump();
                     }
                 }
