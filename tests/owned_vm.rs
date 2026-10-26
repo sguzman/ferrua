@@ -196,7 +196,10 @@ fn register_fixed_arity_returns_match_lua54() {
     let program = compile_integer_chunk("return 'a'..'b',42,nil").unwrap();
     let result = execute_register_program_with_strings(&program).unwrap();
     assert_eq!(result.values().len(), 3);
-    assert_eq!(result.value_string_bytes(result.values()[0]), Some(b"ab".as_slice()));
+    assert_eq!(
+        result.value_string_bytes(result.values()[0]),
+        Some(b"ab".as_slice())
+    );
     assert_eq!(result.values()[1], RegisterValue::Integer(42));
     assert_eq!(result.values()[2], RegisterValue::Nil);
 
