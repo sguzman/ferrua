@@ -508,7 +508,9 @@ fn assigned_names<'a>(body: &[Statement<'a>], names: &mut HashSet<&'a str>) {
                         }
                     }
                 }
-                Statement::Block(inner) | Statement::While { body: inner, .. } => pending.push(inner),
+                Statement::Block(inner) | Statement::While { body: inner, .. } => {
+                    pending.push(inner)
+                }
                 Statement::If {
                     branches,
                     else_branch,
@@ -741,9 +743,7 @@ fn compile_statements<'a>(
                     .flat_map(|(level, scope)| {
                         scope
                             .iter()
-                            .filter(|(name, binding)| {
-                                !binding.constant && assigned.contains(*name)
-                            })
+                            .filter(|(name, binding)| !binding.constant && assigned.contains(*name))
                             .map(move |(name, _)| (level, *name))
                     })
                     .collect::<Vec<_>>();
@@ -759,7 +759,13 @@ fn compile_statements<'a>(
                         .register;
                     let dest = program.registers;
                     program.registers += 1;
-                    emit_instruction(program, Instruction::LoopCopy { dest, input: source })?;
+                    emit_instruction(
+                        program,
+                        Instruction::LoopCopy {
+                            dest,
+                            input: source,
+                        },
+                    )?;
                     scopes
                         .get_mut(level)
                         .and_then(|scope| scope.get_mut(name))
@@ -795,7 +801,13 @@ fn compile_statements<'a>(
                             .and_then(|scope| scope.get(name))
                             .ok_or(Error::InvalidBytecode)?
                             .register;
-                        emit_instruction(program, Instruction::LoopCopy { dest, input: source })?;
+                        emit_instruction(
+                            program,
+                            Instruction::LoopCopy {
+                                dest,
+                                input: source,
+                            },
+                        )?;
                     }
                     emit_instruction(program, Instruction::LoopJump { target: start })?;
                 }
@@ -912,7 +924,10 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             Instruction::LoopReset { start, end } => start < end && end <= program.registers,
             Instruction::LoopJump { target } => {
                 target < pc
-                    && matches!(program.code.get(target), Some(Instruction::LoopReset { .. }))
+                    && matches!(
+                        program.code.get(target),
+                        Some(Instruction::LoopReset { .. })
+                    )
             }
             Instruction::Return { source } => register(source),
         };
@@ -982,7 +997,7 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
                 *registers.get_mut(dest).ok_or(Error::InvalidBytecode)? = Some(value);
                 pc += 1;
                 continue;
-            },
+            }
             Instruction::Jump { target } => {
                 if target <= pc || target >= program.code.len() {
                     return Err(Error::InvalidBytecode);
