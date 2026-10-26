@@ -2693,6 +2693,7 @@ mod tests {
             "local x<const> =3; do x=4 end; return x",
             "local a,b<const> =1,2; b=4; return a+b",
             "local x<close> =3; return x",
+            "local x<const>; x=1; return x",
 
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
