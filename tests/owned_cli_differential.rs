@@ -692,6 +692,24 @@ fn owned_string_format_scientific_exponent_width_and_flags_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_uses_lua_tostring_and_rejects_modified_nul_strings() {
+    for source in [
+        "print(string.format('%s %s %s',nil,true,false)=='nil true false')",
+        "local t=setmetatable({}, {__tostring=function() return 'hello' end}); print(string.format('%s',t)=='hello',string.format('%8s',t)=='   hello')",
+        "local t=setmetatable({}, {__tostring=function() return 'WORLD' end}); print(string.format('%.3s',t)=='WOR',string.format('%-8.3s',t)=='WOR     ')",
+        "local t=setmetatable({}, {__tostring=function() collectgarbage('collect'); return 'ok' end}); print(string.format('[%5s]',t)=='[   ok]')",
+        "print(string.format('%s','a\\0b')=='a\\0b',#string.format('%s','a\\0b'))",
+        "local a,x=pcall(string.format,'%5s','a\\0b'); local b,y=pcall(string.format,'%.1s','a\\0b'); print(a,type(x),b,type(y))",
+        "local t=setmetatable({}, {__tostring=function() error(27) end}); local ok,e=pcall(string.format,'%s',t); print(ok,type(e))",
+        "local t=setmetatable({}, {__tostring=function() return 'x' end}); local original=tostring; tostring=function() return 'wrong' end; print(string.format('%s',t)=='x'); tostring=original",
+        "local t={}; local result=string.format('%s',t); print(type(result),string.sub(result,1,7)=='table: ')",
+        "print(string.format('%5s',false)=='false',string.format('%-5s',nil)=='nil  ')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_gsub_short_lived_gc_roots_preserve_long_replacement_semantics() {
     for source in [
         "local n=0; local s=string.rep('a',100); local out,c=string.gsub(s,'.',function(x) n=n+1; return x..'b' end); print(#out,c,n)",

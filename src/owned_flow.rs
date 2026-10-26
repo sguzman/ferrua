@@ -5964,7 +5964,14 @@ impl Execution<'_> {
                                     }
                                     formatted
                                 }
-                                b's' => self.string_bytes(value)?,
+                                b's' => {
+                                    // luaL_tolstring performs Lua's tostring
+                                    // protocol, including table __tostring
+                                    // callbacks, without consulting a global
+                                    // tostring override.
+                                    let converted = self.tostring_builtin(value, args)?;
+                                    self.string_bytes(converted)?
+                                },
                                 b'q' => match value {
                                     Value::Nil => b"nil".to_vec(),
                                     Value::Boolean(true) => b"true".to_vec(),
@@ -6023,6 +6030,14 @@ impl Execution<'_> {
                                 }
                             };
                             if specifier == b's' {
+                                // Lua's modified %s uses C's NUL-terminated
+                                // formatter and rejects embedded zeros even
+                                // if the requested precision would hide one.
+                                if (left_align || width > 0 || precision.is_some())
+                                    && part.contains(&0)
+                                {
+                                    return Err(FlowError::TypeError);
+                                }
                                 if let Some(precision) = precision {
                                     part.truncate(precision);
                                 }
