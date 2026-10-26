@@ -40,8 +40,7 @@ impl RegisterValue {
                 let value = f64::from_bits(bits);
                 if value.is_finite()
                     && value.fract() == 0.0
-                    && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
-                        .contains(&value)
+                    && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&value)
                 {
                     Ok(value as i64)
                 } else {
@@ -1654,10 +1653,7 @@ pub fn execute_register_program_with_budget(
     fn read_integer(registers: &[Option<RegisterValue>], at: usize) -> Result<i64, Error> {
         read(registers, at)?.integer()
     }
-    fn read_bitwise_integer(
-        registers: &[Option<RegisterValue>],
-        at: usize,
-    ) -> Result<i64, Error> {
+    fn read_bitwise_integer(registers: &[Option<RegisterValue>], at: usize) -> Result<i64, Error> {
         read(registers, at)?.bitwise_integer()
     }
     let mut pc = 0;
