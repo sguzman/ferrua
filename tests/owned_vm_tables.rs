@@ -20,7 +20,9 @@ fn render(code: &str) -> String {
             RegisterValue::Boolean(boolean) => rendered.push_str(&boolean.to_string()),
             RegisterValue::Nil => rendered.push_str("nil"),
             RegisterValue::String(_) => rendered.push_str(&String::from_utf8_lossy(
-                result.value_string_bytes(value).expect("valid string handle"),
+                result
+                    .value_string_bytes(value)
+                    .expect("valid string handle"),
             )),
             RegisterValue::Table(_) => rendered.push_str("table"),
             RegisterValue::Builtin(_) => rendered.push_str("function"),
@@ -46,7 +48,10 @@ fn register_table_literals_lookup_and_identity_match_lua54() {
         ("local t={}; return #t", "1|0"),
         ("local t={[1]=7,[2]=8}; return t[1]+t[2]", "1|15"),
         ("local t={[2.0]=5}; return t[2]", "1|5"),
-        ("local t={[true]=7,[false]=8}; return t[true]+t[false]", "1|15"),
+        (
+            "local t={[true]=7,[false]=8}; return t[true]+t[false]",
+            "1|15",
+        ),
         ("local t={['x']=4,x=5}; return t.x", "1|5"),
         ("local t={x='ab'}; return t.x..'c'", "1|abc"),
         ("local t={a=nil}; return t.a", "1|nil"),
@@ -60,7 +65,10 @@ fn register_table_literals_lookup_and_identity_match_lua54() {
         ("local t={}; t[2]=8; return t[2]", "1|8"),
         ("local t={}; t[2.0]=8; return t[2]", "1|8"),
         ("local t={}; t.a,t.b=1,2; return t.a,t.b", "2|1|2"),
-        ("local t={a=1,b=2}; t.a,t.b=t.b,t.a; return t.a,t.b", "2|2|1"),
+        (
+            "local t={a=1,b=2}; t.a,t.b=t.b,t.a; return t.a,t.b",
+            "2|2|1",
+        ),
         ("local t={a=1}; t.a,t.a=2,3; return t.a", "1|3"),
         ("local t={}; local u=t; u.k=11; return t.k", "1|11"),
         ("local t={a=1}; t.a=nil; return t.a", "1|nil"),
