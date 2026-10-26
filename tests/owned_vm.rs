@@ -7,6 +7,83 @@ use ferrua::owned_vm::{
 use std::process::Command;
 
 #[test]
+fn tagged_register_decimal_floats_and_mixed_number_order_match_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("1.5", RegisterValue::Float(1.5_f64.to_bits())),
+        ("1e2", RegisterValue::Float(100.0_f64.to_bits())),
+        ("-0.0", RegisterValue::Float((-0.0_f64).to_bits())),
+        ("1.25+2.5", RegisterValue::Float(3.75_f64.to_bits())),
+        ("1+2.5", RegisterValue::Float(3.5_f64.to_bits())),
+        ("7.5-2", RegisterValue::Float(5.5_f64.to_bits())),
+        ("1.25*4", RegisterValue::Float(5.0_f64.to_bits())),
+        ("0.0 or 8", RegisterValue::Float(0.0_f64.to_bits())),
+        ("1.0==1", RegisterValue::Boolean(true)),
+        ("-0.0==0.0", RegisterValue::Boolean(true)),
+        ("1.5<2", RegisterValue::Boolean(true)),
+        ("2<=2.5", RegisterValue::Boolean(true)),
+        ("2.5>2", RegisterValue::Boolean(true)),
+        ("2.0>=2", RegisterValue::Boolean(true)),
+        ("not 0.0", RegisterValue::Boolean(false)),
+        (
+            "9007199254740993==9007199254740992.0",
+            RegisterValue::Boolean(false),
+        ),
+        (
+            "9223372036854775807<9223372036854775808.0",
+            RegisterValue::Boolean(true),
+        ),
+    ] {
+        let expression = compile_integer_expression(source).unwrap();
+        assert_eq!(execute_register_program(&expression), Ok(expected), "{source}");
+        let chunk = compile_integer_chunk(&format!("return {source}")).unwrap();
+        assert_eq!(execute_register_program(&chunk), Ok(expected), "{source}");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut cmd = Command::new(executable);
+            if executable != "lua5.4" {
+                cmd.arg("--lua=5.4");
+            }
+            let code = format!("local x=({source}); print(type(x),x)");
+            let result = cmd.args(["-e", &code]).output().unwrap();
+            assert!(
+                result.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            let output = String::from_utf8_lossy(&result.stdout);
+            let fields = output.trim().split('\t').collect::<Vec<_>>();
+            assert_eq!(fields.len(), 2, "{source}: {output}");
+            match expected {
+                RegisterValue::Float(bits) => {
+                    assert_eq!(fields[0], "number", "{source}");
+                    let actual: f64 = fields[1].parse().unwrap();
+                    assert_eq!(actual.to_bits(), bits, "{source}");
+                }
+                RegisterValue::Boolean(value) => {
+                    assert_eq!(fields[0], "boolean", "{source}");
+                    assert_eq!(fields[1], value.to_string(), "{source}");
+                }
+                _ => unreachable!("float/boolean reference only"),
+            }
+        }
+    }
+    for source in ["1.5+true", "nil*0.5", "false<1.5"] {
+        let program = compile_integer_expression(source).unwrap();
+        assert_eq!(
+            execute_register_program(&program),
+            Err(ferrua::owned_vm::Error::TypeError),
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn tagged_register_and_or_return_selected_operands_like_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
