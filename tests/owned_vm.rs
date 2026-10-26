@@ -17,7 +17,11 @@ fn register_adjusted_scalar_assignments_match_lua54() {
         ("return", RegisterValue::Nil, "nil\tnil\n"),
         ("local x=3", RegisterValue::Nil, "nil\tnil\n"),
         ("do local x=3 end", RegisterValue::Nil, "nil\tnil\n"),
-        ("if false then return 7 end", RegisterValue::Nil, "nil\tnil\n"),
+        (
+            "if false then return 7 end",
+            RegisterValue::Nil,
+            "nil\tnil\n",
+        ),
         (
             "if true then return 7 end",
             RegisterValue::Integer(7),
