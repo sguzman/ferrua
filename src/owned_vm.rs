@@ -139,6 +139,12 @@ pub enum Instruction {
         dest: usize,
         input: usize,
     },
+    /// Lua string concatenation of byte strings or numeric scalars.
+    Concat {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
     Neg {
         dest: usize,
         input: usize,
@@ -302,6 +308,24 @@ pub struct Program {
     result: usize,
     strings: Vec<Vec<u8>>,
 }
+/// The result and all immutable byte strings created during one bounded
+/// register execution. A dynamic string handle belongs to this execution,
+/// not to the compiled Program's static literal pool.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RegisterExecution {
+    pub value: RegisterValue,
+    strings: Vec<Vec<u8>>,
+}
+
+impl RegisterExecution {
+    pub fn string_bytes(&self) -> Option<&[u8]> {
+        match self.value {
+            RegisterValue::String(index) => self.strings.get(index).map(Vec::as_slice),
+            _ => None,
+        }
+    }
+}
+
 impl Program {
     pub fn instructions(&self) -> &[Instruction] {
         &self.code
@@ -550,7 +574,7 @@ fn emit<'a>(
         Expr::Binary { op, left, right }
             if matches!(
                 *op,
-                "+" | "-" | "*" | "/" | "^" | "//" | "%" | "&" | "|" | "~" | "<<" | ">>"
+                "+" | "-" | "*" | "/" | "^" | "//" | "%" | "&" | "|" | "~" | "<<" | ">>" | ".."
             ) =>
         {
             let lhs = emit(program, left, depth + 1, locals)?;
@@ -558,6 +582,7 @@ fn emit<'a>(
             let dest = program.registers;
             match *op {
                 "+" => Instruction::Add { dest, lhs, rhs },
+                ".." => Instruction::Concat { dest, lhs, rhs },
                 "-" => Instruction::Sub { dest, lhs, rhs },
                 "*" => Instruction::Mul { dest, lhs, rhs },
                 "/" => Instruction::Div { dest, lhs, rhs },
@@ -1700,7 +1725,8 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             | Instruction::BitXor { dest, lhs, rhs }
             | Instruction::Shl { dest, lhs, rhs }
             | Instruction::Shr { dest, lhs, rhs }
-            | Instruction::Compare { dest, lhs, rhs, .. } => {
+            | Instruction::Compare { dest, lhs, rhs, .. }
+            | Instruction::Concat { dest, lhs, rhs } => {
                 register(dest) && register(lhs) && register(rhs)
             }
             Instruction::BranchIfFalse { condition, target } => {
@@ -1776,8 +1802,33 @@ pub fn execute_register_program_with_budget(
     program: &Program,
     budget: usize,
 ) -> Result<RegisterValue, Error> {
+    let result = execute_register_program_with_strings_and_budget(program, budget)?;
+    if matches!(result.value, RegisterValue::String(index) if index >= program.strings.len()) {
+        return Err(Error::Unsupported(
+            "dynamic string result requires execute_register_program_with_strings".into(),
+        ));
+    }
+    Ok(result.value)
+}
+
+/// Execute the typed register VM and retain any dynamically produced byte
+/// strings. The returned string handle must be decoded through this value.
+pub fn execute_register_program_with_strings(
+    program: &Program,
+) -> Result<RegisterExecution, Error> {
+    execute_register_program_with_strings_and_budget(program, MAX_REGISTER_STEPS)
+}
+
+/// The combined literal and dynamic string pool is bounded by the same
+/// static byte limit; every instruction is validated before execution.
+pub fn execute_register_program_with_strings_and_budget(
+    program: &Program,
+    budget: usize,
+) -> Result<RegisterExecution, Error> {
     validate_integer_program(program)?;
     let budget = budget.min(MAX_REGISTER_STEPS);
+    let mut strings = program.strings.clone();
+    let mut string_bytes_used: usize = strings.iter().map(Vec::len).sum();
     let mut registers: Vec<Option<RegisterValue>> = vec![None; program.registers];
     fn read(registers: &[Option<RegisterValue>], at: usize) -> Result<RegisterValue, Error> {
         registers
@@ -1808,7 +1859,12 @@ pub fn execute_register_program_with_budget(
                 };
                 continue;
             }
-            Instruction::Return { source } => return read(&registers, source),
+            Instruction::Return { source } => {
+                return Ok(RegisterExecution {
+                    value: read(&registers, source)?,
+                    strings,
+                });
+            }
             Instruction::NumericForCheck {
                 counter,
                 limit,
@@ -1961,6 +2017,11 @@ pub fn execute_register_program_with_budget(
                 ) {
                     let equal = if both_numbers {
                         numeric_comparison(left, right)? == Some(Ordering::Equal)
+                    } else if let (RegisterValue::String(a), RegisterValue::String(b)) =
+                        (left, right)
+                    {
+                        strings.get(a).ok_or(Error::InvalidBytecode)?
+                            == strings.get(b).ok_or(Error::InvalidBytecode)?
                     } else {
                         left == right
                     };
@@ -1972,11 +2033,10 @@ pub fn execute_register_program_with_budget(
                 } else {
                     let ordering = match (left, right) {
                         (RegisterValue::String(a), RegisterValue::String(b)) => Some(
-                            program
-                                .strings
+                            strings
                                 .get(a)
                                 .ok_or(Error::InvalidBytecode)?
-                                .cmp(program.strings.get(b).ok_or(Error::InvalidBytecode)?),
+                                .cmp(strings.get(b).ok_or(Error::InvalidBytecode)?),
                         ),
                         _ => numeric_comparison(left, right)?,
                     };
@@ -2001,14 +2061,37 @@ pub fn execute_register_program_with_budget(
             Instruction::LoadString { dest, index } => (dest, RegisterValue::String(index)),
             Instruction::Length { dest, input } => {
                 let length = match read(&registers, input)? {
-                    RegisterValue::String(index) => program
-                        .strings
+                    RegisterValue::String(index) => strings
                         .get(index)
                         .ok_or(Error::InvalidBytecode)?
                         .len(),
                     _ => return Err(Error::TypeError),
                 };
                 (dest, RegisterValue::Integer(length as i64))
+            }
+            Instruction::Concat { dest, lhs, rhs } => {
+                let left = concat_operand_bytes(read(&registers, lhs)?, &strings)?;
+                let right = concat_operand_bytes(read(&registers, rhs)?, &strings)?;
+                let length = left.len().checked_add(right.len()).ok_or(Error::TooLarge)?;
+                if length > MAX_REGISTER_STRING_BYTES {
+                    return Err(Error::TooLarge);
+                }
+                let mut bytes = left;
+                bytes.extend_from_slice(&right);
+                let index = if let Some(index) = strings.iter().position(|item| item == &bytes) {
+                    index
+                } else {
+                    if strings.len() >= MAX_REGISTERS
+                        || string_bytes_used.saturating_add(length) > MAX_REGISTER_STRING_BYTES
+                    {
+                        return Err(Error::TooLarge);
+                    }
+                    string_bytes_used += length;
+                    let index = strings.len();
+                    strings.push(bytes);
+                    index
+                };
+                (dest, RegisterValue::String(index))
             }
             Instruction::Neg { dest, input } => {
                 let value = read(&registers, input)?;
@@ -2141,7 +2224,21 @@ pub fn execute_register_program_with_budget(
         *target = Some(value);
         pc += 1;
     }
-    read(&registers, program.result)
+    Ok(RegisterExecution {
+        value: read(&registers, program.result)?,
+        strings,
+    })
+}
+
+/// Byte-correct concatenation input. Numbers are formatted without routing
+/// through a host shell or foreign Lua runtime; other Lua types are rejected.
+fn concat_operand_bytes(value: RegisterValue, strings: &[Vec<u8>]) -> Result<Vec<u8>, Error> {
+    match value {
+        RegisterValue::String(index) => strings.get(index).cloned().ok_or(Error::InvalidBytecode),
+        RegisterValue::Integer(value) => Ok(value.to_string().into_bytes()),
+        RegisterValue::Float(bits) => Ok(format!("{:?}", f64::from_bits(bits)).into_bytes()),
+        _ => Err(Error::TypeError),
+    }
 }
 
 #[cfg(test)]
