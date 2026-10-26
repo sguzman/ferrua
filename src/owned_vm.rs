@@ -2704,7 +2704,8 @@ pub fn execute_register_program_with_strings_and_budget(
                             .get_mut(*index)
                             .ok_or(Error::InvalidBytecode)?
                             .entries;
-                        if let Some(position) = entries.iter().position(|(candidate, _)| *candidate == key)
+                        if let Some(position) =
+                            entries.iter().position(|(candidate, _)| *candidate == key)
                         {
                             if value == RegisterValue::Nil {
                                 entries.swap_remove(position);
