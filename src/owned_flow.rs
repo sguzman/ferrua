@@ -5397,6 +5397,16 @@ impl Execution<'_> {
         Ok(value)
     }
 
+    /// Convert Lua numeric arguments to exact integers for the binary
+    /// format API. Decimal/exponent numeric strings are permitted only
+    /// when their numeric value is integral and fits a Lua integer.
+    fn pack_integer_operand(&self, value: Value) -> Result<i64, FlowError> {
+        self.exact_integer_operand(value).or_else(|_| {
+            let number = self.arithmetic_operand(value)?;
+            self.exact_integer_operand(number)
+        })
+    }
+
     /// Bounded Lua 5.4 pack/unpack/packsize share one parser and support
     /// 1–16-byte integer and length fields, binary strings, and dynamic
     /// alignment padding. Native ABI portability remains a separate gate.
@@ -5503,9 +5513,7 @@ impl Execution<'_> {
                     } => {
                         let value = *args.get(argument).ok_or(FlowError::TypeError)?;
                         argument += 1;
-                        let integer = self
-                            .exact_integer_operand(value)
-                            .or_else(|_| self.integer_operand(value))?;
+                        let integer = self.pack_integer_operand(value)?;
                         if size < 8 {
                             let bits = size * 8;
                             let fits = if signed {
@@ -5555,9 +5563,7 @@ impl Execution<'_> {
         }
         let bytes = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
         let position = match args.get(2).copied() {
-            Some(value) if value != Value::Nil => self
-                .exact_integer_operand(value)
-                .or_else(|_| self.integer_operand(value))?,
+            Some(value) if value != Value::Nil => self.pack_integer_operand(value)?,
             _ => 1,
         };
         // Lua 5.4's posrelatI clamps zero and excessively negative

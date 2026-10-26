@@ -734,6 +734,23 @@ fn owned_binary_unpack_start_position_bounds_match_lua54() {
 }
 
 #[test]
+fn owned_binary_integer_numeric_string_coercions_match_lua54() {
+    // luaL_checkinteger accepts exactly integral numeric text, including
+    // decimal fractions and exponent notation, not only integer tokens.
+    for source in [
+        "local p=string.pack('>i2','1e2'); print(#p,string.unpack('>i2',p))",
+        "local p=string.pack('<i4','42.0'); print(#p,string.unpack('<i4',p))",
+        "local p=string.pack('<i4','4.2e1'); print(string.unpack('<i4',p))",
+        "local p=string.pack('b','-2.0'); print(string.unpack('b',p))",
+        "local p=string.pack('BBB',10,20,30); print(string.unpack('B',p,'2.0'))",
+        "local p=string.pack('BBB',10,20,30); print(string.unpack('B',p,'2e0'))",
+        "local a=pcall(string.pack,'i2','1.5'); local b=pcall(string.pack,'i2','not-a-number'); local c=pcall(string.unpack,'B',string.char(9),'1.5'); print(a,b,c)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",
