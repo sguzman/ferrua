@@ -440,7 +440,10 @@ fn check_expression_labels(expression: &Expr<'_>) -> Result<(), &'static str> {
             check_expression_labels(object)?;
             check_expression_labels(key)?;
         }
-        Expr::Function { body, .. } => check_block_labels(body, &[])?,
+        Expr::Function { body, .. } => {
+            check_block_labels(body, &[])?;
+            check_block_gotos(body)?;
+        },
         Expr::Table(fields) => {
             for field in fields {
                 match field {
@@ -485,7 +488,10 @@ fn check_block_labels<'a>(
                 }
             }
             Statement::Call(value) => check_expression_labels(value)?,
-            Statement::Function { body, .. } => check_block_labels(body, &[])?,
+            Statement::Function { body, .. } => {
+                check_block_labels(body, &[])?;
+                check_block_gotos(body)?;
+            },
             Statement::Block(body) => check_block_labels(body, &visible)?,
             Statement::While { condition, body } => {
                 check_expression_labels(condition)?;
@@ -533,6 +539,133 @@ fn check_block_labels<'a>(
         }
     }
     Ok(())
+}
+
+// Lua 5.4 resolves gotos within the current function, through enclosing
+// lexical blocks only. Jumps must not activate locals that were not in scope
+// at the goto site. Record independent declaration identities so shadowing
+// does not accidentally authorize a jump.
+struct JumpSite<'a> {
+    name: &'a str,
+    block: usize,
+    live: Vec<usize>,
+}
+
+struct JumpCollector<'a> {
+    parents: Vec<Option<usize>>,
+    labels: Vec<JumpSite<'a>>,
+    gotos: Vec<JumpSite<'a>>,
+    next_local: usize,
+}
+
+impl<'a> JumpCollector<'a> {
+    fn declare(&mut self, live: &mut Vec<usize>, count: usize) {
+        for _ in 0..count {
+            live.push(self.next_local);
+            self.next_local += 1;
+        }
+    }
+
+    fn scan(
+        &mut self,
+        statements: &[Statement<'a>],
+        parent: Option<usize>,
+        inherited: &[usize],
+        loop_locals: usize,
+        close_at_trailing_label: bool,
+    ) {
+        let block = self.parents.len();
+        self.parents.push(parent);
+        let mut live = inherited.to_vec();
+        self.declare(&mut live, loop_locals);
+        for (index, statement) in statements.iter().enumerate() {
+            match statement {
+                Statement::Label(name) => {
+                    // The scope of a local ends at the last non-void statement
+                    // in its block. An end-of-block label is consequently
+                    // outside locals declared in this block.
+                    let trailing = close_at_trailing_label
+                        && statements[index + 1..]
+                            .iter()
+                            .all(|statement| matches!(statement, Statement::Label(_)));
+                    self.labels.push(JumpSite {
+                        name,
+                        block,
+                        live: if trailing { inherited.to_vec() } else { live.clone() },
+                    });
+                }
+                Statement::Goto(name) => self.gotos.push(JumpSite {
+                    name,
+                    block,
+                    live: live.clone(),
+                }),
+                Statement::Local { names, .. } => self.declare(&mut live, names.len()),
+                Statement::Function { local: true, .. } => self.declare(&mut live, 1),
+                Statement::Block(body) => self.scan(body, Some(block), &live, 0, true),
+                Statement::While { body, .. } => self.scan(body, Some(block), &live, 0, true),
+                Statement::Repeat { body, .. } => {
+                    // repeat-until retains body locals through its condition.
+                    self.scan(body, Some(block), &live, 0, false);
+                }
+                Statement::NumericFor { body, .. } => {
+                    self.scan(body, Some(block), &live, 1, true);
+                }
+                Statement::GenericFor {
+                    variables, body, ..
+                } => self.scan(body, Some(block), &live, variables.len(), true),
+                Statement::If {
+                    branches,
+                    else_branch,
+                } => {
+                    for (_, body) in branches {
+                        self.scan(body, Some(block), &live, 0, true);
+                    }
+                    if let Some(body) = else_branch {
+                        self.scan(body, Some(block), &live, 0, true);
+                    }
+                }
+                Statement::Return(_)
+                | Statement::Assign { .. }
+                | Statement::Call(_)
+                | Statement::Function { local: false, .. }
+                | Statement::Break => {}
+            }
+        }
+    }
+
+    fn validate(&self) -> Result<(), &'static str> {
+        for jump in &self.gotos {
+            let mut current = Some(jump.block);
+            let label = loop {
+                let Some(block) = current else {
+                    return Err("no visible label for goto");
+                };
+                if let Some(found) = self
+                    .labels
+                    .iter()
+                    .find(|label| label.block == block && label.name == jump.name)
+                {
+                    break found;
+                }
+                current = self.parents[block];
+            };
+            if !label.live.iter().all(|local| jump.live.contains(local)) {
+                return Err("goto jumps into the scope of a local variable");
+            }
+        }
+        Ok(())
+    }
+}
+
+fn check_block_gotos<'a>(statements: &[Statement<'a>]) -> Result<(), &'static str> {
+    let mut checker = JumpCollector {
+        parents: Vec::new(),
+        labels: Vec::new(),
+        gotos: Vec::new(),
+        next_local: 0,
+    };
+    checker.scan(statements, None, &[], 0, true);
+    checker.validate()
 }
 
 pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
@@ -1067,6 +1200,7 @@ pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
     };
     let body = parser.block(&[], 0)?;
     check_block_labels(&body, &[]).map_err(|message| parser.error(message))?;
+    check_block_gotos(&body).map_err(|message| parser.error(message))?;
     Ok(body)
 }
 
@@ -1206,12 +1340,38 @@ mod tests {
             matches!(&nested[0], Statement::Block(body) if matches!(&body[0], Statement::Label("name")))
         );
         assert!(matches!(nested[1], Statement::Label("name")));
-        // Label name scope resolution and jump-over-local checks remain
-        // explicit compiler/conformance work, not silent parser guarantees.
-        assert!(matches!(
-            parse_chunk("goto unresolved").unwrap()[0],
-            Statement::Goto("unresolved")
-        ));
+        // The AST still represents goto explicitly, but invalid targets are
+        // rejected before a chunk is accepted.
+        assert!(parse_chunk("goto unresolved").is_err());
+    }
+
+    #[test]
+    fn lua_gotos_resolve_lexically_without_entering_local_scope() {
+        for source in [
+            "goto done ::done:: return 9",
+            "::again:: local x = 1; goto again",
+            "do goto outer end ::outer:: return 1",
+            "goto done do local x = 1 end ::done:: return 1",
+            "goto done local x = 1 ::done::",
+            "goto after ::after:: local x = 1 return x",
+            "local x = 1; goto done; ::done:: return x",
+            "do ::inner:: goto inner end",
+            "local function f() goto done ::done:: return 1 end",
+        ] {
+            assert!(parse_chunk(source).is_ok(), "{source}");
+        }
+        for source in [
+            "goto missing",
+            "goto target local x = 1 ::target:: print(x)",
+            "do goto target end local x = 1 ::target:: print(x)",
+            "goto inner do ::inner:: end",
+            "if true then goto elsewhere end if true then ::elsewhere:: end",
+            "local function f() goto outside end ::outside::",
+            "goto inside local function f() ::inside:: end",
+            "local function f() goto later local x = 1 ::later:: return x end",
+        ] {
+            assert!(parse_chunk(source).is_err(), "{source}");
+        }
     }
 
     #[test]
