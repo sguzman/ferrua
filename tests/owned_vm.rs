@@ -112,8 +112,16 @@ fn register_string_locals_branches_and_loop_carried_values_match_lua54() {
             }
             let code = format!("print((function() {source} end)())");
             let output = command.args(["-e", &code]).output().unwrap();
-            assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
-            assert_eq!(output.stdout, format!("{expected}\n").into_bytes(), "{source}");
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                output.stdout,
+                format!("{expected}\n").into_bytes(),
+                "{source}"
+            );
         }
     }
 }
