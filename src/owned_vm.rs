@@ -1418,15 +1418,33 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
 /// budget. Callers can lower but never increase the hard process-safe cap.
 /// Validation always precedes budget execution, including when budget is 0.
 pub fn execute_integer_program_with_budget(program: &Program, budget: usize) -> Result<i64, Error> {
+    execute_register_program_with_budget(program, budget)?.integer()
+}
+
+/// Execute the experimental register IR and preserve Lua nil/boolean/integer
+/// return types. Strings, functions, tables, floats and a complete register
+/// compiler remain separate unaccepted T302 work.
+pub fn execute_register_program(program: &Program) -> Result<RegisterValue, Error> {
+    execute_register_program_with_budget(program, MAX_REGISTER_STEPS)
+}
+
+/// All register variants use the same bounded execution and validation path.
+pub fn execute_register_program_with_budget(
+    program: &Program,
+    budget: usize,
+) -> Result<RegisterValue, Error> {
     validate_integer_program(program)?;
     let budget = budget.min(MAX_REGISTER_STEPS);
-    let mut registers: Vec<Option<i64>> = vec![None; program.registers];
-    fn read(registers: &[Option<i64>], at: usize) -> Result<i64, Error> {
+    let mut registers: Vec<Option<RegisterValue>> = vec![None; program.registers];
+    fn read(registers: &[Option<RegisterValue>], at: usize) -> Result<RegisterValue, Error> {
         registers
             .get(at)
             .copied()
             .flatten()
             .ok_or(Error::InvalidBytecode)
+    }
+    fn read_integer(registers: &[Option<RegisterValue>], at: usize) -> Result<i64, Error> {
+        read(registers, at)?.integer()
     }
     let mut pc = 0;
     let mut steps = 0usize;
@@ -1440,7 +1458,7 @@ pub fn execute_integer_program_with_budget(program: &Program, budget: usize) -> 
                 if target <= pc || target >= program.code.len() {
                     return Err(Error::InvalidBytecode);
                 }
-                pc = if read(&registers, condition)? == 0 {
+                pc = if !read(&registers, condition)?.truthy() {
                     target
                 } else {
                     pc + 1
@@ -1455,9 +1473,9 @@ pub fn execute_integer_program_with_budget(program: &Program, budget: usize) -> 
                 visible,
                 exit,
             } => {
-                let current = read(&registers, counter)?;
-                let bound = read(&registers, limit)?;
-                let stride = read(&registers, step)?;
+                let current = read_integer(&registers, counter)?;
+                let bound = read_integer(&registers, limit)?;
+                let stride = read_integer(&registers, step)?;
                 if stride == 0 {
                     return Err(Error::ZeroForStep);
                 }
@@ -1465,7 +1483,7 @@ pub fn execute_integer_program_with_budget(program: &Program, budget: usize) -> 
                     pc = exit;
                 } else {
                     let slot = registers.get_mut(visible).ok_or(Error::InvalidBytecode)?;
-                    if slot.replace(current).is_some() {
+                    if slot.replace(RegisterValue::Integer(current)).is_some() {
                         return Err(Error::InvalidBytecode);
                     }
                     pc += 1;
@@ -1477,10 +1495,11 @@ pub fn execute_integer_program_with_budget(program: &Program, budget: usize) -> 
                 step,
                 exit,
             } => {
-                let value = read(&registers, counter)?;
-                let stride = read(&registers, step)?;
+                let value = read_integer(&registers, counter)?;
+                let stride = read_integer(&registers, step)?;
                 if let Some(next) = value.checked_add(stride) {
-                    *registers.get_mut(counter).ok_or(Error::InvalidBytecode)? = Some(next);
+                    *registers.get_mut(counter).ok_or(Error::InvalidBytecode)? =
+                        Some(RegisterValue::Integer(next));
                     pc += 1;
                 } else {
                     pc = exit;
@@ -1512,7 +1531,7 @@ pub fn execute_integer_program_with_budget(program: &Program, budget: usize) -> 
                 }
                 let jump = match program.code[pc] {
                     Instruction::LoopBranchIfFalse { condition, .. } => {
-                        read(&registers, condition)? == 0
+                        !read(&registers, condition)?.truthy()
                     }
                     _ => true,
                 };
@@ -1536,11 +1555,10 @@ pub fn execute_integer_program_with_budget(program: &Program, budget: usize) -> 
                 (dest, read(&registers, input)?)
             }
             Instruction::NumericTruthy { dest, input } => {
-                read(&registers, input)?;
-                (dest, 1)
+                (dest, RegisterValue::Boolean(read(&registers, input)?.truthy()))
             }
             Instruction::BooleanNot { dest, input } => {
-                (dest, i64::from(read(&registers, input)? == 0))
+                (dest, RegisterValue::Boolean(!read(&registers, input)?.truthy()))
             }
             Instruction::Compare {
                 dest,
@@ -1553,52 +1571,89 @@ pub fn execute_integer_program_with_budget(program: &Program, budget: usize) -> 
                 let flag = match operation {
                     CompareOperation::Equal => left == right,
                     CompareOperation::NotEqual => left != right,
-                    CompareOperation::Less => left < right,
-                    CompareOperation::LessEqual => left <= right,
-                    CompareOperation::Greater => left > right,
-                    CompareOperation::GreaterEqual => left >= right,
+                    CompareOperation::Less => left.integer()? < right.integer()?,
+                    CompareOperation::LessEqual => left.integer()? <= right.integer()?,
+                    CompareOperation::Greater => left.integer()? > right.integer()?,
+                    CompareOperation::GreaterEqual => left.integer()? >= right.integer()?,
                 };
-                (dest, i64::from(flag))
+                (dest, RegisterValue::Boolean(flag))
             }
-            Instruction::Load { dest, value } => (dest, value),
-            Instruction::Neg { dest, input } => (dest, read(&registers, input)?.wrapping_neg()),
+            Instruction::Load { dest, value } => (dest, RegisterValue::Integer(value)),
+            Instruction::LoadNil { dest } => (dest, RegisterValue::Nil),
+            Instruction::LoadBoolean { dest, value } => (dest, RegisterValue::Boolean(value)),
+            Instruction::Neg { dest, input } => (
+                dest,
+                RegisterValue::Integer(read_integer(&registers, input)?.wrapping_neg()),
+            ),
             Instruction::Add { dest, lhs, rhs } => (
                 dest,
-                read(&registers, lhs)?.wrapping_add(read(&registers, rhs)?),
+                RegisterValue::Integer(
+                    read_integer(&registers, lhs)?.wrapping_add(read_integer(&registers, rhs)?),
+                ),
             ),
             Instruction::Sub { dest, lhs, rhs } => (
                 dest,
-                read(&registers, lhs)?.wrapping_sub(read(&registers, rhs)?),
+                RegisterValue::Integer(
+                    read_integer(&registers, lhs)?.wrapping_sub(read_integer(&registers, rhs)?),
+                ),
             ),
             Instruction::Mul { dest, lhs, rhs } => (
                 dest,
-                read(&registers, lhs)?.wrapping_mul(read(&registers, rhs)?),
+                RegisterValue::Integer(
+                    read_integer(&registers, lhs)?.wrapping_mul(read_integer(&registers, rhs)?),
+                ),
             ),
             Instruction::FloorDiv { dest, lhs, rhs } => (
                 dest,
-                floor_div(read(&registers, lhs)?, read(&registers, rhs)?)?,
+                RegisterValue::Integer(floor_div(
+                    read_integer(&registers, lhs)?,
+                    read_integer(&registers, rhs)?,
+                )?),
             ),
             Instruction::Mod { dest, lhs, rhs } => (
                 dest,
-                lua_mod(read(&registers, lhs)?, read(&registers, rhs)?)?,
+                RegisterValue::Integer(lua_mod(
+                    read_integer(&registers, lhs)?,
+                    read_integer(&registers, rhs)?,
+                )?),
             ),
-            Instruction::BitAnd { dest, lhs, rhs } => {
-                (dest, read(&registers, lhs)? & read(&registers, rhs)?)
-            }
-            Instruction::BitOr { dest, lhs, rhs } => {
-                (dest, read(&registers, lhs)? | read(&registers, rhs)?)
-            }
-            Instruction::BitXor { dest, lhs, rhs } => {
-                (dest, read(&registers, lhs)? ^ read(&registers, rhs)?)
-            }
-            Instruction::BitNot { dest, input } => (dest, !read(&registers, input)?),
+            Instruction::BitAnd { dest, lhs, rhs } => (
+                dest,
+                RegisterValue::Integer(
+                    read_integer(&registers, lhs)? & read_integer(&registers, rhs)?,
+                ),
+            ),
+            Instruction::BitOr { dest, lhs, rhs } => (
+                dest,
+                RegisterValue::Integer(
+                    read_integer(&registers, lhs)? | read_integer(&registers, rhs)?,
+                ),
+            ),
+            Instruction::BitXor { dest, lhs, rhs } => (
+                dest,
+                RegisterValue::Integer(
+                    read_integer(&registers, lhs)? ^ read_integer(&registers, rhs)?,
+                ),
+            ),
+            Instruction::BitNot { dest, input } => (
+                dest,
+                RegisterValue::Integer(!read_integer(&registers, input)?),
+            ),
             Instruction::Shl { dest, lhs, rhs } => (
                 dest,
-                shift(read(&registers, lhs)?, read(&registers, rhs)?, true),
+                RegisterValue::Integer(shift(
+                    read_integer(&registers, lhs)?,
+                    read_integer(&registers, rhs)?,
+                    true,
+                )),
             ),
             Instruction::Shr { dest, lhs, rhs } => (
                 dest,
-                shift(read(&registers, lhs)?, read(&registers, rhs)?, false),
+                RegisterValue::Integer(shift(
+                    read_integer(&registers, lhs)?,
+                    read_integer(&registers, rhs)?,
+                    false,
+                )),
             ),
         };
         let target = registers.get_mut(dest).ok_or(Error::InvalidBytecode)?;
