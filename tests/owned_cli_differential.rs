@@ -764,6 +764,25 @@ fn owned_string_format_plain_hex_float_directives_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_hex_float_flags_and_width_match_lua54() {
+    for source in [
+        "print(string.format('%+a',1.0),string.format('% a',1.0))",
+        "print(string.format('%#a',1.0),string.format('%#A',1.0))",
+        "print(string.format('%12a',1.0),string.format('%-12A',1.5))",
+        "print(string.format('%012a',1.0),string.format('%+012A',1.5))",
+        "print(string.format('%#012a',1.0),string.format('%-#12A',1.0))",
+        "print(string.format('% a',-1.0),string.format('%+a',-0.0))",
+        "print(string.format('%#a',1.5),string.format('%#A',3.5))",
+        "print(string.format('%+12a',0.0),string.format('% 12a',0.0))",
+        "print(string.format('%012a',-1.0),string.format('%012A',-1.5))",
+        "print(string.format('%+a',math.huge),string.format('%#A',-math.huge))",
+        "local a=pcall(string.format,'%.1a',1.0); local b=pcall(string.format,'%+a',false); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_general_significant_digits_match_lua54() {
     for source in [
         "print(string.format('%g',12.3400)=='12.34',string.format('%G',12.3400)=='12.34')",

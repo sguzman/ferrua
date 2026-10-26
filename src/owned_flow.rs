@@ -5871,7 +5871,7 @@ impl Execution<'_> {
                         } else {
                             let numeric =
                                 matches!(specifier, b'd' | b'i' | b'u' | b'o' | b'x' | b'X');
-                            let floating = matches!(specifier, b'f' | b'e' | b'E' | b'g' | b'G');
+                            let floating = matches!(specifier, b'f' | b'e' | b'E' | b'g' | b'G' | b'a' | b'A');
                             if (left_align
                                 || width > 0
                                 || precision.is_some()
@@ -5893,6 +5893,8 @@ impl Execution<'_> {
                                         | b'E'
                                         | b'g'
                                         | b'G'
+                                        | b'a'
+                                        | b'A'
                                 )
                             {
                                 return Err(FlowError::Unsupported(
@@ -5908,10 +5910,15 @@ impl Execution<'_> {
                                 b'u' => plus_sign || space_sign || alternate,
                                 b'o' | b'x' | b'X' => plus_sign || space_sign,
                                 b's' | b'c' => zero_pad || plus_sign || space_sign || alternate,
-                                b'f' | b'e' | b'E' | b'g' | b'G' => false,
+                                b'f' | b'e' | b'E' | b'g' | b'G' | b'a' | b'A' => false,
                                 _ => false,
                             };
                             if invalid_flag || (specifier == b'c' && precision.is_some()) {
+                                return Err(FlowError::Unsupported(
+                                    "Lua format flags or precision invalid for directive".into(),
+                                ));
+                            }
+                            if matches!(specifier, b'a' | b'A') && precision.is_some() {
                                 return Err(FlowError::Unsupported(
                                     "Lua format flags or precision invalid for directive".into(),
                                 ));
@@ -5943,6 +5950,20 @@ impl Execution<'_> {
                                     };
                                     if specifier == b'A' {
                                         formatted.make_ascii_uppercase();
+                                    }
+                                    if alternate && number.is_finite() && !formatted.contains(&b'.') {
+                                        let exponent = formatted
+                                            .iter()
+                                            .position(|byte| matches!(*byte, b'p' | b'P'))
+                                            .ok_or(FlowError::InvalidBytecode)?;
+                                        formatted.insert(exponent, b'.');
+                                    }
+                                    if !number.is_sign_negative() {
+                                        if plus_sign {
+                                            formatted.insert(0, b'+');
+                                        } else if space_sign {
+                                            formatted.insert(0, b' ');
+                                        }
                                     }
                                     formatted
                                 }
@@ -6136,19 +6157,18 @@ impl Execution<'_> {
                                 } else if (numeric && zero_pad && precision.is_none())
                                     || (floating && zero_pad)
                                 {
-                                    let prefix = if matches!(specifier, b'x' | b'X')
-                                        && alternate
-                                        && part.len() >= 2
-                                        && part[0] == b'0'
-                                        && matches!(part[1], b'x' | b'X')
-                                    {
-                                        2
-                                    } else {
-                                        usize::from(matches!(
-                                            part.first(),
-                                            Some(b'-' | b'+' | b' ')
-                                        ))
-                                    };
+                                    let sign = usize::from(matches!(
+                                        part.first(),
+                                        Some(b'-' | b'+' | b' ')
+                                    ));
+                                    let hex_prefix = ((matches!(specifier, b'x' | b'X')
+                                        && alternate)
+                                        || matches!(specifier, b'a' | b'A'))
+                                        && part.get(sign) == Some(&b'0')
+                                        && part
+                                            .get(sign + 1)
+                                            .is_some_and(|byte| matches!(*byte, b'x' | b'X'));
+                                    let prefix = sign + if hex_prefix { 2 } else { 0 };
                                     let mut padded = Vec::with_capacity(width);
                                     padded.extend_from_slice(&part[..prefix]);
                                     padded.extend(std::iter::repeat_n(b'0', padding));
