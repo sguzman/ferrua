@@ -300,6 +300,20 @@ fn owned_math_min_max_incompatible_values_fail_like_lua54() {
 }
 
 #[test]
+fn owned_short_string_z_escape_consumes_c_locale_vertical_tab_like_lua54() {
+    // Lua's \\z consumes the C isspace class, including VT (0x0B).
+    // Rust's is_ascii_whitespace omits VT, so decoding must be explicit.
+    for source in [
+        "local s='A\\z\x0bB'; print(#s, string.byte(s,1,2))",
+        "local s='A\\z\x0b\x0c\t B'; print(#s, string.byte(s,1,2))",
+        "local s='A\\z\x0b\n B'; print(#s, string.byte(s,1,2))",
+        "local s='A\x0bB'; print(#s, string.byte(s,1,3))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_len_sub_byte_offsets_match_lua54() {
     for source in [
         "print(string.len('a\\0b'),string.sub('abcdef',2,4),string.sub('abcdef',-3),string.sub('abcdef',0,2))",

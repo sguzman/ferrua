@@ -137,7 +137,10 @@ impl Scanner<'_> {
                 b'z' => {
                     // Lua's z escape consumes subsequent whitespace including lines.
                     self.bump();
-                    while self.peek(0).is_some_and(|next| next.is_ascii_whitespace()) {
+                    while self
+                        .peek(0)
+                        .is_some_and(|next| matches!(next, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c))
+                    {
                         self.bump();
                     }
                 }
@@ -469,6 +472,14 @@ mod tests {
         assert_eq!(tokens[3].kind, Kind::ShortString);
         assert_eq!(tokens[4].spelling, "local");
         assert_eq!(tokens[4].line, 3);
+    }
+
+    #[test]
+    fn lua_z_escape_skips_c_locale_vertical_tab_and_form_feed() {
+        let tokens = tokenize("local s='A\\z\x0b\x0cB'\nreturn s").unwrap();
+        assert_eq!(tokens[3].kind, Kind::ShortString);
+        assert_eq!(tokens[4].spelling, "return");
+        assert_eq!(tokens[4].line, 2);
     }
 
     #[test]

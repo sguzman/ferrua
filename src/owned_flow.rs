@@ -1499,7 +1499,10 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
                 Some(b'\n')
             }
             b'z' => {
-                while bytes.get(i).is_some_and(|byte| byte.is_ascii_whitespace()) {
+                while bytes
+                    .get(i)
+                    .is_some_and(|byte| matches!(*byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c))
+                {
                     i += 1;
                 }
                 None
