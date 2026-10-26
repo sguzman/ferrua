@@ -21,8 +21,9 @@ pub enum RegisterBuiltin {
     Select,
 }
 
-/// Bounded register values with immutable, program-owned byte-string literals.
-/// Dynamic strings, tables and functions remain unimplemented.
+/// Bounded scalar values, execution-owned tables, byte strings and first-class
+/// builtin identities. Lua closures, userdata and arbitrary metamethods remain
+/// unsupported by this independent register VM.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RegisterValue {
     Nil,
@@ -382,7 +383,8 @@ enum TableKey {
     Boolean(bool),
     Integer(i64),
     Float(u64),
-    String(Vec<u8>),
+    /// Interned index into the execution-owned byte-string pool.
+    String(usize),
     Table(usize),
     Builtin(RegisterBuiltin),
 }
@@ -1080,12 +1082,11 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 
 /// Compile a static subset of Lua chunks to Ferrua-owned register bytecode.
 ///
-/// Supports typed scalar locals with Lua nil-padding/value-discard adjustment,
-/// parallel assignments, lexical blocks and branches, while/repeat/numeric-for
-/// loops, and first-result scalar return adjustment. Every surplus scalar
-/// return expression is still evaluated in Lua order, including errors.
-/// Exact multiple-result transport, arbitrary calls, tables, globals,
-/// generic iteration and closures remain unsupported in this register VM.
+/// Supports typed locals, limited execution-owned tables and globals, Lua
+/// nil-padding, parallel assignments, branches and bounded numeric loops.
+/// Bounded builtins can transport variable result counts in final-call
+/// expression positions. Arbitrary closures, general iteration, varargs,
+/// metamethods and full Lua library dispatch are not yet supported.
 pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
     let mut program = Program {
@@ -2460,12 +2461,21 @@ pub fn execute_register_program_with_strings_and_budget(
                 let RegisterValue::Table(index) = read(&registers, table)? else {
                     return Err(Error::TypeError);
                 };
-                let key = register_table_key(read(&registers, key)?, &strings)?;
-                let entries = &tables.get(index).ok_or(Error::InvalidBytecode)?.entries;
-                let value = entries
-                    .iter()
-                    .find(|(candidate, _)| *candidate == key)
-                    .map_or(RegisterValue::Nil, |(_, value)| *value);
+                let key = read(&registers, key)?;
+                // Unlike insertion, reading an absent nil or NaN index
+                // returns nil without creating a table slot.
+                let value = if matches!(key, RegisterValue::Nil)
+                    || matches!(key, RegisterValue::Float(bits) if f64::from_bits(bits).is_nan())
+                {
+                    RegisterValue::Nil
+                } else {
+                    let key = register_table_key(key, &strings)?;
+                    let entries = &tables.get(index).ok_or(Error::InvalidBytecode)?.entries;
+                    entries
+                        .iter()
+                        .find(|(candidate, _)| *candidate == key)
+                        .map_or(RegisterValue::Nil, |(_, value)| *value)
+                };
                 (dest, value)
             }
             Instruction::SetTable { table, key, value } => {
@@ -2831,9 +2841,12 @@ fn register_table_key(value: RegisterValue, strings: &[Vec<u8>]) -> Result<Table
                 }))
             }
         }
-        RegisterValue::String(index) => Ok(TableKey::String(
-            strings.get(index).cloned().ok_or(Error::InvalidBytecode)?,
-        )),
+        RegisterValue::String(index) => {
+            if index >= strings.len() {
+                return Err(Error::InvalidBytecode);
+            }
+            Ok(TableKey::String(index))
+        }
         RegisterValue::Table(index) => Ok(TableKey::Table(index)),
         RegisterValue::Builtin(builtin) => Ok(TableKey::Builtin(builtin)),
     }
