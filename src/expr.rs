@@ -681,9 +681,7 @@ fn check_block_gotos<'a>(statements: &[Statement<'a>]) -> Result<(), &'static st
 // Walk function bodies separately so a failed goto can retain its borrowed
 // source token rather than being flattened into an EOF-only grammar error.
 // Ordinary block-level gotos are checked by the enclosing function/root.
-fn check_nested_goto_expression<'a>(
-    expression: &Expr<'a>,
-) -> Result<(), (&'static str, &'a str)> {
+fn check_nested_goto_expression<'a>(expression: &Expr<'a>) -> Result<(), (&'static str, &'a str)> {
     match expression {
         Expr::Atom(_) | Expr::Vararg => {}
         Expr::Grouped(inner) | Expr::Unary { right: inner, .. } => {
@@ -759,7 +757,11 @@ fn check_nested_goto_statements<'a>(
                 check_nested_goto_statements(body)?;
             }
             Statement::NumericFor {
-                start, limit, step, body, ..
+                start,
+                limit,
+                step,
+                body,
+                ..
             } => {
                 check_nested_goto_expression(start)?;
                 check_nested_goto_expression(limit)?;
@@ -777,7 +779,9 @@ fn check_nested_goto_statements<'a>(
                 check_nested_goto_statements(body)?;
             }
             Statement::If {
-                branches, else_branch, ..
+                branches,
+                else_branch,
+                ..
             } => {
                 for (condition, body) in branches {
                     check_nested_goto_expression(condition)?;
