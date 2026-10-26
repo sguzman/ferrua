@@ -409,11 +409,7 @@ impl RegisterExecution {
 
     /// Inspect a key in a returned table from this execution. A missing
     /// key yields Lua nil; the heap remains owned by the result.
-    pub fn table_value(
-        &self,
-        table: RegisterValue,
-        key: RegisterValue,
-    ) -> Option<RegisterValue> {
+    pub fn table_value(&self, table: RegisterValue, key: RegisterValue) -> Option<RegisterValue> {
         let RegisterValue::Table(index) = table else {
             return None;
         };
@@ -529,7 +525,13 @@ fn emit_table_key_integer(program: &mut Program, number: i64) -> Result<usize, E
     }
     let dest = program.registers;
     program.registers += 1;
-    emit_instruction(program, Instruction::Load { dest, value: number })?;
+    emit_instruction(
+        program,
+        Instruction::Load {
+            dest,
+            value: number,
+        },
+    )?;
     Ok(dest)
 }
 
@@ -2470,7 +2472,8 @@ pub fn execute_register_program_with_strings_and_budget(
                 let key = register_table_key(read(&registers, key)?, &strings)?;
                 let value = read(&registers, value)?;
                 let entries = &mut tables.get_mut(index).ok_or(Error::InvalidBytecode)?.entries;
-                if let Some(position) = entries.iter().position(|(candidate, _)| *candidate == key) {
+                if let Some(position) = entries.iter().position(|(candidate, _)| *candidate == key)
+                {
                     if value == RegisterValue::Nil {
                         entries.swap_remove(position);
                         table_entries_used -= 1;
@@ -2562,7 +2565,7 @@ pub fn execute_register_program_with_strings_and_budget(
                             RegisterValue::Builtin(_) => b"function: builtin".to_vec(),
                             RegisterValue::Table(index) => {
                                 format!("table: 0x{index:x}").into_bytes()
-                            },
+                            }
                         };
                         vec![intern_register_string(
                             bytes,
@@ -2624,9 +2627,9 @@ pub fn execute_register_program_with_strings_and_budget(
                         let entries = &tables.get(index).ok_or(Error::InvalidBytecode)?.entries;
                         let mut border = 0_usize;
                         while border < entries.len()
-                            && entries.iter().any(|(key, _)| {
-                                *key == TableKey::Integer((border + 1) as i64)
-                            })
+                            && entries
+                                .iter()
+                                .any(|(key, _)| *key == TableKey::Integer((border + 1) as i64))
                         {
                             border += 1;
                         }
@@ -2814,8 +2817,7 @@ fn register_table_key(value: RegisterValue, strings: &[Vec<u8>]) -> Result<Table
             }
             if number.is_finite()
                 && number.fract() == 0.0
-                && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
-                    .contains(&number)
+                && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&number)
             {
                 Ok(TableKey::Integer(number as i64))
             } else {
