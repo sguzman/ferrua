@@ -1050,10 +1050,7 @@ fn mixed_float_numeric_for_register_controls_match_lua54() {
             );
         }
     }
-    for source in [
-        "for i=1.0,3,0.0 do end",
-        "for i=1,3.0,0 do end",
-    ] {
+    for source in ["for i=1.0,3,0.0 do end", "for i=1,3.0,0 do end"] {
         let program = compile_integer_chunk(&format!("{source}; return 1")).unwrap();
         assert_eq!(
             execute_register_program(&program),
