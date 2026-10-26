@@ -5207,7 +5207,7 @@ impl Execution<'_> {
                         // argument nor emit that following field's bytes.
                         let next = *format.get(index).ok_or(FlowError::TypeError)?;
                         index += 1;
-                        let mut width = match next {
+                        let mut width: usize = match next {
                             b'b' | b'B' | b'x' => 1,
                             b'h' | b'H' => 2,
                             b'i' | b'I' | b'f' => 4,
