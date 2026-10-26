@@ -58,6 +58,30 @@ fn assert_parity(source: &str, should_succeed: bool) {
     }
 }
 
+// These are executable first-party golden programs, not synthetic fragments.
+// Coroutines (07) remain a separate unaccepted T302 graduation requirement;
+// never run these examples via an implicit production-engine fallback.
+macro_rules! owned_first_party_conformance {
+    ($name:ident, $fixture:literal) => {
+        #[test]
+        fn $name() {
+            assert_parity(include_str!($fixture), true);
+        }
+    };
+}
+
+owned_first_party_conformance!(owned_conformance_control_flow, "conformance/01-control-flow.lua");
+owned_first_party_conformance!(owned_conformance_closures, "conformance/02-closures.lua");
+owned_first_party_conformance!(owned_conformance_tables, "conformance/03-tables.lua");
+owned_first_party_conformance!(owned_conformance_string_patterns, "conformance/04-string-patterns.lua");
+owned_first_party_conformance!(owned_conformance_upvalues, "conformance/05-upvalues.lua");
+owned_first_party_conformance!(owned_conformance_lexical_scopes, "conformance/06-scopes.lua");
+owned_first_party_conformance!(owned_conformance_metatables, "conformance/08-metatables.lua");
+owned_first_party_conformance!(owned_conformance_generic_iterators, "conformance/09-generic-iterators.lua");
+owned_first_party_conformance!(owned_conformance_multiple_returns, "conformance/10-multiple-returns.lua");
+owned_first_party_conformance!(owned_conformance_bitwise, "conformance/11-bitwise.lua");
+owned_first_party_conformance!(owned_conformance_utf8, "conformance/12-utf8.lua");
+
 #[test]
 fn curated_global_function_print_and_error_semantics_match_lua54() {
     for source in [
