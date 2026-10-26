@@ -302,6 +302,34 @@ fn emit<'a>(
                 }
             }
         }
+        Expr::Unary { op: "not", right } => {
+            let input = emit(program, right, depth + 1, locals)?;
+            Instruction::BooleanNot {
+                dest: program.registers,
+                input,
+            }
+        }
+        Expr::Binary { op, left, right }
+            if matches!(*op, "==" | "~=" | "<" | "<=" | ">" | ">=") =>
+        {
+            let lhs = emit(program, left, depth + 1, locals)?;
+            let rhs = emit(program, right, depth + 1, locals)?;
+            let operation = match *op {
+                "==" => CompareOperation::Equal,
+                "~=" => CompareOperation::NotEqual,
+                "<" => CompareOperation::Less,
+                "<=" => CompareOperation::LessEqual,
+                ">" => CompareOperation::Greater,
+                ">=" => CompareOperation::GreaterEqual,
+                _ => unreachable!("matched comparison operator"),
+            };
+            Instruction::Compare {
+                dest: program.registers,
+                lhs,
+                rhs,
+                operation,
+            }
+        }
         Expr::Binary { op, left, right }
             if matches!(
                 *op,
