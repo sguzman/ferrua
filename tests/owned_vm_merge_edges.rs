@@ -319,10 +319,26 @@ fn scalar_return_fallthrough_through_nested_loops_matches_lua_54() {
     // Every chunk is valid Lua 5.4 and has a well-defined scalar
     // adjustment of its first return value, or nil at implicit fallthrough.
     for (source, expected, output) in [
-        ("while false do return 9 end", RegisterValue::Nil, "nil\tnil\n"),
-        ("for i=1,3 do if i==4 then return i end end", RegisterValue::Nil, "nil\tnil\n"),
-        ("for i=1,3 do if i==2 then return i end end", RegisterValue::Integer(2), "number\t2\n"),
-        ("local n=0; repeat n=n+1 until n==3", RegisterValue::Nil, "nil\tnil\n"),
+        (
+            "while false do return 9 end",
+            RegisterValue::Nil,
+            "nil\tnil\n",
+        ),
+        (
+            "for i=1,3 do if i==4 then return i end end",
+            RegisterValue::Nil,
+            "nil\tnil\n",
+        ),
+        (
+            "for i=1,3 do if i==2 then return i end end",
+            RegisterValue::Integer(2),
+            "number\t2\n",
+        ),
+        (
+            "local n=0; repeat n=n+1 until n==3",
+            RegisterValue::Nil,
+            "nil\tnil\n",
+        ),
         (
             "local n=0; while n<3 do n=n+1; if n==3 then return n end end",
             RegisterValue::Integer(3),
@@ -343,13 +359,37 @@ fn scalar_return_fallthrough_through_nested_loops_matches_lua_54() {
             RegisterValue::Nil,
             "nil\tnil\n",
         ),
-        ("if false then return 9 elseif true then local x=3 end", RegisterValue::Nil, "nil\tnil\n"),
-        ("if true then local x=3 elseif false then return 9 end", RegisterValue::Nil, "nil\tnil\n"),
-        ("repeat if false then return 9 end until true", RegisterValue::Nil, "nil\tnil\n"),
+        (
+            "if false then return 9 elseif true then local x=3 end",
+            RegisterValue::Nil,
+            "nil\tnil\n",
+        ),
+        (
+            "if true then local x=3 elseif false then return 9 end",
+            RegisterValue::Nil,
+            "nil\tnil\n",
+        ),
+        (
+            "repeat if false then return 9 end until true",
+            RegisterValue::Nil,
+            "nil\tnil\n",
+        ),
         ("if true then return end", RegisterValue::Nil, "nil\tnil\n"),
-        ("if true then return nil else return 4 end", RegisterValue::Nil, "nil\tnil\n"),
-        ("return true or 8", RegisterValue::Boolean(true), "boolean\ttrue\n"),
-        ("if false then return 9 end return 3", RegisterValue::Integer(3), "number\t3\n"),
+        (
+            "if true then return nil else return 4 end",
+            RegisterValue::Nil,
+            "nil\tnil\n",
+        ),
+        (
+            "return true or 8",
+            RegisterValue::Boolean(true),
+            "boolean\ttrue\n",
+        ),
+        (
+            "if false then return 9 end return 3",
+            RegisterValue::Integer(3),
+            "number\t3\n",
+        ),
         ("do return nil end", RegisterValue::Nil, "nil\tnil\n"),
     ] {
         let program = compile_integer_chunk(source)
