@@ -231,7 +231,11 @@ fn register_hexadecimal_float_literals_and_wrapping_integers_match_lua54() {
             match expected {
                 RegisterValue::Float(bits) => {
                     assert_eq!(pieces[0], "float", "{source}");
-                    assert_eq!(pieces[1].parse::<f64>().unwrap().to_bits(), bits, "{source}");
+                    assert_eq!(
+                        pieces[1].parse::<f64>().unwrap().to_bits(),
+                        bits,
+                        "{source}"
+                    );
                 }
                 RegisterValue::Integer(integer) => {
                     assert_eq!(pieces[0], "integer", "{source}");
