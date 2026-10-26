@@ -5040,6 +5040,9 @@ impl Execution<'_> {
                                 if position {
                                     output.extend_from_slice((first + 1).to_string().as_bytes());
                                 } else {
+                                    if last == usize::MAX {
+                                        return Err(FlowError::TypeError);
+                                    }
                                     output.extend_from_slice(&source[first..last]);
                                 }
                             } else {
@@ -5062,6 +5065,9 @@ impl Execution<'_> {
                     let key = match captures.first().copied() {
                         Some((start, _, true)) => Value::Integer(start as i64 + 1),
                         Some((start, end, false)) => {
+                            if end == usize::MAX {
+                                return Err(FlowError::TypeError);
+                            }
                             self.intern_rooted_string(source[start..end].to_vec(), args)?
                         }
                         None => self.intern_rooted_string(source[begin..end].to_vec(), args)?,
@@ -5155,6 +5161,9 @@ impl Execution<'_> {
                 let value = if is_position {
                     Value::Integer(start as i64 + 1)
                 } else {
+                    if end == usize::MAX {
+                        return Err(FlowError::TypeError);
+                    }
                     let roots = self
                         .gc_temporary_roots
                         .last()
@@ -6078,12 +6087,9 @@ impl Execution<'_> {
                 self.steps += 1;
                 if atom_index == atoms.len() {
                     if !anchored_end || position == source.len() {
-                        if captures
-                            .iter()
-                            .any(|&(_, end, is_position)| end == usize::MAX && !is_position)
-                        {
-                            return Err(FlowError::TypeError);
-                        }
+                        // Capture consumers validate unfinished captures.
+                        // Lua gsub with a literal replacement can use a
+                        // successful match without retrieving its captures.
                         return Ok(Some((begin, position, captures)));
                     }
                     continue;

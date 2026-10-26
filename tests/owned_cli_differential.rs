@@ -475,20 +475,18 @@ fn owned_pattern_unfinished_opening_capture_checks_reachable_paths_like_lua54() 
 }
 
 #[test]
-fn owned_gsub_unfinished_capture_rejects_reached_error_despite_pinned_backend() {
-    // Observed pinned luna-core divergence: its gsub accepts an unfinished
-    // capture reached after 'a', while upstream Lua and the owned VM reject.
-    // Preserve the production evidence and a strict upstream comparison.
-    let source = "local ok=pcall(string.gsub,'abc','a(','X'); print(ok)";
-    let owned = run_fer(true, source);
-    let production = run_fer(false, source);
-    assert!(owned.status.success());
-    assert!(production.status.success());
-    assert_eq!(owned.stdout, b"false\n");
-    assert_eq!(production.stdout, b"true\n");
-    if let Some(reference) = reference_output(source) {
-        assert!(reference.status.success(), "{:?}", reference.stderr);
-        assert_eq!(owned.stdout, reference.stdout);
+fn owned_gsub_unfinished_capture_requires_retrieval_to_error_like_lua54() {
+    // Lua 5.4 permits a successful match with an unfinished capture when
+    // the literal replacement never asks for that capture.
+    for source in [
+        "local ok=pcall(string.gsub,'abc','a(','X'); print(ok)",
+        "local text,n=string.gsub('abc','a(','X'); print(text,n)",
+        "local text,n=string.gsub('abc','a(','%0'); print(text,n)",
+        "local ok=pcall(string.gsub,'abc','a(','%1'); print(ok)",
+        "local ok=pcall(string.gsub,'abc','a(',{}); print(ok)",
+        "local ok=pcall(string.gsub,'abc','a(',function(x) return x end); print(ok)",
+    ] {
+        assert_parity(source, true);
     }
 }
 
