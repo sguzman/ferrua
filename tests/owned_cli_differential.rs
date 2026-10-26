@@ -494,6 +494,29 @@ fn owned_lua_pattern_capture_backreferences_match_lua54() {
 }
 
 #[test]
+fn owned_string_gsub_text_replacement_and_captures_match_lua54() {
+    for source in [
+        "local s,n=string.gsub('abcabc','ab','X'); print(s,n)",
+        "print(string.gsub('aaaa','a','b',2)); print(string.gsub('aaaa','a','b',0))",
+        "print(string.gsub('aaaa','a','b',-2)); print(string.gsub('abc','z','?'))",
+        "print(string.gsub('abc','','-'))",
+        "print(string.gsub('abc','^','+')); print(string.gsub('abc','.$','!'))",
+        "print(string.gsub('abc123','%d+','NUM'))",
+        "print(string.gsub('abcabc','(ab)c','%1!'))",
+        "print(string.gsub('b7','(%a)(%d)','%2%1'))",
+        "print(string.gsub('a.b','%.','%%'))",
+        "print(string.gsub('a\\0b','%z','?'))",
+        "print(string.gsub('ababa','a','%0%0'))",
+        "print(string.gsub('abcdef','(.)','[%1]',3))",
+        "print(string.gsub('123','%d+',42))",
+        "print(string.gsub('abc','.', 'X',1)); print(string.gsub('abc','','+',2))",
+        "local good,s,n=pcall(string.gsub,'aba','a','x'); print(good,s,n); local bad,e=pcall(string.gsub,'abc','(a)','%2'); print(bad,type(e))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
