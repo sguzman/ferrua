@@ -764,6 +764,27 @@ fn owned_string_format_plain_hex_float_directives_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_general_significant_digits_match_lua54() {
+    for source in [
+        "print(string.format('%g',12.3400)=='12.34',string.format('%G',12.3400)=='12.34')",
+        "print(string.format('%g',1234567)=='1.23457e+06',string.format('%G',1234567)=='1.23457E+06')",
+        "print(string.format('%g',0.0001)=='0.0001',string.format('%g',0.00001)=='1e-05')",
+        "print(string.format('%.3g',1234.0)=='1.23e+03',string.format('%.3g',12.345)=='12.3')",
+        "print(string.format('%#.3g',12.0)=='12.0',string.format('%.0g',1.2)=='1')",
+        "print(string.format('%g',-0.0)=='-0',string.format('%g',0.0)=='0')",
+        "print(string.format('%.3g',999.99)=='1e+03',string.format('%.3g',9.999)=='10')",
+        "print(string.format('%010.3g',12345.0)=='001.23e+04')",
+        "print(string.format('%+010.3g',12345.0)=='+01.23e+04')",
+        "print(string.format('%-10.3G',12345.0)=='1.23E+04  ')",
+        "print(string.format('%#.0g',1.0)=='1.',string.format('%#.3g',1.0)=='1.00')",
+        "print(string.format('%.2g',0.000123)=='0.00012',string.format('%.2G',0.0000123)=='1.2E-05')",
+        "local a=pcall(string.format,'%g',false); local b=pcall(string.format,'%G'); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_gsub_short_lived_gc_roots_preserve_long_replacement_semantics() {
     for source in [
         "local n=0; local s=string.rep('a',100); local out,c=string.gsub(s,'.',function(x) n=n+1; return x..'b' end); print(#out,c,n)",

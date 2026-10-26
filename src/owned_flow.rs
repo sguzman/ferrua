@@ -5871,7 +5871,7 @@ impl Execution<'_> {
                         } else {
                             let numeric =
                                 matches!(specifier, b'd' | b'i' | b'u' | b'o' | b'x' | b'X');
-                            let floating = matches!(specifier, b'f' | b'e' | b'E');
+                            let floating = matches!(specifier, b'f' | b'e' | b'E' | b'g' | b'G');
                             if (left_align
                                 || width > 0
                                 || precision.is_some()
@@ -5891,6 +5891,8 @@ impl Execution<'_> {
                                         | b'f'
                                         | b'e'
                                         | b'E'
+                                        | b'g'
+                                        | b'G'
                                 )
                             {
                                 return Err(FlowError::Unsupported(
@@ -5906,7 +5908,7 @@ impl Execution<'_> {
                                 b'u' => plus_sign || space_sign || alternate,
                                 b'o' | b'x' | b'X' => plus_sign || space_sign,
                                 b's' | b'c' => zero_pad || plus_sign || space_sign || alternate,
-                                b'f' | b'e' | b'E' => false,
+                                b'f' | b'e' | b'E' | b'g' | b'G' => false,
                                 _ => false,
                             };
                             if invalid_flag || (specifier == b'c' && precision.is_some()) {
@@ -5944,7 +5946,7 @@ impl Execution<'_> {
                                     }
                                     formatted
                                 }
-                                b'f' | b'e' | b'E' => {
+                                b'f' | b'e' | b'E' | b'g' | b'G' => {
                                     let operand = self.arithmetic_operand(value)?;
                                     let number = match operand {
                                         Value::Integer(integer) => integer as f64,
@@ -5958,9 +5960,12 @@ impl Execution<'_> {
                                     let mut formatted = match specifier {
                                         b'e' => format!("{:.*e}", digits, number).into_bytes(),
                                         b'E' => format!("{:.*E}", digits, number).into_bytes(),
+                                        b'g' | b'G' => {
+                                            Self::lua_general_float(number, digits, specifier == b'G', alternate)?
+                                        }
                                         _ => format!("{:.*}", digits, number).into_bytes(),
                                     };
-                                    if specifier != b'f' {
+                                    if matches!(specifier, b'e' | b'E') {
                                         if let Some(at) = formatted
                                             .iter()
                                             .position(|byte| *byte == b'e' || *byte == b'E')
@@ -5979,7 +5984,7 @@ impl Execution<'_> {
                                             );
                                             formatted = normalized;
                                         }
-                                    } else if alternate && digits == 0 && number.is_finite() {
+                                    } else if specifier == b'f' && alternate && digits == 0 && number.is_finite() {
                                         formatted.push(b'.');
                                     }
                                     if !number.is_sign_negative() {
@@ -6239,6 +6244,76 @@ impl Execution<'_> {
             }
             _ => Err(FlowError::InvalidBytecode),
         }
+    }
+
+    /// Lua 5.4 %g/%G uses significant digits, switching to scientific
+    /// when the rounded exponent is below -4 or >= the precision.
+    /// Trailing fractional zeros are removed unless '#' is present.
+    fn lua_general_float(
+        number: f64,
+        precision: usize,
+        uppercase: bool,
+        alternate: bool,
+    ) -> Result<Vec<u8>, FlowError> {
+        let digits = precision.max(1);
+        // Lua's format precision is limited to two decimal digits.
+        if digits > 99 {
+            return Err(FlowError::TooLarge);
+        }
+        if !number.is_finite() {
+            let label = if number.is_nan() { "nan" } else { "inf" };
+            let mut out = if number.is_sign_negative() {
+                format!("-{label}")
+            } else {
+                label.to_owned()
+            };
+            if uppercase {
+                out.make_ascii_uppercase();
+            }
+            return Ok(out.into_bytes());
+        }
+        let scientific = format!("{:.*e}", digits - 1, number);
+        let (mantissa, exponent) = scientific
+            .split_once('e')
+            .ok_or(FlowError::InvalidBytecode)?;
+        let exponent: i32 = exponent.parse().map_err(|_| FlowError::InvalidBytecode)?;
+        let mut out = if exponent < -4 || exponent >= digits as i32 {
+            let mut significance = mantissa.to_owned();
+            if !alternate {
+                if significance.contains('.') {
+                    while significance.ends_with('0') {
+                        significance.pop();
+                    }
+                    if significance.ends_with('.') {
+                        significance.pop();
+                    }
+                }
+            } else if !significance.contains('.') {
+                significance.push('.');
+            }
+            let marker = if uppercase { 'E' } else { 'e' };
+            format!("{significance}{marker}{exponent:+03}")
+        } else {
+            let decimals = (digits as i32 - exponent - 1).max(0) as usize;
+            let mut fixed = format!("{number:.decimals$}");
+            if !alternate {
+                if fixed.contains('.') {
+                    while fixed.ends_with('0') {
+                        fixed.pop();
+                    }
+                    if fixed.ends_with('.') {
+                        fixed.pop();
+                    }
+                }
+            } else if !fixed.contains('.') {
+                fixed.push('.');
+            }
+            fixed
+        };
+        if uppercase {
+            out.make_ascii_uppercase();
+        }
+        Ok(out.into_bytes())
     }
 
     /// Lua 5.4 %q emits a round-trippable float constant. The common
