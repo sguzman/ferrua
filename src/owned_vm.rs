@@ -1594,6 +1594,37 @@ mod tests {
     }
 
     #[test]
+    fn register_while_loops_preserve_loop_carried_values_and_lexical_scopes() {
+        for (source, result) in [
+            ("local n=0; while n<5 do n=n+1 end; return n", 5),
+            ("local n=1; local i=0; while i<4 do n=n*2; i=i+1 end; return n", 16),
+            ("local n=0; while false do n=n+1 end; return n", 0),
+            ("local x=0; while x<5 do if x<2 then x=x+2 else x=x+1 end end; return x", 5),
+            ("local n=0; while n<3 do local i=0; while i<2 do n=n+1; i=i+1 end end; return n", 4),
+            ("local i=0; while i<3 do local temporary=i+7; i=i+1 end; return i", 3),
+            ("local i=0; while i<3 do i=i+1 end; return i+2", 5),
+            ("local i=0; while i<3 do i=i+1 end; while i<6 do i=i+1 end; return i", 6),
+            ("local n=9223372036854775807; while n>0 do n=n+1 end; return n", i64::MIN),
+        ] {
+            let program = compile_integer_chunk(source).unwrap();
+            assert_eq!(
+                execute_integer_program(&program),
+                Ok(result),
+                "owned register loop: {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn register_while_loop_step_quota_prevents_unbounded_execution() {
+        let loop_program = compile_integer_chunk("local n=0; while true do n=n+1 end; return n").unwrap();
+        assert_eq!(
+            execute_integer_program(&loop_program),
+            Err(Error::StepBudgetExceeded)
+        );
+    }
+
+    #[test]
     fn rejects_unsupported_dynamic_chunk_features() {
         for source in [
             "local x; return x",
