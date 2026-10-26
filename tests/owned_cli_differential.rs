@@ -704,6 +704,20 @@ fn owned_string_pack_explicit_x_alignment_directives_match_lua54() {
 }
 
 #[test]
+fn owned_binary_format_nul_termination_and_whitespace_match_lua54() {
+    // Lua's format parser uses a NUL-terminated C string, even though
+    // ordinary Lua string values can contain embedded NUL bytes.
+    for source in [
+        "local fmt='b'..string.char(0)..'I17'; local p=string.pack(fmt,42); local n,pos=string.unpack(fmt,p); print(#p,n,pos,string.packsize(fmt))",
+        "local fmt=string.char(0)..'Q'; print(#string.pack(fmt),string.packsize(fmt),string.unpack(fmt,''))",
+        "local fmt=' b b '; local p=string.pack(fmt,1,2); local a,b,pos=string.unpack(fmt,p); print(#p,a,b,pos,string.packsize(fmt))",
+        "local t=string.char(9); local n=string.char(10); local a=pcall(string.pack,'b'..t..'b',1,2); local b=pcall(string.unpack,'b'..n..'b',string.char(1,2)); local c=pcall(string.packsize,'b'..t..'b'); local d=pcall(string.packsize,'b'..n); print(a,b,c,d)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",

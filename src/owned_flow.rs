@@ -5157,6 +5157,12 @@ impl Execution<'_> {
     /// keeping endianness and alignment metadata through runtime layout.
     /// Other host ABIs and exhaustive native diagnostics remain unaccepted.
     fn parse_pack_fields(format: &[u8]) -> Result<Vec<PackField>, FlowError> {
+        // Lua 5.4's binary-format functions scan a C string from
+        // luaL_checkstring: bytes after the first NUL are not format options.
+        let format = &format[..format
+            .iter()
+            .position(|&byte| byte == 0)
+            .unwrap_or(format.len())];
         let mut fields = Vec::new();
         let mut index = 0;
         let mut little = cfg!(target_endian = "little");
@@ -5167,7 +5173,7 @@ impl Execution<'_> {
             index += 1;
             let field =
                 match code {
-                    b' ' | b'\t' | b'\n' => continue,
+                    b' ' => continue,
                     b'<' => {
                         little = true;
                         continue;
