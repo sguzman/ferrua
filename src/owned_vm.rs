@@ -438,27 +438,25 @@ fn emit_condition<'a>(
             if matches!(
                 operation,
                 CompareOperation::Equal | CompareOperation::NotEqual
-            ) {
-                if let (Some(lhs), Some(rhs)) =
-                    (boolean_nil_literal(left), boolean_nil_literal(right))
-                {
-                    let same = lhs == rhs;
-                    let result = if operation == CompareOperation::Equal {
-                        same
-                    } else {
-                        !same
-                    };
-                    let dest = program.registers;
-                    program.registers += 1;
-                    emit_instruction(
-                        program,
-                        Instruction::Load {
-                            dest,
-                            value: i64::from(result),
-                        },
-                    )?;
-                    return Ok(dest);
-                }
+            ) && let (Some(lhs), Some(rhs)) =
+                (boolean_nil_literal(left), boolean_nil_literal(right))
+            {
+                let same = lhs == rhs;
+                let result = if operation == CompareOperation::Equal {
+                    same
+                } else {
+                    !same
+                };
+                let dest = program.registers;
+                program.registers += 1;
+                emit_instruction(
+                    program,
+                    Instruction::Load {
+                        dest,
+                        value: i64::from(result),
+                    },
+                )?;
+                return Ok(dest);
             }
             let lhs = emit(program, left, depth + 1, locals)?;
             let rhs = emit(program, right, depth + 1, locals)?;
