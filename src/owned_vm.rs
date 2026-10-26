@@ -375,7 +375,7 @@ fn emit<'a>(
                     dest: program.registers,
                     value,
                 },
-                Err(_) => {
+                None => {
                     // Numeric tokens starting with a digit or decimal point
                     // may be Lua floats; never interpret the name of a
                     // local like "inf" or "NaN" as a Rust float constant.
