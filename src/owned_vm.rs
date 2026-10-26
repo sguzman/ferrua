@@ -338,21 +338,21 @@ fn emit<'a>(
                     let numeric_token = text.as_bytes().first().is_some_and(u8::is_ascii_digit)
                         || (text.starts_with('.')
                             && text.as_bytes().get(1).is_some_and(u8::is_ascii_digit));
-                    if numeric_token && !text.starts_with("0x") && !text.starts_with("0X") {
-                        if let Ok(number) = text.parse::<f64>() {
-                            return {
-                                let output = program.registers;
-                                program.registers += 1;
-                                emit_instruction(
-                                    program,
-                                    Instruction::LoadFloat {
-                                        dest: output,
-                                        bits: number.to_bits(),
-                                    },
-                                )?;
-                                Ok(output)
-                            };
-                        }
+                    if numeric_token
+                        && !text.starts_with("0x")
+                        && !text.starts_with("0X")
+                        && let Ok(number) = text.parse::<f64>()
+                    {
+                        let output = program.registers;
+                        program.registers += 1;
+                        emit_instruction(
+                            program,
+                            Instruction::LoadFloat {
+                                dest: output,
+                                bits: number.to_bits(),
+                            },
+                        )?;
+                        return Ok(output);
                     }
                     return locals
                         .iter()
