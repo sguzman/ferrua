@@ -5895,9 +5895,7 @@ impl Execution<'_> {
                                 b'd' | b'i' => alternate,
                                 b'u' => plus_sign || space_sign || alternate,
                                 b'o' | b'x' | b'X' => plus_sign || space_sign,
-                                b's' | b'c' => {
-                                    zero_pad || plus_sign || space_sign || alternate
-                                }
+                                b's' | b'c' => zero_pad || plus_sign || space_sign || alternate,
                                 _ => false,
                             };
                             if invalid_flag || (specifier == b'c' && precision.is_some()) {
@@ -6025,7 +6023,10 @@ impl Execution<'_> {
                                     {
                                         2
                                     } else {
-                                        usize::from(matches!(part.first(), Some(b'-' | b'+' | b' ')))
+                                        usize::from(matches!(
+                                            part.first(),
+                                            Some(b'-' | b'+' | b' ')
+                                        ))
                                     };
                                     let mut padded = Vec::with_capacity(width);
                                     padded.extend_from_slice(&part[..prefix]);
