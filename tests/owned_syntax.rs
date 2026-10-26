@@ -221,8 +221,16 @@ fn goto_resolution_diagnostics_point_to_the_offending_source_token() {
     for (source, name, expected_line) in [
         ("goto missing", "missing", 1),
         ("local x=1\r\n goto missing\r\n return x", "missing", 2),
-        ("local x=1\nif true then goto target end\nlocal y=2\n::target:: return x", "target", 2),
-        ("do\r\n goto target\r\nend\r\nlocal y=2\r\n::target:: return y", "target", 2),
+        (
+            "local x=1\nif true then goto target end\nlocal y=2\n::target:: return x",
+            "target",
+            2,
+        ),
+        (
+            "do\r\n goto target\r\nend\r\nlocal y=2\r\n::target:: return y",
+            "target",
+            2,
+        ),
     ] {
         let error = parse_chunk(source).expect_err("invalid goto must fail");
         assert!(
