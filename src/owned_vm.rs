@@ -182,6 +182,13 @@ struct RegisterBinding {
     constant: bool,
 }
 
+// Pending exits belong to the innermost active loop. Each exit preserves
+// the loop-carried bindings visible along that particular lexical path.
+struct LoopExit<'a> {
+    carried: Vec<(usize, &'a str, usize)>,
+    jumps: Vec<usize>,
+}
+
 /// Bound instruction emission itself, not only the completed chunk size.
 fn emit_instruction(program: &mut Program, instruction: Instruction) -> Result<(), Error> {
     if program.code.len() >= MAX_REGISTERS {
@@ -443,7 +450,8 @@ pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
         result: 0,
     };
     let mut scopes = vec![HashMap::new()];
-    let value = compile_statements(&statements, &mut program, &mut scopes, 0)?
+    let mut loops = Vec::new();
+    let value = compile_statements(&statements, &mut program, &mut scopes, &mut loops, 0)?
         .ok_or_else(|| Error::Unsupported("chunk requires one final return value".into()))?;
     if program.code.len() > MAX_REGISTERS {
         return Err(Error::TooLarge);
@@ -538,6 +546,7 @@ fn compile_statements<'a>(
     statements: &[Statement<'a>],
     program: &mut Program,
     scopes: &mut Vec<HashMap<&'a str, RegisterBinding>>,
+    loops: &mut Vec<LoopExit<'a>>,
     depth: usize,
 ) -> Result<Option<usize>, Error> {
     if depth > 64 {
@@ -613,7 +622,7 @@ fn compile_statements<'a>(
             }
             Statement::Block(body) => {
                 scopes.push(HashMap::new());
-                let child = compile_statements(body, program, scopes, depth + 1)?;
+                let child = compile_statements(body, program, scopes, loops, depth + 1)?;
                 scopes.pop();
                 // A do/end block does not create a separate return context:
                 // returning inside it exits the entire integer chunk.
@@ -686,7 +695,7 @@ fn compile_statements<'a>(
                     let mut branch_scopes = scopes.clone();
                     branch_scopes.push(HashMap::new());
                     let returned =
-                        compile_statements(body, program, &mut branch_scopes, depth + 1)?;
+                        compile_statements(body, program, &mut branch_scopes, loops, depth + 1)?;
                     if returned.is_none() {
                         if !may_fall_through {
                             return Err(Error::InvalidBytecode);
@@ -706,7 +715,7 @@ fn compile_statements<'a>(
                     let mut branch_scopes = scopes.clone();
                     branch_scopes.push(HashMap::new());
                     let returned =
-                        compile_statements(else_body, program, &mut branch_scopes, depth + 1)?;
+                        compile_statements(else_body, program, &mut branch_scopes, loops, depth + 1)?;
                     if returned.is_none() {
                         if !may_fall_through {
                             return Err(Error::InvalidBytecode);
@@ -799,7 +808,13 @@ fn compile_statements<'a>(
                 )?;
                 let mut inner = scopes.clone();
                 inner.push(HashMap::new());
-                let returned = compile_statements(body, program, &mut inner, depth + 1)?;
+                loops.push(LoopExit {
+                    carried: carried.clone(),
+                    jumps: Vec::new(),
+                });
+                let compiled = compile_statements(body, program, &mut inner, loops, depth + 1);
+                let exits = loops.pop().ok_or(Error::InvalidBytecode)?;
+                let returned = compiled?;
                 if returned.is_none() {
                     for &(level, name, dest) in &carried {
                         let source = inner
@@ -821,10 +836,14 @@ fn compile_statements<'a>(
                     start: reset_start,
                     end: program.registers,
                 };
+                let after = program.code.len();
                 program.code[exit_at] = Instruction::BranchIfFalse {
                     condition: guard,
-                    target: program.code.len(),
+                    target: after,
                 };
+                for at in exits.jumps {
+                    program.code[at] = Instruction::Jump { target: after };
+                }
             }
             Statement::Repeat { body, condition } => {
                 // The until-condition sees locals declared in the repeat
@@ -909,6 +928,38 @@ fn compile_statements<'a>(
                     start: reset_start,
                     end: program.registers,
                 };
+                let after = program.code.len();
+                for at in exits.jumps {
+                    program.code[at] = Instruction::Jump { target: after };
+                }
+            }
+            Statement::Break => {
+                let carried = loops
+                    .last()
+                    .ok_or_else(|| Error::Unsupported("break outside integer loop".into()))?
+                    .carried
+                    .clone();
+                for (level, name, dest) in carried {
+                    let source = scopes
+                        .get(level)
+                        .and_then(|scope| scope.get(name))
+                        .ok_or(Error::InvalidBytecode)?
+                        .register;
+                    emit_instruction(
+                        program,
+                        Instruction::LoopCopy {
+                            dest,
+                            input: source,
+                        },
+                    )?;
+                }
+                let at = program.code.len();
+                emit_instruction(program, Instruction::Jump { target: usize::MAX })?;
+                loops.last_mut().ok_or(Error::InvalidBytecode)?.jumps.push(at);
+                // Break terminates this control path, like Return, but the
+                // surrounding loop itself still falls through after exit.
+                result = Some(0);
+                break;
             }
             Statement::Return(values) if values.len() == 1 => {
                 let value = emit(program, &values[0], 0, scopes)?;
