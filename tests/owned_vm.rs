@@ -141,6 +141,14 @@ fn register_select_multireturn_adjustment_matches_lua54() {
             "2|2|10",
         ),
         ("return type(select(2,10,20))", "1|number"),
+        ("return select('#',select(2,10,20,30))", "1|2"),
+        ("return select('#',1,select(2,10,20,30))", "1|3"),
+        ("return select('#',select(9,10,20))", "1|0"),
+        ("return select(1,select(2,10,20,30))", "2|20|30"),
+        ("return select(1,11,select(2,10,20,30))", "3|11|20|30"),
+        ("return select(1,11,(select(2,10,20,30)))", "2|11|20"),
+        ("return select(1,select(9,10,20))", "0"),
+        ("return select(1,(select(9,10,20)))", "1|nil"),
     ] {
         let program = compile_integer_chunk(chunk).unwrap();
         let owned = execute_register_program_with_strings(&program).unwrap();
@@ -185,6 +193,8 @@ fn register_select_multireturn_adjustment_matches_lua54() {
         "return select(0,10,20)",
         "return select(-3,10,20)",
         "return select(false,10,20)",
+        "return type(select(9,10,20))",
+        "return tostring(select(9,10,20))",
     ] {
         let program = compile_integer_chunk(chunk).unwrap();
         assert_eq!(
