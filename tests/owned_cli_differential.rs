@@ -466,12 +466,29 @@ fn owned_pattern_unfinished_opening_capture_checks_reachable_paths_like_lua54() 
         "local it=string.gmatch('abc','z('); print(it()==nil)",
         "local ok=pcall(string.match,'abc','a('); print(ok)",
         "local ok=pcall(string.find,'abc','a('); print(ok)",
-        "local ok=pcall(string.gsub,'abc','a(','X'); print(ok)",
         "local it=string.gmatch('abc','a('); local ok=pcall(it); print(ok)",
         "local ok=pcall(string.match,'abc','('); print(ok)",
         "print(string.match('abc','(a)'))",
     ] {
         assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_gsub_unfinished_capture_rejects_reached_error_despite_pinned_backend() {
+    // Observed pinned luna-core divergence: its gsub accepts an unfinished
+    // capture reached after 'a', while upstream Lua and the owned VM reject.
+    // Preserve the production evidence and a strict upstream comparison.
+    let source = "local ok=pcall(string.gsub,'abc','a(','X'); print(ok)";
+    let owned = run_fer(true, source);
+    let production = run_fer(false, source);
+    assert!(owned.status.success());
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"false\n");
+    assert_eq!(production.stdout, b"true\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(owned.stdout, reference.stdout);
     }
 }
 
