@@ -23,6 +23,8 @@ pub enum RegisterBuiltin {
     RawSet,
     RawLen,
     RawEqual,
+    Next,
+    Pairs,
 }
 
 /// Bounded scalar values, execution-owned tables, byte strings and first-class
@@ -2620,6 +2622,8 @@ pub fn execute_register_program_with_strings_and_budget(
                         b"rawset" => RegisterValue::Builtin(RegisterBuiltin::RawSet),
                         b"rawlen" => RegisterValue::Builtin(RegisterBuiltin::RawLen),
                         b"rawequal" => RegisterValue::Builtin(RegisterBuiltin::RawEqual),
+                        b"next" => RegisterValue::Builtin(RegisterBuiltin::Next),
+                        b"pairs" => RegisterValue::Builtin(RegisterBuiltin::Pairs),
                         _ => RegisterValue::Nil,
                     }
                 };
@@ -2765,6 +2769,40 @@ pub fn execute_register_program_with_strings_and_budget(
                             left == right
                         };
                         vec![RegisterValue::Boolean(equal)]
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::Next) => {
+                        let Some(RegisterValue::Table(index)) = arguments.first() else {
+                            return Err(Error::TypeError);
+                        };
+                        let table = tables.get(*index).ok_or(Error::InvalidBytecode)?;
+                        let previous = arguments.get(1).copied().unwrap_or(RegisterValue::Nil);
+                        let following = if previous == RegisterValue::Nil {
+                            table.entries.first()
+                        } else {
+                            let key = register_table_key(previous, &strings)?;
+                            let offset = table
+                                .entries
+                                .iter()
+                                .position(|(candidate, _)| *candidate == key)
+                                .ok_or(Error::TypeError)?;
+                            table.entries.get(offset + 1)
+                        };
+                        if let Some((key, value)) = following {
+                            let key = register_table_key_value(key);
+                            vec![key, *value]
+                        } else {
+                            vec![RegisterValue::Nil]
+                        }
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::Pairs) => {
+                        let Some(RegisterValue::Table(_)) = arguments.first() else {
+                            return Err(Error::TypeError);
+                        };
+                        vec![
+                            RegisterValue::Builtin(RegisterBuiltin::Next),
+                            arguments[0],
+                            RegisterValue::Nil,
+                        ]
                     }
                     RegisterValue::Builtin(RegisterBuiltin::RawSet) => {
                         let Some(RegisterValue::Table(index)) = arguments.first() else {
@@ -3040,6 +3078,18 @@ fn register_table_key(value: RegisterValue, strings: &[Vec<u8>]) -> Result<Table
         }
         RegisterValue::Table(index) => Ok(TableKey::Table(index)),
         RegisterValue::Builtin(builtin) => Ok(TableKey::Builtin(builtin)),
+    }
+}
+
+/// Convert execution-internal table keys back to Lua values for `next`.
+fn register_table_key_value(key: &TableKey) -> RegisterValue {
+    match *key {
+        TableKey::Boolean(value) => RegisterValue::Boolean(value),
+        TableKey::Integer(value) => RegisterValue::Integer(value),
+        TableKey::Float(bits) => RegisterValue::Float(bits),
+        TableKey::String(index) => RegisterValue::String(index),
+        TableKey::Table(index) => RegisterValue::Table(index),
+        TableKey::Builtin(value) => RegisterValue::Builtin(value),
     }
 }
 
