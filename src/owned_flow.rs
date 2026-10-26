@@ -5397,12 +5397,35 @@ impl Execution<'_> {
         Ok(value)
     }
 
-    /// Convert Lua numeric arguments to exact integers for the binary
-    /// format API. Decimal/exponent numeric strings are permitted only
-    /// when their numeric value is integral and fits a Lua integer.
+    /// The binary-format library uses Lua numeric conversion for its
+    /// arguments, including hexadecimal floating strings such as 0x1.8p+2.
+    /// Keep this extension local to binary formats until the shared owned
+    /// arithmetic coercion path has its own conformance evidence.
+    fn pack_numeric_operand(&self, value: Value) -> Result<Value, FlowError> {
+        if let Ok(number) = self.arithmetic_operand(value) {
+            return Ok(number);
+        }
+        let Value::String(handle) = value else {
+            return Err(FlowError::TypeError);
+        };
+        let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
+        let text = std::str::from_utf8(bytes).map_err(|_| FlowError::TypeError)?;
+        let text = text.trim();
+        let (negative, unsigned) = if let Some(rest) = text.strip_prefix('-') {
+            (true, rest)
+        } else {
+            (false, text.strip_prefix('+').unwrap_or(text))
+        };
+        let number = parse_lua_hex_float(unsigned).ok_or(FlowError::TypeError)?;
+        let number = if negative { -number } else { number };
+        Ok(Value::Float(number.to_bits()))
+    }
+
+    /// Exact integer conversion allows integral scientific/decimal/hex
+    /// numeric strings, but not strings with a fractional numeric value.
     fn pack_integer_operand(&self, value: Value) -> Result<i64, FlowError> {
         self.exact_integer_operand(value).or_else(|_| {
-            let number = self.arithmetic_operand(value)?;
+            let number = self.pack_numeric_operand(value)?;
             self.exact_integer_operand(number)
         })
     }
@@ -5538,7 +5561,7 @@ impl Execution<'_> {
                     PackField::Float { size, little } => {
                         let value = *args.get(argument).ok_or(FlowError::TypeError)?;
                         argument += 1;
-                        let number = match self.arithmetic_operand(value)? {
+                        let number = match self.pack_numeric_operand(value)? {
                             Value::Integer(number) => number as f64,
                             Value::Float(bits) => f64::from_bits(bits),
                             _ => return Err(FlowError::TypeError),

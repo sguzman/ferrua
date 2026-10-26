@@ -751,6 +751,23 @@ fn owned_binary_integer_numeric_string_coercions_match_lua54() {
 }
 
 #[test]
+fn owned_binary_hexadecimal_numeric_strings_match_lua54() {
+    // Lua accepts hexadecimal-float numeric strings for numeric arguments.
+    // Binary integer formats still reject any nonintegral numeric value.
+    for source in [
+        "local p=string.pack('>i2','0x1.8p+2'); print(string.unpack('>i2',p))",
+        "local p=string.pack('<i4','-0x1.8p+2'); print(string.unpack('<i4',p))",
+        "local p=string.pack('<I2','+0x1p+8'); print(string.unpack('<I2',p))",
+        "local p=string.pack('>d','0x1.8p+2'); print(string.unpack('>d',p))",
+        "local p=string.pack('<f','-0x1.8p+2'); print(string.unpack('<f',p))",
+        "local p=string.pack('BBB',11,22,33); print(string.unpack('B',p,'0x1p1'))",
+        "local ok1=pcall(string.pack,'i4','0x1.2p+0'); local ok2=pcall(string.unpack,'B',string.char(1,2),'0x1.2p+0'); print(ok1,ok2)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",
