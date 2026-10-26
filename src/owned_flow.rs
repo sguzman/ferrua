@@ -1954,6 +1954,15 @@ struct OwnedCallFrame {
     varargs: Vec<Value>,
 }
 
+/// A bounded instruction slice is an internal checkpoint, not a coroutine
+/// yield. Nested function calls remain synchronous until their own return.
+enum FrameProgress {
+    Paused,
+    Returned(Vec<Value>),
+}
+
+const FRAME_STEP_QUANTUM: usize = 64;
+
 struct Execution<'a> {
     program: &'a FlowProgram,
     budget: usize,
@@ -7583,17 +7592,24 @@ impl Execution<'_> {
             last_multiple: None,
             varargs: varargs.to_vec(),
         };
-        self.execute_frame(instructions, &mut frame)
+        loop {
+            match self.execute_frame(instructions, &mut frame, FRAME_STEP_QUANTUM)? {
+                FrameProgress::Paused => continue,
+                FrameProgress::Returned(values) => return Ok(values),
+            }
+        }
     }
 
-    /// Execute a fully owned call frame. Nested calls still run synchronously.
-    /// The next coroutine stage can stop and retain this state without
-    /// rebuilding locals, varargs, pending assignments or the program counter.
+    /// Execute up to one instruction quantum against a retained frame.
+    /// A paused frame is intact: resumption continues at the next instruction
+    /// without replaying a prior bytecode operation or resetting the quota.
+    /// Nested calls still execute synchronously, so this is not Lua yield.
     fn execute_frame(
         &mut self,
         instructions: &[Op],
         frame: &mut OwnedCallFrame,
-    ) -> Result<Vec<Value>, FlowError> {
+        quantum: usize,
+    ) -> Result<FrameProgress, FlowError> {
         let OwnedCallFrame {
             pc,
             slots,
@@ -7602,7 +7618,12 @@ impl Execution<'_> {
             last_multiple,
             varargs,
         } = frame;
+        let mut executed = 0usize;
         while *pc < instructions.len() {
+            if executed >= quantum {
+                return Ok(FrameProgress::Paused);
+            }
+            executed += 1;
             if self.steps >= self.budget {
                 return Err(FlowError::StepBudgetExceeded);
             }
@@ -8505,13 +8526,15 @@ impl Execution<'_> {
                     }
                 }
                 Op::Return => {
-                    return Ok(vec![stack.pop().ok_or(FlowError::InvalidBytecode)?]);
+                    return Ok(FrameProgress::Returned(vec![
+                        stack.pop().ok_or(FlowError::InvalidBytecode)?,
+                    ]));
                 }
                 Op::ReturnMany(count) => {
                     if stack.len() < *count {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    return Ok(stack.split_off(stack.len() - *count));
+                    return Ok(FrameProgress::Returned(stack.split_off(stack.len() - *count)));
                 }
                 Op::ReturnTail(prefix) => {
                     let multiple = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
@@ -8519,7 +8542,7 @@ impl Execution<'_> {
                     if stack.len() < count {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    return Ok(stack.split_off(stack.len() - count));
+                    return Ok(FrameProgress::Returned(stack.split_off(stack.len() - count)));
                 }
             }
             if stack.len() > MAX_STACK {
