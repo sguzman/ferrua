@@ -673,9 +673,14 @@ fn emit<'a>(
             program.registers += 1;
             emit_instruction(program, Instruction::NewTable { dest })?;
             let mut sequence = 0_i64;
+            // Lua expands the final array-style expression even if named or
+            // explicit-key fields follow it in the constructor.
+            let last_array_field = fields
+                .iter()
+                .rposition(|field| matches!(field, TableField::Value(_)));
             for (position, field) in fields.iter().enumerate() {
                 if let TableField::Value(value) = field
-                    && position + 1 == fields.len()
+                    && Some(position) == last_array_field
                     && matches!(value, Expr::Call { .. })
                 {
                     sequence = sequence.checked_add(1).ok_or(Error::TooLarge)?;
