@@ -57,6 +57,12 @@ fn register_next_and_pairs_builtin_protocol_match_lua54() {
             "local t={x=9};local i,s,v=pairs(t);return i(s,'x')",
             "1|nil",
         ),
+        ("local t={2,3};return ipairs(t)", "3|function|table|0"),
+        ("local t={};return ipairs(t)", "3|function|table|0"),
+        ("local t={4,5};local f,s,i=ipairs(t);return f(s,i)", "2|1|4"),
+        ("local t={4,5};local f,s,i=ipairs(t);return f(s,1)", "2|2|5"),
+        ("local t={4,5};local f,s,i=ipairs(t);return f(s,2)", "1|nil"),
+        ("return type(ipairs)", "1|function"),
     ] {
         assert_eq!(render(chunk), Ok(expected.to_string()), "{chunk}");
         for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
@@ -91,6 +97,9 @@ fn register_next_and_pairs_validate_table_and_previous_key() {
         "return next({},'missing')",
         "local t={x=1};return next(t,'missing')",
         "local next=8;return next({})",
+        "return ipairs()",
+        "return ipairs(8)",
+        "local f,s,i=ipairs({2});return f(s,'not-an-index')",
     ] {
         assert_eq!(render(chunk), Err(Error::TypeError), "{chunk}");
     }
