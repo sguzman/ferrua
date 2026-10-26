@@ -687,7 +687,7 @@ fn owned_string_pack_bounded_native_alignment_directives_match_lua54() {
 }
 
 #[test]
-fn owned_string_pack_explicit_X_alignment_directives_match_lua54() {
+fn owned_string_pack_explicit_x_alignment_directives_match_lua54() {
     for source in [
         "local p=string.pack('!4bXI4B',7,9); print(#p,string.unpack('!4bXI4B',p),string.packsize('!4bXI4B'))",
         "local p=string.pack('!8bXdI4',1,258); print(#p,string.unpack('!8bXdI4',p),string.packsize('!8bXdI4'))",
