@@ -8827,6 +8827,25 @@ mod tests {
     }
 
     #[test]
+    fn owned_activation_stack_enforces_lua_call_depth_without_host_recursion() {
+        let source = "local function sum(n) if n==0 then return 0 end return n+sum(n-1) end return sum(12)";
+        let program = compile_flow_chunk(source).unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Ok(vec![Value::Integer(78)])
+        );
+
+        let deep = compile_flow_chunk(
+            "local function sum(n) if n==0 then return 0 end return sum(n-1) end return sum(30)",
+        )
+        .unwrap();
+        assert_eq!(
+            execute_flow_values(&deep, DEFAULT_STEP_BUDGET),
+            Err(FlowError::CallDepthExceeded)
+        );
+    }
+
+    #[test]
     fn owned_call_checkpoint_preserves_multiple_returns_gc_roots_and_tail_adjustment() {
         let script = "local function triple(n) local t={} for i=1,80 do t[i]=i end collectgarbage('collect') return n,n+1,n+2 end local function swap(a,b,c) return c,b,a end return swap(triple(4))";
         let program = compile_flow_chunk(script).unwrap();
