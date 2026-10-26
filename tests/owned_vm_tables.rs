@@ -117,7 +117,7 @@ fn register_table_literals_lookup_and_identity_match_lua54() {
         ),
         (
             "local t={select(1,10,20),a=5};return t[1],t[2],t.a",
-            "3|10|nil|5",
+            "3|10|20|5",
         ),
         (
             "local t={1,select(1,2,nil,4)};return t[1],t[2],t[3],t[4]",
