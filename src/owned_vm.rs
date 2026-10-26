@@ -1612,17 +1612,32 @@ mod tests {
     fn register_while_loops_preserve_loop_carried_values_and_lexical_scopes() {
         for (source, result) in [
             ("local n=0; while n<5 do n=n+1 end; return n", 5),
-            ("local n=1; local i=0; while i<4 do n=n*2; i=i+1 end; return n", 16),
+            (
+                "local n=1; local i=0; while i<4 do n=n*2; i=i+1 end; return n",
+                16,
+            ),
             ("local n=0; while false do n=n+1 end; return n", 0),
-            ("local x=0; while x<5 do if x<2 then x=x+2 else x=x+1 end end; return x", 5),
+            (
+                "local x=0; while x<5 do if x<2 then x=x+2 else x=x+1 end end; return x",
+                5,
+            ),
             (
                 "local n=0; while n<3 do local i=0; while i<2 do n=n+1; i=i+1 end end; return n",
                 4,
             ),
-            ("local i=0; while i<3 do local temporary=i+7; i=i+1 end; return i", 3),
+            (
+                "local i=0; while i<3 do local temporary=i+7; i=i+1 end; return i",
+                3,
+            ),
             ("local i=0; while i<3 do i=i+1 end; return i+2", 5),
-            ("local i=0; while i<3 do i=i+1 end; while i<6 do i=i+1 end; return i", 6),
-            ("local n=9223372036854775807; while n>0 do n=n+1 end; return n", i64::MIN),
+            (
+                "local i=0; while i<3 do i=i+1 end; while i<6 do i=i+1 end; return i",
+                6,
+            ),
+            (
+                "local n=9223372036854775807; while n>0 do n=n+1 end; return n",
+                i64::MIN,
+            ),
         ] {
             let program = compile_integer_chunk(source).unwrap();
             assert_eq!(
@@ -1650,7 +1665,7 @@ mod tests {
             "return x",
             "x=1; return x",
             "local x=1; print(x); return x",
-            "local x=1; while x<3 do x=x+1 end; return x",
+            "local x=1; repeat x=x+1 until x>2; return x",
             "local x=1; return 1.5",
             "local x=1; x.y=2; return x",
         ] {
