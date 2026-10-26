@@ -718,6 +718,25 @@ fn owned_gmatch_leading_caret_is_literal_not_anchor_like_lua54() {
 }
 
 #[test]
+fn owned_gmatch_initial_byte_position_matches_lua54() {
+    for source in [
+        "local t={}; for c in string.gmatch('a1b2c3','%d',4) do t[#t+1]=c end; print(table.concat(t,','))",
+        "local t={}; for c in string.gmatch('a1b2c3','%d',-3) do t[#t+1]=c end; print(table.concat(t,','))",
+        "local t={}; for c in string.gmatch('a1b2c3','%d',0) do t[#t+1]=c end; print(table.concat(t,','))",
+        "local t={}; for c in string.gmatch('a1b2c3','%d',-99) do t[#t+1]=c end; print(table.concat(t,','))",
+        "print(string.gmatch('a1b2c3','%d',7)()==nil,string.gmatch('a1b2c3','%d',8)()==nil)",
+        "print(string.gmatch('a1b2c3','%d',nil)())",
+        "print(string.gmatch('a1b2c3','%d','4.0')())",
+        "print(string.gmatch('a1b2c3','%d',4.0)())",
+        "print(pcall(string.gmatch,'abc','%a',2.5),pcall(string.gmatch,'abc','%a','wrong'))",
+        "print(pcall(string.gmatch,'abc','%a',true))",
+        "local t={}; for p in string.gmatch('abc','()',4) do t[#t+1]=p end; print(table.concat(t,','))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_gmatch_gc_reclaims_or_retains_iterator_snapshots() {
     for source in [
         "local f=string.gmatch('ab cd','%a+'); collectgarbage('collect'); print(f(),f(),f()==nil)",

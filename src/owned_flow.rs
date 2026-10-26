@@ -4957,7 +4957,7 @@ impl Execution<'_> {
         let plain = args.get(3).copied().unwrap_or(Value::Nil).truthy()
             || !pattern.iter().any(|byte| b"^$*+?.([%-".contains(byte));
         let Some((begin, end, captures)) =
-            self.simple_pattern_match(&source, &pattern, initial, plain, true)?
+            self.simple_pattern_match(&source, &pattern, initial, plain)?
         else {
             return Ok(vec![Value::Nil]);
         };
@@ -5004,7 +5004,7 @@ impl Execution<'_> {
             let anchored = pattern.first() == Some(&b'^');
             while substitutions < limit && cursor <= source.len() {
                 let Some((begin, end, captures)) =
-                    self.simple_pattern_match(&source, &pattern, cursor as i64 + 1, false, true)?
+                    self.simple_pattern_match(&source, &pattern, cursor as i64 + 1, false)?
                 else {
                     break;
                 };
@@ -5193,7 +5193,7 @@ impl Execution<'_> {
                 .or_else(|_| self.integer_operand(index))?,
             _ => 1,
         };
-        match self.simple_pattern_match(&source, &pattern, initial, false, true)? {
+        match self.simple_pattern_match(&source, &pattern, initial, false)? {
             Some((begin, end, captures)) if captures.is_empty() => Ok(vec![
                 self.intern_rooted_string(source[begin..end].to_vec(), args)?,
             ]),
@@ -5803,10 +5803,26 @@ impl Execution<'_> {
             return Err(FlowError::StepBudgetExceeded);
         }
         self.steps += bytes.max(1);
+        // Lua 5.4 gmatch accepts an optional third argument for its
+        // initial byte position. Negative positions count from the end,
+        // zero and overly negative values clip to the first byte, and
+        // positions past the end yield an exhausted iterator.
+        let initial = match args.get(2).copied() {
+            Some(value) if value != Value::Nil => self
+                .exact_integer_operand(value)
+                .or_else(|_| self.integer_operand(value))?,
+            _ => 1,
+        };
+        let start = Self::string_offset(initial, source.len() as i64).max(1);
+        let cursor = if start > source.len() as i64 {
+            source.len() + 1
+        } else {
+            (start - 1) as usize
+        };
         let state = GmatchState {
             source,
             pattern,
-            cursor: 0,
+            cursor,
             last_end: None,
             done: false,
         };
@@ -5850,7 +5866,7 @@ impl Execution<'_> {
                 return Err(FlowError::StepBudgetExceeded);
             }
             self.steps += 1;
-            let result = self.simple_pattern_match(&source, &pattern, cursor as i64 + 1, false, false)?;
+            let result = self.simple_pattern_match(&source, &pattern, cursor as i64 + 1, false)?;
             let Some((begin, end, captures)) = result else {
                 break;
             };
@@ -5895,16 +5911,12 @@ impl Execution<'_> {
         pattern: &[u8],
         initial: i64,
         plain: bool,
-        anchored_caret: bool,
     ) -> Result<Option<PatternMatch>, FlowError> {
         let mut body = pattern;
         let mut anchored_start = false;
         let mut anchored_end = false;
         if !plain {
-            // Lua's gmatch passes its pattern directly to match(),
-            // without stripping a leading '^'. For gmatch only, the
-            // caret is therefore an ordinary literal pattern byte.
-            if anchored_caret && body.first() == Some(&b'^') {
+            if body.first() == Some(&b'^') {
                 body = &body[1..];
                 anchored_start = true;
             }
