@@ -7751,7 +7751,10 @@ impl Execution<'_> {
         };
         let inputs = args.get(1..).unwrap_or_default();
         if self.current_coroutine == Some(id)
-            || self.saved_call_contexts.iter().any(|c| c.coroutine_id == Some(id))
+            || self
+                .saved_call_contexts
+                .iter()
+                .any(|c| c.coroutine_id == Some(id))
         {
             return Ok(vec![
                 Value::Boolean(false),
