@@ -2981,12 +2981,15 @@ mod tests {
     }
     #[test]
     fn rejects_noninteger_or_side_effectful_expressions() {
-        for source in ["math.abs(1)", "t[1]", "_ENV"] {
-            assert!(
-                matches!(
-                    compile_integer_expression(source),
-                    Err(Error::Unsupported(_))
-                ),
+        assert!(matches!(
+            compile_integer_expression("_ENV"),
+            Err(Error::Unsupported(_))
+        ));
+        for source in ["math.abs(1)", "t[1]"] {
+            let compiled = compile_integer_expression(source).unwrap();
+            assert_eq!(
+                execute_register_program(&compiled),
+                Err(Error::TypeError),
                 "{source}"
             );
         }
@@ -3056,7 +3059,11 @@ mod tests {
         );
         let scalar = compile_integer_chunk("do return 1, 2 end").unwrap();
         assert_eq!(execute_integer_program(&scalar), Ok(1));
-        assert!(compile_integer_chunk("do return math.max(1,2) end").is_err());
+        let missing_library = compile_integer_chunk("do return math.max(1,2) end").unwrap();
+        assert_eq!(
+            execute_register_program(&missing_library),
+            Err(Error::TypeError)
+        );
     }
 
     #[test]
@@ -3110,7 +3117,8 @@ mod tests {
             let program = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_register_program(&program), Ok(expected), "{source}");
         }
-        assert!(compile_integer_chunk("if {} then return 1 else return 2 end").is_err());
+        let table_truth = compile_integer_chunk("if {} then return 1 else return 2 end").unwrap();
+        assert_eq!(execute_integer_program(&table_truth), Ok(1));
         let float_return =
             compile_integer_chunk("if true then return 1.5 else return 2 end").unwrap();
         assert_eq!(
@@ -3814,13 +3822,14 @@ mod tests {
 
     #[test]
     fn rejects_unsupported_dynamic_chunk_features() {
-        for source in [
-            "return _ENV",
-            "_ENV=1; return _ENV",
-            "local x=1; x.y=2; return x",
-        ] {
+        for source in ["return _ENV", "_ENV=1; return _ENV"] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
+        let scalar_indexed = compile_integer_chunk("local x=1; x.y=2; return x").unwrap();
+        assert_eq!(
+            execute_register_program(&scalar_indexed),
+            Err(Error::TypeError)
+        );
         let float_return = compile_integer_chunk("local x=1; return 1.5").unwrap();
         assert_eq!(
             execute_register_program(&float_return),
