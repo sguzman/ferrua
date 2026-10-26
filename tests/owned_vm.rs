@@ -50,14 +50,7 @@ fn register_string_literals_have_upstream_lua54_output_parity() {
         .as_deref()
         == Some("1");
     for source in [
-        "#'abc'",
-        "#'é'",
-        "#'a\\0b'",
-        "'a'=='a'",
-        "'a'<'b'",
-        "'z'>='a'",
-        "'a'==nil",
-        "'hello'",
+        "#'abc'", "#'é'", "#'a\\0b'", "'a'=='a'", "'a'<'b'", "'z'>='a'", "'a'==nil", "'hello'",
         "'a\\0b'",
     ] {
         let program = compile_integer_expression(source).unwrap();
@@ -80,8 +73,15 @@ fn register_string_literals_have_upstream_lua54_output_parity() {
             }
             let program = format!("print({source})");
             let output = command.args(["-e", &program]).output().unwrap();
-            assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
-            assert_eq!(output.stdout, expected, "register Lua string parity: {source}");
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                output.stdout, expected,
+                "register Lua string parity: {source}"
+            );
         }
     }
 }
