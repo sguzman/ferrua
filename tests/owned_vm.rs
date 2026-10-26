@@ -46,7 +46,7 @@ fn register_adjusted_scalar_assignments_match_lua54() {
         ("local x,y=4; return y", RegisterValue::Nil, "nil\tnil\n"),
         ("local x<const>; return x", RegisterValue::Nil, "nil\tnil\n"),
         (
-            "local x,y<const>=4; return y",
+            "local x,y<const> =4; return y",
             RegisterValue::Nil,
             "nil\tnil\n",
         ),
