@@ -1789,6 +1789,170 @@ fn compile_statements<'a>(
                     program.code[at] = Instruction::Jump { target: after };
                 }
             }
+            Statement::GenericFor {
+                variables,
+                iterators,
+                body,
+            } => {
+                // Evaluate Lua's iterator/state/control triple once, before
+                // introducing the loop's lexical variables.
+                if variables.is_empty() || variables.len() > MAX_CALL_ARGUMENTS {
+                    return Err(Error::TooLarge);
+                }
+                let triple = adjusted_rhs(program, iterators, 3, scopes)?;
+                let iterator = triple[0];
+                let state = triple[1];
+                if program.registers >= MAX_REGISTERS {
+                    return Err(Error::TooLarge);
+                }
+                let control = program.registers;
+                program.registers += 1;
+                emit_instruction(
+                    program,
+                    Instruction::LoopCopy {
+                        dest: control,
+                        input: triple[2],
+                    },
+                )?;
+                let mut assigned = HashSet::new();
+                assigned_names(body, &mut assigned);
+                let mut candidates = scopes
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(level, scope)| {
+                        scope
+                            .iter()
+                            .filter(|(name, binding)| !binding.constant && assigned.contains(*name))
+                            .map(move |(name, _)| (level, *name))
+                    })
+                    .collect::<Vec<_>>();
+                candidates.sort_unstable();
+                let mut carried = Vec::new();
+                for (level, name) in candidates {
+                    if program.registers >= MAX_REGISTERS {
+                        return Err(Error::TooLarge);
+                    }
+                    let source = scopes
+                        .get(level)
+                        .and_then(|scope| scope.get(name))
+                        .ok_or(Error::InvalidBytecode)?
+                        .register;
+                    let dest = program.registers;
+                    program.registers += 1;
+                    emit_instruction(
+                        program,
+                        Instruction::LoopCopy { dest, input: source },
+                    )?;
+                    scopes
+                        .get_mut(level)
+                        .and_then(|scope| scope.get_mut(name))
+                        .ok_or(Error::InvalidBytecode)?
+                        .register = dest;
+                    carried.push((level, name, dest));
+                }
+                let header = program.code.len();
+                let reset_start = program.registers;
+                emit_instruction(
+                    program,
+                    Instruction::LoopReset {
+                        start: reset_start,
+                        end: usize::MAX,
+                    },
+                )?;
+                emit_instruction(program, Instruction::PushArgument { source: state })?;
+                emit_instruction(program, Instruction::PushArgument { source: control })?;
+                if program.registers >= MAX_REGISTERS {
+                    return Err(Error::TooLarge);
+                }
+                let first = program.registers;
+                program.registers += 1;
+                emit_instruction(
+                    program,
+                    Instruction::Call {
+                        dest: first,
+                        callee: iterator,
+                        argc: 2,
+                        expand_tail: false,
+                    },
+                )?;
+                let exit_at = program.code.len();
+                emit_instruction(
+                    program,
+                    Instruction::BranchIfNil {
+                        value: first,
+                        target: usize::MAX,
+                    },
+                )?;
+                emit_instruction(
+                    program,
+                    Instruction::LoopCopy {
+                        dest: control,
+                        input: first,
+                    },
+                )?;
+                let mut loop_scope = HashMap::new();
+                for (index, variable) in variables.iter().enumerate() {
+                    let visible = if index == 0 {
+                        first
+                    } else {
+                        if program.registers >= MAX_REGISTERS {
+                            return Err(Error::TooLarge);
+                        }
+                        let dest = program.registers;
+                        program.registers += 1;
+                        emit_instruction(
+                            program,
+                            Instruction::ReadCallResult { dest, index },
+                        )?;
+                        dest
+                    };
+                    loop_scope.insert(
+                        *variable,
+                        RegisterBinding {
+                            register: visible,
+                            constant: true,
+                        },
+                    );
+                }
+                let mut inner = scopes.clone();
+                inner.push(loop_scope);
+                loops.push(LoopExit {
+                    carried: carried.clone(),
+                    jumps: Vec::new(),
+                });
+                let compiled = compile_statements(body, program, &mut inner, loops, depth + 1);
+                let exits = loops.pop().ok_or(Error::InvalidBytecode)?;
+                let returned = compiled?;
+                if returned.is_none() {
+                    for &(level, name, dest) in &carried {
+                        let source = inner
+                            .get(level)
+                            .and_then(|scope| scope.get(name))
+                            .ok_or(Error::InvalidBytecode)?
+                            .register;
+                        emit_instruction(
+                            program,
+                            Instruction::LoopCopy {
+                                dest,
+                                input: source,
+                            },
+                        )?;
+                    }
+                    emit_instruction(program, Instruction::LoopJump { target: header })?;
+                }
+                program.code[header] = Instruction::LoopReset {
+                    start: reset_start,
+                    end: program.registers,
+                };
+                let after = program.code.len();
+                program.code[exit_at] = Instruction::BranchIfNil {
+                    value: first,
+                    target: after,
+                };
+                for at in exits.jumps {
+                    program.code[at] = Instruction::Jump { target: after };
+                }
+            }
             Statement::NumericFor {
                 variable,
                 start,
