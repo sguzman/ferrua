@@ -720,11 +720,28 @@ fn owned_string_format_q_roundtrips_float_constants_like_lua54() {
         "print(string.format('%q',math.maxinteger)=='9223372036854775807')",
         "print(string.format('%q',1/0)=='1e9999',string.format('%q',-1/0)=='-1e9999')",
         "print(string.format('%q',0/0)=='(0/0)')",
-        "print(string.format('%q',5e-324)=='0x0.0000000000001p-1022')",
         "print(string.format('%q',2.2250738585072014e-308)=='0x1p-1022')",
         "print(string.format('%q',-1e100)=='-0x1.249ad2594c37dp+332')",
     ] {
         assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_format_q_subnormal_matches_upstream_despite_pinned_backend_divergence() {
+    // The pinned luna-core production interpreter does not preserve the
+    // smallest decimal subnormal in this fixture (recorded in CI).
+    // The owned engine must still emit Lua's exact, round-trippable %q hex.
+    let source = "print(string.format('%q',5e-324)=='0x0.0000000000001p-1022')";
+    let owned = run_fer(true, source);
+    let production = run_fer(false, source);
+    assert!(owned.status.success(), "{:?}", owned.stderr);
+    assert!(production.status.success(), "{:?}", production.stderr);
+    assert_eq!(owned.stdout, b"true\n");
+    assert_eq!(production.stdout, b"false\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success(), "{:?}", reference.stderr);
+        assert_eq!(reference.stdout, owned.stdout);
     }
 }
 
