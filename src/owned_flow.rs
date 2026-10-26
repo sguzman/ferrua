@@ -1892,6 +1892,7 @@ enum PackField {
         little: bool,
     },
     Padding,
+    Align(usize),
 }
 
 impl PackField {
@@ -1902,7 +1903,7 @@ impl PackField {
             | Self::FixedString(size)
             | Self::LengthPrefixed { size, .. } => size,
             Self::Padding => 1,
-            Self::NullTerminated => 0,
+            Self::NullTerminated | Self::Align(_) => 0,
         }
     }
 }
@@ -5159,6 +5160,7 @@ impl Execution<'_> {
         let mut fields = Vec::new();
         let mut index = 0;
         let mut little = cfg!(target_endian = "little");
+        let mut maxalign = 1usize;
         let mut total = 0usize;
         while index < format.len() {
             let code = format[index];
@@ -5176,6 +5178,27 @@ impl Execution<'_> {
                     }
                     b'=' => {
                         little = cfg!(target_endian = "little");
+                        continue;
+                    }
+                    b'!' => {
+                        // The Linux x86-64 Lua ABI has a maximum native
+                        // alignment of eight bytes; Lua defaults to eight
+                        // when the numeric parameter is omitted.
+                        let mut limit = 8usize;
+                        if index < format.len() && format[index].is_ascii_digit() {
+                            limit = 0;
+                            while index < format.len() && format[index].is_ascii_digit() {
+                                limit = limit
+                                    .checked_mul(10)
+                                    .and_then(|n| n.checked_add(usize::from(format[index] - b'0')))
+                                    .ok_or(FlowError::TooLarge)?;
+                                index += 1;
+                            }
+                        }
+                        if !(1..=8).contains(&limit) {
+                            return Err(FlowError::TypeError);
+                        }
+                        maxalign = limit;
                         continue;
                     }
                     b'x' => PackField::Padding,
@@ -5258,6 +5281,20 @@ impl Execution<'_> {
             if total > MAX_STRING_POOL_BYTES || fields.len() >= MAX_STACK {
                 return Err(FlowError::TooLarge);
             }
+            // Lua aligns a field before writing/reading its bytes; the
+            // offset is runtime-dependent after variable-length strings.
+            // Store alignment markers instead of predicting the padding
+            // during static format parsing.
+            let align = match field {
+                PackField::FixedString(_) | PackField::NullTerminated | PackField::Padding => 1,
+                _ => field.size().min(maxalign),
+            };
+            if align > 1 {
+                if !align.is_power_of_two() {
+                    return Err(FlowError::TypeError);
+                }
+                fields.push(PackField::Align(align));
+            }
             fields.push(field);
         }
         Ok(fields)
@@ -5338,7 +5375,20 @@ impl Execution<'_> {
             }) {
                 return Err(FlowError::TypeError);
             }
-            return Ok(vec![Value::Integer(total as i64)]);
+            let mut size = 0usize;
+            for field in &fields {
+                if let PackField::Align(align) = field {
+                    size = size
+                        .checked_add((align - size % align) % align)
+                        .ok_or(FlowError::TooLarge)?;
+                } else {
+                    size = size.checked_add(field.size()).ok_or(FlowError::TooLarge)?;
+                }
+                if size > MAX_STRING_POOL_BYTES {
+                    return Err(FlowError::TooLarge);
+                }
+            }
+            return Ok(vec![Value::Integer(size as i64)]);
         }
         if builtin == Builtin::StringPack {
             let mut output = Vec::with_capacity(total);
@@ -5346,6 +5396,17 @@ impl Execution<'_> {
             for field in fields {
                 match field {
                     PackField::Padding => output.push(0),
+                    PackField::Align(align) => {
+                        let padding = (align - output.len() % align) % align;
+                        if output.len().saturating_add(padding) > MAX_STRING_POOL_BYTES {
+                            return Err(FlowError::TooLarge);
+                        }
+                        if self.steps.saturating_add(padding) > self.budget {
+                            return Err(FlowError::StepBudgetExceeded);
+                        }
+                        self.steps += padding;
+                        output.resize(output.len() + padding, 0);
+                    },
                     PackField::NullTerminated | PackField::LengthPrefixed { .. } => {
                         let bytes =
                             self.string_bytes(*args.get(argument).ok_or(FlowError::TypeError)?)?;
@@ -5461,6 +5522,14 @@ impl Execution<'_> {
         self.gc_temporary_roots.push(args.to_vec());
         let outcome = (|| {
             for field in fields {
+                if let PackField::Align(align) = field {
+                    let padding = (align - cursor % align) % align;
+                    cursor = cursor.checked_add(padding).ok_or(FlowError::TooLarge)?;
+                    if cursor > bytes.len() {
+                        return Err(FlowError::TypeError);
+                    }
+                    continue;
+                }
                 let end = cursor
                     .checked_add(field.size())
                     .ok_or(FlowError::TooLarge)?;
@@ -5468,6 +5537,7 @@ impl Execution<'_> {
                 cursor = end;
                 let value = match field {
                     PackField::Padding => continue,
+                    PackField::Align(_) => unreachable!("alignment consumed before byte read"),
                     PackField::NullTerminated | PackField::LengthPrefixed { .. } => {
                         let (begin, end) = match field {
                             PackField::NullTerminated => {

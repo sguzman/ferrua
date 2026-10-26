@@ -671,6 +671,22 @@ fn owned_string_pack_extended_9_to_16_byte_widths_match_lua54() {
 }
 
 #[test]
+fn owned_string_pack_bounded_native_alignment_directives_match_lua54() {
+    for source in [
+        "local p=string.pack('!4bI4',7,42); print(#p,string.byte(p,1,8)); print(string.unpack('!4bI4',p),string.packsize('!4bI4'))",
+        "local p=string.pack('!8bI8',3,42); print(#p,string.unpack('!8bI8',p),string.packsize('!8bI8'))",
+        "local p=string.pack('!2bI4',1,7); print(#p,string.unpack('!2bI4',p),string.packsize('!2bI4'))",
+        "local p=string.pack('!4c3I4','abc',0x1234); local a,b,n=string.unpack('!4c3I4',p); print(#p,a,b,n)",
+        "local p=string.pack('!4zI4','ab',42); local s,n,pos=string.unpack('!4zI4',p); print(#p,s,n,pos)",
+        "local p=string.pack('!4s1I4','ab',10); local a,b,n=string.unpack('!4s1I4',p); print(#p,a,b,n)",
+        "local p=string.pack('!4bxi4',1,256); print(#p,string.unpack('!4bxi4',p),string.packsize('!4bxi4'))",
+        "local a=pcall(string.packsize,'!3i4'); local b=pcall(string.packsize,'!8i3'); local c=pcall(string.packsize,'!16I8'); print(a,b,c)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",
