@@ -1,9 +1,76 @@
 //! Differential smoke for the experimental owned integer register subset.
 //! Reference is the existing production fer CLI, not upstream Lua directly.
 use ferrua::owned_vm::{
-    compile_integer_chunk, compile_integer_expression, execute_integer_program,
+    RegisterValue, compile_integer_chunk, compile_integer_expression, execute_integer_program,
+    execute_register_program,
 };
 use std::process::Command;
+
+#[test]
+fn tagged_register_boolean_expressions_match_production_and_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("not false", RegisterValue::Boolean(true)),
+        ("not true", RegisterValue::Boolean(false)),
+        ("not nil", RegisterValue::Boolean(true)),
+        ("not 0", RegisterValue::Boolean(false)),
+        ("not (2-2)", RegisterValue::Boolean(false)),
+        ("true==true", RegisterValue::Boolean(true)),
+        ("true==false", RegisterValue::Boolean(false)),
+        ("nil==nil", RegisterValue::Boolean(true)),
+        ("nil==false", RegisterValue::Boolean(false)),
+        ("nil~=false", RegisterValue::Boolean(true)),
+        ("0==false", RegisterValue::Boolean(false)),
+        ("0~=false", RegisterValue::Boolean(true)),
+        ("4<5", RegisterValue::Boolean(true)),
+        ("5<=5", RegisterValue::Boolean(true)),
+        ("5>4", RegisterValue::Boolean(true)),
+        ("4>=5", RegisterValue::Boolean(false)),
+        ("(1+2)==3", RegisterValue::Boolean(true)),
+        ("not (1==2)", RegisterValue::Boolean(true)),
+        ("not (4<5)", RegisterValue::Boolean(false)),
+    ] {
+        let program = compile_integer_expression(source).unwrap();
+        assert_eq!(execute_register_program(&program), Ok(expected), "{source}");
+        let code = format!("print({source})");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let reference = match expected {
+                RegisterValue::Boolean(true) => "true",
+                RegisterValue::Boolean(false) => "false",
+                _ => unreachable!("Boolean cases only"),
+            };
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                reference,
+                "{source}"
+            );
+        }
+    }
+    for source in ["true<false", "nil<0", "1<true"] {
+        let program = compile_integer_expression(source).unwrap();
+        assert_eq!(
+            execute_register_program(&program),
+            Err(ferrua::owned_vm::Error::TypeError),
+            "{source}"
+        );
+    }
+}
 
 #[test]
 fn integer_register_subset_matches_production_interpreter() {
