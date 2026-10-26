@@ -48,9 +48,15 @@ fn register_next_and_pairs_builtin_protocol_match_lua54() {
         ("local t={x=9};return (next(t))", "1|x"),
         ("local t={x=9};return pairs(t)", "3|function|table|nil"),
         ("local t={};return pairs(t)", "3|function|table|nil"),
-        ("local t={x=9};local i,s,v=pairs(t);return type(i),s==t,v", "3|function|true|nil"),
+        (
+            "local t={x=9};local i,s,v=pairs(t);return type(i),s==t,v",
+            "3|function|true|nil",
+        ),
         ("local t={x=9};local i,s,v=pairs(t);return i(s,v)", "2|x|9"),
-        ("local t={x=9};local i,s,v=pairs(t);return i(s,'x')", "1|nil"),
+        (
+            "local t={x=9};local i,s,v=pairs(t);return i(s,'x')",
+            "1|nil",
+        ),
     ] {
         assert_eq!(render(chunk), Ok(expected.to_string()), "{chunk}");
         for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
