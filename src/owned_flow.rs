@@ -4957,7 +4957,7 @@ impl Execution<'_> {
         let plain = args.get(3).copied().unwrap_or(Value::Nil).truthy()
             || !pattern.iter().any(|byte| b"^$*+?.([%-".contains(byte));
         let Some((begin, end, captures)) =
-            self.simple_pattern_match(&source, &pattern, initial, plain)?
+            self.simple_pattern_match(&source, &pattern, initial, plain, true)?
         else {
             return Ok(vec![Value::Nil]);
         };
@@ -5004,7 +5004,7 @@ impl Execution<'_> {
             let anchored = pattern.first() == Some(&b'^');
             while substitutions < limit && cursor <= source.len() {
                 let Some((begin, end, captures)) =
-                    self.simple_pattern_match(&source, &pattern, cursor as i64 + 1, false)?
+                    self.simple_pattern_match(&source, &pattern, cursor as i64 + 1, false, true)?
                 else {
                     break;
                 };
@@ -5193,7 +5193,7 @@ impl Execution<'_> {
                 .or_else(|_| self.integer_operand(index))?,
             _ => 1,
         };
-        match self.simple_pattern_match(&source, &pattern, initial, false)? {
+        match self.simple_pattern_match(&source, &pattern, initial, false, true)? {
             Some((begin, end, captures)) if captures.is_empty() => Ok(vec![
                 self.intern_rooted_string(source[begin..end].to_vec(), args)?,
             ]),
@@ -5850,7 +5850,7 @@ impl Execution<'_> {
                 return Err(FlowError::StepBudgetExceeded);
             }
             self.steps += 1;
-            let result = self.simple_pattern_match(&source, &pattern, cursor as i64 + 1, false)?;
+            let result = self.simple_pattern_match(&source, &pattern, cursor as i64 + 1, false, false)?;
             let Some((begin, end, captures)) = result else {
                 break;
             };
@@ -5895,12 +5895,16 @@ impl Execution<'_> {
         pattern: &[u8],
         initial: i64,
         plain: bool,
+        anchored_caret: bool,
     ) -> Result<Option<PatternMatch>, FlowError> {
         let mut body = pattern;
         let mut anchored_start = false;
         let mut anchored_end = false;
         if !plain {
-            if body.first() == Some(&b'^') {
+            // Lua's gmatch passes its pattern directly to match(),
+            // without stripping a leading '^'. For gmatch only, the
+            // caret is therefore an ordinary literal pattern byte.
+            if anchored_caret && body.first() == Some(&b'^') {
                 body = &body[1..];
                 anchored_start = true;
             }

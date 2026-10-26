@@ -701,6 +701,23 @@ fn owned_string_gmatch_iterators_and_captures_match_lua54() {
 }
 
 #[test]
+fn owned_gmatch_leading_caret_is_literal_not_anchor_like_lua54() {
+    // gmatch does not remove an initial '^', unlike find/match/gsub.
+    for source in [
+        "local t={}; for v in string.gmatch('a^b^c','^') do t[#t+1]=v end; print(#t,table.concat(t,','))",
+        "local t={}; for v in string.gmatch('^a^a','^a') do t[#t+1]=v end; print(#t,table.concat(t,','))",
+        "local t={}; for v in string.gmatch('^^','^') do t[#t+1]=v end; print(#t)",
+        "print(string.gmatch('abc','^')()==nil)",
+        "local t={}; for v in string.gmatch('a^b','%^') do t[#t+1]=v end; print(table.concat(t,','))",
+        "print(string.match('abc','^a'),string.find('abc','^a'))",
+        "print(string.match('abc','^')=='',string.gmatch('abc','^')()==nil)",
+        "local it=string.gmatch('a^b','^'); print(it(),it()==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_gmatch_gc_reclaims_or_retains_iterator_snapshots() {
     for source in [
         "local f=string.gmatch('ab cd','%a+'); collectgarbage('collect'); print(f(),f(),f()==nil)",
