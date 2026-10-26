@@ -5922,6 +5922,7 @@ impl Execution<'_> {
             CaptureOpen,
             CaptureClose,
             CapturePosition,
+            InvalidClose,
             Backreference(u8),
         }
         if self.steps.saturating_add(body.len()) > self.budget {
@@ -5949,12 +5950,13 @@ impl Execution<'_> {
             } else if !plain && body[index] == b')' {
                 index += 1;
                 if opened == 0 {
-                    // The upstream capture_to_close() fails on stray ')',
-                    // rather than interpreting it as an ordinary byte.
-                    return Err(FlowError::TypeError);
+                    // Capture errors occur only if Lua's pattern traversal
+                    // actually reaches this closing delimiter.
+                    Atom::InvalidClose
+                } else {
+                    opened -= 1;
+                    Atom::CaptureClose
                 }
-                opened -= 1;
-                Atom::CaptureClose
             } else if !plain && body[index] == b'[' {
                 let start = index + 1;
                 let mut cursor = start;
@@ -6081,6 +6083,7 @@ impl Execution<'_> {
                 }
                 let (atom, repetition) = &atoms[atom_index];
                 match atom {
+                    Atom::InvalidClose => return Err(FlowError::TypeError),
                     Atom::CapturePosition => {
                         let mut next = captures;
                         next.push((position, position, true));
@@ -6184,6 +6187,7 @@ impl Execution<'_> {
                             | Atom::CaptureOpen
                             | Atom::CaptureClose
                             | Atom::CapturePosition
+                            | Atom::InvalidClose
                             | Atom::Backreference(_) => false,
                         }
                 };
