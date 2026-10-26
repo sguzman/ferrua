@@ -5808,9 +5808,9 @@ impl Execution<'_> {
         // zero and overly negative values clip to the first byte, and
         // positions past the end yield an exhausted iterator.
         let initial = match args.get(2).copied() {
-            Some(value) if value != Value::Nil => self
-                .exact_integer_operand(value)
-                .or_else(|_| self.integer_operand(value))?,
+            Some(value) if value != Value::Nil => {
+                self.exact_integer_operand(self.lua_numeric_operand(value)?)?
+            }
             _ => 1,
         };
         let start = Self::string_offset(initial, source.len() as i64).max(1);
