@@ -1954,6 +1954,14 @@ struct OwnedCallFrame {
     varargs: Vec<Value>,
 }
 
+/// Owned child activation, retaining both its bytecode and its independent
+/// return-value adjustment while a caller is suspended in the VM scheduler.
+struct ActiveLuaCall {
+    instructions: Vec<Op>,
+    frame: OwnedCallFrame,
+    many: bool,
+}
+
 /// A bounded instruction slice is an internal checkpoint, not a coroutine
 /// yield. Nested function calls remain synchronous until their own return.
 enum FrameProgress {
@@ -7526,17 +7534,9 @@ impl Execution<'_> {
         result
     }
 
-    fn run(
-        &mut self,
-        instructions: &[Op],
-        slot_count: usize,
-        initial: &[(usize, Value)],
-        captures: &[(usize, usize)],
-        varargs: &[Value],
-    ) -> Result<Vec<Value>, FlowError> {
-        self.frame_allocations.push(Vec::new());
-        self.gc_frame_roots.push(GcFrameRoots::default());
-        let result = self.run_inner(instructions, slot_count, initial, captures, varargs);
+    /// Release one VM call's lexical allocations and GC-root entry.
+    /// Captured cells remain live until their owning closure is collected.
+    fn release_call_frame(&mut self) -> Result<(), FlowError> {
         self.gc_frame_roots
             .pop()
             .ok_or(FlowError::InvalidBytecode)?;
@@ -7550,18 +7550,17 @@ impl Execution<'_> {
                 self.free_cells.push(cell);
             }
         }
-        result
+        Ok(())
     }
 
-    fn run_inner(
+    fn prepare_call_frame(
         &mut self,
-        instructions: &[Op],
         slot_count: usize,
         initial: &[(usize, Value)],
         captures: &[(usize, usize)],
         varargs: &[Value],
-    ) -> Result<Vec<Value>, FlowError> {
-        if instructions.len() > MAX_CODE || slot_count > MAX_SLOTS {
+    ) -> Result<OwnedCallFrame, FlowError> {
+        if slot_count > MAX_SLOTS {
             return Err(FlowError::TooLarge);
         }
         let start = self.cells.len();
@@ -7591,37 +7590,145 @@ impl Execution<'_> {
             let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
             *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
         }
-        let mut frame = OwnedCallFrame {
+        Ok(OwnedCallFrame {
             pc: 0,
             slots,
             stack: Vec::new(),
             prepared: Vec::new(),
             last_multiple: None,
             varargs: varargs.to_vec(),
-        };
-        loop {
-            match self.execute_frame(instructions, &mut frame, FRAME_STEP_QUANTUM)? {
-                FrameProgress::Paused => continue,
-                FrameProgress::Returned(values) => return Ok(values),
-                FrameProgress::Call { handle, args, many } => {
-                    // Nested Lua calls still execute synchronously. Keeping
-                    // the calling frame intact here is a trampoline seam
-                    // for an explicit scheduler, not a simulated coroutine.
-                    let returned = self.call_owned_function(handle, &args)?;
-                    if many {
-                        frame.last_multiple = Some(returned.len());
-                        frame.stack.extend(returned);
-                    } else {
-                        frame
-                            .stack
-                            .push(returned.into_iter().next().unwrap_or(Value::Nil));
+        })
+    }
+
+    fn run(
+        &mut self,
+        instructions: &[Op],
+        slot_count: usize,
+        initial: &[(usize, Value)],
+        captures: &[(usize, usize)],
+        varargs: &[Value],
+    ) -> Result<Vec<Value>, FlowError> {
+        self.frame_allocations.push(Vec::new());
+        self.gc_frame_roots.push(GcFrameRoots::default());
+        let result = self.run_inner(instructions, slot_count, initial, captures, varargs);
+        self.release_call_frame()?;
+        result
+    }
+
+    fn run_inner(
+        &mut self,
+        instructions: &[Op],
+        slot_count: usize,
+        initial: &[(usize, Value)],
+        captures: &[(usize, usize)],
+        varargs: &[Value],
+    ) -> Result<Vec<Value>, FlowError> {
+        if instructions.len() > MAX_CODE {
+            return Err(FlowError::TooLarge);
+        }
+        let mut root = self.prepare_call_frame(slot_count, initial, captures, varargs)?;
+        let mut active: Vec<ActiveLuaCall> = Vec::new();
+        let result = (|| -> Result<Vec<Value>, FlowError> {
+            loop {
+                let progress = if let Some(child) = active.last_mut() {
+                    self.execute_frame(
+                        &child.instructions,
+                        &mut child.frame,
+                        FRAME_STEP_QUANTUM,
+                    )?
+                } else {
+                    self.execute_frame(instructions, &mut root, FRAME_STEP_QUANTUM)?
+                };
+                match progress {
+                    FrameProgress::Paused => continue,
+                    FrameProgress::Call { handle, args, many } => {
+                        // Child calls execute on an explicit owned frame stack;
+                        // native callbacks may still nest a separate scheduler.
+                        let closure = self
+                            .closures
+                            .get(handle)
+                            .and_then(Option::as_ref)
+                            .cloned()
+                            .ok_or(FlowError::InvalidBytecode)?;
+                        let function = self
+                            .program
+                            .functions
+                            .get(closure.function)
+                            .ok_or(FlowError::InvalidBytecode)?
+                            .clone();
+                        if self.depth >= MAX_CALL_DEPTH {
+                            return Err(FlowError::CallDepthExceeded);
+                        }
+                        if function.instructions.len() > MAX_CODE {
+                            return Err(FlowError::TooLarge);
+                        }
+                        let initial: Vec<_> = function
+                            .parameters
+                            .iter()
+                            .enumerate()
+                            .map(|(i, slot)| (*slot, args.get(i).copied().unwrap_or(Value::Nil)))
+                            .collect();
+                        let varargs = if function.vararg && args.len() > function.parameters.len() {
+                            &args[function.parameters.len()..]
+                        } else {
+                            &[]
+                        };
+                        self.depth += 1;
+                        self.frame_allocations.push(Vec::new());
+                        self.gc_frame_roots.push(GcFrameRoots::default());
+                        let child_frame = match self.prepare_call_frame(
+                            function.slots,
+                            &initial,
+                            &closure.captures,
+                            varargs,
+                        ) {
+                            Ok(child) => child,
+                            Err(error) => {
+                                self.release_call_frame()?;
+                                self.depth -= 1;
+                                return Err(error);
+                            }
+                        };
+                        active.push(ActiveLuaCall {
+                            instructions: function.instructions,
+                            frame: child_frame,
+                            many,
+                        });
                     }
-                    if frame.stack.len() > MAX_STACK {
-                        return Err(FlowError::TooLarge);
+                    FrameProgress::Returned(values) => {
+                        if let Some(child) = active.pop() {
+                            self.release_call_frame()?;
+                            self.depth -= 1;
+                            let parent = if let Some(parent) = active.last_mut() {
+                                &mut parent.frame
+                            } else {
+                                &mut root
+                            };
+                            if child.many {
+                                parent.last_multiple = Some(values.len());
+                                parent.stack.extend(values);
+                            } else {
+                                parent
+                                    .stack
+                                    .push(values.into_iter().next().unwrap_or(Value::Nil));
+                            }
+                            if parent.stack.len() > MAX_STACK {
+                                return Err(FlowError::TooLarge);
+                            }
+                        } else {
+                            return Ok(values);
+                        }
                     }
                 }
             }
+        })();
+        // Errors must unwind *every* child frame and restore caller depth
+        // before the surrounding run() releases the root frame.
+        while active.pop().is_some() {
+            self.release_call_frame()?;
+            self.depth -= 1;
         }
+        result
     }
 
     /// Execute up to one instruction quantum against a retained frame.
