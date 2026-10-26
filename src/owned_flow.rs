@@ -4950,7 +4950,12 @@ impl Execution<'_> {
                 .or_else(|_| self.integer_operand(index))?,
             _ => 1,
         };
-        let plain = args.get(3).copied().unwrap_or(Value::Nil).truthy();
+        // Lua's string.find skips pattern matching when no characters
+        // from its SPECIALS set occur anywhere in the pattern. In
+        // particular, a lone ')' is literal in find but a capture error
+        // in string.match, which always invokes the pattern matcher.
+        let plain = args.get(3).copied().unwrap_or(Value::Nil).truthy()
+            || !pattern.iter().any(|byte| b"^$*+?.([%-".contains(byte));
         let Some((begin, end, captures)) =
             self.simple_pattern_match(&source, &pattern, initial, plain)?
         else {
