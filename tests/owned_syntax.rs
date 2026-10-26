@@ -168,7 +168,10 @@ fn goto_syntax_and_scope_boundaries_match_lua_54_when_requested() {
         ("::first:: goto done; ::done:: return 4", true),
         ("goto done ::done:: return 3", true),
         ("do ::inner:: local x=2 end; ::outer:: return 5", true),
-        ("local n=1; ::mark:: n=n+1; if n<3 then goto mark end; return n", true),
+        (
+            "local n=1; ::mark:: n=n+1; if n<3 then goto mark end; return n",
+            true,
+        ),
         ("goto missing", false),
         ("goto ready; local x=1; ::ready:: return 1", false),
         ("::dup:: ::dup:: return 1", false),
@@ -181,10 +184,16 @@ fn goto_syntax_and_scope_boundaries_match_lua_54_when_requested() {
         ("goto target local x = 1 ::target:: print(x)", false),
         ("do goto target end local x = 1 ::target:: print(x)", false),
         ("goto inner do ::inner:: end", false),
-        ("if true then goto elsewhere end if true then ::elsewhere:: end", false),
+        (
+            "if true then goto elsewhere end if true then ::elsewhere:: end",
+            false,
+        ),
         ("local function f() goto outside end ::outside::", false),
         ("goto inside local function f() ::inside:: end", false),
-        ("local function f() goto later local x = 1 ::later:: return x end", false),
+        (
+            "local function f() goto later local x = 1 ::later:: return x end",
+            false,
+        ),
     ] {
         // Compile but never execute: backward jumps in valid programs may
         // intentionally be infinite, and this test only concerns grammar.
