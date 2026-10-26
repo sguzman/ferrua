@@ -207,7 +207,10 @@ fn register_hexadecimal_float_literals_and_wrapping_integers_match_lua54() {
         ("0x0p5000", RegisterValue::Float(0.0_f64.to_bits())),
         ("0x1p5000", RegisterValue::Float(f64::INFINITY.to_bits())),
         ("0x1p-5000", RegisterValue::Float(0.0_f64.to_bits())),
-        ("0x1p-1074", RegisterValue::Float(f64::from_bits(1).to_bits())),
+        (
+            "0x1p-1074",
+            RegisterValue::Float(f64::from_bits(1).to_bits()),
+        ),
         ("0x1p-1075", RegisterValue::Float(0.0_f64.to_bits())),
         ("0x10000000000000001", RegisterValue::Integer(1)),
         ("0xffffffffffffffffffff", RegisterValue::Integer(-1)),
