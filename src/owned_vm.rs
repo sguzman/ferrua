@@ -2149,6 +2149,19 @@ mod tests {
     fn register_integer_numeric_for_controls_scope_and_overflow() {
         for (source, expected) in [
             ("local s=0; for i=1,5 do s=s+i end; return s", 15),
+            (
+                "local n=0; for i=0x8000000000000000,0x8000000000000000,-1 do n=n+1 end; return n",
+                1,
+            ),
+            (
+                "local n=0; for i=0x7ffffffffffffffe,0x7fffffffffffffff,2 do n=n+1 end; return n",
+                1,
+            ),
+            (
+                "local n=0; for i=0x8000000000000001,0x8000000000000000,-2 do n=n+1 end; return n",
+                1,
+            ),
+            ("local n=0; for i=4,1,-1 do n=n+i end; return n", 10),
             ("local x=1; for i=1,3 do x=x+i end; return x", 7),
             ("local s=0; for i=5,1,-2 do s=s+i end; return s", 9),
             ("local s=0; for i=1,0 do s=s+i end; return s", 0),
