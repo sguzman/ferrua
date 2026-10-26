@@ -840,7 +840,7 @@ const RUNTIME_ERROR_FIXTURES: &[&str] = &[
     "return {}..'x'",
     "return #nil",
     "return ~nil",
-    "return nil(1)",
+    "return (nil)(1)",
     "return 1//0",
     "return 5%0",
     "local t={}; t[nil]=4; return t.x",
