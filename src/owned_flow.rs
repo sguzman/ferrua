@@ -8534,7 +8534,9 @@ impl Execution<'_> {
                     if stack.len() < *count {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    return Ok(FrameProgress::Returned(stack.split_off(stack.len() - *count)));
+                    return Ok(FrameProgress::Returned(
+                        stack.split_off(stack.len() - *count),
+                    ));
                 }
                 Op::ReturnTail(prefix) => {
                     let multiple = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
@@ -8542,7 +8544,9 @@ impl Execution<'_> {
                     if stack.len() < count {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    return Ok(FrameProgress::Returned(stack.split_off(stack.len() - count)));
+                    return Ok(FrameProgress::Returned(
+                        stack.split_off(stack.len() - count),
+                    ));
                 }
             }
             if stack.len() > MAX_STACK {
