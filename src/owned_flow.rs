@@ -5960,9 +5960,12 @@ impl Execution<'_> {
                                     let mut formatted = match specifier {
                                         b'e' => format!("{:.*e}", digits, number).into_bytes(),
                                         b'E' => format!("{:.*E}", digits, number).into_bytes(),
-                                        b'g' | b'G' => {
-                                            Self::lua_general_float(number, digits, specifier == b'G', alternate)?
-                                        }
+                                        b'g' | b'G' => Self::lua_general_float(
+                                            number,
+                                            digits,
+                                            specifier == b'G',
+                                            alternate,
+                                        )?
                                         _ => format!("{:.*}", digits, number).into_bytes(),
                                     };
                                     if matches!(specifier, b'e' | b'E') {
@@ -5984,7 +5987,11 @@ impl Execution<'_> {
                                             );
                                             formatted = normalized;
                                         }
-                                    } else if specifier == b'f' && alternate && digits == 0 && number.is_finite() {
+                                    } else if specifier == b'f'
+                                        && alternate
+                                        && digits == 0
+                                        && number.is_finite()
+                                    {
                                         formatted.push(b'.');
                                     }
                                     if !number.is_sign_negative() {
