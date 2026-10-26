@@ -117,6 +117,18 @@ fn owned_string_receivers_index_the_shared_mutable_string_library_like_lua54() {
 }
 
 #[test]
+fn owned_string_method_library_identity_survives_gc_and_global_rebinding() {
+    for source in [
+        "local lib=string; string={}; collectgarbage('collect'); print(('ABC'):lower(),lib.lower==('ABC').lower)",
+        "local s='ABC'; local method=s.lower; collectgarbage('collect'); print(method(s),s.lower==method)",
+        "local lib=string; lib.upper=false; collectgarbage('collect'); local ok=pcall(function() return ('abc'):upper() end); print(ok,('abc').upper==false)",
+        "local s=('Ab'):rep(400); collectgarbage('collect'); print(s:sub(1,4),#s,s:lower():sub(1,4))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn curated_global_function_print_and_error_semantics_match_lua54() {
     for source in [
         "function first() return second() end; function second() return 7 end; print(first())",
