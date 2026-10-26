@@ -7631,11 +7631,7 @@ impl Execution<'_> {
         let result = (|| -> Result<Vec<Value>, FlowError> {
             loop {
                 let progress = if let Some(child) = active.last_mut() {
-                    self.execute_frame(
-                        &child.instructions,
-                        &mut child.frame,
-                        FRAME_STEP_QUANTUM,
-                    )?
+                    self.execute_frame(&child.instructions, &mut child.frame, FRAME_STEP_QUANTUM)?
                 } else {
                     self.execute_frame(instructions, &mut root, FRAME_STEP_QUANTUM)?
                 };
