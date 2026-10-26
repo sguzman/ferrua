@@ -3657,7 +3657,9 @@ impl Execution<'_> {
     fn tonumber_builtin(&self, args: &[Value]) -> Result<Value, FlowError> {
         let value = args.first().copied().unwrap_or(Value::Nil);
         if let Some(base_value) = args.get(1).copied().filter(|arg| *arg != Value::Nil) {
-            let base = self.exact_integer_operand(base_value)?;
+            // luaL_checkinteger accepts numeric-string bases when they
+            // represent exact integers, just as it accepts integer floats.
+            let base = self.exact_integer_operand(self.lua_numeric_operand(base_value)?)?;
             if !(2..=36).contains(&base) {
                 return Err(FlowError::TypeError);
             }

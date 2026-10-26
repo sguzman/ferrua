@@ -704,6 +704,18 @@ fn owned_string_pack_explicit_x_alignment_directives_match_lua54() {
 }
 
 #[test]
+fn owned_tonumber_numeric_string_bases_match_lua54() {
+    for source in [
+        "print(tonumber('ff','16'),tonumber('101','2.0'),tonumber('z','3.6e1'))",
+        "print(tonumber('1f','0x10'),tonumber('12','1e1'))",
+        "local a=pcall(tonumber,'10','1.5'); local b=pcall(tonumber,'10','wrong'); print(a,b)",
+        "local a=pcall(tonumber,'10','1'); local b=pcall(tonumber,'10','37'); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_tonumber_explicit_base_wraps_like_lua54() {
     // Lua's base-specific conversion accumulates modulo 2^64 rather
     // than rejecting input above the signed or unsigned integer limit.
