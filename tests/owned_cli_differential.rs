@@ -635,6 +635,24 @@ fn owned_string_variable_binary_formats_match_lua54() {
 }
 
 #[test]
+fn owned_string_pack_nonpoweroftwo_integer_and_string_widths_match_lua54() {
+    for source in [
+        "local p=string.pack('<i3I3',-8388608,16777215); local a,b,n=string.unpack('<i3I3',p); print(#p,a,b,n,string.packsize('<i3I3'))",
+        "local p=string.pack('>i3I3',8388607,1193046); print(string.byte(p,1,6)); print(string.unpack('>i3I3',p))",
+        "local p=string.pack('>i5I5',-549755813888,1099511627775); print(#p,string.unpack('>i5I5',p),string.packsize('>i5I5'))",
+        "local p=string.pack('<i6I6',-140737488355328,281474976710655); print(string.unpack('<i6I6',p))",
+        "local p=string.pack('<i7I7',-36028797018963968,72057594037927935); print(string.unpack('<i7I7',p))",
+        "local p=string.pack('>s3','ab\\0c'); local v,n=string.unpack('>s3',p); print(#p,v=='ab\\0c',n,string.byte(p,1,3))",
+        "local p=string.pack('<s5','xyz'); local v,n=string.unpack('<s5',p); print(#p,v,n,string.byte(p,1,5))",
+        "local p=string.pack('>I3s3i3',0x123456,'x\\0y',-42); local a,b,c,n=string.unpack('>I3s3i3',p); print(#p,a,b=='x\\0y',c,n)",
+        "local a=pcall(string.pack,'I3',16777216); local b=pcall(string.pack,'i3',8388608); local c=pcall(string.pack,'i3',-8388609); print(a,b,c)",
+        "local a=pcall(string.packsize,'i0'); local b=pcall(string.packsize,'s0'); local c=pcall(string.packsize,'I9'); print(a,b,c)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",

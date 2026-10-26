@@ -5200,9 +5200,9 @@ impl Execution<'_> {
                                 index += 1;
                             }
                         }
-                        if !matches!(size, 1 | 2 | 4 | 8) {
+                        if !(1..=8).contains(&size) {
                             return Err(FlowError::Unsupported(
-                                "pack supports 1-, 2-, 4- and 8-byte integers".into(),
+                                "pack supports integer widths from 1 to 8 bytes".into(),
                             ));
                         }
                         PackField::Integer {
@@ -5228,9 +5228,9 @@ impl Execution<'_> {
                                 index += 1;
                             }
                         }
-                        if !matches!(size, 1 | 2 | 4 | 8) {
+                        if !(1..=8).contains(&size) {
                             return Err(FlowError::Unsupported(
-                                "pack supports 1-, 2-, 4- and 8-byte string lengths".into(),
+                                "pack supports string-length prefixes from 1 to 8 bytes".into(),
                             ));
                         }
                         PackField::LengthPrefixed { size, little }
