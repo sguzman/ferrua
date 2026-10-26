@@ -2,6 +2,7 @@
 //! Not used by production fer; not a full Lua VM.
 
 use crate::expr::{Expr, LocalAttribute, Statement, parse_chunk, parse_expression};
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 const MAX_REGISTERS: usize = 16384;
@@ -14,6 +15,8 @@ pub enum RegisterValue {
     Nil,
     Boolean(bool),
     Integer(i64),
+    /// Raw IEEE-754 bits preserve Copy/Eq and signed-zero representation.
+    Float(u64),
 }
 
 impl RegisterValue {
@@ -26,6 +29,50 @@ impl RegisterValue {
             Self::Integer(value) => Ok(value),
             _ => Err(Error::TypeError),
         }
+    }
+
+    fn number(self) -> Result<f64, Error> {
+        match self {
+            Self::Integer(value) => Ok(value as f64),
+            Self::Float(bits) => Ok(f64::from_bits(bits)),
+            _ => Err(Error::TypeError),
+        }
+    }
+}
+
+/// Compare an integer and a float without first rounding the integer to
+/// f64. In particular 2^53+1 must not compare equal to floating 2^53.
+fn compare_integer_float(integer: i64, float: f64) -> Option<Ordering> {
+    if float.is_nan() {
+        return None;
+    }
+    if float < -9_223_372_036_854_775_808.0 {
+        return Some(Ordering::Greater);
+    }
+    if float >= 9_223_372_036_854_775_808.0 {
+        return Some(Ordering::Less);
+    }
+    let trunc = float.trunc() as i64;
+    match integer.cmp(&trunc) {
+        Ordering::Equal if float.fract() > 0.0 => Some(Ordering::Less),
+        Ordering::Equal if float.fract() < 0.0 => Some(Ordering::Greater),
+        other => Some(other),
+    }
+}
+
+fn numeric_comparison(left: RegisterValue, right: RegisterValue) -> Result<Option<Ordering>, Error> {
+    match (left, right) {
+        (RegisterValue::Integer(a), RegisterValue::Integer(b)) => Ok(Some(a.cmp(&b))),
+        (RegisterValue::Integer(a), RegisterValue::Float(b)) => {
+            Ok(compare_integer_float(a, f64::from_bits(b)))
+        }
+        (RegisterValue::Float(a), RegisterValue::Integer(b)) => {
+            Ok(compare_integer_float(b, f64::from_bits(a)).map(Ordering::reverse))
+        }
+        (RegisterValue::Float(a), RegisterValue::Float(b)) => {
+            Ok(f64::from_bits(a).partial_cmp(&f64::from_bits(b)))
+        }
+        _ => Err(Error::TypeError),
     }
 }
 
@@ -41,6 +88,10 @@ pub enum Instruction {
     LoadBoolean {
         dest: usize,
         value: bool,
+    },
+    LoadFloat {
+        dest: usize,
+        bits: u64,
     },
     Neg {
         dest: usize,
@@ -278,12 +329,40 @@ fn emit<'a>(
                     value,
                 },
                 Err(_) => {
+                    // Numeric tokens starting with a digit or decimal point
+                    // may be Lua floats; never interpret the name of a
+                    // local like "inf" or "NaN" as a Rust float constant.
+                    let numeric_token = text
+                        .as_bytes()
+                        .first()
+                        .is_some_and(u8::is_ascii_digit)
+                        || (text.starts_with('.')
+                            && text
+                                .as_bytes()
+                                .get(1)
+                                .is_some_and(u8::is_ascii_digit));
+                    if numeric_token && !text.starts_with("0x") && !text.starts_with("0X") {
+                        if let Ok(number) = text.parse::<f64>() {
+                            return {
+                                let output = program.registers;
+                                program.registers += 1;
+                                emit_instruction(
+                                    program,
+                                    Instruction::LoadFloat {
+                                        dest: output,
+                                        bits: number.to_bits(),
+                                    },
+                                )?;
+                                Ok(output)
+                            };
+                        }
+                    }
                     return locals
                         .iter()
                         .rev()
                         .find_map(|scope| scope.get(*text).map(|binding| binding.register))
                         .ok_or_else(|| {
-                            Error::Unsupported(format!("unbound or noninteger name: {text}"))
+                            Error::Unsupported(format!("unbound or unsupported name: {text}"))
                         });
                 }
             }
@@ -1422,6 +1501,7 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
         let valid = match *instruction {
             Instruction::Load { dest, .. }
             | Instruction::LoadBoolean { dest, .. }
+            | Instruction::LoadFloat { dest, .. }
             | Instruction::LoadNil { dest } => register(dest),
             Instruction::Neg { dest, input }
             | Instruction::LoopCopy { dest, input }
@@ -1653,41 +1733,91 @@ pub fn execute_register_program_with_budget(
             } => {
                 let left = read(&registers, lhs)?;
                 let right = read(&registers, rhs)?;
-                let flag = match operation {
-                    CompareOperation::Equal => left == right,
-                    CompareOperation::NotEqual => left != right,
-                    CompareOperation::Less => left.integer()? < right.integer()?,
-                    CompareOperation::LessEqual => left.integer()? <= right.integer()?,
-                    CompareOperation::Greater => left.integer()? > right.integer()?,
-                    CompareOperation::GreaterEqual => left.integer()? >= right.integer()?,
+                let both_numbers = matches!(
+                    left,
+                    RegisterValue::Integer(_) | RegisterValue::Float(_)
+                ) && matches!(
+                    right,
+                    RegisterValue::Integer(_) | RegisterValue::Float(_)
+                );
+                let flag = if matches!(
+                    operation,
+                    CompareOperation::Equal | CompareOperation::NotEqual
+                ) {
+                    let equal = if both_numbers {
+                        numeric_comparison(left, right)? == Some(Ordering::Equal)
+                    } else {
+                        left == right
+                    };
+                    if operation == CompareOperation::Equal {
+                        equal
+                    } else {
+                        !equal
+                    }
+                } else {
+                    let ordering = numeric_comparison(left, right)?;
+                    match operation {
+                        CompareOperation::Less => ordering == Some(Ordering::Less),
+                        CompareOperation::LessEqual => {
+                            matches!(ordering, Some(Ordering::Less | Ordering::Equal))
+                        }
+                        CompareOperation::Greater => ordering == Some(Ordering::Greater),
+                        CompareOperation::GreaterEqual => {
+                            matches!(ordering, Some(Ordering::Greater | Ordering::Equal))
+                        }
+                        _ => unreachable!("equality handled above"),
+                    }
                 };
                 (dest, RegisterValue::Boolean(flag))
             }
             Instruction::Load { dest, value } => (dest, RegisterValue::Integer(value)),
             Instruction::LoadNil { dest } => (dest, RegisterValue::Nil),
             Instruction::LoadBoolean { dest, value } => (dest, RegisterValue::Boolean(value)),
-            Instruction::Neg { dest, input } => (
-                dest,
-                RegisterValue::Integer(read_integer(&registers, input)?.wrapping_neg()),
-            ),
-            Instruction::Add { dest, lhs, rhs } => (
-                dest,
-                RegisterValue::Integer(
-                    read_integer(&registers, lhs)?.wrapping_add(read_integer(&registers, rhs)?),
-                ),
-            ),
-            Instruction::Sub { dest, lhs, rhs } => (
-                dest,
-                RegisterValue::Integer(
-                    read_integer(&registers, lhs)?.wrapping_sub(read_integer(&registers, rhs)?),
-                ),
-            ),
-            Instruction::Mul { dest, lhs, rhs } => (
-                dest,
-                RegisterValue::Integer(
-                    read_integer(&registers, lhs)?.wrapping_mul(read_integer(&registers, rhs)?),
-                ),
-            ),
+            Instruction::LoadFloat { dest, bits } => (dest, RegisterValue::Float(bits)),
+            Instruction::Neg { dest, input } => {
+                let value = read(&registers, input)?;
+                (
+                    dest,
+                    match value {
+                        RegisterValue::Integer(value) => RegisterValue::Integer(value.wrapping_neg()),
+                        RegisterValue::Float(bits) => RegisterValue::Float(bits ^ (1_u64 << 63)),
+                        _ => return Err(Error::TypeError),
+                    },
+                )
+            },
+            Instruction::Add { dest, lhs, rhs } => {
+                let left = read(&registers, lhs)?;
+                let right = read(&registers, rhs)?;
+                let result = match (left, right) {
+                    (RegisterValue::Integer(a), RegisterValue::Integer(b)) => {
+                        RegisterValue::Integer(a.wrapping_add(b))
+                    }
+                    (a, b) => RegisterValue::Float((a.number()? + b.number()?).to_bits()),
+                };
+                (dest, result)
+            },
+            Instruction::Sub { dest, lhs, rhs } => {
+                let left = read(&registers, lhs)?;
+                let right = read(&registers, rhs)?;
+                let result = match (left, right) {
+                    (RegisterValue::Integer(a), RegisterValue::Integer(b)) => {
+                        RegisterValue::Integer(a.wrapping_sub(b))
+                    }
+                    (a, b) => RegisterValue::Float((a.number()? - b.number()?).to_bits()),
+                };
+                (dest, result)
+            },
+            Instruction::Mul { dest, lhs, rhs } => {
+                let left = read(&registers, lhs)?;
+                let right = read(&registers, rhs)?;
+                let result = match (left, right) {
+                    (RegisterValue::Integer(a), RegisterValue::Integer(b)) => {
+                        RegisterValue::Integer(a.wrapping_mul(b))
+                    }
+                    (a, b) => RegisterValue::Float((a.number()? * b.number()?).to_bits()),
+                };
+                (dest, result)
+            },
             Instruction::FloorDiv { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Integer(floor_div(
@@ -1811,7 +1941,7 @@ mod tests {
     }
     #[test]
     fn rejects_noninteger_or_side_effectful_expressions() {
-        for source in ["1.5+2", "1/2", "math.abs(1)", "x+1", "2^3", "t[1]"] {
+        for source in ["1/2", "math.abs(1)", "x+1", "2^3", "t[1]"] {
             assert!(
                 matches!(
                     compile_integer_expression(source),
