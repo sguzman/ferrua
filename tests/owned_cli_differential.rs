@@ -746,6 +746,22 @@ fn owned_tonumber_missing_argument_error_matches_lua54() {
 }
 
 #[test]
+fn owned_math_tointeger_hex_numeric_text_matches_lua54() {
+    for source in [
+        "print(math.tointeger('0xffffffffffffffff'),math.tointeger('0x8000000000000000')==math.mininteger)",
+        "print(math.tointeger('-0xffffffffffffffff'),math.tointeger('+0x10'))",
+        "print(math.tointeger('0x1.8p+2'),math.tointeger('-0x1.8p+2'))",
+        "print(math.tointeger('0x1.1p+0')==nil,math.tointeger('1.5')==nil)",
+        "print(math.tointeger('42.0'),math.tointeger('4.2e1'))",
+        "print(math.tointeger(nil)==nil,math.tointeger(true)==nil)",
+        "local nbsp=string.char(194,160); print(math.tointeger(nbsp..'42')==nil)",
+        "local ok,n=pcall(math.tointeger,'0xffffffffffffffff'); print(ok,n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_tonumber_explicit_base_wraps_like_lua54() {
     // Lua's base-specific conversion accumulates modulo 2^64 rather
     // than rejecting input above the signed or unsigned integer limit.

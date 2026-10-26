@@ -3022,7 +3022,9 @@ impl Execution<'_> {
                 _ => Ok(Value::Nil),
             },
             Builtin::MathToInteger => {
-                let operand = self.arithmetic_operand(first);
+                // Lua's lua_tointegerx also recognizes hexadecimal numeric
+                // strings, including wrapped 64-bit integer spellings.
+                let operand = self.lua_numeric_operand(first);
                 Ok(operand
                     .ok()
                     .and_then(|number| self.exact_integer_operand(number).ok())
