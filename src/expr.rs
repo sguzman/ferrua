@@ -1202,11 +1202,11 @@ mod tests {
         let compact = parse_chunk("goto done ::done:: return 9").unwrap();
         assert!(matches!(compact[0], Statement::Goto("done")));
         assert!(matches!(compact[1], Statement::Label("done")));
-        let nested = parse_chunk("do ::name:: local x=2 end; ::name:: return 3").unwrap();
+        let nested = parse_chunk("do ::inner:: local x=2 end; ::outer:: return 3").unwrap();
         assert!(
-            matches!(&nested[0], Statement::Block(body) if matches!(&body[0], Statement::Label("name")))
+            matches!(&nested[0], Statement::Block(body) if matches!(&body[0], Statement::Label("inner")))
         );
-        assert!(matches!(nested[1], Statement::Label("name")));
+        assert!(matches!(nested[1], Statement::Label("outer")));
         // Label name scope resolution and jump-over-local checks remain
         // explicit compiler/conformance work, not silent parser guarantees.
         assert!(matches!(

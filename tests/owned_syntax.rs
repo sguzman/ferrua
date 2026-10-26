@@ -70,7 +70,7 @@ fn owned_goto_label_grammar_accepts_valid_lua_syntax() {
     for source in [
         "::first:: goto done; ::done:: return 4",
         "goto done ::done:: return 3",
-        "do ::inner:: local x=2 end; ::inner:: return 5",
+        "do ::inner:: local x=2 end; ::outer:: return 5",
         "local n=1; ::mark:: n=n+1; if n<3 then goto mark end; return n",
     ] {
         let syntax = parse_chunk(source).unwrap_or_else(|error| {
@@ -89,6 +89,7 @@ fn owned_goto_label_grammar_accepts_valid_lua_syntax() {
         "goto 3",
         "::named:",
         "::dup:: ::dup:: return 1",
+        "do ::dup:: end ::dup:: return 1",
     ] {
         assert!(
             parse_chunk(source).is_err(),
