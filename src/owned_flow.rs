@@ -5055,9 +5055,10 @@ impl Execution<'_> {
     fn string_gmatch_builtin(&mut self, args: &[Value]) -> Result<Value, FlowError> {
         let source = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         let mut pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
-        // Lua 5.4 string.gmatch ignores a leading '^', unlike find/match.
+        // Lua 5.4 gmatch does not interpret a leading '^' as an anchor.
+        // It is a literal caret, not a character to discard.
         if pattern.first() == Some(&b'^') {
-            pattern.remove(0);
+            pattern.insert(0, b'%');
         }
         let bytes = source.len().saturating_add(pattern.len());
         if self.gmatch_states.len() >= MAX_STRINGS

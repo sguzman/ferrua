@@ -568,6 +568,7 @@ fn owned_string_gmatch_iterators_and_captures_match_lua54() {
         "for a,b in string.gmatch('a=1,b=2','(%a)=(%d)') do print(a,b) end",
         "local a={}; for pos in string.gmatch('abc','()b') do a[#a+1]=pos end; print(table.concat(a,','))",
         "local a={}; for s in string.gmatch('aba','^a') do a[#a+1]=s end; print(table.concat(a,','))",
+        "local a={}; for s in string.gmatch('^aba','^a') do a[#a+1]=s end; print(table.concat(a,','))",
         "local a={}; for s in string.gmatch('ab','') do a[#a+1]='['..s..']' end; print(table.concat(a,','))",
         "local a={}; for s in string.gmatch('aba','a*') do a[#a+1]='['..s..']' end; print(table.concat(a,','))",
         "local a={}; for s in string.gmatch('a\\0b','.') do a[#a+1]=#s end; print(table.concat(a,','))",
