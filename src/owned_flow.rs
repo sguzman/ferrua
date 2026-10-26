@@ -5944,13 +5944,12 @@ impl Execution<'_> {
             } else if !plain && body[index] == b')' {
                 index += 1;
                 if opened == 0 {
-                    // Lua 5.4 accepts a closing ')' without an active
-                    // capture as a literal pattern byte.
-                    Atom::Byte(b')', false)
-                } else {
-                    opened -= 1;
-                    Atom::CaptureClose
+                    // The upstream capture_to_close() fails on stray ')',
+                    // rather than interpreting it as an ordinary byte.
+                    return Err(FlowError::TypeError);
                 }
+                opened -= 1;
+                Atom::CaptureClose
             } else if !plain && body[index] == b'[' {
                 let start = index + 1;
                 let mut cursor = start;

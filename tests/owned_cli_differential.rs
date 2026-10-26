@@ -418,6 +418,23 @@ fn owned_lua_pattern_quantifiers_use_bounded_backtracking_like_lua54() {
 }
 
 #[test]
+fn owned_pattern_unmatched_closing_capture_is_an_error_like_lua54() {
+    for source in [
+        "local ok=pcall(string.match,')',')'); print(ok)",
+        "local ok=pcall(string.find,'a)','a)'); print(ok)",
+        "local ok=pcall(string.gsub,')',')','X'); print(ok)",
+        "local iter=string.gmatch(')',')'); local ok=pcall(iter); print(ok)",
+        "local ok=pcall(string.match,')','('); print(ok)",
+        "print(string.match('a(b)c','a%(b%)c'))",
+        "print(string.find('a)b',')',1,true))",
+        "print(string.match('a','(a)'))",
+        "print(string.match('ab','()a()b()'))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_pattern_standalone_repetition_markers_and_closing_bracket_match_lua54() {
     // Lua 5.4 classend() returns a one-byte pattern atom for these raw
     // bytes; only a marker *after* another atom becomes a repetition suffix.
