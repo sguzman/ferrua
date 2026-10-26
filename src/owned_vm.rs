@@ -3338,8 +3338,7 @@ fn register_tonumber(
                 }
                 let valid_decimal = text.bytes().any(|byte| byte.is_ascii_digit())
                     && text.bytes().all(|byte| {
-                        byte.is_ascii_digit()
-                            || matches!(byte, b'+' | b'-' | b'.' | b'e' | b'E')
+                        byte.is_ascii_digit() || matches!(byte, b'+' | b'-' | b'.' | b'e' | b'E')
                     });
                 if valid_decimal {
                     if let Ok(number) = text.parse::<f64>() {
@@ -3391,7 +3390,9 @@ fn register_tonumber(
         if i64::from(digit) >= radix {
             return Ok(RegisterValue::Nil);
         }
-        result = result.wrapping_mul(radix as u64).wrapping_add(u64::from(digit));
+        result = result
+            .wrapping_mul(radix as u64)
+            .wrapping_add(u64::from(digit));
     }
     let integer = result as i64;
     Ok(RegisterValue::Integer(if negative {
