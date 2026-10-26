@@ -7,6 +7,67 @@ use ferrua::owned_vm::{
 use std::process::Command;
 
 #[test]
+fn tagged_register_and_or_return_selected_operands_like_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected, rendered) in [
+        ("true and 7", RegisterValue::Integer(7), "7"),
+        ("false and 7", RegisterValue::Boolean(false), "false"),
+        ("nil and 5", RegisterValue::Nil, "nil"),
+        ("0 and false", RegisterValue::Boolean(false), "false"),
+        ("false or 3", RegisterValue::Integer(3), "3"),
+        ("nil or 4", RegisterValue::Integer(4), "4"),
+        ("0 or 7", RegisterValue::Integer(0), "0"),
+        ("true or 12", RegisterValue::Boolean(true), "true"),
+        ("false and (1//0)", RegisterValue::Boolean(false), "false"),
+        ("true or (1//0)", RegisterValue::Boolean(true), "true"),
+        ("false or nil", RegisterValue::Nil, "nil"),
+        ("true and false or 9", RegisterValue::Integer(9), "9"),
+        ("(3<4) and (9>=7)", RegisterValue::Boolean(true), "true"),
+        ("nil or false or 7", RegisterValue::Integer(7), "7"),
+        ("(5==5) and 42", RegisterValue::Integer(42), "42"),
+    ] {
+        let compiled = compile_integer_expression(source).unwrap();
+        assert_eq!(execute_register_program(&compiled), Ok(expected), "{source}");
+        let chunk = compile_integer_chunk(&format!("return {source}")).unwrap();
+        assert_eq!(execute_register_program(&chunk), Ok(expected), "{source}");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command
+                .args(["-e", &format!("print({source})")])
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                rendered,
+                "{source}"
+            );
+        }
+    }
+    for source in ["true and (1//0)", "false or (1//0)"] {
+        let program = compile_integer_expression(source).unwrap();
+        assert_eq!(
+            execute_register_program(&program),
+            Err(ferrua::owned_vm::Error::DivisionByZero),
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn tagged_register_boolean_expressions_match_production_and_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
