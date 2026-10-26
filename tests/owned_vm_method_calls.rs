@@ -20,7 +20,9 @@ fn owned_result(chunk: &str) -> Result<String, Error> {
             }
             RegisterValue::String(_) => {
                 rendered.push_str(&String::from_utf8_lossy(
-                    output.value_string_bytes(value).expect("valid string handle"),
+                    output
+                        .value_string_bytes(value)
+                        .expect("valid string handle"),
                 ));
             }
             RegisterValue::Table(_) => rendered.push_str("table"),
@@ -44,9 +46,18 @@ fn register_method_call_implicit_self_matches_lua54() {
         ("local t={f=rawset};t:f('x',8);return t.x", "1|8"),
         ("local t={f=rawset};return t:f('x',9)==t,t.x", "2|true|9"),
         ("local t={f=rawset};local u=t;u:f('x',7);return t.x", "1|7"),
-        ("local t={f=rawset};t:f('x',select(1,10,20));return t.x", "1|10"),
-        ("local t={f=rawset};t:f('x',(select(1,10,20)));return t.x", "1|10"),
-        ("local t={f=rawget,x=2};return t:f('x'),t.f==rawget", "2|2|true"),
+        (
+            "local t={f=rawset};t:f('x',select(1,10,20));return t.x",
+            "1|10",
+        ),
+        (
+            "local t={f=rawset};t:f('x',(select(1,10,20)));return t.x",
+            "1|10",
+        ),
+        (
+            "local t={f=rawget,x=2};return t:f('x'),t.f==rawget",
+            "2|2|true",
+        ),
         ("local t={f=type};return type(t:f())", "1|string"),
         ("local t={f=rawget,x=12};return tostring(t:f('x'))", "1|12"),
     ] {
