@@ -38,7 +38,11 @@ fn tagged_register_decimal_floats_and_mixed_number_order_match_lua54() {
         ),
     ] {
         let expression = compile_integer_expression(source).unwrap();
-        assert_eq!(execute_register_program(&expression), Ok(expected), "{source}");
+        assert_eq!(
+            execute_register_program(&expression),
+            Ok(expected),
+            "{source}"
+        );
         let chunk = compile_integer_chunk(&format!("return {source}")).unwrap();
         assert_eq!(execute_register_program(&chunk), Ok(expected), "{source}");
         for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {

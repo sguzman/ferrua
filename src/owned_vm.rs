@@ -60,7 +60,10 @@ fn compare_integer_float(integer: i64, float: f64) -> Option<Ordering> {
     }
 }
 
-fn numeric_comparison(left: RegisterValue, right: RegisterValue) -> Result<Option<Ordering>, Error> {
+fn numeric_comparison(
+    left: RegisterValue,
+    right: RegisterValue,
+) -> Result<Option<Ordering>, Error> {
     match (left, right) {
         (RegisterValue::Integer(a), RegisterValue::Integer(b)) => Ok(Some(a.cmp(&b))),
         (RegisterValue::Integer(a), RegisterValue::Float(b)) => {
@@ -332,15 +335,9 @@ fn emit<'a>(
                     // Numeric tokens starting with a digit or decimal point
                     // may be Lua floats; never interpret the name of a
                     // local like "inf" or "NaN" as a Rust float constant.
-                    let numeric_token = text
-                        .as_bytes()
-                        .first()
-                        .is_some_and(u8::is_ascii_digit)
+                    let numeric_token = text.as_bytes().first().is_some_and(u8::is_ascii_digit)
                         || (text.starts_with('.')
-                            && text
-                                .as_bytes()
-                                .get(1)
-                                .is_some_and(u8::is_ascii_digit));
+                            && text.as_bytes().get(1).is_some_and(u8::is_ascii_digit));
                     if numeric_token && !text.starts_with("0x") && !text.starts_with("0X") {
                         if let Ok(number) = text.parse::<f64>() {
                             return {
@@ -1733,13 +1730,9 @@ pub fn execute_register_program_with_budget(
             } => {
                 let left = read(&registers, lhs)?;
                 let right = read(&registers, rhs)?;
-                let both_numbers = matches!(
-                    left,
-                    RegisterValue::Integer(_) | RegisterValue::Float(_)
-                ) && matches!(
-                    right,
-                    RegisterValue::Integer(_) | RegisterValue::Float(_)
-                );
+                let both_numbers =
+                    matches!(left, RegisterValue::Integer(_) | RegisterValue::Float(_))
+                        && matches!(right, RegisterValue::Integer(_) | RegisterValue::Float(_));
                 let flag = if matches!(
                     operation,
                     CompareOperation::Equal | CompareOperation::NotEqual
@@ -1779,12 +1772,14 @@ pub fn execute_register_program_with_budget(
                 (
                     dest,
                     match value {
-                        RegisterValue::Integer(value) => RegisterValue::Integer(value.wrapping_neg()),
+                        RegisterValue::Integer(value) => {
+                            RegisterValue::Integer(value.wrapping_neg())
+                        }
                         RegisterValue::Float(bits) => RegisterValue::Float(bits ^ (1_u64 << 63)),
                         _ => return Err(Error::TypeError),
                     },
                 )
-            },
+            }
             Instruction::Add { dest, lhs, rhs } => {
                 let left = read(&registers, lhs)?;
                 let right = read(&registers, rhs)?;
@@ -1795,7 +1790,7 @@ pub fn execute_register_program_with_budget(
                     (a, b) => RegisterValue::Float((a.number()? + b.number()?).to_bits()),
                 };
                 (dest, result)
-            },
+            }
             Instruction::Sub { dest, lhs, rhs } => {
                 let left = read(&registers, lhs)?;
                 let right = read(&registers, rhs)?;
@@ -1806,7 +1801,7 @@ pub fn execute_register_program_with_budget(
                     (a, b) => RegisterValue::Float((a.number()? - b.number()?).to_bits()),
                 };
                 (dest, result)
-            },
+            }
             Instruction::Mul { dest, lhs, rhs } => {
                 let left = read(&registers, lhs)?;
                 let right = read(&registers, rhs)?;
@@ -1817,7 +1812,7 @@ pub fn execute_register_program_with_budget(
                     (a, b) => RegisterValue::Float((a.number()? * b.number()?).to_bits()),
                 };
                 (dest, result)
-            },
+            }
             Instruction::FloorDiv { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Integer(floor_div(
