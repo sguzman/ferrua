@@ -52,7 +52,7 @@ fn tonumber_numeric_strings_and_bases_match_lua54() {
         ("return tonumber('ff',16)", "1|255"),
         ("return tonumber('z',36)", "1|35"),
         ("return tonumber('-101',2)", "1|-5"),
-        ("return tonumber('0x10',16)", "1|16"),
+        ("return tonumber('0x10',16)", "1|nil"),
         ("return tonumber('20',8)", "1|16"),
         ("return tonumber('10',2)", "1|2"),
         ("return tonumber('foo',10)", "1|nil"),
