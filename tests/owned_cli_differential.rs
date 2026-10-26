@@ -145,6 +145,21 @@ fn owned_coroutine_nested_yield_resume_values_and_status_match_lua54() {
 }
 
 #[test]
+fn owned_coroutine_error_reentry_and_multiple_yield_results_match_lua54() {
+    for source in [
+        "local co=coroutine.create(function() return 7 end); print(coroutine.resume(co)); print(coroutine.status(co)); print(coroutine.resume(co))",
+        "local co=coroutine.create(function() error('boom',0) end); local ok,err=coroutine.resume(co); print(ok,type(err),coroutine.status(co)); print(coroutine.resume(co))",
+        "local co; co=coroutine.create(function() print(coroutine.resume(co)) end); print(coroutine.resume(co))",
+        "local co=coroutine.create(function() local n=select('#',coroutine.yield()); return n end); print(coroutine.resume(co)); print(coroutine.resume(co,1,2))",
+        "local co=coroutine.create(function() local n=coroutine.yield(1,2); return n end); print(coroutine.resume(co)); print(coroutine.resume(co,8,9))",
+        "local ok=pcall(coroutine.yield,4); print(ok)",
+        "local a,b; a=coroutine.create(function() return coroutine.resume(b) end); b=coroutine.create(function() print(coroutine.status(a)); return 7 end); print(coroutine.resume(a)); print(coroutine.status(a),coroutine.status(b))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn curated_global_function_print_and_error_semantics_match_lua54() {
     for source in [
         "function first() return second() end; function second() return 7 end; print(first())",
