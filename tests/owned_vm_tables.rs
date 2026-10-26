@@ -54,6 +54,19 @@ fn register_table_literals_lookup_and_identity_match_lua54() {
         ("local t={}; local u=t; return t==u", "1|true"),
         ("local t={}; local u={}; return t==u", "1|false"),
         ("local t={}; return t==t,t~=t", "2|true|false"),
+        ("local t={}; t.x=7; return t.x", "1|7"),
+        ("local t={}; t['x']=7; return t.x", "1|7"),
+        ("local t={x=1}; t.x=t.x+4; return t.x", "1|5"),
+        ("local t={}; t[2]=8; return t[2]", "1|8"),
+        ("local t={}; t[2.0]=8; return t[2]", "1|8"),
+        ("local t={}; t.a,t.b=1,2; return t.a,t.b", "2|1|2"),
+        ("local t={a=1,b=2}; t.a,t.b=t.b,t.a; return t.a,t.b", "2|2|1"),
+        ("local t={a=1}; t.a,t.a=2,3; return t.a", "1|3"),
+        ("local t={}; local u=t; u.k=11; return t.k", "1|11"),
+        ("local t={a=1}; t.a=nil; return t.a", "1|nil"),
+        ("local t={}; local k='a'; t[k]=9; return t.a", "1|9"),
+        ("local t={}; t[true]=8; return t[true]", "1|8"),
+        ("t={}; t.value=20; return t.value", "1|20"),
         ("local t={}; return type(t),type(t.x)", "2|table|nil"),
     ] {
         assert_eq!(render(chunk), expected, "{chunk}");
@@ -101,6 +114,9 @@ fn table_heap_rejects_invalid_access_and_excessive_allocation() {
         "local t={}; return t.a.x",
         "return {[nil]=1}",
         "return {[0/0]=1}",
+        "local t={}; t[nil]=1",
+        "local t={}; t[0/0]=1",
+        "local t=7; t.x=1",
     ] {
         let program = compile_integer_chunk(script).unwrap();
         assert_eq!(
