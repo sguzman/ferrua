@@ -334,6 +334,8 @@ The owned stack VM now exposes a first-class, lexically shadowable `rawlen` buil
 - [CI #40324349799](https://github.com/sguzman/ferrua/actions/runs/40324349799): signed hexadecimal floats and wrapped hexadecimal integer strings for ordinary `tonumber`.
 - [CI #40324679113](https://github.com/sguzman/ferrua/actions/runs/40324679113): exact numeric-string bases, including decimal exponent and hexadecimal forms.
 - [CI #40325028948](https://github.com/sguzman/ferrua/actions/runs/40325028948): ASCII-only numeric whitespace and invalid UTF-8 / Unicode whitespace validation.
+- [CI #40325619361](https://github.com/sguzman/ferrua/actions/runs/40325619361): direct `tonumber()` missing-argument error and protected-call behavior, distinct from explicitly supplied `nil`.
+- [CI #40325867742](https://github.com/sguzman/ferrua/actions/runs/40325867742): `math.tointeger` reuses tested Lua numeric-string conversion for signed hexadecimal floats and wrapped integers, with strict nonintegral and Unicode-whitespace rejection.
 - [CI #40016120064](https://github.com/sguzman/ferrua/actions/runs/40016120064): bounded `rawlen`, using the shared underlying Lua byte-string and table-border length handler, passed all four jobs.
 
 These checks cover only the recorded, bounded first-party runtime subsets. There is still no full Lua standard library, garbage-collected production VM, metatable implementation, or accepted engine migration.
