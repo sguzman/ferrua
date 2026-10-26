@@ -2,8 +2,7 @@
 //! Production fer remains pinned to its separate backend.
 
 use ferrua::owned_vm::{
-    Error, RegisterValue, compile_integer_chunk, execute_integer_program,
-    execute_register_program,
+    Error, RegisterValue, compile_integer_chunk, execute_integer_program, execute_register_program,
 };
 use std::process::Command;
 
@@ -324,10 +323,26 @@ fn scalar_return_fallthrough_through_nested_loops_matches_lua_54() {
         ("for i=1,3 do if i==4 then return i end end", RegisterValue::Nil, "nil\tnil\n"),
         ("for i=1,3 do if i==2 then return i end end", RegisterValue::Integer(2), "number\t2\n"),
         ("local n=0; repeat n=n+1 until n==3", RegisterValue::Nil, "nil\tnil\n"),
-        ("local n=0; while n<3 do n=n+1; if n==3 then return n end end", RegisterValue::Integer(3), "number\t3\n"),
-        ("local x=0; while true do if x==3 then return x end; x=x+1 end", RegisterValue::Integer(3), "number\t3\n"),
-        ("local x=0; while true do if x>2 then break end; x=x+1 end", RegisterValue::Nil, "nil\tnil\n"),
-        ("if true then while true do break end else return 7 end", RegisterValue::Nil, "nil\tnil\n"),
+        (
+            "local n=0; while n<3 do n=n+1; if n==3 then return n end end",
+            RegisterValue::Integer(3),
+            "number\t3\n",
+        ),
+        (
+            "local x=0; while true do if x==3 then return x end; x=x+1 end",
+            RegisterValue::Integer(3),
+            "number\t3\n",
+        ),
+        (
+            "local x=0; while true do if x>2 then break end; x=x+1 end",
+            RegisterValue::Nil,
+            "nil\tnil\n",
+        ),
+        (
+            "if true then while true do break end else return 7 end",
+            RegisterValue::Nil,
+            "nil\tnil\n",
+        ),
         ("if false then return 9 elseif true then local x=3 end", RegisterValue::Nil, "nil\tnil\n"),
         ("if true then local x=3 elseif false then return 9 end", RegisterValue::Nil, "nil\tnil\n"),
         ("repeat if false then return 9 end until true", RegisterValue::Nil, "nil\tnil\n"),
