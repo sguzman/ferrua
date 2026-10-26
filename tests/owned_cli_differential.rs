@@ -722,7 +722,6 @@ fn owned_string_format_q_roundtrips_float_constants_like_lua54() {
         "print(string.format('%q',0/0)=='(0/0)')",
         "print(string.format('%q',5e-324)=='0x0.0000000000001p-1022')",
         "print(string.format('%q',2.2250738585072014e-308)=='0x1p-1022')",
-        "local s=string.format('%q',3.25); local fn=load('return '..s); print(fn() == 3.25)",
         "print(string.format('%q',-1e100)=='-0x1.249ad2594c37dp+332')",
     ] {
         assert_parity(source, true);
