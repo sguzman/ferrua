@@ -329,6 +329,7 @@ fn register_numeric_for_matches_production_and_upstream_lua54() {
         == Some("1");
     for (source, expected) in [
         ("local s=0; for i=1,5 do s=s+i end; return s", 15),
+        ("local x=1; for i=1,3 do x=x+i end; return x", 7),
         ("local s=0; for i=5,1,-2 do s=s+i end; return s", 9),
         ("local s=0; for i=1,0 do s=s+i end; return s", 0),
         ("local s=0; for i=0,3,-1 do s=s+1 end; return s", 0),
