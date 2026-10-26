@@ -1962,6 +1962,14 @@ struct ActiveLuaCall {
     many: bool,
 }
 
+/// Entire Lua continuation, including callers retained while a child runs.
+/// Owning the root bytecode makes this state independent of Rust stack lifetimes.
+struct OwnedScheduler {
+    instructions: Vec<Op>,
+    root: OwnedCallFrame,
+    active: Vec<ActiveLuaCall>,
+}
+
 /// A bounded instruction slice is an internal checkpoint, not a coroutine
 /// yield. Nested function calls remain synchronous until their own return.
 enum FrameProgress {
@@ -7626,14 +7634,36 @@ impl Execution<'_> {
         if instructions.len() > MAX_CODE {
             return Err(FlowError::TooLarge);
         }
-        let mut root = self.prepare_call_frame(slot_count, initial, captures, varargs)?;
-        let mut active: Vec<ActiveLuaCall> = Vec::new();
+        let mut scheduler = OwnedScheduler {
+            instructions: instructions.to_vec(),
+            root: self.prepare_call_frame(slot_count, initial, captures, varargs)?,
+            active: Vec::new(),
+        };
+        let result = self.drive_scheduler(&mut scheduler);
+        while scheduler.active.pop().is_some() {
+            self.release_call_frame()?;
+            self.depth -= 1;
+        }
+        result
+    }
+
+    /// Run an owned Lua continuation to return or error. Coroutine support
+    /// can later retain this scheduler when execution yields.
+    fn drive_scheduler(
+        &mut self,
+        scheduler: &mut OwnedScheduler,
+    ) -> Result<Vec<Value>, FlowError> {
+        let OwnedScheduler {
+            instructions,
+            root,
+            active,
+        } = scheduler;
         let result = (|| -> Result<Vec<Value>, FlowError> {
             loop {
                 let progress = if let Some(child) = active.last_mut() {
                     self.execute_frame(&child.instructions, &mut child.frame, FRAME_STEP_QUANTUM)?
                 } else {
-                    self.execute_frame(instructions, &mut root, FRAME_STEP_QUANTUM)?
+                    self.execute_frame(instructions, root, FRAME_STEP_QUANTUM)?
                 };
                 match progress {
                     FrameProgress::Paused => continue,
@@ -7698,7 +7728,7 @@ impl Execution<'_> {
                             let parent = if let Some(parent) = active.last_mut() {
                                 &mut parent.frame
                             } else {
-                                &mut root
+                                root
                             };
                             if child.many {
                                 parent.last_multiple = Some(values.len());
@@ -7718,12 +7748,6 @@ impl Execution<'_> {
                 }
             }
         })();
-        // Errors must unwind *every* child frame and restore caller depth
-        // before the surrounding run() releases the root frame.
-        while active.pop().is_some() {
-            self.release_call_frame()?;
-            self.depth -= 1;
-        }
         result
     }
 
