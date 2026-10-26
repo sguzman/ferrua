@@ -398,7 +398,11 @@ fn register_boolean_nil_literal_equality_matches_lua54_in_control_flow() {
             "{source}"
         );
     }
-    assert!(compile_integer_chunk("return nil==nil").is_err());
+    let equality = compile_integer_chunk("return nil==nil").unwrap();
+    assert_eq!(
+        ferrua::owned_vm::execute_register_program(&equality),
+        Ok(ferrua::owned_vm::RegisterValue::Boolean(true))
+    );
 }
 
 #[test]
