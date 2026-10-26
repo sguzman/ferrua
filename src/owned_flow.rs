@@ -7649,10 +7649,7 @@ impl Execution<'_> {
 
     /// Run an owned Lua continuation to return or error. Coroutine support
     /// can later retain this scheduler when execution yields.
-    fn drive_scheduler(
-        &mut self,
-        scheduler: &mut OwnedScheduler,
-    ) -> Result<Vec<Value>, FlowError> {
+    fn drive_scheduler(&mut self, scheduler: &mut OwnedScheduler) -> Result<Vec<Value>, FlowError> {
         let OwnedScheduler {
             instructions,
             root,
