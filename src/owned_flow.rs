@@ -5917,6 +5917,33 @@ impl Execution<'_> {
                             let value = *args.get(argument).ok_or(FlowError::TypeError)?;
                             argument += 1;
                             let mut part = match specifier {
+                                b'a' | b'A' => {
+                                    let operand = self.arithmetic_operand(value)?;
+                                    let number = match operand {
+                                        Value::Integer(integer) => integer as f64,
+                                        Value::Float(bits) => f64::from_bits(bits),
+                                        _ => return Err(FlowError::TypeError),
+                                    };
+                                    // Plain hexadecimal-float directives share
+                                    // Lua %q's exact finite bit representation,
+                                    // but C %a/%A spell nonfinite values as
+                                    // inf/nan instead of source expressions.
+                                    let mut formatted = if number.is_nan() {
+                                        b"nan".to_vec()
+                                    } else if number.is_infinite() {
+                                        if number.is_sign_negative() {
+                                            b"-inf".to_vec()
+                                        } else {
+                                            b"inf".to_vec()
+                                        }
+                                    } else {
+                                        Self::quoted_lua_float(number.to_bits())
+                                    };
+                                    if specifier == b'A' {
+                                        formatted.make_ascii_uppercase();
+                                    }
+                                    formatted
+                                }
                                 b'f' | b'e' | b'E' => {
                                     let operand = self.arithmetic_operand(value)?;
                                     let number = match operand {

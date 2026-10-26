@@ -746,6 +746,24 @@ fn owned_format_q_subnormal_matches_upstream_despite_pinned_backend_divergence()
 }
 
 #[test]
+fn owned_string_format_plain_hex_float_directives_match_lua54() {
+    for source in [
+        "print(string.format('%a',1.0)=='0x1p+0',string.format('%A',1.0)=='0X1P+0')",
+        "print(string.format('%a',1.5)=='0x1.8p+0',string.format('%A',3.5)=='0X1.CP+1')",
+        "print(string.format('%a',-1.0)=='-0x1p+0',string.format('%A',-1.5)=='-0X1.8P+0')",
+        "print(string.format('%a',0.0)=='0x0p+0',string.format('%a',-0.0)=='-0x0p+0')",
+        "print(string.format('%a',0.125)=='0x1p-3',string.format('%A',2.25)=='0X1.2P+1')",
+        "print(string.format('%a',math.huge)=='inf',string.format('%A',math.huge)=='INF')",
+        "print(string.format('%a',-math.huge)=='-inf',string.format('%A',-math.huge)=='-INF')",
+        "print(string.format('%a',3)=='0x1.8p+1',string.format('%A',3)=='0X1.8P+1')",
+        "print(string.format('%a',1e100)=='0x1.249ad2594c37dp+332')",
+        "local a=pcall(string.format,'%a',false); local b=pcall(string.format,'%A'); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_gsub_short_lived_gc_roots_preserve_long_replacement_semantics() {
     for source in [
         "local n=0; local s=string.rep('a',100); local out,c=string.gsub(s,'.',function(x) n=n+1; return x..'b' end); print(#out,c,n)",
