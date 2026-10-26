@@ -20,7 +20,9 @@ fn run_owned(source: &str) -> Result<String, Error> {
             }
             RegisterValue::String(_) => {
                 output.push_str(&String::from_utf8_lossy(
-                    execution.value_string_bytes(value).expect("valid result string"),
+                    execution
+                        .value_string_bytes(value)
+                        .expect("valid result string"),
                 ));
             }
             RegisterValue::Builtin(_) => output.push_str("function"),
@@ -42,17 +44,29 @@ fn register_raw_table_builtins_match_lua54() {
         ("local t={}; rawset(t,'x',8); return t.x", "1|8"),
         ("local t={}; rawset(t,2,8); return t[2]", "1|8"),
         ("local t={}; rawset(t,2.0,8); return rawget(t,2)", "1|8"),
-        ("local t={x=1}; rawset(t,'x',5); return rawget(t,'x')", "1|5"),
+        (
+            "local t={x=1}; rawset(t,'x',5); return rawget(t,'x')",
+            "1|5",
+        ),
         ("local t={x=4}; rawset(t,'x',nil); return t.x", "1|nil"),
-        ("local t={}; return rawset(t,'x',9)==t,rawget(t,'x')", "2|true|9"),
+        (
+            "local t={}; return rawset(t,'x',9)==t,rawget(t,'x')",
+            "2|true|9",
+        ),
         ("local t={}; local f=rawset;f(t,'x',7);return t.x", "1|7"),
         ("local t={x=3};local f=rawget;return f(t,'x')", "1|3"),
         ("local t={}; rawset(t,1,10);rawset(t,2,20);return #t", "1|2"),
         ("local t={}; rawset(t,true,9);return rawget(t,true)", "1|9"),
-        ("local t={};return type(rawget),type(rawset)", "2|function|function"),
+        (
+            "local t={};return type(rawget),type(rawset)",
+            "2|function|function",
+        ),
         ("local t={};return rawget(t,nil)", "1|nil"),
         ("local t={};return rawget(t,0/0)", "1|nil"),
-        ("local t={};rawset(t,'a'..'b',7);return rawget(t,'ab')", "1|7"),
+        (
+            "local t={};rawset(t,'a'..'b',7);return rawget(t,'ab')",
+            "1|7",
+        ),
     ] {
         assert_eq!(run_owned(chunk), Ok(expected.to_string()), "{chunk}");
         for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
@@ -95,10 +109,8 @@ fn register_raw_table_builtins_reject_invalid_operations() {
 
 #[test]
 fn register_rawset_obeys_table_entry_quota() {
-    let program = compile_integer_chunk(
-        "local t={}; for i=1,5000 do rawset(t,i,i) end return #t",
-    )
-    .unwrap();
+    let program =
+        compile_integer_chunk("local t={}; for i=1,5000 do rawset(t,i,i) end return #t").unwrap();
     assert_eq!(
         execute_register_program_with_strings(&program),
         Err(Error::TooLarge)
