@@ -5813,13 +5813,22 @@ impl Execution<'_> {
                         index += 1;
                     } else {
                         let mut cursor = index + 1;
-                        let left_align = text.get(cursor) == Some(&b'-');
-                        if left_align {
+                        let mut left_align = false;
+                        let mut zero_pad = false;
+                        let mut plus_sign = false;
+                        let mut space_sign = false;
+                        let mut alternate = false;
+                        while let Some(flag) = text.get(cursor).copied() {
+                            match flag {
+                                b'-' => left_align = true,
+                                b'0' => zero_pad = true,
+                                b'+' => plus_sign = true,
+                                b' ' => space_sign = true,
+                                b'#' => alternate = true,
+                                _ => break,
+                            }
                             cursor += 1;
                         }
-                        // A leading zero is printf's zero-padding flag,
-                        // not just another decimal width digit.
-                        let zero_pad = text.get(cursor) == Some(&b'0');
                         let mut width = 0usize;
                         while let Some(byte @ b'0'..=b'9') = text.get(cursor).copied() {
                             width = width
@@ -5849,12 +5858,26 @@ impl Execution<'_> {
                         }
                         let specifier = *text.get(cursor).ok_or(FlowError::TypeError)?;
                         index = cursor + 1;
-                        if specifier == b'%' && !left_align && width == 0 && precision.is_none() {
+                        if specifier == b'%'
+                            && !left_align
+                            && !zero_pad
+                            && !plus_sign
+                            && !space_sign
+                            && !alternate
+                            && width == 0
+                            && precision.is_none()
+                        {
                             output.push(b'%');
                         } else {
                             let numeric =
                                 matches!(specifier, b'd' | b'i' | b'u' | b'o' | b'x' | b'X');
-                            if (left_align || width > 0 || precision.is_some() || zero_pad)
+                            if (left_align
+                                || width > 0
+                                || precision.is_some()
+                                || zero_pad
+                                || plus_sign
+                                || space_sign
+                                || alternate)
                                 && !matches!(
                                     specifier,
                                     b's' | b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'c'
@@ -5865,12 +5888,21 @@ impl Execution<'_> {
                                         .into(),
                                 ));
                             }
-                            // Lua 5.4 allows width and '-' for %c, but
-                            // rejects zero-padding and any precision.
-                            if specifier == b'c' && (precision.is_some() || zero_pad) {
+                            // Lua 5.4 format flags vary by directive:
+                            // signed d/i: -+0[space]; unsigned u: -0;
+                            // octal/hex: -#0; character/string: - only.
+                            let invalid_flag = match specifier {
+                                b'd' | b'i' => alternate,
+                                b'u' => plus_sign || space_sign || alternate,
+                                b'o' | b'x' | b'X' => plus_sign || space_sign,
+                                b's' | b'c' => {
+                                    zero_pad || plus_sign || space_sign || alternate
+                                }
+                                _ => false,
+                            };
+                            if invalid_flag || (specifier == b'c' && precision.is_some()) {
                                 return Err(FlowError::Unsupported(
-                                    "Lua %c accepts width and '-' but no zero flag or precision"
-                                        .into(),
+                                    "Lua format flags or precision invalid for directive".into(),
                                 ));
                             }
                             let value = *args.get(argument).ok_or(FlowError::TypeError)?;
@@ -5958,8 +5990,24 @@ impl Execution<'_> {
                                         part = padded;
                                     }
                                 }
+                                if matches!(specifier, b'o' | b'x' | b'X') && alternate {
+                                    if specifier == b'o' {
+                                        if part.first() != Some(&b'0') {
+                                            part.insert(0, b'0');
+                                        }
+                                    } else if part.iter().any(|byte| *byte != b'0') {
+                                        part.insert(0, if specifier == b'X' { b'X' } else { b'x' });
+                                        part.insert(0, b'0');
+                                    }
+                                }
                                 if negative {
                                     part.insert(0, b'-');
+                                } else if matches!(specifier, b'd' | b'i') {
+                                    if plus_sign {
+                                        part.insert(0, b'+');
+                                    } else if space_sign {
+                                        part.insert(0, b' ');
+                                    }
                                 }
                             }
                             if (specifier == b's' || specifier == b'c' || numeric)
@@ -5969,11 +6017,20 @@ impl Execution<'_> {
                                 if left_align {
                                     part.extend(std::iter::repeat_n(b' ', padding));
                                 } else if numeric && zero_pad && precision.is_none() {
-                                    let sign = usize::from(part.first() == Some(&b'-'));
+                                    let prefix = if matches!(specifier, b'x' | b'X')
+                                        && alternate
+                                        && part.len() >= 2
+                                        && part[0] == b'0'
+                                        && matches!(part[1], b'x' | b'X')
+                                    {
+                                        2
+                                    } else {
+                                        usize::from(matches!(part.first(), Some(b'-' | b'+' | b' ')))
+                                    };
                                     let mut padded = Vec::with_capacity(width);
-                                    padded.extend_from_slice(&part[..sign]);
+                                    padded.extend_from_slice(&part[..prefix]);
                                     padded.extend(std::iter::repeat_n(b'0', padding));
-                                    padded.extend_from_slice(&part[sign..]);
+                                    padded.extend_from_slice(&part[prefix..]);
                                     part = padded;
                                 } else {
                                     let mut padded = vec![b' '; padding];

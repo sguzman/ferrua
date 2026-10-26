@@ -635,6 +635,27 @@ fn owned_string_format_numeric_width_precision_and_zero_padding_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_signed_and_alternate_integer_flags_match_lua54() {
+    for source in [
+        "print(string.format('%+d',12)=='+12',string.format('% d',12)==' 12')",
+        "print(string.format('%+d',-12)=='-12',string.format('% d',-12)=='-12')",
+        "print(string.format('%+06d',12)=='+00012',string.format('% 06d',12)==' 00012')",
+        "print(string.format('%-+6d',12)=='+12   ',string.format('%+6.4d',12)==' +0012')",
+        "print(string.format('%+ d',1)=='+1',string.format('% d',0)==' 0')",
+        "print(string.format('%#x',26)=='0x1a',string.format('%#X',26)=='0X1A')",
+        "print(string.format('%#08x',26)=='0x00001a',string.format('%#8.4X',26)=='  0X001A')",
+        "print(string.format('%#o',9)=='011',string.format('%#.3o',9)=='011')",
+        "print(string.format('%#06o',9)=='000011',string.format('%#.0o',0)=='0')",
+        "print(string.format('%#x',0)=='0',string.format('%#.0x',0)=='')",
+        "print(string.format('%-#8x',26)=='0x1a    ',string.format('%-#5o',9)=='011  ')",
+        "local a=pcall(string.format,'%+u',3); local b=pcall(string.format,'%#d',3); local c=pcall(string.format,'%0s','a'); print(a,b,c)",
+        "local a=pcall(string.format,'%+x',3); local b=pcall(string.format,'%#s','a'); local c=pcall(string.format,'%#c',65); print(a,b,c)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_gsub_short_lived_gc_roots_preserve_long_replacement_semantics() {
     for source in [
         "local n=0; local s=string.rep('a',100); local out,c=string.gsub(s,'.',function(x) n=n+1; return x..'b' end); print(#out,c,n)",
