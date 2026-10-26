@@ -632,7 +632,7 @@ fn integer_conditional_branches_match_fer_and_upstream_lua() {
 }
 
 #[test]
-fn register_literal_truthiness_matches_lua54_without_general_float_or_string_values() {
+fn register_literal_truthiness_and_immutable_string_values_match_lua54() {
     let compare_upstream = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
         .as_deref()
@@ -678,9 +678,16 @@ fn register_literal_truthiness_matches_lua54_without_general_float_or_string_val
             );
         }
     }
-    // Strings still require a real Lua string value representation.
+    // String literals now have immutable program-owned byte identities.
+    // The legacy integer-return compatibility API still rejects strings.
     for source in ["return 'hello'", "local x='hello'; return x"] {
-        assert!(compile_integer_chunk(source).is_err(), "{source}");
+        let chunk = compile_integer_chunk(source).unwrap();
+        let returned = execute_register_program(&chunk).unwrap();
+        assert_eq!(chunk.string_bytes(returned), Some(b"hello".as_slice()));
+        assert_eq!(
+            execute_integer_program(&chunk),
+            Err(ferrua::owned_vm::Error::TypeError)
+        );
     }
     // Floats are now first-class tagged results, but the legacy integer
     // compatibility API must still reject every noninteger return.
