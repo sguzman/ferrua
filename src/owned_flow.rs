@@ -6131,7 +6131,9 @@ impl Execution<'_> {
                     Atom::CapturePosition => {
                         let mut next = captures;
                         if next.len() >= 32 {
-                            return Err(FlowError::TooLarge);
+                            // Lua reports excess captures as a protected
+                            // pattern error, not as a fatal host quota.
+                            return Err(FlowError::TypeError);
                         }
                         next.push((position, position, true));
                         states.push((atom_index + 1, position, next));
@@ -6140,7 +6142,9 @@ impl Execution<'_> {
                     Atom::CaptureOpen => {
                         let mut next = captures;
                         if next.len() >= 32 {
-                            return Err(FlowError::TooLarge);
+                            // Lua reports excess captures as a protected
+                            // pattern error, not as a fatal host quota.
+                            return Err(FlowError::TypeError);
                         }
                         next.push((position, usize::MAX, false));
                         states.push((atom_index + 1, position, next));
