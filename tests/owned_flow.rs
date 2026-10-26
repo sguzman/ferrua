@@ -676,7 +676,7 @@ const FIXTURES: &[&str] = &[
     "local x=0; for _,v in ipairs({4,5}) do if v==5 then goto done end; x=x+v end; ::done:: return x",
     "local x=0; ::top:: x=x+1; local temp=x; if x<4 then do goto top end; end; return x",
     "do goto finish; local x=8 end; ::finish:: return 11",
-    "local x=0; do goto mark; ::mark:: x=x+1 end; ::mark:: return x",
+    "local x=0; do goto inner; ::inner:: x=x+1 end; ::outer:: return x",
     "local x=1 local y=2 return x+y",
     "local x=1 x=x+2 return x",
     "local n=0 if true then n=3 n=n+4 end return n",
