@@ -5881,7 +5881,16 @@ impl Execution<'_> {
                                 || alternate)
                                 && !matches!(
                                     specifier,
-                                    b's' | b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'c' | b'f' | b'e' | b'E'
+                                    b's' | b'd'
+                                        | b'i'
+                                        | b'u'
+                                        | b'o'
+                                        | b'x'
+                                        | b'X'
+                                        | b'c'
+                                        | b'f'
+                                        | b'e'
+                                        | b'E'
                                 )
                             {
                                 return Err(FlowError::Unsupported(
