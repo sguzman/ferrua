@@ -433,12 +433,20 @@ fn owned_pattern_unmatched_closing_capture_matches_upstream_not_pinned_backend()
         assert!(owned.status.success(), "{source}: {:?}", owned.stderr);
         assert_eq!(owned.stdout, b"false\n", "{source}");
         let production = run_fer(false, source);
-        assert!(production.status.success(), "{source}: {:?}", production.stderr);
+        assert!(
+            production.status.success(),
+            "{source}: {:?}",
+            production.stderr
+        );
         if source.contains("string.find") {
             assert_eq!(production.stdout, b"true\n", "{source}");
         }
         if let Some(reference) = reference_output(source) {
-            assert!(reference.status.success(), "{source}: {:?}", reference.stderr);
+            assert!(
+                reference.status.success(),
+                "{source}: {:?}",
+                reference.stderr
+            );
             assert_eq!(owned.stdout, reference.stdout, "{source}");
         }
     }
