@@ -4938,9 +4938,9 @@ impl Execution<'_> {
         self.intern_rooted_string(output, args)
     }
 
-    /// Bounded Lua 5.4 string.find subset. Plain mode matches arbitrary
-    /// literal bytes; pattern mode supports literal bytes, '.', '^' and '$'.
-    /// Quantifiers, captures, escapes and character classes remain gated.
+    /// Bounded Lua 5.4 string.find, using the shared byte-pattern matcher
+    /// unless explicit plain mode or Lua's literal-search shortcut applies.
+    /// Pattern coverage is regression-tested but not full Lua conformance.
     fn string_find_literal_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
         let source = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         let pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
@@ -4964,10 +4964,9 @@ impl Execution<'_> {
         Ok(values)
     }
 
-    /// Bounded string.gsub subset with textual/number replacement. Lua
-    /// function and table replacement protocols remain unimplemented.
-    /// Pattern matching, captures, and zero-width advances reuse the
-    /// reference-tested owned byte matcher; no Lua callback can run here.
+    /// Bounded Lua string.gsub with textual, table and callback replacement.
+    /// Captures, zero-width advances and matching reuse the shared pattern
+    /// engine. Callback values remain rooted across nested Lua execution.
     fn string_gsub_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
         let source = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         let pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
@@ -5901,11 +5900,10 @@ impl Execution<'_> {
         Ok(Vec::new())
     }
 
-    /// Search a bounded byte string using only the implemented Lua-pattern
-    /// atoms: any byte ('.'), initial anchor ('^') and final anchor ('$').
-    /// Empty patterns match the current position. The return value holds
-    /// zero-based [begin,end) byte bounds; each candidate consumes the
-    /// shared execution budget before it can match.
+    /// Search a bounded byte string with Lua-pattern atoms, byte classes,
+    /// captures, balanced/frontier assertions, and bounded backtracking.
+    /// Invalid constructs are rejected when traversal reaches them.
+    /// Returns zero-based [begin,end) bounds and charges the shared budget.
     fn simple_pattern_match(
         &mut self,
         source: &[u8],
