@@ -7616,11 +7616,11 @@ impl Execution<'_> {
                 .last_mut()
                 .ok_or(FlowError::InvalidBytecode)?;
             roots.stack.clear();
-            roots.stack.extend_from_slice(&stack);
+            roots.stack.extend_from_slice(stack);
             roots.slots.clear();
-            roots.slots.extend_from_slice(&slots);
+            roots.slots.extend_from_slice(slots);
             roots.prepared.clear();
-            roots.prepared.extend_from_slice(&prepared);
+            roots.prepared.extend_from_slice(prepared);
             let next = *pc + 1;
             match &instructions[*pc] {
                 Op::Constant(value) => stack.push(*value),
@@ -7633,7 +7633,7 @@ impl Execution<'_> {
                         && self.closures.len() >= MAX_CLOSURES
                         && self.free_closures.is_empty()
                     {
-                        self.collect_root_tables(&stack, &slots, &prepared)?;
+                        self.collect_root_tables(stack, slots, prepared)?;
                     }
                     if self.closures.len() >= MAX_CLOSURES && self.free_closures.is_empty() {
                         return Err(FlowError::TooLarge);
@@ -8136,7 +8136,7 @@ impl Execution<'_> {
                         let mut roots = Vec::with_capacity(results.len() + 1);
                         roots.push(Value::Table(handle));
                         roots.extend_from_slice(&results);
-                        self.collect_root_tables(&roots, &slots, &prepared)?;
+                        self.collect_root_tables(&roots, slots, prepared)?;
                     }
                     if self.table_cells.saturating_add(growth) > MAX_TABLE_CELLS_TOTAL {
                         return Err(FlowError::TooLarge);
@@ -8168,7 +8168,7 @@ impl Execution<'_> {
                         && ((self.tables.len() >= MAX_TABLES && self.free_tables.is_empty())
                             || self.table_cells.saturating_add(arity) > MAX_TABLE_CELLS_TOTAL)
                     {
-                        self.collect_root_tables(&stack, &slots, &prepared)?;
+                        self.collect_root_tables(stack, slots, prepared)?;
                     }
                     if (self.tables.len() >= MAX_TABLES && self.free_tables.is_empty())
                         || self.table_cells.saturating_add(arity) > MAX_TABLE_CELLS_TOTAL
