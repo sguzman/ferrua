@@ -94,13 +94,7 @@ fn tagged_register_decimal_floats_and_mixed_number_order_match_lua54() {
             }
         }
     }
-    for source in [
-        "1.5+true",
-        "nil*0.5",
-        "false<1.5",
-        "1.0//true",
-        "nil%2.0",
-    ] {
+    for source in ["1.5+true", "nil*0.5", "false<1.5", "1.0//true", "nil%2.0"] {
         let program = compile_integer_expression(source).unwrap();
         assert_eq!(
             execute_register_program(&program),

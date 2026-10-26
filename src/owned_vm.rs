@@ -1878,7 +1878,7 @@ pub fn execute_register_program_with_budget(
                     }
                 };
                 (dest, result)
-            },
+            }
             Instruction::BitAnd { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Integer(
