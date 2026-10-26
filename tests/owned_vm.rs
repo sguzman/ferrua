@@ -20,7 +20,11 @@ fn register_immutable_lua_strings_use_byte_length_and_value_comparison() {
         ("not ''", RegisterValue::Boolean(false)),
     ] {
         let compiled = compile_integer_expression(source).unwrap();
-        assert_eq!(execute_register_program(&compiled), Ok(expected), "{source}");
+        assert_eq!(
+            execute_register_program(&compiled),
+            Ok(expected),
+            "{source}"
+        );
         let chunk = compile_integer_chunk(&format!("return {source}")).unwrap();
         assert_eq!(execute_register_program(&chunk), Ok(expected), "{source}");
     }

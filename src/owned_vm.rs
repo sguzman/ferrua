@@ -386,8 +386,8 @@ fn emit<'a>(
         Expr::Atom(text)
             if text.starts_with('\'') || text.starts_with('"') || text.starts_with('[') =>
         {
-            let bytes = decode_lua_string(text)
-                .map_err(|err| Error::Unsupported(err.to_string()))?;
+            let bytes =
+                decode_lua_string(text).map_err(|err| Error::Unsupported(err.to_string()))?;
             let index = if let Some(existing) = program.strings.iter().position(|s| *s == bytes) {
                 existing
             } else {
@@ -1897,7 +1897,10 @@ pub fn execute_register_program_with_budget(
                 } else {
                     let ordering = match (left, right) {
                         (RegisterValue::String(a), RegisterValue::String(b)) => Some(
-                            program.strings.get(a).ok_or(Error::InvalidBytecode)?
+                            program
+                                .strings
+                                .get(a)
+                                .ok_or(Error::InvalidBytecode)?
                                 .cmp(program.strings.get(b).ok_or(Error::InvalidBytecode)?),
                         ),
                         _ => numeric_comparison(left, right)?,
