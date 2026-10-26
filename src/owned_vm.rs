@@ -490,6 +490,11 @@ struct RegisterBinding {
     constant: bool,
 }
 
+enum AssignmentDestination<'a> {
+    Name(&'a str),
+    Table { table: usize, key: usize },
+}
+
 // Pending exits belong to the innermost active loop. Each exit preserves
 // the loop-carried bindings visible along that particular lexical path.
 struct LoopExit<'a> {
@@ -1286,37 +1291,73 @@ fn compile_statements<'a>(
                 if targets.is_empty() {
                     return Err(Error::InvalidBytecode);
                 }
-                // All RHS expressions see the original bindings, as in Lua.
-                let rhs = adjusted_rhs(program, values, targets.len(), scopes)?;
-                for (target, register) in targets.iter().zip(rhs) {
-                    let Expr::Atom(name) = target else {
-                        return Err(Error::Unsupported("only local variable targets".into()));
-                    };
-                    if let Some(binding) = scopes
-                        .iter_mut()
-                        .rev()
-                        .find_map(|scope| scope.get_mut(*name))
-                    {
-                        if binding.constant {
-                            return Err(Error::Unsupported(format!(
-                                "cannot assign to constant local: {name}"
-                            )));
+                // Resolve table bases and keys before computing any RHS.
+                // Store operations still occur only after every RHS evaluates,
+                // so aliasing and parallel assignments retain Lua order.
+                let mut destinations = Vec::with_capacity(targets.len());
+                for target in targets {
+                    let destination = match target {
+                        Expr::Atom(name) => AssignmentDestination::Name(name),
+                        Expr::Field { object, name } => {
+                            let table = emit(program, object, 0, scopes)?;
+                            let key = emit_table_key_string(program, name)?;
+                            AssignmentDestination::Table { table, key }
                         }
-                        binding.register = register;
-                    } else {
-                        if *name == "_ENV" {
+                        Expr::Index { object, key } => {
+                            let table = emit(program, object, 0, scopes)?;
+                            let key = emit(program, key, 0, scopes)?;
+                            AssignmentDestination::Table { table, key }
+                        }
+                        _ => {
                             return Err(Error::Unsupported(
-                                "dynamic _ENV tables are not available in register VM".into(),
+                                "unsupported assignment target in register VM".into(),
                             ));
                         }
-                        let name = intern_global_name(program, name)?;
-                        emit_instruction(
-                            program,
-                            Instruction::StoreGlobal {
-                                name,
-                                source: register,
-                            },
-                        )?;
+                    };
+                    destinations.push(destination);
+                }
+                let rhs = adjusted_rhs(program, values, targets.len(), scopes)?;
+                for (target, register) in destinations.into_iter().zip(rhs) {
+                    match target {
+                        AssignmentDestination::Table { table, key } => {
+                            emit_instruction(
+                                program,
+                                Instruction::SetTable {
+                                    table,
+                                    key,
+                                    value: register,
+                                },
+                            )?;
+                        }
+                        AssignmentDestination::Name(name) => {
+                            if let Some(binding) = scopes
+                                .iter_mut()
+                                .rev()
+                                .find_map(|scope| scope.get_mut(name))
+                            {
+                                if binding.constant {
+                                    return Err(Error::Unsupported(format!(
+                                        "cannot assign to constant local: {name}"
+                                    )));
+                                }
+                                binding.register = register;
+                            } else {
+                                if name == "_ENV" {
+                                    return Err(Error::Unsupported(
+                                        "dynamic _ENV tables are not available in register VM"
+                                            .into(),
+                                    ));
+                                }
+                                let name = intern_global_name(program, name)?;
+                                emit_instruction(
+                                    program,
+                                    Instruction::StoreGlobal {
+                                        name,
+                                        source: register,
+                                    },
+                                )?;
+                            }
+                        }
                     }
                 }
             }
