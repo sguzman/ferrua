@@ -478,6 +478,22 @@ fn owned_lua_pattern_substring_and_position_captures_match_lua54() {
 }
 
 #[test]
+fn owned_lua_pattern_capture_backreferences_match_lua54() {
+    for source in [
+        "print(string.match('abab','(%a+)%1'),string.find('abab','(%a+)%1'))",
+        "print(string.match('red-red','(%a+)%-%1'),string.find('red-red','(%a+)%-%1'))",
+        "print(string.match('abcabc','(.+)%1'),string.match('aabaa','(a+)%1'))",
+        "local a,b=string.match('abba','(a)(b)%2%1'); print(a,b)",
+        "print(string.find('foofoo','(foo)%1'),string.match('abc','(a)%1')==nil)",
+        "print(string.match('aaaa','(a+)%1'),string.find('aaaa','(a+)%1'))",
+        "local ok=pcall(string.match,'abc','%1'); local other=pcall(string.find,'abc','%0'); print(ok,other)",
+        "print(string.match('xabcdabcd','(abcd)%1')=='abcd',string.match('aaaa','(a)(a)%2%1')=='a')",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",

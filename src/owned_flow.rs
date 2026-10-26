@@ -4895,6 +4895,7 @@ impl Execution<'_> {
             CaptureOpen,
             CaptureClose,
             CapturePosition,
+            Backreference(u8),
         }
         if self.steps.saturating_add(body.len()) > self.budget {
             return Err(FlowError::StepBudgetExceeded);
@@ -4986,13 +4987,12 @@ impl Execution<'_> {
                         }
                     }
                 } else {
-                    if quoted.is_ascii_digit() {
-                        return Err(FlowError::Unsupported(
-                            "Lua backreference patterns are not implemented".into(),
-                        ));
-                    }
                     index += 2;
-                    Atom::Byte(quoted, true)
+                    if quoted.is_ascii_digit() {
+                        Atom::Backreference(quoted)
+                    } else {
+                        Atom::Byte(quoted, true)
+                    }
                 }
             } else {
                 let value = body[index];
@@ -5019,6 +5019,7 @@ impl Execution<'_> {
                         | Atom::CaptureOpen
                         | Atom::CaptureClose
                         | Atom::CapturePosition
+                        | Atom::Backreference(_)
                 )
             {
                 return Err(FlowError::Unsupported(
@@ -5080,6 +5081,24 @@ impl Execution<'_> {
                     }
                     _ => {}
                 }
+                if let Atom::Backreference(digit) = atom {
+                    if *digit == b'0' {
+                        return Err(FlowError::TypeError);
+                    }
+                    let referenced = usize::from(*digit - b'1');
+                    let &(start, end, is_position) =
+                        captures.get(referenced).ok_or(FlowError::TypeError)?;
+                    if is_position || end == usize::MAX {
+                        return Err(FlowError::TypeError);
+                    }
+                    let span = end - start;
+                    if position.checked_add(span).is_some_and(|last| last <= source.len())
+                        && source[position..position + span] == source[start..end]
+                    {
+                        states.push((atom_index + 1, position + span, captures.clone()));
+                    }
+                    continue;
+                }
                 if let Atom::Frontier(contents) = atom {
                     let previous = if position == 0 {
                         0
@@ -5132,7 +5151,8 @@ impl Execution<'_> {
                             | Atom::Balanced(_, _)
                             | Atom::CaptureOpen
                             | Atom::CaptureClose
-                            | Atom::CapturePosition => false,
+                            | Atom::CapturePosition
+                            | Atom::Backreference(_) => false,
                         }
                 };
                 match *repetition {
