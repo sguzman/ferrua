@@ -314,14 +314,30 @@ fn emit_condition<'a>(
     }
     match expression {
         Expr::Grouped(inner) => emit_condition(program, inner, locals, depth + 1),
-        Expr::Atom(value) if matches!(*value, "true" | "false") => {
+        Expr::Atom(value)
+            if matches!(*value, "true" | "false" | "nil")
+                || matches!(value.as_bytes().first(), Some(b'\'' | b'"' | b'['))
+                || value
+                    .as_bytes()
+                    .first()
+                    .is_some_and(|byte| byte.is_ascii_digit())
+                || (value.starts_with('.')
+                    && value
+                        .as_bytes()
+                        .get(1)
+                        .is_some_and(|byte| byte.is_ascii_digit())) =>
+        {
+            // This register VM only carries integers. Lua literal truthiness
+            // can nonetheless be lowered exactly as a condition-only guard:
+            // nil and false are false; every string and number is true,
+            // including empty strings and floating-point zero.
             let dest = program.registers;
             program.registers += 1;
             emit_instruction(
                 program,
                 Instruction::Load {
                     dest,
-                    value: i64::from(*value == "true"),
+                    value: i64::from(!matches!(*value, "false" | "nil")),
                 },
             )?;
             Ok(dest)

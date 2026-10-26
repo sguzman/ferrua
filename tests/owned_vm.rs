@@ -207,6 +207,66 @@ fn integer_conditional_branches_match_fer_and_upstream_lua() {
 }
 
 #[test]
+fn register_literal_truthiness_matches_lua54_without_general_float_or_string_values() {
+    let compare_upstream = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("if nil then return 1 else return 7 end", 7),
+        ("if not nil then return 9 else return 1 end", 9),
+        ("if '' then return 4 else return 1 end", 4),
+        ("if [[hello]] then return 6 else return 1 end", 6),
+        ("if 0.0 then return 5 else return 1 end", 5),
+        ("if .5 then return 8 else return 1 end", 8),
+        ("if 0x1p+1 then return 11 else return 1 end", 11),
+        ("if nil or 'hello' then return 13 else return 1 end", 13),
+        ("if false or 0.0 then return 15 else return 1 end", 15),
+        ("if nil and 1//0==1 then return 1 else return 17 end", 17),
+        ("if not (nil or false) then return 19 else return 1 end", 19),
+        ("local x=0; while nil do x=x+1 end; return x", 0),
+        ("local x=0; repeat x=x+1 until 'nonempty'; return x", 1),
+        ("local x=3; if not '' then x=99 end; return x", 3),
+    ] {
+        let owned = compile_integer_chunk(source)
+            .unwrap_or_else(|error| panic!("register guard rejected {source}: {error}"));
+        assert_eq!(execute_integer_program(&owned), Ok(expected), "{source}");
+        let code = format!("print((function() {source} end)())");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_upstream {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                expected.to_string(),
+                "{source}"
+            );
+        }
+    }
+    // Condition-only literal lowering must not become an integer value
+    // for return, assignment, numeric loop control, or arithmetic.
+    for source in [
+        "return nil",
+        "return 0.0",
+        "return 'hello'",
+        "local x='hello'; return x",
+        "return 4 + 0.5",
+    ] {
+        assert!(compile_integer_chunk(source).is_err(), "{source}");
+    }
+}
+
+#[test]
 fn register_while_loops_match_production_and_upstream_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
