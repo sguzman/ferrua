@@ -27,6 +27,8 @@ pub enum RegisterBuiltin {
     ToNumber,
     Next,
     Pairs,
+    Ipairs,
+    IpairsIterator,
 }
 
 /// Bounded scalar values, execution-owned tables, byte strings and first-class
@@ -2812,6 +2814,7 @@ pub fn execute_register_program_with_strings_and_budget(
                         b"tonumber" => RegisterValue::Builtin(RegisterBuiltin::ToNumber),
                         b"next" => RegisterValue::Builtin(RegisterBuiltin::Next),
                         b"pairs" => RegisterValue::Builtin(RegisterBuiltin::Pairs),
+                        b"ipairs" => RegisterValue::Builtin(RegisterBuiltin::Ipairs),
                         _ => RegisterValue::Nil,
                     }
                 };
@@ -3003,6 +3006,35 @@ pub fn execute_register_program_with_strings_and_budget(
                             arguments[0],
                             RegisterValue::Nil,
                         ]
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::Ipairs) => {
+                        let Some(RegisterValue::Table(_)) = arguments.first() else {
+                            return Err(Error::TypeError);
+                        };
+                        vec![
+                            RegisterValue::Builtin(RegisterBuiltin::IpairsIterator),
+                            arguments[0],
+                            RegisterValue::Integer(0),
+                        ]
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::IpairsIterator) => {
+                        let Some(RegisterValue::Table(index)) = arguments.first() else {
+                            return Err(Error::TypeError);
+                        };
+                        let previous = *arguments.get(1).ok_or(Error::TypeError)?;
+                        let counter = register_select_integer(previous, &strings)?;
+                        let next_index = counter.checked_add(1).ok_or(Error::TooLarge)?;
+                        let table = tables.get(*index).ok_or(Error::InvalidBytecode)?;
+                        let value = table
+                            .entries
+                            .iter()
+                            .find(|(key, _)| *key == TableKey::Integer(next_index))
+                            .map_or(RegisterValue::Nil, |(_, value)| *value);
+                        if value == RegisterValue::Nil {
+                            vec![RegisterValue::Nil]
+                        } else {
+                            vec![RegisterValue::Integer(next_index), value]
+                        }
                     }
                     RegisterValue::Builtin(RegisterBuiltin::RawSet) => {
                         let Some(RegisterValue::Table(index)) = arguments.first() else {
