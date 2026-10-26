@@ -87,6 +87,38 @@ fn register_string_literals_have_upstream_lua54_output_parity() {
 }
 
 #[test]
+fn register_string_locals_branches_and_loop_carried_values_match_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("if 'a'<'b' then return 1 else return 0 end", 1),
+        ("local s='é'; if #s==2 then return 7 else return 0 end", 7),
+        ("local s='a'; if s=='a' then return 2 end; return 0", 2),
+        ("local s='a'; s='b'; if s~='a' then return 3 end; return 0", 3),
+        ("local s='b'; while s=='b' do s='a' end; return #s", 1),
+        ("local s='a'; repeat s='b' until s=='b'; return #s", 1),
+    ] {
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let code = format!("print((function() {source} end)())");
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(output.stdout, format!("{expected}\n").into_bytes(), "{source}");
+        }
+    }
+}
+
+#[test]
 fn tagged_register_decimal_floats_and_mixed_number_order_match_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
