@@ -7,6 +7,47 @@ use ferrua::owned_vm::{
 use std::process::Command;
 
 #[test]
+fn register_adjusted_scalar_assignments_match_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected, printed) in [
+        ("local x; return x", RegisterValue::Nil, "nil\tnil\n"),
+        ("local x,y=4; return y", RegisterValue::Nil, "nil\tnil\n"),
+        ("local x=3,4; return x", RegisterValue::Integer(3), "number\t3\n"),
+        ("local x,y=1,2; x,y=7; return y", RegisterValue::Nil, "nil\tnil\n"),
+        ("local x,y=1,2; x,y=7; return x", RegisterValue::Integer(7), "number\t7\n"),
+        ("local x,y=1,2; x=8,9; return x", RegisterValue::Integer(8), "number\t8\n"),
+        ("local x=1; local x,y=x+2; return x", RegisterValue::Integer(3), "number\t3\n"),
+        ("local x,y; if x==nil then y=6 end; return y", RegisterValue::Integer(6), "number\t6\n"),
+        ("local x,y=1,2; x,y=y,x; return x", RegisterValue::Integer(2), "number\t2\n"),
+    ] {
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(execute_register_program(&program), Ok(expected), "{source}");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let lua = format!(
+                "local v=(function() {source} end)(); print(type(v),tostring(v))"
+            );
+            let output = command.args(["-e", &lua]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, printed.as_bytes(), "{source}");
+        }
+    }
+}
+
+#[test]
 fn register_immutable_lua_strings_use_byte_length_and_value_comparison() {
     for (source, expected) in [
         ("#'abc'", RegisterValue::Integer(3)),
