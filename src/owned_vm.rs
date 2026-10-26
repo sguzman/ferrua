@@ -1,7 +1,7 @@
 //! Experimental Ferrua-owned typed register bytecode for bounded Lua expressions.
 //! Not used by production fer; not a full Lua VM.
 
-use crate::expr::{Expr, LocalAttribute, Statement, parse_chunk, parse_expression};
+use crate::expr::{Expr, LocalAttribute, Statement, TableField, parse_chunk, parse_expression};
 use crate::owned_flow::{decode_lua_string, parse_lua_hex_float, parse_lua_hex_integer_wrapping};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -10,6 +10,8 @@ const MAX_REGISTERS: usize = 16384;
 const MAX_REGISTER_STEPS: usize = 100_000;
 const MAX_REGISTER_STRING_BYTES: usize = 65_536;
 const MAX_CALL_ARGUMENTS: usize = 128;
+const MAX_REGISTER_TABLES: usize = 512;
+const MAX_REGISTER_TABLE_ENTRIES: usize = 4096;
 
 /// Bounded first-class builtins in the independent register dispatcher.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,6 +34,8 @@ pub enum RegisterValue {
     String(usize),
     /// First-class builtin function identity, not a Lua closure.
     Builtin(RegisterBuiltin),
+    /// Execution-owned Lua table identity.
+    Table(usize),
 }
 
 impl RegisterValue {
@@ -154,6 +158,19 @@ pub enum Instruction {
     LoadGlobal {
         dest: usize,
         name: usize,
+    },
+    NewTable {
+        dest: usize,
+    },
+    GetTable {
+        dest: usize,
+        table: usize,
+        key: usize,
+    },
+    SetTable {
+        table: usize,
+        key: usize,
+        value: usize,
     },
     /// Write a global after every right-hand side has been evaluated.
     StoreGlobal {
@@ -361,17 +378,53 @@ pub struct Program {
 /// register execution. A dynamic string handle belongs to this execution,
 /// not to the compiled Program's static literal pool.
 #[derive(Clone, Debug, PartialEq, Eq)]
+enum TableKey {
+    Boolean(bool),
+    Integer(i64),
+    Float(u64),
+    String(Vec<u8>),
+    Table(usize),
+    Builtin(RegisterBuiltin),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+struct RegisterTable {
+    entries: Vec<(TableKey, RegisterValue)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RegisterExecution {
     /// First scalar result, adjusted to nil for zero-result returns.
     pub value: RegisterValue,
     /// Exact arity and values for explicitly returned scalar expressions.
     values: Vec<RegisterValue>,
     strings: Vec<Vec<u8>>,
+    tables: Vec<RegisterTable>,
 }
 
 impl RegisterExecution {
     pub fn values(&self) -> &[RegisterValue] {
         &self.values
+    }
+
+    /// Inspect a key in a returned table from this execution. A missing
+    /// key yields Lua nil; the heap remains owned by the result.
+    pub fn table_value(
+        &self,
+        table: RegisterValue,
+        key: RegisterValue,
+    ) -> Option<RegisterValue> {
+        let RegisterValue::Table(index) = table else {
+            return None;
+        };
+        let key = register_table_key(key, &self.strings).ok()?;
+        let entries = &self.tables.get(index)?.entries;
+        Some(
+            entries
+                .iter()
+                .find(|(candidate, _)| *candidate == key)
+                .map_or(RegisterValue::Nil, |(_, value)| *value),
+        )
     }
 
     /// Resolve any returned string against the execution-owned string pool.
@@ -451,6 +504,28 @@ fn emit_instruction(program: &mut Program, instruction: Instruction) -> Result<(
     }
     program.code.push(instruction);
     Ok(())
+}
+
+/// Emit a bounded literal key as a typed register value.
+fn emit_table_key_string(program: &mut Program, name: &str) -> Result<usize, Error> {
+    if program.registers >= MAX_REGISTERS {
+        return Err(Error::TooLarge);
+    }
+    let index = intern_global_name(program, name)?;
+    let dest = program.registers;
+    program.registers += 1;
+    emit_instruction(program, Instruction::LoadString { dest, index })?;
+    Ok(dest)
+}
+
+fn emit_table_key_integer(program: &mut Program, number: i64) -> Result<usize, Error> {
+    if program.registers >= MAX_REGISTERS {
+        return Err(Error::TooLarge);
+    }
+    let dest = program.registers;
+    program.registers += 1;
+    emit_instruction(program, Instruction::Load { dest, value: number })?;
+    Ok(dest)
 }
 
 /// Bind an ASCII Lua global name to an immutable byte-string pool slot.
@@ -572,6 +647,57 @@ fn emit<'a>(
                     emit_instruction(program, Instruction::LoadGlobal { dest, name })?;
                     return Ok(dest);
                 }
+            }
+        }
+        Expr::Table(fields) => {
+            if fields.len() > MAX_REGISTER_TABLE_ENTRIES {
+                return Err(Error::TooLarge);
+            }
+            let dest = program.registers;
+            program.registers += 1;
+            emit_instruction(program, Instruction::NewTable { dest })?;
+            let mut sequence = 0_i64;
+            for field in fields {
+                let (key, value) = match field {
+                    TableField::Named { name, value } => {
+                        (emit_table_key_string(program, name)?, value)
+                    }
+                    TableField::Indexed { key, value } => {
+                        (emit(program, key, depth + 1, locals)?, value)
+                    }
+                    TableField::Value(value) => {
+                        sequence = sequence.checked_add(1).ok_or(Error::TooLarge)?;
+                        (emit_table_key_integer(program, sequence)?, value)
+                    }
+                };
+                let source = emit(program, value, depth + 1, locals)?;
+                emit_instruction(
+                    program,
+                    Instruction::SetTable {
+                        table: dest,
+                        key,
+                        value: source,
+                    },
+                )?;
+            }
+            return Ok(dest);
+        }
+        Expr::Field { object, name } => {
+            let table = emit(program, object, depth + 1, locals)?;
+            let key = emit_table_key_string(program, name)?;
+            Instruction::GetTable {
+                dest: program.registers,
+                table,
+                key,
+            }
+        }
+        Expr::Index { object, key } => {
+            let table = emit(program, object, depth + 1, locals)?;
+            let key = emit(program, key, depth + 1, locals)?;
+            Instruction::GetTable {
+                dest: program.registers,
+                table,
+                key,
             }
         }
         Expr::Call { callee, arguments } => {
@@ -1858,7 +1984,15 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             Instruction::LoadString { dest, index } => {
                 register(dest) && index < program.strings.len()
             }
-            Instruction::LoadBuiltin { dest, .. } => register(dest),
+            Instruction::LoadBuiltin { dest, .. } | Instruction::NewTable { dest } => {
+                register(dest)
+            }
+            Instruction::GetTable { dest, table, key } => {
+                register(dest) && register(table) && register(key)
+            }
+            Instruction::SetTable { table, key, value } => {
+                register(table) && register(key) && register(value)
+            }
             Instruction::LoadGlobal { dest, name } => {
                 register(dest) && name < program.strings.len()
             }
@@ -2004,6 +2138,8 @@ pub fn execute_register_program_with_strings_and_budget(
     let mut last_call_results = Vec::new();
     let mut call_arguments = Vec::new();
     let mut globals: HashMap<usize, RegisterValue> = HashMap::new();
+    let mut tables: Vec<RegisterTable> = Vec::new();
+    let mut table_entries_used: usize = 0;
     let mut registers: Vec<Option<RegisterValue>> = vec![None; program.registers];
     fn read(registers: &[Option<RegisterValue>], at: usize) -> Result<RegisterValue, Error> {
         registers
@@ -2039,6 +2175,7 @@ pub fn execute_register_program_with_strings_and_budget(
                     value: read(&registers, source)?,
                     values: return_values,
                     strings,
+                    tables,
                 });
             }
             Instruction::AppendReturn { source } => {
@@ -2265,6 +2402,50 @@ pub fn execute_register_program_with_strings_and_budget(
             Instruction::LoadFloat { dest, bits } => (dest, RegisterValue::Float(bits)),
             Instruction::LoadString { dest, index } => (dest, RegisterValue::String(index)),
             Instruction::LoadBuiltin { dest, builtin } => (dest, RegisterValue::Builtin(builtin)),
+            Instruction::NewTable { dest } => {
+                if tables.len() >= MAX_REGISTER_TABLES {
+                    return Err(Error::TooLarge);
+                }
+                let index = tables.len();
+                tables.push(RegisterTable::default());
+                (dest, RegisterValue::Table(index))
+            }
+            Instruction::GetTable { dest, table, key } => {
+                let RegisterValue::Table(index) = read(&registers, table)? else {
+                    return Err(Error::TypeError);
+                };
+                let key = register_table_key(read(&registers, key)?, &strings)?;
+                let entries = &tables.get(index).ok_or(Error::InvalidBytecode)?.entries;
+                let value = entries
+                    .iter()
+                    .find(|(candidate, _)| *candidate == key)
+                    .map_or(RegisterValue::Nil, |(_, value)| *value);
+                (dest, value)
+            }
+            Instruction::SetTable { table, key, value } => {
+                let RegisterValue::Table(index) = read(&registers, table)? else {
+                    return Err(Error::TypeError);
+                };
+                let key = register_table_key(read(&registers, key)?, &strings)?;
+                let value = read(&registers, value)?;
+                let entries = &mut tables.get_mut(index).ok_or(Error::InvalidBytecode)?.entries;
+                if let Some(position) = entries.iter().position(|(candidate, _)| *candidate == key) {
+                    if value == RegisterValue::Nil {
+                        entries.swap_remove(position);
+                        table_entries_used -= 1;
+                    } else {
+                        entries[position].1 = value;
+                    }
+                } else if value != RegisterValue::Nil {
+                    if table_entries_used >= MAX_REGISTER_TABLE_ENTRIES {
+                        return Err(Error::TooLarge);
+                    }
+                    entries.push((key, value));
+                    table_entries_used += 1;
+                }
+                pc += 1;
+                continue;
+            }
             Instruction::LoadGlobal { dest, name } => {
                 let value = if let Some(value) = globals.get(&name) {
                     *value
@@ -2312,6 +2493,7 @@ pub fn execute_register_program_with_strings_and_budget(
                             RegisterValue::Integer(_) | RegisterValue::Float(_) => b"number",
                             RegisterValue::String(_) => b"string",
                             RegisterValue::Builtin(_) => b"function",
+                            RegisterValue::Table(_) => b"table",
                         };
                         vec![intern_register_string(
                             bytes.to_vec(),
@@ -2337,6 +2519,9 @@ pub fn execute_register_program_with_strings_and_budget(
                                 strings.get(*index).cloned().ok_or(Error::InvalidBytecode)?
                             }
                             RegisterValue::Builtin(_) => b"function: builtin".to_vec(),
+                            RegisterValue::Table(index) => {
+                                format!("table: 0x{index:x}").into_bytes()
+                            },
                         };
                         vec![intern_register_string(
                             bytes,
@@ -2393,6 +2578,18 @@ pub fn execute_register_program_with_strings_and_budget(
                 let length = match read(&registers, input)? {
                     RegisterValue::String(index) => {
                         strings.get(index).ok_or(Error::InvalidBytecode)?.len()
+                    }
+                    RegisterValue::Table(index) => {
+                        let entries = &tables.get(index).ok_or(Error::InvalidBytecode)?.entries;
+                        let mut border = 0_usize;
+                        while border < entries.len()
+                            && entries.iter().any(|(key, _)| {
+                                *key == TableKey::Integer((border + 1) as i64)
+                            })
+                        {
+                            border += 1;
+                        }
+                        border
                     }
                     _ => return Err(Error::TypeError),
                 };
@@ -2557,7 +2754,43 @@ pub fn execute_register_program_with_strings_and_budget(
         value: read(&registers, program.result)?,
         values: return_values,
         strings,
+        tables,
     })
+}
+
+/// Normalize Lua table keys for the bounded register heap. Integral float
+/// indices share slots with integer indices, strings compare by bytes, and
+/// identity-bearing objects compare by their execution-local handles.
+fn register_table_key(value: RegisterValue, strings: &[Vec<u8>]) -> Result<TableKey, Error> {
+    match value {
+        RegisterValue::Nil => Err(Error::TypeError),
+        RegisterValue::Boolean(value) => Ok(TableKey::Boolean(value)),
+        RegisterValue::Integer(value) => Ok(TableKey::Integer(value)),
+        RegisterValue::Float(bits) => {
+            let number = f64::from_bits(bits);
+            if number.is_nan() {
+                return Err(Error::TypeError);
+            }
+            if number.is_finite()
+                && number.fract() == 0.0
+                && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
+                    .contains(&number)
+            {
+                Ok(TableKey::Integer(number as i64))
+            } else {
+                Ok(TableKey::Float(if number == 0.0 {
+                    0.0_f64.to_bits()
+                } else {
+                    bits
+                }))
+            }
+        }
+        RegisterValue::String(index) => Ok(TableKey::String(
+            strings.get(index).cloned().ok_or(Error::InvalidBytecode)?,
+        )),
+        RegisterValue::Table(index) => Ok(TableKey::Table(index)),
+        RegisterValue::Builtin(builtin) => Ok(TableKey::Builtin(builtin)),
+    }
 }
 
 /// Lua's integer argument coercion for the bounded `select` builtin.
