@@ -267,6 +267,60 @@ fn register_literal_truthiness_matches_lua54_without_general_float_or_string_val
 }
 
 #[test]
+fn register_boolean_nil_literal_equality_matches_lua54_in_control_flow() {
+    let compare_upstream = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("if nil==nil then return 7 else return 0 end", 7),
+        ("if nil~=nil then return 7 else return 9 end", 9),
+        ("if true==true then return 11 else return 0 end", 11),
+        ("if true==false then return 0 else return 13 end", 13),
+        ("if false~=nil then return 17 else return 0 end", 17),
+        ("if true~=nil then return 19 else return 0 end", 19),
+        ("if (nil)==(nil) then return 23 else return 0 end", 23),
+        ("if (true==false) or (nil==nil) then return 29 else return 0 end", 29),
+        ("if (nil~=false) and 4<5 then return 31 else return 0 end", 31),
+        ("local n=0; while (false==false) and n<3 do n=n+1 end; return n", 3),
+        ("local n=0; repeat n=n+1 until (nil~=false); return n", 1),
+    ] {
+        let program = compile_integer_chunk(source)
+            .unwrap_or_else(|error| panic!("register guard rejected {source}: {error}"));
+        assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        let code = format!("print((function() {source} end)())");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_upstream {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                expected.to_string(),
+                "{source}"
+            );
+        }
+    }
+    // No implicit broad acceptance of nil/boolean ordering or value returns.
+    for source in [
+        "if nil<false then return 1 else return 2 end",
+        "return nil==nil",
+        "local x=1; if x==true then return 1 else return 2 end",
+    ] {
+        assert!(compile_integer_chunk(source).is_err(), "{source}");
+    }
+}
+
+#[test]
 fn register_while_loops_match_production_and_upstream_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()

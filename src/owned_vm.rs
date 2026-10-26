@@ -299,6 +299,18 @@ fn emit<'a>(
     Ok(output)
 }
 
+/// Nil and boolean literal identity for condition-only comparisons.
+/// An outer Some distinguishes the nil value from an unsupported expression.
+fn boolean_nil_literal(expression: &Expr<'_>) -> Option<Option<bool>> {
+    match expression {
+        Expr::Atom("nil") => Some(None),
+        Expr::Atom("false") => Some(Some(false)),
+        Expr::Atom("true") => Some(Some(true)),
+        Expr::Grouped(inner) => boolean_nil_literal(inner),
+        _ => None,
+    }
+}
+
 /// Compile Boolean literals, integer comparisons, unary not and pure integer
 /// expressions into internal guards. Unlike some host languages, every Lua
 /// integer, including zero, is truthy. These Boolean guard registers are never
@@ -420,6 +432,31 @@ fn emit_condition<'a>(
                     ));
                 }
             };
+            // Lua compares nil and boolean values by type and identity.
+            // These are condition-only constants; the integer register
+            // representation is deliberately not widened to hold Lua values.
+            if matches!(operation, CompareOperation::Equal | CompareOperation::NotEqual) {
+                if let (Some(lhs), Some(rhs)) =
+                    (boolean_nil_literal(left), boolean_nil_literal(right))
+                {
+                    let same = lhs == rhs;
+                    let result = if operation == CompareOperation::Equal {
+                        same
+                    } else {
+                        !same
+                    };
+                    let dest = program.registers;
+                    program.registers += 1;
+                    emit_instruction(
+                        program,
+                        Instruction::Load {
+                            dest,
+                            value: i64::from(result),
+                        },
+                    )?;
+                    return Ok(dest);
+                }
+            }
             let lhs = emit(program, left, depth + 1, locals)?;
             let rhs = emit(program, right, depth + 1, locals)?;
             if program.registers >= MAX_REGISTERS {
