@@ -140,7 +140,10 @@ fn register_rawlen_and_rawequal_match_lua54() {
         ("return rawequal({}, {})", "1|false"),
         ("local t={};return rawequal(t,t)", "1|true"),
         ("local t={};local u=t;return rawequal(t,u)", "1|true"),
-        ("local t={};return rawequal(t,{}),rawequal(t,t)", "2|false|true"),
+        (
+            "local t={};return rawequal(t,{}),rawequal(t,t)",
+            "2|false|true",
+        ),
         ("return rawequal(rawget,rawget)", "1|true"),
         ("return type(rawlen),type(rawequal)", "2|function|function"),
         ("return rawequal(1,1,2)", "1|true"),
