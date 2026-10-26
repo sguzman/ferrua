@@ -615,6 +615,26 @@ fn owned_string_format_width_precision_and_alignment_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_numeric_width_precision_and_zero_padding_match_lua54() {
+    for source in [
+        "print(string.format('%5d',12)=='   12',string.format('%-5d',12)=='12   ')",
+        "print(string.format('%05d',12)=='00012',string.format('%05d',-12)=='-0012')",
+        "print(string.format('%.4d',12)=='0012',string.format('%7.4d',-12)=='  -0012')",
+        "print(string.format('%7.4u',12)=='   0012',string.format('%-7.4u',12)=='0012   ')",
+        "print(string.format('%08x',26)=='0000001a',string.format('%08X',26)=='0000001A')",
+        "print(string.format('%6.4x',26)=='  001a',string.format('%5.3o',7)=='  007')",
+        "print(string.format('%5.0d',0)=='     ',string.format('%.0d',0)=='')",
+        "print(string.format('%-6.4d',42)=='0042  ',string.format('%06.4d',42)=='  0042')",
+        "print(string.format('%04c',65)=='   A',string.format('%-4c',65)=='A   ')",
+        "print(string.format('%5d',-1)=='   -1',string.format('%02u',-1)=='18446744073709551615')",
+        "print(string.format('x:%5d/%04x',-2,15)=='x:   -2/000f')",
+        "local ok,s=pcall(string.format,'%05d',-7); print(ok,s); local bad,x=pcall(string.format,'%6.3d'); print(bad,type(x))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_gsub_short_lived_gc_roots_preserve_long_replacement_semantics() {
     for source in [
         "local n=0; local s=string.rep('a',100); local out,c=string.gsub(s,'.',function(x) n=n+1; return x..'b' end); print(#out,c,n)",

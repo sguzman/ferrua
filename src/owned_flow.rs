@@ -5817,6 +5817,9 @@ impl Execution<'_> {
                         if left_align {
                             cursor += 1;
                         }
+                        // A leading zero is printf's zero-padding flag,
+                        // not just another decimal width digit.
+                        let zero_pad = text.get(cursor) == Some(&b'0');
                         let mut width = 0usize;
                         while let Some(byte @ b'0'..=b'9') = text.get(cursor).copied() {
                             width = width
@@ -5849,10 +5852,17 @@ impl Execution<'_> {
                         if specifier == b'%' && !left_align && width == 0 && precision.is_none() {
                             output.push(b'%');
                         } else {
-                            if (left_align || width > 0 || precision.is_some()) && specifier != b's'
+                            let numeric = matches!(specifier, b'd' | b'i' | b'u' | b'o' | b'x' | b'X');
+                            if (left_align || width > 0 || precision.is_some() || zero_pad)
+                                && !matches!(specifier, b's' | b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'c')
                             {
                                 return Err(FlowError::Unsupported(
-                                    "Lua numeric width and precision are not implemented".into(),
+                                    "Lua width and precision for this format are not implemented".into(),
+                                ));
+                            }
+                            if specifier == b'c' && precision.is_some() {
+                                return Err(FlowError::Unsupported(
+                                    "Lua %c precision is not implemented".into(),
                                 ));
                             }
                             let value = *args.get(argument).ok_or(FlowError::TypeError)?;
@@ -5920,15 +5930,47 @@ impl Execution<'_> {
                                 if let Some(precision) = precision {
                                     part.truncate(precision);
                                 }
-                                if part.len() < width {
-                                    let padding = width - part.len();
-                                    if left_align {
-                                        part.extend(std::iter::repeat_n(b' ', padding));
-                                    } else {
-                                        let mut padded = vec![b' '; padding];
+                            } else if numeric {
+                                // Lua's integer formatting uses printf-style
+                                // signed magnitude, unsigned 64-bit payload,
+                                // decimal precision and width. Precision
+                                // suppresses the zero flag; negative signs
+                                // precede any precision/width zero padding.
+                                let negative = matches!(specifier, b'd' | b'i')
+                                    && part.first() == Some(&b'-');
+                                if negative {
+                                    part.remove(0);
+                                }
+                                if let Some(minimum_digits) = precision {
+                                    if minimum_digits == 0 && part == b"0" {
+                                        part.clear();
+                                    } else if part.len() < minimum_digits {
+                                        let mut padded = vec![b'0'; minimum_digits - part.len()];
                                         padded.extend_from_slice(&part);
                                         part = padded;
                                     }
+                                }
+                                if negative {
+                                    part.insert(0, b'-');
+                                }
+                            }
+                            if (specifier == b's' || specifier == b'c' || numeric)
+                                && part.len() < width
+                            {
+                                let padding = width - part.len();
+                                if left_align {
+                                    part.extend(std::iter::repeat_n(b' ', padding));
+                                } else if numeric && zero_pad && precision.is_none() {
+                                    let sign = usize::from(part.first() == Some(&b'-'));
+                                    let mut padded = Vec::with_capacity(width);
+                                    padded.extend_from_slice(&part[..sign]);
+                                    padded.extend(std::iter::repeat_n(b'0', padding));
+                                    padded.extend_from_slice(&part[sign..]);
+                                    part = padded;
+                                } else {
+                                    let mut padded = vec![b' '; padding];
+                                    padded.extend_from_slice(&part);
+                                    part = padded;
                                 }
                             }
                             if self.steps.saturating_add(part.len()) > self.budget {
