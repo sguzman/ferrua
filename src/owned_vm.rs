@@ -31,6 +31,27 @@ impl RegisterValue {
         }
     }
 
+    /// Bitwise operators convert integral finite floats exactly to i64.
+    /// Arithmetic and numeric-for controls retain their distinct coercions.
+    fn bitwise_integer(self) -> Result<i64, Error> {
+        match self {
+            Self::Integer(value) => Ok(value),
+            Self::Float(bits) => {
+                let value = f64::from_bits(bits);
+                if value.is_finite()
+                    && value.fract() == 0.0
+                    && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0)
+                        .contains(&value)
+                {
+                    Ok(value as i64)
+                } else {
+                    Err(Error::TypeError)
+                }
+            }
+            _ => Err(Error::TypeError),
+        }
+    }
+
     fn number(self) -> Result<f64, Error> {
         match self {
             Self::Integer(value) => Ok(value as f64),
@@ -1633,6 +1654,12 @@ pub fn execute_register_program_with_budget(
     fn read_integer(registers: &[Option<RegisterValue>], at: usize) -> Result<i64, Error> {
         read(registers, at)?.integer()
     }
+    fn read_bitwise_integer(
+        registers: &[Option<RegisterValue>],
+        at: usize,
+    ) -> Result<i64, Error> {
+        read(registers, at)?.bitwise_integer()
+    }
     let mut pc = 0;
     let mut steps = 0usize;
     while pc < program.code.len() {
@@ -1882,38 +1909,38 @@ pub fn execute_register_program_with_budget(
             Instruction::BitAnd { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Integer(
-                    read_integer(&registers, lhs)? & read_integer(&registers, rhs)?,
+                    read_bitwise_integer(&registers, lhs)? & read_bitwise_integer(&registers, rhs)?,
                 ),
             ),
             Instruction::BitOr { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Integer(
-                    read_integer(&registers, lhs)? | read_integer(&registers, rhs)?,
+                    read_bitwise_integer(&registers, lhs)? | read_bitwise_integer(&registers, rhs)?,
                 ),
             ),
             Instruction::BitXor { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Integer(
-                    read_integer(&registers, lhs)? ^ read_integer(&registers, rhs)?,
+                    read_bitwise_integer(&registers, lhs)? ^ read_bitwise_integer(&registers, rhs)?,
                 ),
             ),
             Instruction::BitNot { dest, input } => (
                 dest,
-                RegisterValue::Integer(!read_integer(&registers, input)?),
+                RegisterValue::Integer(!read_bitwise_integer(&registers, input)?),
             ),
             Instruction::Shl { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Integer(shift(
-                    read_integer(&registers, lhs)?,
-                    read_integer(&registers, rhs)?,
+                    read_bitwise_integer(&registers, lhs)?,
+                    read_bitwise_integer(&registers, rhs)?,
                     true,
                 )),
             ),
             Instruction::Shr { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Integer(shift(
-                    read_integer(&registers, lhs)?,
-                    read_integer(&registers, rhs)?,
+                    read_bitwise_integer(&registers, lhs)?,
+                    read_bitwise_integer(&registers, rhs)?,
                     false,
                 )),
             ),

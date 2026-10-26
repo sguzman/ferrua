@@ -105,6 +105,92 @@ fn tagged_register_decimal_floats_and_mixed_number_order_match_lua54() {
 }
 
 #[test]
+fn bitwise_register_exact_float_to_integer_coercions_match_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("3.0&1", 1),
+        ("1|2.0", 3),
+        ("5.0~3", 6),
+        ("~2.0", -3),
+        ("8.0<<-1.0", 4),
+        ("8>>1.0", 4),
+        ("-0.0&1", 0),
+        ("9007199254740992.0&3", 0),
+        ("-9223372036854775808.0&-1", i64::MIN),
+    ] {
+        let program = compile_integer_expression(source).unwrap();
+        assert_eq!(
+            execute_register_program(&program),
+            Ok(RegisterValue::Integer(expected)),
+            "{source}"
+        );
+        let chunk = compile_integer_chunk(&format!("return {source}")).unwrap();
+        assert_eq!(
+            execute_register_program(&chunk),
+            Ok(RegisterValue::Integer(expected)),
+            "{source}"
+        );
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command
+                .args(["-e", &format!("local x=({source}); print(x,math.type(x))")])
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout).trim(),
+                format!("{expected}\\tinteger"),
+                "{source}"
+            );
+        }
+    }
+    for source in [
+        "1.5&2",
+        "2.5|1",
+        "~3.25",
+        "1.0<<0.5",
+        "1e20&1",
+        "9223372036854775808.0&1",
+        "(1.0/0.0)&1",
+        "true&1",
+    ] {
+        let program = compile_integer_expression(source).unwrap();
+        assert_eq!(
+            execute_register_program(&program),
+            Err(ferrua::owned_vm::Error::TypeError),
+            "{source}"
+        );
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command
+                .args(["-e", &format!("print(({source}))")])
+                .output()
+                .unwrap();
+            assert!(!output.status.success(), "{source}");
+        }
+    }
+}
+
+#[test]
 fn tagged_register_and_or_return_selected_operands_like_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
