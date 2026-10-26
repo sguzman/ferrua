@@ -432,12 +432,32 @@ fn scalar_register_multi_return_evaluates_discarded_expressions_like_lua54() {
     for (source, expected, printed) in [
         ("return 3, 4", RegisterValue::Integer(3), "number\t3\n"),
         ("return nil, 7", RegisterValue::Nil, "nil\tnil\n"),
-        ("return true, false", RegisterValue::Boolean(true), "boolean\ttrue\n"),
-        ("local x=9; return x, x+3", RegisterValue::Integer(9), "number\t9\n"),
-        ("if true then return 5, 6 else return 7 end", RegisterValue::Integer(5), "number\t5\n"),
-        ("do return 8, 9 end", RegisterValue::Integer(8), "number\t8\n"),
+        (
+            "return true, false",
+            RegisterValue::Boolean(true),
+            "boolean\ttrue\n",
+        ),
+        (
+            "local x=9; return x, x+3",
+            RegisterValue::Integer(9),
+            "number\t9\n",
+        ),
+        (
+            "if true then return 5, 6 else return 7 end",
+            RegisterValue::Integer(5),
+            "number\t5\n",
+        ),
+        (
+            "do return 8, 9 end",
+            RegisterValue::Integer(8),
+            "number\t8\n",
+        ),
         ("return 1,2,3,4", RegisterValue::Integer(1), "number\t1\n"),
-        ("return 7, false and (1//0)", RegisterValue::Integer(7), "number\t7\n"),
+        (
+            "return 7, false and (1//0)",
+            RegisterValue::Integer(7),
+            "number\t7\n",
+        ),
     ] {
         let program = compile_integer_chunk(source).expect(source);
         assert_eq!(execute_register_program(&program), Ok(expected), "{source}");
@@ -451,7 +471,11 @@ fn scalar_register_multi_return_evaluates_discarded_expressions_like_lua54() {
                 command.arg("--lua=5.4");
             }
             let output = command.args(["-e", &lua]).output().expect(executable);
-            assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
             assert_eq!(output.stdout, printed.as_bytes(), "{source}: {executable}");
         }
     }
@@ -476,7 +500,11 @@ fn scalar_register_multi_return_evaluates_discarded_expressions_like_lua54() {
                 command.arg("--lua=5.4");
             }
             let output = command.args(["-e", &lua]).output().expect(executable);
-            assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
             assert_eq!(output.stdout, b"false\n", "{source}: {executable}");
         }
     }
