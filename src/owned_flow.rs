@@ -6207,7 +6207,7 @@ impl Execution<'_> {
                                 Builtin::StringByte => self.string_byte_builtin(&args)?,
                                 Builtin::StringFind => self.string_find_literal_builtin(&args)?,
                                 Builtin::StringMatch => self.string_match_builtin(&args)?,
-                                Builtin::StringGsub => self.string_gsub_builtin(&args)?, 
+                                Builtin::StringGsub => self.string_gsub_builtin(&args)?,
                                 Builtin::Utf8Len => self.utf8_len_builtin(&args)?,
                                 Builtin::Utf8Codepoint => self.utf8_codepoint_builtin(&args)?,
                                 Builtin::Utf8Codes => self.utf8_codes_builtin(&args)?,
