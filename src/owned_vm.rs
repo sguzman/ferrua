@@ -5,6 +5,7 @@ use crate::expr::{Expr, LocalAttribute, Statement, parse_chunk, parse_expression
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 const MAX_REGISTERS: usize = 16384;
+const MAX_REGISTER_STEPS: usize = 100_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Instruction {
@@ -106,6 +107,22 @@ pub enum Instruction {
     Jump {
         target: usize,
     },
+    /// Copy a predecessor value into a loop-carried register. Unlike an
+    /// SSA definition, the target is updated once per completed iteration.
+    LoopCopy {
+        dest: usize,
+        input: usize,
+    },
+    /// Clear temporary SSA registers before a new loop iteration. This
+    /// includes the condition and body temporaries, but not carried locals.
+    LoopReset {
+        start: usize,
+        end: usize,
+    },
+    /// Only validated backedges to a LoopReset instruction are permitted.
+    LoopJump {
+        target: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -138,6 +155,7 @@ pub enum Error {
     TooLarge,
     InvalidBytecode,
     DivisionByZero,
+    StepBudgetExceeded,
 }
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -146,6 +164,7 @@ impl fmt::Display for Error {
             Self::TooLarge => write!(f, "experimental program is too large"),
             Self::InvalidBytecode => write!(f, "invalid experimental register bytecode"),
             Self::DivisionByZero => write!(f, "integer division by zero"),
+            Self::StepBudgetExceeded => write!(f, "bounded register VM step budget exhausted"),
         }
     }
 }
@@ -407,9 +426,9 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 /// Supports integer locals with initializers, parallel assignments to locals,
 /// nested do/end blocks, bounded integer/Boolean if/elseif/else branches
 /// with returning or continuing branches, SSA-like single-assignment
-/// integer merge copies for enclosing locals, and a single integer return
-/// from an active block.
-/// Calls, general truthiness, loops, globals, nil and closures remain unsupported.
+/// integer merge copies, bounded while loops with loop-carried register
+/// values, and a single integer return from an active block.
+/// Calls, general truthiness, for/repeat loops, globals, nil and closures remain unsupported.
 pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
     let mut program = Program {
@@ -489,7 +508,7 @@ fn assigned_names<'a>(body: &[Statement<'a>], names: &mut HashSet<&'a str>) {
                         }
                     }
                 }
-                Statement::Block(inner) => pending.push(inner),
+                Statement::Block(inner) | Statement::While { body: inner, .. } => pending.push(inner),
                 Statement::If {
                     branches,
                     else_branch,
@@ -709,6 +728,86 @@ fn compile_statements<'a>(
                     binding.register = dest;
                 }
             }
+            Statement::While { condition, body } => {
+                // Resolve loop-carried locals at their lexical levels. The
+                // initialization copies execute once before the loop header;
+                // backedges update only those registers that might change.
+                let mut assigned = HashSet::new();
+                assigned_names(body, &mut assigned);
+                let mut carried = Vec::new();
+                let mut candidates = scopes
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(level, scope)| {
+                        scope
+                            .iter()
+                            .filter(|(name, binding)| {
+                                !binding.constant && assigned.contains(*name)
+                            })
+                            .map(move |(name, _)| (level, *name))
+                    })
+                    .collect::<Vec<_>>();
+                candidates.sort_unstable();
+                for (level, name) in candidates {
+                    if program.registers >= MAX_REGISTERS {
+                        return Err(Error::TooLarge);
+                    }
+                    let source = scopes
+                        .get(level)
+                        .and_then(|scope| scope.get(name))
+                        .ok_or(Error::InvalidBytecode)?
+                        .register;
+                    let dest = program.registers;
+                    program.registers += 1;
+                    emit_instruction(program, Instruction::LoopCopy { dest, input: source })?;
+                    scopes
+                        .get_mut(level)
+                        .and_then(|scope| scope.get_mut(name))
+                        .ok_or(Error::InvalidBytecode)?
+                        .register = dest;
+                    carried.push((level, name, dest));
+                }
+                let start = program.code.len();
+                let reset_start = program.registers;
+                emit_instruction(
+                    program,
+                    Instruction::LoopReset {
+                        start: reset_start,
+                        end: usize::MAX,
+                    },
+                )?;
+                let guard = emit_condition(program, condition, scopes, 0)?;
+                let exit_at = program.code.len();
+                emit_instruction(
+                    program,
+                    Instruction::BranchIfFalse {
+                        condition: guard,
+                        target: usize::MAX,
+                    },
+                )?;
+                let mut inner = scopes.clone();
+                inner.push(HashMap::new());
+                let returned = compile_statements(body, program, &mut inner, depth + 1)?;
+                if returned.is_none() {
+                    for &(level, name, dest) in &carried {
+                        let source = inner
+                            .get(level)
+                            .and_then(|scope| scope.get(name))
+                            .ok_or(Error::InvalidBytecode)?
+                            .register;
+                        emit_instruction(program, Instruction::LoopCopy { dest, input: source })?;
+                    }
+                    emit_instruction(program, Instruction::LoopJump { target: start })?;
+                }
+                program.code[start] = Instruction::LoopReset {
+                    start: reset_start,
+                    end: program.registers,
+                };
+                program.code[exit_at] = Instruction::BranchIfFalse {
+                    condition: guard,
+                    target: program.code.len(),
+                };
+            }
             Statement::Return(values) if values.len() == 1 => {
                 let value = emit(program, &values[0], 0, scopes)?;
                 emit_instruction(program, Instruction::Return { source: value })?;
@@ -787,6 +886,7 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
         let valid = match *instruction {
             Instruction::Load { dest, .. } => register(dest),
             Instruction::Neg { dest, input }
+            | Instruction::LoopCopy { dest, input }
             | Instruction::BitNot { dest, input }
             | Instruction::NumericTruthy { dest, input }
             | Instruction::BooleanNot { dest, input }
@@ -809,6 +909,11 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
                 register(condition) && target > pc && target < size
             }
             Instruction::Jump { target } => target > pc && target < size,
+            Instruction::LoopReset { start, end } => start < end && end <= program.registers,
+            Instruction::LoopJump { target } => {
+                target < pc
+                    && matches!(program.code.get(target), Some(Instruction::LoopReset { .. }))
+            }
             Instruction::Return { source } => register(source),
         };
         if !valid {
@@ -831,7 +936,12 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
             .ok_or(Error::InvalidBytecode)
     }
     let mut pc = 0;
+    let mut steps = 0usize;
     while pc < program.code.len() {
+        if steps >= MAX_REGISTER_STEPS {
+            return Err(Error::StepBudgetExceeded);
+        }
+        steps += 1;
         let (dest, value) = match program.code[pc] {
             Instruction::BranchIfFalse { condition, target } => {
                 if target <= pc || target >= program.code.len() {
@@ -845,6 +955,34 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
                 continue;
             }
             Instruction::Return { source } => return read(&registers, source),
+            Instruction::LoopReset { start, end } => {
+                for value in registers
+                    .get_mut(start..end)
+                    .ok_or(Error::InvalidBytecode)?
+                {
+                    *value = None;
+                }
+                pc += 1;
+                continue;
+            }
+            Instruction::LoopJump { target } => {
+                if target >= pc
+                    || !matches!(
+                        program.code.get(target),
+                        Some(Instruction::LoopReset { .. })
+                    )
+                {
+                    return Err(Error::InvalidBytecode);
+                }
+                pc = target;
+                continue;
+            }
+            Instruction::LoopCopy { dest, input } => {
+                let value = read(&registers, input)?;
+                *registers.get_mut(dest).ok_or(Error::InvalidBytecode)? = Some(value);
+                pc += 1;
+                continue;
+            },
             Instruction::Jump { target } => {
                 if target <= pc || target >= program.code.len() {
                     return Err(Error::InvalidBytecode);
