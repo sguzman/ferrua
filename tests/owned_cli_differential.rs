@@ -625,7 +625,7 @@ fn owned_string_format_numeric_width_precision_and_zero_padding_match_lua54() {
         "print(string.format('%6.4x',26)=='  001a',string.format('%5.3o',7)=='  007')",
         "print(string.format('%5.0d',0)=='     ',string.format('%.0d',0)=='')",
         "print(string.format('%-6.4d',42)=='0042  ',string.format('%06.4d',42)=='  0042')",
-        "print(string.format('%04c',65)=='   A',string.format('%-4c',65)=='A   ')",
+        "print(string.format('%4c',65)=='   A',string.format('%-4c',65)=='A   ')",
         "print(string.format('%5d',-1)=='   -1',string.format('%02u',-1)=='18446744073709551615')",
         "print(string.format('x:%5d/%04x',-2,15)=='x:   -2/000f')",
         "local ok,s=pcall(string.format,'%05d',-7); print(ok,s); local bad,x=pcall(string.format,'%6.3d'); print(bad,type(x))",

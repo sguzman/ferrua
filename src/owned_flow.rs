@@ -5865,9 +5865,12 @@ impl Execution<'_> {
                                         .into(),
                                 ));
                             }
-                            if specifier == b'c' && precision.is_some() {
+                            // Lua 5.4 allows width and '-' for %c, but
+                            // rejects zero-padding and any precision.
+                            if specifier == b'c' && (precision.is_some() || zero_pad) {
                                 return Err(FlowError::Unsupported(
-                                    "Lua %c precision is not implemented".into(),
+                                    "Lua %c accepts width and '-' but no zero flag or precision"
+                                        .into(),
                                 ));
                             }
                             let value = *args.get(argument).ok_or(FlowError::TypeError)?;
