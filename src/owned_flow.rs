@@ -8700,6 +8700,26 @@ mod tests {
     }
 
     #[test]
+    fn instruction_quantum_preserves_nested_frames_varargs_and_shared_budget() {
+        // More than 64 instructions execute in both the enclosing frame
+        // and the closure. A pause must not restart a loop or lose varargs.
+        let script = "local function sum(...) local total=0 for i=1,70 do total=total+i end return total,... end return sum(7,8)";
+        let program = compile_flow_chunk(script).unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Ok(vec![
+                Value::Integer(2485),
+                Value::Integer(7),
+                Value::Integer(8)
+            ])
+        );
+        assert_eq!(
+            execute_flow_values(&program, 50),
+            Err(FlowError::StepBudgetExceeded)
+        );
+    }
+
+    #[test]
     fn runs_while_loops_and_parallel_assignments() {
         assert_eq!(evaluate("local n=0; while n<5 do n=n+1 end; return n"), 5);
         assert_eq!(
