@@ -7663,7 +7663,7 @@ impl Execution<'_> {
                 let progress = if let Some(child) = active.last_mut() {
                     self.execute_frame(&child.instructions, &mut child.frame, FRAME_STEP_QUANTUM)?
                 } else {
-                    self.execute_frame(instructions, root, FRAME_STEP_QUANTUM)?
+                    self.execute_frame(instructions, &mut *root, FRAME_STEP_QUANTUM)?
                 };
                 match progress {
                     FrameProgress::Paused => continue,
@@ -7728,7 +7728,7 @@ impl Execution<'_> {
                             let parent = if let Some(parent) = active.last_mut() {
                                 &mut parent.frame
                             } else {
-                                root
+                                &mut *root
                             };
                             if child.many {
                                 parent.last_multiple = Some(values.len());
@@ -7754,7 +7754,7 @@ impl Execution<'_> {
     /// Execute up to one instruction quantum against a retained frame.
     /// A paused frame is intact: resumption continues at the next instruction
     /// without replaying a prior bytecode operation or resetting the quota.
-    /// Nested calls still execute synchronously, so this is not Lua yield.
+    /// Native callback paths still execute synchronously; this is not Lua yield.
     fn execute_frame(
         &mut self,
         instructions: &[Op],
