@@ -845,10 +845,11 @@
                 },
                 {
                   "text": "Parse golden Lua fixtures",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "tests/owned_syntax.rs: 27 checked-in Lua scripts parsed into owned ASTs; GitHub Actions 40351211626 (five jobs passed, including upstream Lua 5.4 differential)"
                 }
               ],
-              "progress": 0
+              "progress": 50
             },
             {
               "id": "T302",

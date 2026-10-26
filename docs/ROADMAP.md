@@ -164,9 +164,9 @@
 
 ### 🔣 P3 — Ferrua-owned language engine — `██████████ 99%`
 
-- 🧩 **T301** Lexing, parsing and lexical scope — `░░░░░░░░░░ 0%`
+- 🧩 **T301** Lexing, parsing and lexical scope — `█████░░░░░ 50%`
   - [ ] Implement owned lexer/parser
-  - [ ] Parse golden Lua fixtures
+  - [x] Parse golden Lua fixtures — tests/owned_syntax.rs: 27 checked-in Lua scripts parsed into owned ASTs; GitHub Actions 40351211626 (five jobs passed, including upstream Lua 5.4 differential)
 - 📜 **T302** Bytecode compiler and register VM — `░░░░░░░░░░ 0%`
   - [ ] Implement compiler and register dispatcher
   - [ ] Closures, frames and coroutines tested
@@ -984,7 +984,7 @@
 
 **Feature inventory** (computed from associated atomic task progress):
 
-- 🔩 Independent compiler and VM — `░░░░░░░░░░ 0%`
+- 🔩 Independent compiler and VM — `███░░░░░░░ 25%`
 - 🧪 Verified Lua compatibility — `███████░░░ 67%`
 - 🔡 Ferrua-owned lexer scaffold — `██████████ 100%`
 - 🧮 Experimental expression AST — `██████████ 100%`
