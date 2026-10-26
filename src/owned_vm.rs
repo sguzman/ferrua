@@ -9,6 +9,14 @@ use std::fmt;
 const MAX_REGISTERS: usize = 16384;
 const MAX_REGISTER_STEPS: usize = 100_000;
 const MAX_REGISTER_STRING_BYTES: usize = 65_536;
+const MAX_CALL_ARGUMENTS: usize = 128;
+
+/// Bounded first-class builtins in the independent register dispatcher.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RegisterBuiltin {
+    Type,
+    ToString,
+}
 
 /// Bounded register values with immutable, program-owned byte-string literals.
 /// Dynamic strings, tables and functions remain unimplemented.
@@ -21,6 +29,8 @@ pub enum RegisterValue {
     Float(u64),
     /// Index into this program's immutable Lua byte-string pool.
     String(usize),
+    /// First-class builtin function identity, not a Lua closure.
+    Builtin(RegisterBuiltin),
 }
 
 impl RegisterValue {
@@ -134,6 +144,19 @@ pub enum Instruction {
     LoadString {
         dest: usize,
         index: usize,
+    },
+    LoadBuiltin {
+        dest: usize,
+        builtin: RegisterBuiltin,
+    },
+    /// Arguments are evaluated first and placed on the call stack in Lua order.
+    PushArgument {
+        source: usize,
+    },
+    Call {
+        dest: usize,
+        callee: usize,
+        argc: usize,
     },
     Length {
         dest: usize,
@@ -486,14 +509,44 @@ fn emit<'a>(
                         )?;
                         return Ok(output);
                     }
-                    return locals
+                    if let Some(register) = locals
                         .iter()
                         .rev()
                         .find_map(|scope| scope.get(*text).map(|binding| binding.register))
-                        .ok_or_else(|| {
-                            Error::Unsupported(format!("unbound or unsupported name: {text}"))
-                        });
+                    {
+                        return Ok(register);
+                    }
+                    let builtin = match *text {
+                        "type" => RegisterBuiltin::Type,
+                        "tostring" => RegisterBuiltin::ToString,
+                        _ => {
+                            return Err(Error::Unsupported(format!(
+                                "unbound or unsupported name: {text}"
+                            )));
+                        }
+                    };
+                    let dest = program.registers;
+                    program.registers += 1;
+                    emit_instruction(program, Instruction::LoadBuiltin { dest, builtin })?;
+                    return Ok(dest);
                 }
+            }
+        }
+        Expr::Call { callee, arguments } => {
+            // A bounded register-call subset with actual function values.
+            // Nested calls consume only their own pushed arguments.
+            if arguments.len() > MAX_CALL_ARGUMENTS {
+                return Err(Error::TooLarge);
+            }
+            let callee = emit(program, callee, depth + 1, locals)?;
+            for argument in arguments {
+                let source = emit(program, argument, depth + 1, locals)?;
+                emit_instruction(program, Instruction::PushArgument { source })?;
+            }
+            Instruction::Call {
+                dest: program.registers,
+                callee,
+                argc: arguments.len(),
             }
         }
         Expr::Unary { op: "#", right } => {
@@ -1721,6 +1774,11 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             Instruction::LoadString { dest, index } => {
                 register(dest) && index < program.strings.len()
             }
+            Instruction::LoadBuiltin { dest, .. } => register(dest),
+            Instruction::PushArgument { source } => register(source),
+            Instruction::Call { dest, callee, argc } => {
+                register(dest) && register(callee) && argc <= MAX_CALL_ARGUMENTS
+            }
             Instruction::Load { dest, .. }
             | Instruction::LoadBoolean { dest, .. }
             | Instruction::LoadFloat { dest, .. }
@@ -1851,6 +1909,7 @@ pub fn execute_register_program_with_strings_and_budget(
     let mut strings = program.strings.clone();
     let mut string_bytes_used: usize = strings.iter().map(Vec::len).sum();
     let mut return_values = Vec::new();
+    let mut call_arguments = Vec::new();
     let mut registers: Vec<Option<RegisterValue>> = vec![None; program.registers];
     fn read(registers: &[Option<RegisterValue>], at: usize) -> Result<RegisterValue, Error> {
         registers
@@ -1893,6 +1952,14 @@ pub fn execute_register_program_with_strings_and_budget(
                     return Err(Error::TooLarge);
                 }
                 return_values.push(read(&registers, source)?);
+                pc += 1;
+                continue;
+            }
+            Instruction::PushArgument { source } => {
+                if call_arguments.len() >= MAX_CALL_ARGUMENTS * 2 {
+                    return Err(Error::TooLarge);
+                }
+                call_arguments.push(read(&registers, source)?);
                 pc += 1;
                 continue;
             }
@@ -2090,6 +2157,58 @@ pub fn execute_register_program_with_strings_and_budget(
             Instruction::LoadBoolean { dest, value } => (dest, RegisterValue::Boolean(value)),
             Instruction::LoadFloat { dest, bits } => (dest, RegisterValue::Float(bits)),
             Instruction::LoadString { dest, index } => (dest, RegisterValue::String(index)),
+            Instruction::LoadBuiltin { dest, builtin } => {
+                (dest, RegisterValue::Builtin(builtin))
+            }
+            Instruction::Call { dest, callee, argc } => {
+                let function = read(&registers, callee)?;
+                let start = call_arguments
+                    .len()
+                    .checked_sub(argc)
+                    .ok_or(Error::InvalidBytecode)?;
+                let arguments = &call_arguments[start..];
+                let output = match function {
+                    RegisterValue::Builtin(RegisterBuiltin::Type) => {
+                        let first = arguments.first().ok_or(Error::TypeError)?;
+                        let bytes = match first {
+                            RegisterValue::Nil => b"nil".as_slice(),
+                            RegisterValue::Boolean(_) => b"boolean",
+                            RegisterValue::Integer(_) | RegisterValue::Float(_) => b"number",
+                            RegisterValue::String(_) => b"string",
+                            RegisterValue::Builtin(_) => b"function",
+                        };
+                        intern_register_string(
+                            bytes.to_vec(),
+                            &mut strings,
+                            &mut string_bytes_used,
+                        )?
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::ToString) => {
+                        let first = arguments.first().ok_or(Error::TypeError)?;
+                        let bytes = match first {
+                            RegisterValue::Nil => b"nil".to_vec(),
+                            RegisterValue::Boolean(value) => value.to_string().into_bytes(),
+                            RegisterValue::Integer(value) => value.to_string().into_bytes(),
+                            RegisterValue::Float(bits) => {
+                                let value = f64::from_bits(*bits);
+                                if value.is_subnormal() {
+                                    format!("{value:.13e}").into_bytes()
+                                } else {
+                                    format!("{value:?}").into_bytes()
+                                }
+                            }
+                            RegisterValue::String(index) => {
+                                strings.get(*index).cloned().ok_or(Error::InvalidBytecode)?
+                            }
+                            RegisterValue::Builtin(_) => b"function: builtin".to_vec(),
+                        };
+                        intern_register_string(bytes, &mut strings, &mut string_bytes_used)?
+                    }
+                    _ => return Err(Error::TypeError),
+                };
+                call_arguments.truncate(start);
+                (dest, output)
+            }
             Instruction::Length { dest, input } => {
                 let length = match read(&registers, input)? {
                     RegisterValue::String(index) => {
@@ -2259,6 +2378,27 @@ pub fn execute_register_program_with_strings_and_budget(
         values: return_values,
         strings,
     })
+}
+
+/// Intern execution-owned byte strings, preserving equality and quota
+/// accounting for both dynamic concatenation and first-class builtin calls.
+fn intern_register_string(
+    bytes: Vec<u8>,
+    strings: &mut Vec<Vec<u8>>,
+    used_bytes: &mut usize,
+) -> Result<RegisterValue, Error> {
+    if let Some(index) = strings.iter().position(|value| *value == bytes) {
+        return Ok(RegisterValue::String(index));
+    }
+    if strings.len() >= MAX_REGISTERS
+        || used_bytes.saturating_add(bytes.len()) > MAX_REGISTER_STRING_BYTES
+    {
+        return Err(Error::TooLarge);
+    }
+    *used_bytes += bytes.len();
+    let index = strings.len();
+    strings.push(bytes);
+    Ok(RegisterValue::String(index))
 }
 
 /// Byte-correct concatenation input. Numbers are formatted without routing
