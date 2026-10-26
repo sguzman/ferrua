@@ -5852,12 +5852,17 @@ impl Execution<'_> {
                         if specifier == b'%' && !left_align && width == 0 && precision.is_none() {
                             output.push(b'%');
                         } else {
-                            let numeric = matches!(specifier, b'd' | b'i' | b'u' | b'o' | b'x' | b'X');
+                            let numeric =
+                                matches!(specifier, b'd' | b'i' | b'u' | b'o' | b'x' | b'X');
                             if (left_align || width > 0 || precision.is_some() || zero_pad)
-                                && !matches!(specifier, b's' | b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'c')
+                                && !matches!(
+                                    specifier,
+                                    b's' | b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'c'
+                                )
                             {
                                 return Err(FlowError::Unsupported(
-                                    "Lua width and precision for this format are not implemented".into(),
+                                    "Lua width and precision for this format are not implemented"
+                                        .into(),
                                 ));
                             }
                             if specifier == b'c' && precision.is_some() {
@@ -5936,8 +5941,8 @@ impl Execution<'_> {
                                 // decimal precision and width. Precision
                                 // suppresses the zero flag; negative signs
                                 // precede any precision/width zero padding.
-                                let negative = matches!(specifier, b'd' | b'i')
-                                    && part.first() == Some(&b'-');
+                                let negative =
+                                    matches!(specifier, b'd' | b'i') && part.first() == Some(&b'-');
                                 if negative {
                                     part.remove(0);
                                 }
