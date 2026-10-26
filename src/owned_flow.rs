@@ -39,6 +39,8 @@ pub enum Value {
     Table(usize),
     /// Opaque, execution-local function identity.
     Function(usize),
+    /// Opaque, execution-local coroutine identity.
+    Thread(usize),
     /// First-party, pure Lua core builtins have first-class function values.
     Builtin(Builtin),
 }
@@ -71,6 +73,10 @@ pub enum Builtin {
     Pcall,
     Xpcall,
     CollectGarbage,
+    CoroutineCreate,
+    CoroutineResume,
+    CoroutineYield,
+    CoroutineStatus,
     MathAbs,
     MathFloor,
     MathCeil,
@@ -126,6 +132,15 @@ pub enum Builtin {
     TableMove,
     TableSort,
 }
+
+const COROUTINE_GLOBALS: &[(&[u8], Builtin)] = &[
+    (b"create", Builtin::CoroutineCreate),
+    (b"resume", Builtin::CoroutineResume),
+    (b"yield", Builtin::CoroutineYield),
+    (b"status", Builtin::CoroutineStatus),
+];
+
+const MAX_COROUTINES: usize = 64;
 
 const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"abs", Builtin::MathAbs),
@@ -1970,11 +1985,36 @@ struct OwnedScheduler {
     active: Vec<ActiveLuaCall>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CoroutineStatus {
+    Suspended,
+    Running,
+    Dead,
+}
+
+/// Coroutine states retain owned Lua continuations and their independent GC
+/// frame roots across yield/resume. Entries stay bounded and uncollected in
+/// this first stage; complete thread GC is a later conformance requirement.
+struct OwnedCoroutine {
+    entry: usize,
+    scheduler: Option<OwnedScheduler>,
+    status: CoroutineStatus,
+    allocations: Vec<Vec<usize>>,
+    roots: Vec<GcFrameRoots>,
+    awaiting_resume: Option<bool>,
+}
+
+struct SavedCallContext {
+    allocations: Vec<Vec<usize>>,
+    roots: Vec<GcFrameRoots>,
+}
+
 /// A bounded instruction slice is an internal checkpoint, not a coroutine
 /// yield. Nested function calls remain synchronous until their own return.
 enum FrameProgress {
     Paused,
     Returned(Vec<Value>),
+    Yield { values: Vec<Value>, many: bool },
     /// The parent cursor has already advanced. A future trampoline can
     /// enqueue the child instead of invoking it on the Rust call stack.
     Call {
@@ -1982,6 +2022,11 @@ enum FrameProgress {
         args: Vec<Value>,
         many: bool,
     },
+}
+
+enum SchedulerOutcome {
+    Returned(Vec<Value>),
+    Yield { values: Vec<Value>, many: bool },
 }
 
 const FRAME_STEP_QUANTUM: usize = 64;
@@ -2031,6 +2076,13 @@ struct Execution<'a> {
     string_table: Option<usize>,
     utf8_table: Option<usize>,
     table_library: Option<usize>,
+    coroutine_table: Option<usize>,
+    coroutines: Vec<Option<OwnedCoroutine>>,
+    current_coroutine: Option<usize>,
+    /// Roots from calling frames while a coroutine's own roots are active.
+    saved_call_contexts: Vec<SavedCallContext>,
+    /// The entry functions of coroutines currently executing via resume.
+    active_coroutine_entries: Vec<Value>,
 }
 
 impl Execution<'_> {
@@ -2398,6 +2450,7 @@ impl Execution<'_> {
             self.string_table,
             self.utf8_table,
             self.table_library,
+            self.coroutine_table,
         ]
         .into_iter()
         .flatten()
@@ -3343,6 +3396,24 @@ impl Execution<'_> {
     }
 
     /// Lazily root a mutable Lua 5.4.6 byte-oriented UTF-8 table.
+    fn materialize_coroutine_table(&mut self, pending: &[Value]) -> Result<usize, FlowError> {
+        if let Some(handle) = self.coroutine_table {
+            return Ok(handle);
+        }
+        self.reserve_lazy_table_slot(pending)?;
+        let handle = self.insert_table(TableStorage {
+            array: Vec::new(),
+            hashed: HashMap::new(),
+            metatable: None,
+        })?;
+        self.coroutine_table = Some(handle);
+        for &(name, builtin) in COROUTINE_GLOBALS {
+            let key = self.intern_rooted_string(name.to_vec(), pending)?;
+            self.write_table(handle, TableKey::Hashed(key), Value::Builtin(builtin))?;
+        }
+        Ok(handle)
+    }
+
     fn materialize_utf8_table(&mut self, pending: &[Value]) -> Result<usize, FlowError> {
         if let Some(handle) = self.utf8_table {
             return Ok(handle);
@@ -3423,6 +3494,9 @@ impl Execution<'_> {
         let table_key = self.intern_rooted_string(b"table".to_vec(), &[])?;
         let table = self.materialize_table_library(&[table_key])?;
         self.write_table(handle, TableKey::Hashed(table_key), Value::Table(table))?;
+        let co_key = self.intern_rooted_string(b"coroutine".to_vec(), &[])?;
+        let coroutines = self.materialize_coroutine_table(&[co_key])?;
+        self.write_table(handle, TableKey::Hashed(co_key), Value::Table(coroutines))?;
         for (key, value) in std::mem::take(&mut self.globals) {
             self.write_table(handle, TableKey::Hashed(Value::String(key)), value)?;
         }
@@ -3463,6 +3537,9 @@ impl Execution<'_> {
         }
         if name == b"table" {
             return Ok(Value::Table(self.materialize_table_library(&[])?));
+        }
+        if name == b"coroutine" {
+            return Ok(Value::Table(self.materialize_coroutine_table(&[])?));
         }
         if name == b"_VERSION" {
             return self.intern_rooted_string(b"Lua 5.4".to_vec(), &[]);
@@ -8769,6 +8846,11 @@ pub fn execute_flow_capture_with_args<'a>(
         string_table: None,
         utf8_table: None,
         table_library: None,
+        coroutine_table: None,
+        coroutines: Vec::new(),
+        current_coroutine: None,
+        saved_call_contexts: Vec::new(),
+        active_coroutine_entries: Vec::new(),
     };
     // Lua's default seed is intentionally weak/noncryptographic; explicit
     // randomseed(x,y) is deterministic, and has upstream Lua 5.4 parity tests.
