@@ -310,11 +310,13 @@ pub fn tokenize(source: &str) -> Result<Vec<Token<'_>>, LexError> {
         }
         let start = scan.at;
         let line = scan.line;
-        let kind = if b.is_ascii_alphabetic() || b == b'_' || b >= 128 {
+        // The pinned Lua 5.4 C-locale lexer recognizes ASCII letters
+        // and underscores in identifiers, not arbitrary UTF-8 bytes.
+        let kind = if b.is_ascii_alphabetic() || b == b'_' {
             scan.bump();
             while scan
                 .peek(0)
-                .is_some_and(|x| x.is_ascii_alphanumeric() || x == b'_' || x >= 128)
+                .is_some_and(|x| x.is_ascii_alphanumeric() || x == b'_')
             {
                 scan.bump();
             }
@@ -496,10 +498,28 @@ mod tests {
     }
 
     #[test]
-    fn escaped_and_multibyte_identifiers_keep_spelling() {
+    fn lua_c_locale_identifiers_are_ascii_only() {
+        assert_eq!(spellings("local cafe_42 = 7"), ["local", "cafe_42", "=", "7"]);
+        for source in [
+            "local café = 42",
+            "local α = 2",
+            "return naïve",
+            "local emoji😀 = 1",
+        ] {
+            let error = tokenize(source).unwrap_err();
+            assert_eq!(error.message, "unexpected character", "{source}");
+        }
+        let error = tokenize("local café = 42").unwrap_err();
+        assert_eq!((error.line, error.byte_offset), (1, 9));
+        // UTF-8 remains valid source data inside quoted strings,
+        // long strings and comments.
         assert_eq!(
-            spellings("local café = \"\\\"quoted\\\"\""),
-            ["local", "café", "=", "\"\\\"quoted\\\"\""]
+            spellings("local cafe = \"café\" -- naïve"),
+            ["local", "cafe", "=", "\"café\""]
+        );
+        assert_eq!(
+            spellings("return [=[α😀]=]"),
+            ["return", "[=[α😀]=]"]
         );
     }
 }

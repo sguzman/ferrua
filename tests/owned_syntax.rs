@@ -138,6 +138,40 @@ fn goto_syntax_and_scope_boundaries_match_lua_54_when_requested() {
 }
 
 #[test]
+fn lua_c_locale_unicode_identifier_rules_match_upstream_when_requested() {
+    let cases = [
+        ("local cafe_42=7; return cafe_42", true),
+        ("local café=42", false),
+        ("local α=2", false),
+        ("local helloé=3", false),
+        ("return naïve", false),
+        ("local s='café'; return s", true),
+        ("return [=[α😀]=]", true),
+        ("-- café, α and 😀 in comments\nreturn 1", true),
+    ];
+    for (source, valid) in cases {
+        let accepted = tokenize(source).is_ok();
+        assert_eq!(accepted, valid, "owned C-locale scanning: {source:?}");
+        if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
+            let reference = std::process::Command::new("lua5.4")
+                .args(["-e", source])
+                .output()
+                .expect("reference interpreter installed by differential job");
+            assert_eq!(
+                reference.status.success(),
+                valid,
+                "Lua 5.4 differs on {source:?}: {}",
+                String::from_utf8_lossy(&reference.stderr)
+            );
+        }
+    }
+}
+
+#[test]
 fn malformed_unicode_and_numeric_corners_do_not_panic() {
     for source in [
         "local x='café'",
