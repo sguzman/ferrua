@@ -1840,6 +1840,25 @@ mod tests {
     }
 
     #[test]
+    fn register_loop_break_exits_preserve_nested_carried_values() {
+        for (source, expected) in [
+            ("local x=1; while true do x=x+3; break; x=100 end; return x", 4),
+            ("local x=0; while x<9 do x=x+1; if x==4 then break end end; return x", 4),
+            ("local x=0; repeat x=x+1; if x==3 then break end until x>99; return x", 3),
+            ("local x=0; repeat local i=x+1; x=i; if i>2 then break end until x>99; return x", 3),
+            ("local a=0; local b=0; while a<5 do a=a+1; while true do b=b+1; break end; if a==3 then break end end; return a*10+b", 33),
+            ("local x=1; while true do if true then x=x+4; break else x=90 end end; return x", 5),
+            ("local x=0; while true do do x=x+7; break end; x=99 end; return x", 7),
+            ("local x=0; while false do break end; return x", 0),
+        ] {
+            let program = compile_integer_chunk(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+            assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        }
+        assert!(compile_integer_chunk("break; return 0").is_err());
+        assert!(compile_integer_chunk("do break end; return 0").is_err());
+    }
+
+    #[test]
     fn register_while_loop_step_quota_prevents_unbounded_execution() {
         let loop_program =
             compile_integer_chunk("local n=0; while true do n=n+1 end; return n").unwrap();
