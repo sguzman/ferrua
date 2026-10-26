@@ -1942,6 +1942,18 @@ struct GmatchState {
     done: bool,
 }
 
+/// State that must survive a future suspended Lua call. It is deliberately
+/// owned instead of referencing a Rust invocation stack. Current execution
+/// is still synchronous; coroutine suspension remains unimplemented.
+struct OwnedCallFrame {
+    pc: usize,
+    slots: Vec<usize>,
+    stack: Vec<Value>,
+    prepared: Vec<PendingTarget>,
+    last_multiple: Option<usize>,
+    varargs: Vec<Value>,
+}
+
 struct Execution<'a> {
     program: &'a FlowProgram,
     budget: usize,
@@ -7563,11 +7575,34 @@ impl Execution<'_> {
             let cell = *slots.get(slot).ok_or(FlowError::InvalidBytecode)?;
             *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
         }
-        let mut stack = Vec::new();
-        let mut prepared = Vec::new();
-        let mut last_multiple = None;
-        let mut pc = 0;
-        while pc < instructions.len() {
+        let mut frame = OwnedCallFrame {
+            pc: 0,
+            slots,
+            stack: Vec::new(),
+            prepared: Vec::new(),
+            last_multiple: None,
+            varargs: varargs.to_vec(),
+        };
+        self.execute_frame(instructions, &mut frame)
+    }
+
+    /// Execute a fully owned call frame. Nested calls still run synchronously.
+    /// The next coroutine stage can stop and retain this state without
+    /// rebuilding locals, varargs, pending assignments or the program counter.
+    fn execute_frame(
+        &mut self,
+        instructions: &[Op],
+        frame: &mut OwnedCallFrame,
+    ) -> Result<Vec<Value>, FlowError> {
+        let OwnedCallFrame {
+            pc,
+            slots,
+            stack,
+            prepared,
+            last_multiple,
+            varargs,
+        } = frame;
+        while *pc < instructions.len() {
             if self.steps >= self.budget {
                 return Err(FlowError::StepBudgetExceeded);
             }
@@ -7586,8 +7621,8 @@ impl Execution<'_> {
             roots.slots.extend_from_slice(&slots);
             roots.prepared.clear();
             roots.prepared.extend_from_slice(&prepared);
-            let next = pc + 1;
-            match &instructions[pc] {
+            let next = *pc + 1;
+            match &instructions[*pc] {
                 Op::Constant(value) => stack.push(*value),
                 Op::ReadGlobal(key) => stack.push(self.read_global(*key)?),
                 Op::NewFunction(index) => {
@@ -7632,7 +7667,7 @@ impl Execution<'_> {
                     stack.push(Value::Function(handle));
                 }
                 Op::Call(argc) | Op::CallMany(argc) | Op::CallSpread { prefix: argc, .. } => {
-                    let arity = if matches!(instructions[pc], Op::CallSpread { .. }) {
+                    let arity = if matches!(instructions[*pc], Op::CallSpread { .. }) {
                         let expanded = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
                         argc.checked_add(expanded).ok_or(FlowError::TooLarge)?
                     } else {
@@ -7780,10 +7815,10 @@ impl Execution<'_> {
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
-                                instructions[pc],
+                                instructions[*pc],
                                 Op::CallMany(_) | Op::CallSpread { many: true, .. }
                             ) {
-                                last_multiple = Some(returned.len());
+                                *last_multiple = Some(returned.len());
                                 stack.extend(returned);
                             } else {
                                 stack.push(returned.into_iter().next().unwrap_or(Value::Nil));
@@ -7791,7 +7826,7 @@ impl Execution<'_> {
                             if stack.len() > MAX_STACK {
                                 return Err(FlowError::TooLarge);
                             }
-                            pc = next;
+                            *pc = next;
                             continue;
                         }
                         let value = args.first().copied().unwrap_or(Value::Nil);
@@ -7901,16 +7936,16 @@ impl Execution<'_> {
                             Builtin::TableMove => self.table_move_builtin(&args)?,
                         };
                         if matches!(
-                            instructions[pc],
+                            instructions[*pc],
                             Op::CallMany(_) | Op::CallSpread { many: true, .. }
                         ) {
-                            last_multiple = Some(1);
+                            *last_multiple = Some(1);
                         }
                         stack.push(result);
                         if stack.len() > MAX_STACK {
                             return Err(FlowError::TooLarge);
                         }
-                        pc = next;
+                        *pc = next;
                         continue;
                     }
                     let Value::Function(handle) = callable else {
@@ -7918,10 +7953,10 @@ impl Execution<'_> {
                     };
                     let returned = self.call_owned_function(handle, &args)?;
                     if matches!(
-                        instructions[pc],
+                        instructions[*pc],
                         Op::CallMany(_) | Op::CallSpread { many: true, .. }
                     ) {
-                        last_multiple = Some(returned.len());
+                        *last_multiple = Some(returned.len());
                         stack.extend(returned);
                     } else {
                         stack.push(returned.into_iter().next().unwrap_or(Value::Nil));
@@ -7931,7 +7966,7 @@ impl Execution<'_> {
                     stack.push(varargs.first().copied().unwrap_or(Value::Nil));
                 }
                 Op::VarargMany => {
-                    last_multiple = Some(varargs.len());
+                    *last_multiple = Some(varargs.len());
                     stack.extend_from_slice(varargs);
                 }
                 Op::AdjustTail { prefix, targets } => {
@@ -7977,7 +8012,7 @@ impl Execution<'_> {
                     }
                     let values = stack.split_off(stack.len() - indices.len());
                     for (index, value) in indices.iter().zip(values) {
-                        let cell = self.iteration_cell(&mut slots, *index)?;
+                        let cell = self.iteration_cell(slots, *index)?;
                         *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
                     }
                 }
@@ -7999,7 +8034,7 @@ impl Execution<'_> {
                     }
                 }
                 Op::RenewLocal(slot) => {
-                    self.iteration_cell(&mut slots, *slot)?;
+                    self.iteration_cell(slots, *slot)?;
                 }
                 Op::PrepareLocal(slot) => {
                     let cell = *slots.get(*slot).ok_or(FlowError::InvalidBytecode)?;
@@ -8120,7 +8155,7 @@ impl Execution<'_> {
                     }
                 }
                 Op::NewTable(count) | Op::NewTableTail(count) => {
-                    let arity = if matches!(instructions[pc], Op::NewTableTail(_)) {
+                    let arity = if matches!(instructions[*pc], Op::NewTableTail(_)) {
                         let expanded = last_multiple.take().ok_or(FlowError::InvalidBytecode)?;
                         count.checked_add(expanded).ok_or(FlowError::TooLarge)?
                     } else {
@@ -8295,13 +8330,13 @@ impl Execution<'_> {
                         if *target > instructions.len() {
                             return Err(FlowError::InvalidBytecode);
                         }
-                        pc = *target;
+                        *pc = *target;
                         continue;
                     }
                 }
                 Op::JumpIfFalseKeep(target) | Op::JumpIfTrueKeep(target) => {
                     let value = *stack.last().ok_or(FlowError::InvalidBytecode)?;
-                    let should_jump = match instructions[pc] {
+                    let should_jump = match instructions[*pc] {
                         Op::JumpIfFalseKeep(_) => !value.truthy(),
                         Op::JumpIfTrueKeep(_) => value.truthy(),
                         _ => unreachable!("guarded opcode"),
@@ -8310,7 +8345,7 @@ impl Execution<'_> {
                         if *target > instructions.len() {
                             return Err(FlowError::InvalidBytecode);
                         }
-                        pc = *target;
+                        *pc = *target;
                         continue;
                     }
                 }
@@ -8321,7 +8356,7 @@ impl Execution<'_> {
                     if *target > instructions.len() {
                         return Err(FlowError::InvalidBytecode);
                     }
-                    pc = *target;
+                    *pc = *target;
                     continue;
                 }
                 Op::ForCheck {
@@ -8385,7 +8420,7 @@ impl Execution<'_> {
                         )
                     };
                     if !enters {
-                        pc = *exit;
+                        *pc = *exit;
                         continue;
                     }
                     if floating {
@@ -8396,7 +8431,7 @@ impl Execution<'_> {
                             .get_mut(counter_cell)
                             .ok_or(FlowError::InvalidBytecode)? = Some(visible);
                     }
-                    let cell = self.iteration_cell(&mut slots, *variable)?;
+                    let cell = self.iteration_cell(slots, *variable)?;
                     *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(visible);
                 }
                 Op::ForStep {
@@ -8426,7 +8461,7 @@ impl Execution<'_> {
                     let updated = match (current, stride) {
                         (Value::Integer(current), Value::Integer(stride)) => {
                             let Some(updated) = current.checked_add(stride) else {
-                                pc = *exit;
+                                *pc = *exit;
                                 continue;
                             };
                             Value::Integer(updated)
@@ -8455,7 +8490,7 @@ impl Execution<'_> {
                     let returned = stack.split_off(stack.len() - count);
                     let first = returned.first().copied().unwrap_or(Value::Nil);
                     if first == Value::Nil {
-                        pc = *exit;
+                        *pc = *exit;
                         continue;
                     }
                     let control_cell = *slots.get(*control).ok_or(FlowError::InvalidBytecode)?;
@@ -8464,7 +8499,7 @@ impl Execution<'_> {
                         .get_mut(control_cell)
                         .ok_or(FlowError::InvalidBytecode)? = Some(first);
                     for (position, slot) in variables.iter().enumerate() {
-                        let cell = self.iteration_cell(&mut slots, *slot)?;
+                        let cell = self.iteration_cell(slots, *slot)?;
                         let value = returned.get(position).copied().unwrap_or(Value::Nil);
                         *self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)? = Some(value);
                     }
@@ -8490,7 +8525,7 @@ impl Execution<'_> {
             if stack.len() > MAX_STACK {
                 return Err(FlowError::TooLarge);
             }
-            pc = next;
+            *pc = next;
         }
         Err(FlowError::NoReturn)
     }
