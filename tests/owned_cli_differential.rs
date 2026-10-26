@@ -724,6 +724,22 @@ fn owned_tonumber_explicit_base_wraps_like_lua54() {
 }
 
 #[test]
+fn owned_tonumber_hex_integer_and_signed_float_strings_match_lua54() {
+    for source in [
+        "print(tonumber('0xffffffffffffffff'),tonumber('0x10000000000000000'))",
+        "print(tonumber('0x8000000000000000')==math.mininteger)",
+        "print(tonumber('-0xffffffffffffffff'),tonumber('+0Xffffffffffffffff'))",
+        "print(tonumber('0x1p+2'),math.type(tonumber('0x1p+2')))",
+        "print(tonumber('-0x1.8p+2'),math.type(tonumber('-0x1.8p+2')))",
+        "print(tonumber('0x1.8'),tonumber('-0x.8p+3'))",
+        "print(tonumber('0x')==nil,tonumber('0x1p')==nil,tonumber('-0x')==nil)",
+        "print(tonumber('  +0x1a  '),tonumber('  -0x1.8p+1  '))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_binary_format_nul_termination_and_whitespace_match_lua54() {
     // Lua's format parser uses a NUL-terminated C string, even though
     // ordinary Lua string values can contain embedded NUL bytes.

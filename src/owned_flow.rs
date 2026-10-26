@@ -3695,16 +3695,7 @@ impl Execution<'_> {
         }
         match value {
             Value::Integer(_) | Value::Float(_) => Ok(value),
-            Value::String(handle) => {
-                if let Ok(converted) = self.arithmetic_operand(value) {
-                    return Ok(converted);
-                }
-                let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
-                let source = std::str::from_utf8(bytes).map_err(|_| FlowError::TypeError)?;
-                Ok(parse_lua_hex_float(source.trim())
-                    .map(|number| Value::Float(number.to_bits()))
-                    .unwrap_or(Value::Nil))
-            }
+            Value::String(_) => Ok(self.lua_numeric_operand(value).unwrap_or(Value::Nil)),
             _ => Ok(Value::Nil),
         }
     }
@@ -5420,11 +5411,11 @@ impl Execution<'_> {
         Ok(value)
     }
 
-    /// The binary-format library uses Lua numeric conversion for its
-    /// arguments, including hexadecimal floating strings such as 0x1.8p+2.
-    /// Keep this extension local to binary formats until the shared owned
-    /// arithmetic coercion path has its own conformance evidence.
-    fn pack_numeric_operand(&self, value: Value) -> Result<Value, FlowError> {
+    /// Lua-style number conversion used by the bounded binary formats
+    /// and tonumber. Hexadecimal integers wrap modulo 2^64 and signed
+    /// hexadecimal floating strings retain their floating representation.
+    /// Arithmetic operators keep their separately tested coercion path.
+    fn lua_numeric_operand(&self, value: Value) -> Result<Value, FlowError> {
         if let Ok(number) = self.arithmetic_operand(value) {
             return Ok(number);
         }
@@ -5455,7 +5446,7 @@ impl Execution<'_> {
     /// numeric strings, but not strings with a fractional numeric value.
     fn pack_integer_operand(&self, value: Value) -> Result<i64, FlowError> {
         self.exact_integer_operand(value).or_else(|_| {
-            let number = self.pack_numeric_operand(value)?;
+            let number = self.lua_numeric_operand(value)?;
             self.exact_integer_operand(number)
         })
     }
@@ -5591,7 +5582,7 @@ impl Execution<'_> {
                     PackField::Float { size, little } => {
                         let value = *args.get(argument).ok_or(FlowError::TypeError)?;
                         argument += 1;
-                        let number = match self.pack_numeric_operand(value)? {
+                        let number = match self.lua_numeric_operand(value)? {
                             Value::Integer(number) => number as f64,
                             Value::Float(bits) => f64::from_bits(bits),
                             _ => return Err(FlowError::TypeError),
