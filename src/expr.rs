@@ -637,12 +637,12 @@ impl<'a> JumpCollector<'a> {
         }
     }
 
-    fn validate(&self) -> Result<(), &'static str> {
+    fn validate(&self) -> Result<(), (&'static str, &'a str)> {
         for jump in &self.gotos {
             let mut current = Some(jump.block);
             let label = loop {
                 let Some(block) = current else {
-                    return Err("no visible label for goto");
+                    return Err(("no visible label for goto", jump.name));
                 };
                 if let Some(found) = self
                     .labels
@@ -654,14 +654,16 @@ impl<'a> JumpCollector<'a> {
                 current = self.parents[block];
             };
             if !label.live.iter().all(|local| jump.live.contains(local)) {
-                return Err("goto jumps into the scope of a local variable");
+                return Err(("goto jumps into the scope of a local variable", jump.name));
             }
         }
         Ok(())
     }
 }
 
-fn check_block_gotos<'a>(statements: &[Statement<'a>]) -> Result<(), &'static str> {
+fn check_block_gotos_detailed<'a>(
+    statements: &[Statement<'a>],
+) -> Result<(), (&'static str, &'a str)> {
     let mut checker = JumpCollector {
         parents: Vec::new(),
         labels: Vec::new(),
@@ -670,6 +672,10 @@ fn check_block_gotos<'a>(statements: &[Statement<'a>]) -> Result<(), &'static st
     };
     checker.scan(statements, None, &[], 0, true);
     checker.validate()
+}
+
+fn check_block_gotos<'a>(statements: &[Statement<'a>]) -> Result<(), &'static str> {
+    check_block_gotos_detailed(statements).map_err(|(message, _)| message)
 }
 
 pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
@@ -1204,7 +1210,19 @@ pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
     };
     let body = parser.block(&[], 0)?;
     check_block_labels(&body, &[]).map_err(|message| parser.error(message))?;
-    check_block_gotos(&body).map_err(|message| parser.error(message))?;
+    check_block_gotos_detailed(&body).map_err(|(message, name)| {
+        // The offending goto name is a borrowed lexer slice of source.
+        // Report its original token position, not the parser's EOF cursor.
+        let byte_offset = (name.as_ptr() as usize)
+            .checked_sub(source.as_ptr() as usize)
+            .filter(|offset| *offset <= source.len())
+            .unwrap_or(source.len());
+        ParseError {
+            line: source_eof_line(&source[..byte_offset]),
+            byte_offset,
+            message,
+        }
+    })?;
     Ok(body)
 }
 
