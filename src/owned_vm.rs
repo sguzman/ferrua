@@ -2314,6 +2314,46 @@ mod tests {
     }
 
     #[test]
+    fn rejects_malformed_numeric_for_dispatch_even_on_unreachable_paths() {
+        let original =
+            compile_integer_chunk("local x=0; for i=1,3 do x=x+i end; return x").unwrap();
+        let check_at = original
+            .code
+            .iter()
+            .position(|op| matches!(op, Instruction::NumericForCheck { .. }))
+            .unwrap();
+        let step_at = original
+            .code
+            .iter()
+            .position(|op| matches!(op, Instruction::NumericForStep { .. }))
+            .unwrap();
+        let mut bad_register = original.clone();
+        if let Instruction::NumericForCheck { visible, .. } = &mut bad_register.code[check_at] {
+            *visible = original.registers;
+        }
+        assert_eq!(
+            execute_integer_program(&bad_register),
+            Err(Error::InvalidBytecode)
+        );
+        let mut bad_exit = original.clone();
+        if let Instruction::NumericForCheck { exit, .. } = &mut bad_exit.code[check_at] {
+            *exit = check_at;
+        }
+        assert_eq!(
+            execute_integer_program(&bad_exit),
+            Err(Error::InvalidBytecode)
+        );
+        let mut bad_step = original;
+        if let Instruction::NumericForStep { exit, .. } = &mut bad_step.code[step_at] {
+            *exit = 0;
+        }
+        assert_eq!(
+            execute_integer_program(&bad_step),
+            Err(Error::InvalidBytecode)
+        );
+    }
+
+    #[test]
     fn rejects_invalid_register_bytecode() {
         let p = Program {
             code: vec![Instruction::Add {
