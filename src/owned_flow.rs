@@ -7750,20 +7750,32 @@ impl Execution<'_> {
             return Err(FlowError::TypeError);
         };
         let inputs = args.get(1..).unwrap_or_default();
+        if self.current_coroutine == Some(id)
+            || self.saved_call_contexts.iter().any(|c| c.coroutine_id == Some(id))
+        {
+            return Ok(vec![
+                Value::Boolean(false),
+                self.intern_rooted_string(b"cannot resume non-suspended coroutine".to_vec(), args)?,
+            ]);
+        }
         let mut state = self
             .coroutines
             .get_mut(id)
             .and_then(Option::take)
             .ok_or(FlowError::InvalidBytecode)?;
         if state.status != CoroutineStatus::Suspended {
+            let message = if state.status == CoroutineStatus::Dead {
+                b"cannot resume dead coroutine".as_slice()
+            } else {
+                b"cannot resume non-suspended coroutine".as_slice()
+            };
             self.coroutines[id] = Some(state);
             return Ok(vec![
                 Value::Boolean(false),
-                self.intern_rooted_string(b"cannot resume non-suspended coroutine".to_vec(), args)?,
+                self.intern_rooted_string(message.to_vec(), args)?,
             ]);
         }
 
-        state.status = CoroutineStatus::Running;
         let previous_depth = self.depth;
         let previous_coroutine = self.current_coroutine;
         let retained_depth = 1 + state.scheduler.as_ref().map_or(0, |s| s.active.len());
@@ -7771,6 +7783,7 @@ impl Execution<'_> {
             self.coroutines[id] = Some(state);
             return Err(FlowError::CallDepthExceeded);
         }
+        state.status = CoroutineStatus::Running;
         self.saved_call_contexts.push(SavedCallContext {
             allocations: std::mem::take(&mut self.frame_allocations),
             roots: std::mem::take(&mut self.gc_frame_roots),
@@ -7783,7 +7796,7 @@ impl Execution<'_> {
             .push(Value::Function(state.entry));
         self.depth = previous_depth + retained_depth;
 
-        let outcome = (|| -> Result<SchedulerOutcome, FlowError> {
+        let mut outcome = (|| -> Result<SchedulerOutcome, FlowError> {
             if state.scheduler.is_none() {
                 let closure = self
                     .closures
@@ -7852,12 +7865,15 @@ impl Execution<'_> {
                 state.awaiting_resume = Some(*many);
             }
             _ => {
-                if let Some(scheduler) = state.scheduler.take() {
-                    for _ in 0..scheduler.active.len() {
-                        self.release_call_frame()?;
-                    }
-                    if !self.frame_allocations.is_empty() {
-                        self.release_call_frame()?;
+                state.scheduler = None;
+                // An error during initial frame preparation can leave roots
+                // allocated before the scheduler itself has been installed.
+                // Release all owned frames, then restore the caller even when
+                // cleanup detects an internal allocation inconsistency.
+                while !self.frame_allocations.is_empty() {
+                    if let Err(error) = self.release_call_frame() {
+                        outcome = Err(error);
+                        break;
                     }
                 }
                 state.status = CoroutineStatus::Dead;
