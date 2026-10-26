@@ -466,15 +466,27 @@ fn register_literal_truthiness_matches_lua54_without_general_float_or_string_val
             );
         }
     }
-    // Condition-only literal lowering must not become an integer value
-    // for return, assignment, numeric loop control, or arithmetic.
-    for source in [
-        "return 0.0",
-        "return 'hello'",
-        "local x='hello'; return x",
-        "return 4 + 0.5",
-    ] {
+    // Strings still require a real Lua string value representation.
+    for source in ["return 'hello'", "local x='hello'; return x"] {
         assert!(compile_integer_chunk(source).is_err(), "{source}");
+    }
+    // Floats are now first-class tagged results, but the legacy integer
+    // compatibility API must still reject every noninteger return.
+    for (source, expected) in [
+        ("return 0.0", 0.0_f64),
+        ("return 4 + 0.5", 4.5_f64),
+    ] {
+        let chunk = compile_integer_chunk(source).unwrap();
+        assert_eq!(
+            ferrua::owned_vm::execute_register_program(&chunk),
+            Ok(ferrua::owned_vm::RegisterValue::Float(expected.to_bits())),
+            "{source}"
+        );
+        assert_eq!(
+            execute_integer_program(&chunk),
+            Err(ferrua::owned_vm::Error::TypeError),
+            "{source}"
+        );
     }
 }
 
