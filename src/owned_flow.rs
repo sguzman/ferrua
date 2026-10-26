@@ -5965,7 +5965,7 @@ impl Execution<'_> {
                                             digits,
                                             specifier == b'G',
                                             alternate,
-                                        )?
+                                        )?,
                                         _ => format!("{:.*}", digits, number).into_bytes(),
                                     };
                                     if matches!(specifier, b'e' | b'E') {
