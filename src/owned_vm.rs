@@ -230,6 +230,11 @@ pub enum Instruction {
     Return {
         source: usize,
     },
+    /// Append one evaluated scalar return value, retaining its position.
+    /// Executed return paths have exact Lua zero-versus-nil arity.
+    AppendReturn {
+        source: usize,
+    },
     NumericTruthy {
         dest: usize,
         input: usize,
@@ -313,11 +318,26 @@ pub struct Program {
 /// not to the compiled Program's static literal pool.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RegisterExecution {
+    /// First scalar result, adjusted to nil for zero-result returns.
     pub value: RegisterValue,
+    /// Exact arity and values for explicitly returned scalar expressions.
+    values: Vec<RegisterValue>,
     strings: Vec<Vec<u8>>,
 }
 
 impl RegisterExecution {
+    pub fn values(&self) -> &[RegisterValue] {
+        &self.values
+    }
+
+    /// Resolve any returned string against the execution-owned string pool.
+    pub fn value_string_bytes(&self, value: RegisterValue) -> Option<&[u8]> {
+        match value {
+            RegisterValue::String(index) => self.strings.get(index).map(Vec::as_slice),
+            _ => None,
+        }
+    }
+
     pub fn string_bytes(&self) -> Option<&[u8]> {
         match self.value {
             RegisterValue::String(index) => self.strings.get(index).map(Vec::as_slice),
@@ -1597,12 +1617,12 @@ fn compile_statements<'a>(
                 break;
             }
             Statement::Return(values) => {
-                // Lua evaluates every return expression from left to right,
-                // even when the caller only consumes the first value. Do
-                // not skip side effects or errors from surplus scalar RHSs.
+                // Preserve every scalar return value in evaluation order.
+                // General call/vararg multi-result expansion remains unsupported.
                 let mut first = None;
                 for expression in values {
                     let register = emit(program, expression, 0, scopes)?;
+                    emit_instruction(program, Instruction::AppendReturn { source: register })?;
                     if first.is_none() {
                         first = Some(register);
                     }
@@ -1713,6 +1733,7 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             | Instruction::BooleanNot { dest, input }
             | Instruction::BooleanCopy { dest, input }
             | Instruction::MergeCopy { dest, input } => register(dest) && register(input),
+            Instruction::AppendReturn { source } => register(source),
             Instruction::Add { dest, lhs, rhs }
             | Instruction::Sub { dest, lhs, rhs }
             | Instruction::Mul { dest, lhs, rhs }
@@ -1829,6 +1850,7 @@ pub fn execute_register_program_with_strings_and_budget(
     let budget = budget.min(MAX_REGISTER_STEPS);
     let mut strings = program.strings.clone();
     let mut string_bytes_used: usize = strings.iter().map(Vec::len).sum();
+    let mut return_values = Vec::new();
     let mut registers: Vec<Option<RegisterValue>> = vec![None; program.registers];
     fn read(registers: &[Option<RegisterValue>], at: usize) -> Result<RegisterValue, Error> {
         registers
@@ -1862,8 +1884,17 @@ pub fn execute_register_program_with_strings_and_budget(
             Instruction::Return { source } => {
                 return Ok(RegisterExecution {
                     value: read(&registers, source)?,
+                    values: return_values,
                     strings,
                 });
+            }
+            Instruction::AppendReturn { source } => {
+                if return_values.len() >= MAX_REGISTERS {
+                    return Err(Error::TooLarge);
+                }
+                return_values.push(read(&registers, source)?);
+                pc += 1;
+                continue;
             }
             Instruction::NumericForCheck {
                 counter,
@@ -2225,6 +2256,7 @@ pub fn execute_register_program_with_strings_and_budget(
     }
     Ok(RegisterExecution {
         value: read(&registers, program.result)?,
+        values: return_values,
         strings,
     })
 }
