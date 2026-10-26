@@ -115,6 +115,18 @@ pub enum Instruction {
         lhs: usize,
         rhs: usize,
     },
+    /// Lua's ordinary division always yields a floating-point number.
+    Div {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    /// Lua exponentiation also produces a floating-point result.
+    Pow {
+        dest: usize,
+        lhs: usize,
+        rhs: usize,
+    },
     FloorDiv {
         dest: usize,
         lhs: usize,
@@ -455,7 +467,7 @@ fn emit<'a>(
         Expr::Binary { op, left, right }
             if matches!(
                 *op,
-                "+" | "-" | "*" | "//" | "%" | "&" | "|" | "~" | "<<" | ">>"
+                "+" | "-" | "*" | "/" | "^" | "//" | "%" | "&" | "|" | "~" | "<<" | ">>"
             ) =>
         {
             let lhs = emit(program, left, depth + 1, locals)?;
@@ -465,6 +477,8 @@ fn emit<'a>(
                 "+" => Instruction::Add { dest, lhs, rhs },
                 "-" => Instruction::Sub { dest, lhs, rhs },
                 "*" => Instruction::Mul { dest, lhs, rhs },
+                "/" => Instruction::Div { dest, lhs, rhs },
+                "^" => Instruction::Pow { dest, lhs, rhs },
                 "//" => Instruction::FloorDiv { dest, lhs, rhs },
                 "%" => Instruction::Mod { dest, lhs, rhs },
                 "&" => Instruction::BitAnd { dest, lhs, rhs },
@@ -1510,6 +1524,8 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             Instruction::Add { dest, lhs, rhs }
             | Instruction::Sub { dest, lhs, rhs }
             | Instruction::Mul { dest, lhs, rhs }
+            | Instruction::Div { dest, lhs, rhs }
+            | Instruction::Pow { dest, lhs, rhs }
             | Instruction::FloorDiv { dest, lhs, rhs }
             | Instruction::Mod { dest, lhs, rhs }
             | Instruction::BitAnd { dest, lhs, rhs }
@@ -1813,6 +1829,22 @@ pub fn execute_register_program_with_budget(
                 };
                 (dest, result)
             }
+            Instruction::Div { dest, lhs, rhs } => (
+                dest,
+                RegisterValue::Float(
+                    (read(&registers, lhs)?.number()? / read(&registers, rhs)?.number()?)
+                        .to_bits(),
+                ),
+            ),
+            Instruction::Pow { dest, lhs, rhs } => (
+                dest,
+                RegisterValue::Float(
+                    read(&registers, lhs)?
+                        .number()?
+                        .powf(read(&registers, rhs)?.number()?)
+                        .to_bits(),
+                ),
+            ),
             Instruction::FloorDiv { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Integer(floor_div(
@@ -1936,7 +1968,7 @@ mod tests {
     }
     #[test]
     fn rejects_noninteger_or_side_effectful_expressions() {
-        for source in ["1/2", "math.abs(1)", "x+1", "2^3", "t[1]"] {
+        for source in ["math.abs(1)", "x+1", "t[1]"] {
             assert!(
                 matches!(
                     compile_integer_expression(source),
