@@ -646,7 +646,7 @@ fn owned_string_pack_nonpoweroftwo_integer_and_string_widths_match_lua54() {
         "local p=string.pack('<s5','xyz'); local v,n=string.unpack('<s5',p); print(#p,v,n,string.byte(p,1,5))",
         "local p=string.pack('>I3s3i3',0x123456,'x\\0y',-42); local a,b,c,n=string.unpack('>I3s3i3',p); print(#p,a,b=='x\\0y',c,n)",
         "local a=pcall(string.pack,'I3',16777216); local b=pcall(string.pack,'i3',8388608); local c=pcall(string.pack,'i3',-8388609); print(a,b,c)",
-        "local a=pcall(string.packsize,'i0'); local b=pcall(string.packsize,'s0'); local c=pcall(string.packsize,'I9'); print(a,b,c)",
+        "local a=pcall(string.packsize,'i0'); local b=pcall(string.packsize,'s0'); local c=pcall(string.packsize,'I17'); print(a,b,c)",
     ] {
         assert_parity(source, true);
     }
