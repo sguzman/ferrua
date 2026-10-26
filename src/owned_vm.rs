@@ -731,6 +731,49 @@ fn emit<'a>(
                 key,
             }
         }
+        Expr::MethodCall {
+            object,
+            method,
+            arguments,
+        } => {
+            // Evaluate the receiver exactly once, fetch its method, and pass
+            // the original receiver as Lua's implicit first argument.
+            if arguments.len() >= MAX_CALL_ARGUMENTS {
+                return Err(Error::TooLarge);
+            }
+            let receiver = emit(program, object, depth + 1, locals)?;
+            let key = emit_table_key_string(program, method)?;
+            if program.registers >= MAX_REGISTERS {
+                return Err(Error::TooLarge);
+            }
+            let callee = program.registers;
+            program.registers += 1;
+            emit_instruction(
+                program,
+                Instruction::GetTable {
+                    dest: callee,
+                    table: receiver,
+                    key,
+                },
+            )?;
+            emit_instruction(
+                program,
+                Instruction::PushArgument { source: receiver },
+            )?;
+            let expand_tail = matches!(arguments.last(), Some(Expr::Call { .. }));
+            for (index, argument) in arguments.iter().enumerate() {
+                let source = emit(program, argument, depth + 1, locals)?;
+                if !(expand_tail && index + 1 == arguments.len()) {
+                    emit_instruction(program, Instruction::PushArgument { source })?;
+                }
+            }
+            Instruction::Call {
+                dest: program.registers,
+                callee,
+                argc: arguments.len() + 1 - usize::from(expand_tail),
+                expand_tail,
+            }
+        }
         Expr::Call { callee, arguments } => {
             // A bounded register-call subset with actual function values.
             // Nested calls consume only their own pushed arguments.
