@@ -7746,10 +7746,8 @@ impl Execution<'_> {
             return Err(FlowError::TypeError);
         };
         if id == MAIN_THREAD_ID || self.current_coroutine == Some(id) {
-            let message = self.intern_rooted_string(
-                b"cannot close a running coroutine".to_vec(),
-                args,
-            )?;
+            let message =
+                self.intern_rooted_string(b"cannot close a running coroutine".to_vec(), args)?;
             return Err(FlowError::Thrown(message));
         }
         if self
@@ -7757,10 +7755,8 @@ impl Execution<'_> {
             .iter()
             .any(|context| context.coroutine_id == Some(id))
         {
-            let message = self.intern_rooted_string(
-                b"cannot close a normal coroutine".to_vec(),
-                args,
-            )?;
+            let message =
+                self.intern_rooted_string(b"cannot close a normal coroutine".to_vec(), args)?;
             return Err(FlowError::Thrown(message));
         }
         let state = self
