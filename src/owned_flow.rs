@@ -2315,6 +2315,7 @@ impl Execution<'_> {
                 Value::Table(_) => "table",
                 Value::Nil => "nil",
                 Value::Function(_) | Value::Builtin(_) => "function",
+                Value::Thread(_) => "thread",
             };
             format!("attempt to call a {name} value (metamethod '__gc')").into_bytes()
         } else {
@@ -2408,6 +2409,59 @@ impl Execution<'_> {
                     if let TableKey::Hashed(value) = key {
                         work.push(value);
                     }
+                }
+            }
+        }
+        // Coroutine states are conservatively retained within a fixed bound.
+        // GC must trace saved lexical cells and operand stacks even when a
+        // different coroutine has temporarily replaced the active frame stack.
+        work.extend_from_slice(&self.active_coroutine_entries);
+        for context in &self.saved_call_contexts {
+            for frame in &context.roots {
+                work.extend_from_slice(&frame.stack);
+                for &target in &frame.prepared {
+                    if let PendingTarget::Indexed { table, key } = target {
+                        work.push(Value::Table(table));
+                        if let TableKey::Hashed(value) = key {
+                            work.push(value);
+                        }
+                    }
+                }
+            }
+            for allocations in &context.allocations {
+                for &cell in allocations {
+                    if let Some(Some(value)) = self.cells.get(cell) {
+                        work.push(*value);
+                    }
+                }
+            }
+        }
+        for state in self.coroutines.iter().flatten() {
+            work.push(Value::Function(state.entry));
+            for frame in &state.roots {
+                work.extend_from_slice(&frame.stack);
+                for &target in &frame.prepared {
+                    if let PendingTarget::Indexed { table, key } = target {
+                        work.push(Value::Table(table));
+                        if let TableKey::Hashed(value) = key {
+                            work.push(value);
+                        }
+                    }
+                }
+            }
+            for allocations in &state.allocations {
+                for &cell in allocations {
+                    if let Some(Some(value)) = self.cells.get(cell) {
+                        work.push(*value);
+                    }
+                }
+            }
+            if let Some(scheduler) = &state.scheduler {
+                work.extend_from_slice(&scheduler.root.stack);
+                work.extend_from_slice(&scheduler.root.varargs);
+                for child in &scheduler.active {
+                    work.extend_from_slice(&child.frame.stack);
+                    work.extend_from_slice(&child.frame.varargs);
                 }
             }
         }
@@ -2996,6 +3050,7 @@ impl Execution<'_> {
                 Some(Value::String(_)) => "string",
                 Some(Value::Table(_)) => "table",
                 Some(Value::Function(_) | Value::Builtin(_)) => "function",
+                Some(Value::Thread(_)) => "thread",
                 Some(Value::Integer(_) | Value::Float(_)) => "number",
             };
             format!("number expected, got {kind}")
@@ -4186,6 +4241,9 @@ impl Execution<'_> {
             Value::Function(handle) => {
                 self.intern_rooted_string(format!("function: 0x{handle:x}").into_bytes(), roots)?
             }
+            Value::Thread(handle) => {
+                self.intern_rooted_string(format!("thread: 0x{handle:x}").into_bytes(), roots)?
+            }
             Value::Builtin(_) => self.intern_rooted_string(b"function: builtin".to_vec(), roots)?,
         };
         Ok(text)
@@ -4330,6 +4388,13 @@ impl Execution<'_> {
         }
         match callable {
             Value::Function(handle) => self.call_owned_function(handle, &arguments),
+            Value::Builtin(Builtin::CoroutineCreate) => {
+                Ok(vec![self.coroutine_create(&arguments)?])
+            }
+            Value::Builtin(Builtin::CoroutineStatus) => {
+                Ok(vec![self.coroutine_status(&arguments)?])
+            }
+            Value::Builtin(Builtin::CoroutineResume) => self.coroutine_resume(&arguments),
             Value::Builtin(Builtin::Error) => Err(self.error_builtin(&arguments)),
             Value::Builtin(Builtin::Print) => self.print_builtin(&arguments),
             Value::Builtin(Builtin::Warn) => self.warn_builtin(&arguments),
@@ -4352,6 +4417,7 @@ impl Execution<'_> {
                     Value::String(_) => b"string",
                     Value::Table(_) => b"table",
                     Value::Function(_) | Value::Builtin(_) => b"function",
+                    Value::Thread(_) => b"thread",
                 };
                 Ok(vec![self.intern_rooted_string(name.to_vec(), &arguments)?])
             }
@@ -8187,6 +8253,7 @@ impl Execution<'_> {
                                     | Builtin::Utf8Char
                                     | Builtin::TablePack
                                     | Builtin::CollectGarbage
+                                    | Builtin::CoroutineYield
                             )
                         {
                             return Err(FlowError::TypeError);
@@ -8223,6 +8290,7 @@ impl Execution<'_> {
                                 | Builtin::TableSort
                                 | Builtin::MathModf
                                 | Builtin::MathRandomSeed
+                                | Builtin::CoroutineResume
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
@@ -8266,6 +8334,7 @@ impl Execution<'_> {
                                 Builtin::TableSort => self.table_sort_builtin(&args)?,
                                 Builtin::MathModf => self.math_modf_builtin(&args)?,
                                 Builtin::MathRandomSeed => self.math_randomseed_builtin(&args)?,
+                                Builtin::CoroutineResume => self.coroutine_resume(&args)?,
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
@@ -8293,10 +8362,13 @@ impl Execution<'_> {
                                     Value::String(_) => b"string",
                                     Value::Table(_) => b"table",
                                     Value::Function(_) | Value::Builtin(_) => b"function",
+                    Value::Thread(_) => b"thread",
                                 };
                                 self.intern_rooted_string(name.to_vec(), &args)?
                             }
                             Builtin::ToNumber => self.tonumber_builtin(&args)?,
+                            Builtin::CoroutineCreate => self.coroutine_create(&args)?,
+                            Builtin::CoroutineStatus => self.coroutine_status(&args)?,
                             Builtin::RawEqual => {
                                 let left = *args.first().ok_or(FlowError::TypeError)?;
                                 let right = *args.get(1).ok_or(FlowError::TypeError)?;
@@ -8341,7 +8413,9 @@ impl Execution<'_> {
                             | Builtin::TableInsert
                             | Builtin::TableSort
                             | Builtin::MathModf
-                            | Builtin::MathRandomSeed => {
+                            | Builtin::MathRandomSeed
+                            | Builtin::CoroutineResume
+                            | Builtin::CoroutineYield => {
                                 unreachable!(
                                     "iteration/selection builtins handled as multiple results"
                                 )
@@ -9087,6 +9161,9 @@ pub fn execute_flow_capture_with_args<'a>(
         }
         Err(FlowError::Thrown(Value::Nil)) => Some(b"error object is a nil value".to_vec()),
         Err(FlowError::Thrown(Value::Table(_))) => Some(b"error object is a table value".to_vec()),
+        Err(FlowError::Thrown(Value::Thread(_))) => {
+            Some(b"error object is a thread value".to_vec())
+        }
         Err(FlowError::Thrown(Value::Function(_) | Value::Builtin(_))) => {
             Some(b"error object is a function value".to_vec())
         }
