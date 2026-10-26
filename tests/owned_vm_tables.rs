@@ -47,6 +47,24 @@ fn register_table_literals_lookup_and_identity_match_lua54() {
         ("local t={9,8,7}; return t[1],t[2],t[3]", "3|9|8|7"),
         ("local t={9,8,7}; return #t", "1|3"),
         ("local t={}; return #t", "1|0"),
+        ("local t={select(1,3,4,5)}; return t[1],t[2],t[3]", "3|3|4|5"),
+        (
+            "local t={1,select(2,3,4,5)}; return t[1],t[2],t[3]",
+            "3|1|4|5",
+        ),
+        (
+            "local t={1,(select(2,3,4,5))}; return #t,t[2],t[3]",
+            "3|2|4|nil",
+        ),
+        ("local t={select(9,3,4)}; return #t,t[1]", "2|0|nil"),
+        (
+            "local t={select(1,3,4),9}; return #t,t[1],t[2]",
+            "3|2|3|9",
+        ),
+        (
+            "local t={x=8,select(1,3,4)}; return #t,t.x,t[2]",
+            "3|2|8|4",
+        ),
         ("local t={[1]=7,[2]=8}; return t[1]+t[2]", "1|15"),
         ("local t={[2.0]=5}; return t[2]", "1|5"),
         (
