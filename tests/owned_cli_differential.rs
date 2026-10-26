@@ -704,6 +704,21 @@ fn owned_string_pack_explicit_x_alignment_directives_match_lua54() {
 }
 
 #[test]
+fn owned_tonumber_rejects_unicode_space_and_invalid_utf8_like_lua54() {
+    for source in [
+        "local ascii=string.char(32,9,10,13,11,12); print(tonumber(ascii..'42'..ascii,10),tonumber(ascii..'42'..ascii))",
+        "local nbsp=string.char(194,160); print(tonumber(nbsp..'42',10)==nil,tonumber('42'..nbsp,10)==nil)",
+        "local nbsp=string.char(194,160); print(tonumber(nbsp..'42')==nil,tonumber('42'..nbsp)==nil)",
+        "local em=string.char(226,128,131); print(tonumber(em..'42',10)==nil,tonumber('42'..em)==nil)",
+        "local bad=string.char(255); print(tonumber(bad,10)==nil,tonumber(bad)==nil)",
+        "local ascii=string.char(32,9,11,12); print(tonumber('10',ascii..'16'..ascii))",
+        "local nbsp=string.char(194,160); local ok=pcall(tonumber,'10',nbsp..'16'); print(ok)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_tonumber_numeric_string_bases_match_lua54() {
     for source in [
         "print(tonumber('ff','16'),tonumber('101','2.0'),tonumber('z','3.6e1'))",

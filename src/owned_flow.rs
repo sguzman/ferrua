@@ -1571,6 +1571,12 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
 
 /// Decode a bounded Lua hexadecimal floating literal independently of Rust's
 /// decimal-only f64 parser. The lexer already validates lexical digits.
+// Lua's C-locale conversion accepts only these six leading/trailing
+// whitespace bytes. Rust's str::trim also accepts Unicode space separators.
+fn trim_lua_numeric_space(text: &str) -> &str {
+    text.trim_matches(|c| matches!(c, ' ' | '\t' | '\n' | '\r' | '\u{000b}' | '\u{000c}'))
+}
+
 // Lua 5.4's integer-string scanner accumulates hexadecimal digits in an
 // unsigned Lua integer with modulo-2^64 arithmetic, unlike decimal integers.
 fn parse_lua_hex_integer_wrapping(source: &str) -> Option<i64> {
@@ -3667,8 +3673,10 @@ impl Execution<'_> {
                 return Err(FlowError::TypeError);
             };
             let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
-            let source = std::str::from_utf8(bytes).map_err(|_| FlowError::TypeError)?;
-            let source = source.trim();
+            let Ok(source) = std::str::from_utf8(bytes) else {
+                return Ok(Value::Nil);
+            };
+            let source = trim_lua_numeric_space(source);
             let (negative, unsigned) = if let Some(rest) = source.strip_prefix('-') {
                 (true, rest)
             } else {
@@ -5418,6 +5426,14 @@ impl Execution<'_> {
     /// hexadecimal floating strings retain their floating representation.
     /// Arithmetic operators keep their separately tested coercion path.
     fn lua_numeric_operand(&self, value: Value) -> Result<Value, FlowError> {
+        if let Value::String(handle) = value {
+            let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
+            let text = std::str::from_utf8(bytes).map_err(|_| FlowError::TypeError)?;
+            // Reject Unicode whitespace that Rust would otherwise trim.
+            if text.trim() != trim_lua_numeric_space(text) {
+                return Err(FlowError::TypeError);
+            }
+        }
         if let Ok(number) = self.arithmetic_operand(value) {
             return Ok(number);
         }
@@ -5426,7 +5442,7 @@ impl Execution<'_> {
         };
         let bytes = self.strings.get(handle).ok_or(FlowError::InvalidBytecode)?;
         let text = std::str::from_utf8(bytes).map_err(|_| FlowError::TypeError)?;
-        let text = text.trim();
+        let text = trim_lua_numeric_space(text);
         let (negative, unsigned) = if let Some(rest) = text.strip_prefix('-') {
             (true, rest)
         } else {
