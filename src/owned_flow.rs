@@ -5976,7 +5976,14 @@ impl Execution<'_> {
                                     Value::Nil => b"nil".to_vec(),
                                     Value::Boolean(true) => b"true".to_vec(),
                                     Value::Boolean(false) => b"false".to_vec(),
+                                    Value::Integer(integer) if integer == i64::MIN => {
+                                        // Lua quotes the minimum signed integer in
+                                        // hexadecimal, so it can be parsed without
+                                        // an out-of-range positive decimal literal.
+                                        b"0x8000000000000000".to_vec()
+                                    }
                                     Value::Integer(integer) => integer.to_string().into_bytes(),
+                                    Value::Float(bits) => Self::quoted_lua_float(bits),
                                     Value::String(_) => {
                                         let bytes = self.string_bytes(value)?;
                                         let mut quoted = vec![b'"'];
@@ -6205,6 +6212,45 @@ impl Execution<'_> {
             }
             _ => Err(FlowError::InvalidBytecode),
         }
+    }
+
+    /// Lua 5.4 %q emits a round-trippable float constant. The common
+    /// IEEE-754 double build uses C %a's normalized hexadecimal spelling;
+    /// nonfinite values use Lua source expressions/literals instead.
+    fn quoted_lua_float(bits: u64) -> Vec<u8> {
+        let number = f64::from_bits(bits);
+        if number.is_nan() {
+            return b"(0/0)".to_vec();
+        }
+        if number.is_infinite() {
+            return if number.is_sign_negative() {
+                b"-1e9999".to_vec()
+            } else {
+                b"1e9999".to_vec()
+            };
+        }
+        let negative = number.is_sign_negative();
+        let exponent_bits = ((bits >> 52) & 0x7ff) as i32;
+        let fraction = bits & ((1u64 << 52) - 1);
+        let mut result = if fraction == 0 {
+            if exponent_bits == 0 {
+                String::from("0x0p+0")
+            } else {
+                format!("0x1p{:+}", exponent_bits - 1023)
+            }
+        } else {
+            let digits = format!("{fraction:013x}");
+            let trimmed = digits.trim_end_matches('0');
+            if exponent_bits == 0 {
+                format!("0x0.{trimmed}p-1022")
+            } else {
+                format!("0x1.{trimmed}p{:+}", exponent_bits - 1023)
+            }
+        };
+        if negative {
+            result.insert(0, '-');
+        }
+        result.into_bytes()
     }
 
     fn string_bytes(&self, value: Value) -> Result<Vec<u8>, FlowError> {
