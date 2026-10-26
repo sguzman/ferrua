@@ -356,9 +356,9 @@ impl<'a> Parser<'a> {
         // Lua postfix operators require a prefixexp: a variable or an
         // explicitly parenthesized expression. Literal values, constructors
         // and anonymous function expressions need parentheses first.
-        let postfix_allowed = self.peek().is_some_and(|token| {
-            token.kind == Kind::Identifier || token.spelling == "("
-        });
+        let postfix_allowed = self
+            .peek()
+            .is_some_and(|token| token.kind == Kind::Identifier || token.spelling == "(");
         let mut left = self.prefix()?;
         if postfix_allowed {
             left = self.postfix(left)?;
