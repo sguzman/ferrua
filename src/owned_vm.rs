@@ -986,13 +986,6 @@ fn compile_statements<'a>(
                 if names.is_empty() || names.len() != attributes.len() {
                     return Err(Error::InvalidBytecode);
                 }
-                if attributes.iter().enumerate().any(|(index, attribute)| {
-                    *attribute == Some(LocalAttribute::Const) && index >= initializers.len()
-                }) {
-                    return Err(Error::Unsupported(
-                        "constant local requires an initializer".into(),
-                    ));
-                }
                 // All initializers use the preceding lexical scope.
                 // Missing values are nil; surplus scalar results are
                 // evaluated and discarded, matching Lua assignment order.
@@ -2700,7 +2693,7 @@ mod tests {
             "local x<const> =3; do x=4 end; return x",
             "local a,b<const> =1,2; b=4; return a+b",
             "local x<close> =3; return x",
-            "local x<const>; return 1",
+
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
@@ -2993,6 +2986,8 @@ mod tests {
             ("local x; return x", RegisterValue::Nil),
             ("local x,y; return y", RegisterValue::Nil),
             ("local x,y=7; return y", RegisterValue::Nil),
+            ("local x<const>; return x", RegisterValue::Nil),
+            ("local x,y<const>=4; return y", RegisterValue::Nil),
             ("local x,y=7; return x", RegisterValue::Integer(7)),
             ("local x=2,3; return x", RegisterValue::Integer(2)),
             ("local x,y=3,4; x=9; return y", RegisterValue::Integer(4)),
