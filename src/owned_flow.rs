@@ -1630,7 +1630,22 @@ pub(crate) fn parse_lua_hex_float(source: &str) -> Option<f64> {
         .or_else(|| source.strip_prefix("0X"))?;
     let exponent_at = body.find(['p', 'P']);
     let (mantissa, exponent) = if let Some(index) = exponent_at {
-        let exponent = body.get(index + 1..)?.parse::<i32>().ok()?;
+        let digits = body.get(index + 1..)?;
+        let (negative, unsigned) = if let Some(rest) = digits.strip_prefix('-') {
+            (true, rest)
+        } else {
+            (false, digits.strip_prefix('+').unwrap_or(digits))
+        };
+        if unsigned.is_empty() || !unsigned.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        // strtod accepts arbitrarily long binary exponents, returning
+        // infinity or zero after range saturation. Parsing as i32 instead
+        // incorrectly rejects otherwise valid Lua numeric literals.
+        let magnitude = unsigned.bytes().fold(0_i32, |value, byte| {
+            value.saturating_mul(10).saturating_add(i32::from(byte - b'0'))
+        });
+        let exponent = if negative { -magnitude } else { magnitude };
         (body.get(..index)?, exponent)
     } else {
         if !body.contains('.') {

@@ -109,6 +109,9 @@ fn owned_hex_float_extreme_exponents_match_lua54() {
         "local x=0x1p-5000; print(math.type(x),x)",
         "local x=0x1p-1074; print(math.type(x),x)",
         "local x=0x1p-1075; print(math.type(x),x)",
+        "local x=0x1p2147483648; print(math.type(x),x)",
+        "local x=0x1p-2147483649; print(math.type(x),x)",
+        "local x=0x0p99999999999; print(math.type(x),x)",
     ] {
         assert_parity(source, true);
     }
