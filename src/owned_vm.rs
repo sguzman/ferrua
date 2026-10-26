@@ -2316,14 +2316,21 @@ mod tests {
             let bytecode = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_integer_program(&bytecode), Ok(expected), "{source}");
         }
-        for source in [
-            "if true then return 1 end",
-            "if true then local a=2 else return 3 end",
-            "if {} then return 1 else return 2 end",
-            "if false then return 2 else local a=3 end",
+        for (source, expected) in [
+            ("if true then return 1 end", RegisterValue::Integer(1)),
+            (
+                "if true then local a=2 else return 3 end",
+                RegisterValue::Nil,
+            ),
+            (
+                "if false then return 2 else local a=3 end",
+                RegisterValue::Nil,
+            ),
         ] {
-            assert!(compile_integer_chunk(source).is_err(), "{source}");
+            let program = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_register_program(&program), Ok(expected), "{source}");
         }
+        assert!(compile_integer_chunk("if {} then return 1 else return 2 end").is_err());
         let float_return =
             compile_integer_chunk("if true then return 1.5 else return 2 end").unwrap();
         assert_eq!(
@@ -2396,7 +2403,8 @@ mod tests {
             assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
         }
         let source = "if true then return 7 end";
-        assert!(compile_integer_chunk(source).is_err(), "{source}");
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(execute_integer_program(&program), Ok(7));
     }
 
     #[test]
@@ -2489,7 +2497,8 @@ mod tests {
             assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
         }
         let source = "if true then local a=1 end";
-        assert!(compile_integer_chunk(source).is_err(), "{source}");
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(execute_register_program(&program), Ok(RegisterValue::Nil));
         let program = compile_integer_chunk("if true then local y=1//0 end; return 1").unwrap();
         assert_eq!(
             execute_integer_program(&program),
