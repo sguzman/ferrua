@@ -5406,7 +5406,7 @@ impl Execution<'_> {
                         }
                         self.steps += padding;
                         output.resize(output.len() + padding, 0);
-                    },
+                    }
                     PackField::NullTerminated | PackField::LengthPrefixed { .. } => {
                         let bytes =
                             self.string_bytes(*args.get(argument).ok_or(FlowError::TypeError)?)?;
