@@ -19,8 +19,16 @@ fn register_adjusted_scalar_assignments_match_lua54() {
         ("local x,y=1,2; x,y=7; return y", RegisterValue::Nil, "nil\tnil\n"),
         ("local x,y=1,2; x,y=7; return x", RegisterValue::Integer(7), "number\t7\n"),
         ("local x,y=1,2; x=8,9; return x", RegisterValue::Integer(8), "number\t8\n"),
-        ("local x=1; local x,y=x+2; return x", RegisterValue::Integer(3), "number\t3\n"),
-        ("local x,y; if x==nil then y=6 end; return y", RegisterValue::Integer(6), "number\t6\n"),
+        (
+            "local x=1; local x,y=x+2; return x",
+            RegisterValue::Integer(3),
+            "number\t3\n",
+        ),
+        (
+            "local x,y; if x==nil then y=6 end; return y",
+            RegisterValue::Integer(6),
+            "number\t6\n",
+        ),
         ("local x,y=1,2; x,y=y,x; return x", RegisterValue::Integer(2), "number\t2\n"),
     ] {
         let program = compile_integer_chunk(source).unwrap();
@@ -33,9 +41,7 @@ fn register_adjusted_scalar_assignments_match_lua54() {
             if executable != "lua5.4" {
                 command.arg("--lua=5.4");
             }
-            let lua = format!(
-                "local v=(function() {source} end)(); print(type(v),tostring(v))"
-            );
+            let lua = format!("local v=(function() {source} end)(); print(type(v),tostring(v))");
             let output = command.args(["-e", &lua]).output().unwrap();
             assert!(
                 output.status.success(),
