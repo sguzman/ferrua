@@ -1609,7 +1609,7 @@ fn trim_lua_numeric_space(text: &str) -> &str {
 
 // Lua 5.4's integer-string scanner accumulates hexadecimal digits in an
 // unsigned Lua integer with modulo-2^64 arithmetic, unlike decimal integers.
-fn parse_lua_hex_integer_wrapping(source: &str) -> Option<i64> {
+pub(crate) fn parse_lua_hex_integer_wrapping(source: &str) -> Option<i64> {
     let digits = source
         .strip_prefix("0x")
         .or_else(|| source.strip_prefix("0X"))?;
@@ -1624,7 +1624,7 @@ fn parse_lua_hex_integer_wrapping(source: &str) -> Option<i64> {
     Some(value as i64)
 }
 
-fn parse_lua_hex_float(source: &str) -> Option<f64> {
+pub(crate) fn parse_lua_hex_float(source: &str) -> Option<f64> {
     let body = source
         .strip_prefix("0x")
         .or_else(|| source.strip_prefix("0X"))?;

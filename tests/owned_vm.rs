@@ -191,6 +191,59 @@ fn bitwise_register_exact_float_to_integer_coercions_match_lua54() {
 }
 
 #[test]
+fn register_hexadecimal_float_literals_and_wrapping_integers_match_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("0x1p1", RegisterValue::Float(2.0_f64.to_bits())),
+        ("0x1.8p1", RegisterValue::Float(3.0_f64.to_bits())),
+        ("0xAp-2", RegisterValue::Float(2.5_f64.to_bits())),
+        ("0x.8p0", RegisterValue::Float(0.5_f64.to_bits())),
+        ("0x1.8", RegisterValue::Float(1.5_f64.to_bits())),
+        ("0Xf.8P+1", RegisterValue::Float(31.0_f64.to_bits())),
+        ("0x10000000000000001", RegisterValue::Integer(1)),
+        ("0xffffffffffffffffffff", RegisterValue::Integer(-1)),
+    ] {
+        let program = compile_integer_expression(source).unwrap();
+        assert_eq!(execute_register_program(&program), Ok(expected), "{source}");
+        let chunk = compile_integer_chunk(&format!("return {source}")).unwrap();
+        assert_eq!(execute_register_program(&chunk), Ok(expected), "{source}");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let code = format!("local x=({source}); print(math.type(x), x)");
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let fields = String::from_utf8_lossy(&output.stdout);
+            let pieces = fields.trim().split('\t').collect::<Vec<_>>();
+            assert_eq!(pieces.len(), 2, "{source}: {fields}");
+            match expected {
+                RegisterValue::Float(bits) => {
+                    assert_eq!(pieces[0], "float", "{source}");
+                    assert_eq!(pieces[1].parse::<f64>().unwrap().to_bits(), bits, "{source}");
+                }
+                RegisterValue::Integer(integer) => {
+                    assert_eq!(pieces[0], "integer", "{source}");
+                    assert_eq!(pieces[1].parse::<i64>().unwrap(), integer, "{source}");
+                }
+                _ => unreachable!("only Lua numeric literal subtypes"),
+            }
+        }
+    }
+}
+
+#[test]
 fn tagged_register_and_or_return_selected_operands_like_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()

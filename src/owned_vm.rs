@@ -2,6 +2,7 @@
 //! Not used by production fer; not a full Lua VM.
 
 use crate::expr::{Expr, LocalAttribute, Statement, parse_chunk, parse_expression};
+use crate::owned_flow::{parse_lua_hex_float, parse_lua_hex_integer_wrapping};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -363,14 +364,14 @@ fn emit<'a>(
             value: matches!(expression, Expr::Atom("true")),
         },
         Expr::Atom(text) => {
-            let integer =
-                if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
-                    u64::from_str_radix(hex, 16).map(|bits| bits as i64)
-                } else {
-                    text.parse::<i64>()
-                };
+            let hex = text.starts_with("0x") || text.starts_with("0X");
+            let integer = if hex {
+                parse_lua_hex_integer_wrapping(text)
+            } else {
+                text.parse::<i64>().ok()
+            };
             match integer {
-                Ok(value) => Instruction::Load {
+                Some(value) => Instruction::Load {
                     dest: program.registers,
                     value,
                 },
@@ -381,11 +382,12 @@ fn emit<'a>(
                     let numeric_token = text.as_bytes().first().is_some_and(u8::is_ascii_digit)
                         || (text.starts_with('.')
                             && text.as_bytes().get(1).is_some_and(u8::is_ascii_digit));
-                    if numeric_token
-                        && !text.starts_with("0x")
-                        && !text.starts_with("0X")
-                        && let Ok(number) = text.parse::<f64>()
-                    {
+                    let floating = if hex {
+                        parse_lua_hex_float(text)
+                    } else {
+                        text.parse::<f64>().ok()
+                    };
+                    if numeric_token && let Some(number) = floating {
                         let output = program.registers;
                         program.registers += 1;
                         emit_instruction(
