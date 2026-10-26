@@ -6,10 +6,7 @@ use ferrua::lex::tokenize;
 use std::fs;
 use std::path::Path;
 
-#[test]
-fn scans_real_checked_in_lua_scripts_without_losing_source_slices() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let samples = [
+const REAL_LUA_CORPUS: &[&str] = &[
         "tools/roadmap.lua",
         "tools/json.lua",
         "tools/process.lua",
@@ -37,8 +34,12 @@ fn scans_real_checked_in_lua_scripts_without_losing_source_slices() {
         "tests/conformance/10-multiple-returns.lua",
         "tests/conformance/11-bitwise.lua",
         "tests/conformance/12-utf8.lua",
-    ];
-    for relative in samples {
+];
+
+#[test]
+fn scans_real_checked_in_lua_scripts_without_losing_source_slices() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for &relative in REAL_LUA_CORPUS {
         let source = fs::read_to_string(root.join(relative)).expect("corpus fixture exists");
         let tokens = tokenize(&source)
             .unwrap_or_else(|error| panic!("owned lexer could not scan {relative}: {error}"));
@@ -62,6 +63,19 @@ fn scans_real_checked_in_lua_scripts_without_losing_source_slices() {
             last_end = token.byte_offset + token.spelling.len();
             last_line = token.line;
         }
+    }
+}
+
+#[test]
+fn parses_checked_in_lua_corpus_as_owned_syntax_trees() {
+    // This is syntax-only acceptance, not owned VM execution, linking,
+    // global-library availability, or full language conformance.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for &relative in REAL_LUA_CORPUS {
+        let source = fs::read_to_string(root.join(relative)).expect("corpus fixture exists");
+        let statements = parse_chunk(&source)
+            .unwrap_or_else(|error| panic!("owned parser rejected {relative}: {error}"));
+        assert!(!statements.is_empty(), "empty parsed chunk for {relative}");
     }
 }
 
