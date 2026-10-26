@@ -5957,14 +5957,9 @@ impl Execution<'_> {
         self.steps += body.len();
         let mut atoms = Vec::with_capacity(body.len());
         let mut index = 0;
-        let mut captures = 0usize;
         let mut opened = 0usize;
         while index < body.len() {
             let atom = if !plain && body[index] == b'(' {
-                captures += 1;
-                if captures > 32 {
-                    return Err(FlowError::TooLarge);
-                }
                 if body.get(index + 1) == Some(&b')') {
                     index += 2;
                     Atom::CapturePosition
@@ -6135,12 +6130,18 @@ impl Execution<'_> {
                     }
                     Atom::CapturePosition => {
                         let mut next = captures;
+                        if next.len() >= 32 {
+                            return Err(FlowError::TooLarge);
+                        }
                         next.push((position, position, true));
                         states.push((atom_index + 1, position, next));
                         continue;
                     }
                     Atom::CaptureOpen => {
                         let mut next = captures;
+                        if next.len() >= 32 {
+                            return Err(FlowError::TooLarge);
+                        }
                         next.push((position, usize::MAX, false));
                         states.push((atom_index + 1, position, next));
                         continue;

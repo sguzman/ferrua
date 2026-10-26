@@ -537,6 +537,24 @@ fn owned_pattern_incomplete_escapes_are_rejected_only_when_reached_like_lua54() 
 }
 
 #[test]
+fn owned_pattern_capture_limit_is_checked_only_when_reached_like_lua54() {
+    // Lua's start_capture() enforces the 32-capture limit only after
+    // traversal reaches each opening or position capture, not at parse time.
+    for source in [
+        "local p='z'..string.rep('()',33); print(string.match('abc',p)==nil)",
+        "local p='z'..string.rep('()',33); print(string.find('abc',p)==nil)",
+        "local p='z'..string.rep('()',33); local s,n=string.gsub('abc',p,'X'); print(s,n)",
+        "local p='z'..string.rep('()',33); local it=string.gmatch('abc',p); print(it()==nil)",
+        "local p=string.rep('()',33); local ok=pcall(string.match,'abc',p); print(ok)",
+        "local p=string.rep('()',33); local ok=pcall(string.find,'abc',p); print(ok)",
+        "local p=string.rep('()',33); local ok=pcall(string.gsub,'abc',p,'X'); print(ok)",
+        "local p=string.rep('()',33); local it=string.gmatch('abc',p); local ok=pcall(it); print(ok)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_pattern_unfinished_opening_capture_checks_reachable_paths_like_lua54() {
     for source in [
         "print(string.match('abc','z(')==nil)",
