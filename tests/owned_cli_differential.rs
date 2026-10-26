@@ -496,6 +496,25 @@ fn owned_pattern_unreachable_invalid_closer_is_deferred_like_lua54() {
 }
 
 #[test]
+fn owned_pattern_malformed_bracket_is_rejected_only_when_reached_like_lua54() {
+    // Lua's classend() runs during matching, not while pre-parsing all
+    // pattern atoms. An earlier mismatching byte leaves '[' unreachable.
+    for source in [
+        "print(string.match('abc','z[')==nil)",
+        "print(string.find('abc','z[')==nil)",
+        "local out,n=string.gsub('abc','z[','X'); print(out,n)",
+        "local it=string.gmatch('abc','z['); print(it()==nil)",
+        "local ok=pcall(string.match,'abc','a['); print(ok)",
+        "local ok=pcall(string.find,'abc','a['); print(ok)",
+        "local ok=pcall(string.gsub,'abc','a[','X'); print(ok)",
+        "local it=string.gmatch('abc','a['); local ok=pcall(it); print(ok)",
+        "local ok=pcall(string.match,'abc','['); print(ok)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_pattern_unfinished_opening_capture_checks_reachable_paths_like_lua54() {
     for source in [
         "print(string.match('abc','z(')==nil)",

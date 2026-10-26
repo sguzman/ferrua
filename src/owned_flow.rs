@@ -5949,6 +5949,7 @@ impl Execution<'_> {
             CaptureClose,
             CapturePosition,
             InvalidClose,
+            InvalidBracket,
             Backreference(u8),
         }
         if self.steps.saturating_add(body.len()) > self.budget {
@@ -5995,7 +5996,12 @@ impl Execution<'_> {
                 }
                 loop {
                     match body.get(cursor) {
-                        None => return Err(FlowError::TypeError),
+                        None => {
+                            // Like upstream Lua's classend(), reject a malformed
+                            // bracket only when matching reaches this atom.
+                            index = body.len();
+                            break Atom::InvalidBracket;
+                        }
                         Some(b'%') if cursor + 1 < body.len() => cursor += 2,
                         Some(b']') => {
                             let inside = body[start..cursor].to_vec();
@@ -6113,7 +6119,9 @@ impl Execution<'_> {
                 }
                 let (atom, repetition) = &atoms[atom_index];
                 match atom {
-                    Atom::InvalidClose => return Err(FlowError::TypeError),
+                    Atom::InvalidClose | Atom::InvalidBracket => {
+                        return Err(FlowError::TypeError);
+                    }
                     Atom::CapturePosition => {
                         let mut next = captures;
                         next.push((position, position, true));
@@ -6218,6 +6226,7 @@ impl Execution<'_> {
                             | Atom::CaptureClose
                             | Atom::CapturePosition
                             | Atom::InvalidClose
+                            | Atom::InvalidBracket
                             | Atom::Backreference(_) => false,
                         }
                 };
