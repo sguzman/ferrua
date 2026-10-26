@@ -674,6 +674,24 @@ fn owned_string_format_fixed_float_width_precision_and_flags_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_scientific_exponent_width_and_flags_match_lua54() {
+    for source in [
+        "print(string.format('%e',1.0)=='1.000000e+00',string.format('%E',1.0)=='1.000000E+00')",
+        "print(string.format('%.2e',100.0)=='1.00e+02',string.format('%.2E',100.0)=='1.00E+02')",
+        "print(string.format('%10.2e',2.0)=='  2.00e+00',string.format('%010.2e',2.0)=='002.00e+00')",
+        "print(string.format('%-11.2E',2.0)=='2.00E+00   ',string.format('%+010.2e',2.0)=='+02.00e+00')",
+        "print(string.format('%.0e',2.0)=='2e+00',string.format('%#.0e',2.0)=='2.e+00')",
+        "print(string.format('%.1E',0.5)=='5.0E-01',string.format('%e',0.0)=='0.000000e+00')",
+        "print(string.format('%.2e',-0.0)=='-0.00e+00',string.format('%.2e',-1.5)=='-1.50e+00')",
+        "print(string.format('%.1e',10000000000)=='1.0e+10',string.format('%.1e',1e100)=='1.0e+100')",
+        "print(string.format('% 10.2e',2.0)=='  2.00e+00',string.format('%.1e','0.5')=='5.0e-01')",
+        "local a=pcall(string.format,'%e',false); local b=pcall(string.format,'%E'); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_gsub_short_lived_gc_roots_preserve_long_replacement_semantics() {
     for source in [
         "local n=0; local s=string.rep('a',100); local out,c=string.gsub(s,'.',function(x) n=n+1; return x..'b' end); print(#out,c,n)",

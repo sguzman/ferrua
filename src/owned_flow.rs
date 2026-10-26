@@ -5871,7 +5871,7 @@ impl Execution<'_> {
                         } else {
                             let numeric =
                                 matches!(specifier, b'd' | b'i' | b'u' | b'o' | b'x' | b'X');
-                            let floating = specifier == b'f';
+                            let floating = matches!(specifier, b'f' | b'e' | b'E');
                             if (left_align
                                 || width > 0
                                 || precision.is_some()
@@ -5881,7 +5881,7 @@ impl Execution<'_> {
                                 || alternate)
                                 && !matches!(
                                     specifier,
-                                    b's' | b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'c' | b'f'
+                                    b's' | b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'c' | b'f' | b'e' | b'E'
                                 )
                             {
                                 return Err(FlowError::Unsupported(
@@ -5897,7 +5897,7 @@ impl Execution<'_> {
                                 b'u' => plus_sign || space_sign || alternate,
                                 b'o' | b'x' | b'X' => plus_sign || space_sign,
                                 b's' | b'c' => zero_pad || plus_sign || space_sign || alternate,
-                                b'f' => false,
+                                b'f' | b'e' | b'E' => false,
                                 _ => false,
                             };
                             if invalid_flag || (specifier == b'c' && precision.is_some()) {
@@ -5908,28 +5908,50 @@ impl Execution<'_> {
                             let value = *args.get(argument).ok_or(FlowError::TypeError)?;
                             argument += 1;
                             let mut part = match specifier {
-                                b'f' => {
+                                b'f' | b'e' | b'E' => {
                                     let operand = self.arithmetic_operand(value)?;
                                     let number = match operand {
                                         Value::Integer(integer) => integer as f64,
                                         Value::Float(bits) => f64::from_bits(bits),
                                         _ => return Err(FlowError::TypeError),
                                     };
-                                    // Lua's %f uses C-locale fixed notation.
-                                    // Keep the output bounded by the same
-                                    // checked precision and string quota.
+                                    // Lua's scientific conversion uses a
+                                    // signed exponent with at least two
+                                    // digits; Rust prints a shorter exponent.
                                     let digits = precision.unwrap_or(6);
-                                    let mut formatted =
-                                        format!("{:.*}", digits, number).into_bytes();
+                                    let mut formatted = match specifier {
+                                        b'e' => format!("{:.*e}", digits, number).into_bytes(),
+                                        b'E' => format!("{:.*E}", digits, number).into_bytes(),
+                                        _ => format!("{:.*}", digits, number).into_bytes(),
+                                    };
+                                    if specifier != b'f' {
+                                        if let Some(at) = formatted
+                                            .iter()
+                                            .position(|byte| *byte == b'e' || *byte == b'E')
+                                        {
+                                            let power = std::str::from_utf8(&formatted[at + 1..])
+                                                .map_err(|_| FlowError::InvalidBytecode)?
+                                                .parse::<i32>()
+                                                .map_err(|_| FlowError::InvalidBytecode)?;
+                                            let mut normalized = formatted[..at].to_vec();
+                                            if alternate && digits == 0 && number.is_finite() {
+                                                normalized.push(b'.');
+                                            }
+                                            normalized.push(specifier);
+                                            normalized.extend_from_slice(
+                                                format!("{power:+03}").as_bytes(),
+                                            );
+                                            formatted = normalized;
+                                        }
+                                    } else if alternate && digits == 0 && number.is_finite() {
+                                        formatted.push(b'.');
+                                    }
                                     if !number.is_sign_negative() {
                                         if plus_sign {
                                             formatted.insert(0, b'+');
                                         } else if space_sign {
                                             formatted.insert(0, b' ');
                                         }
-                                    }
-                                    if alternate && digits == 0 && number.is_finite() {
-                                        formatted.push(b'.');
                                     }
                                     formatted
                                 }
