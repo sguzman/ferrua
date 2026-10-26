@@ -79,6 +79,8 @@ pub enum Builtin {
     CoroutineStatus,
     CoroutineRunning,
     CoroutineIsYieldable,
+    CoroutineWrap,
+    CoroutineWrapped(usize),
     MathAbs,
     MathFloor,
     MathCeil,
@@ -142,6 +144,7 @@ const COROUTINE_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"status", Builtin::CoroutineStatus),
     (b"running", Builtin::CoroutineRunning),
     (b"isyieldable", Builtin::CoroutineIsYieldable),
+    (b"wrap", Builtin::CoroutineWrap),
 ];
 
 const MAX_COROUTINES: usize = 64;
@@ -4409,6 +4412,12 @@ impl Execution<'_> {
             Value::Builtin(Builtin::CoroutineIsYieldable) => {
                 Ok(vec![self.coroutine_isyieldable(&arguments)?])
             }
+            Value::Builtin(Builtin::CoroutineWrap) => {
+                Ok(vec![self.coroutine_wrap(&arguments)?])
+            }
+            Value::Builtin(Builtin::CoroutineWrapped(id)) => {
+                self.coroutine_wrapped(id, &arguments)
+            }
             Value::Builtin(Builtin::Error) => Err(self.error_builtin(&arguments)),
             Value::Builtin(Builtin::Print) => self.print_builtin(&arguments),
             Value::Builtin(Builtin::Warn) => self.warn_builtin(&arguments),
@@ -7723,6 +7732,39 @@ impl Execution<'_> {
 
     /// Lua's running thread is first-class even in the main VM, where no
     /// coroutine scheduler or heap slot exists.
+    /// Wrap an owned coroutine as a first-class Lua callable. The closure
+    /// identity is a builtin tagged with its retained coroutine slot.
+    fn coroutine_wrap(&mut self, args: &[Value]) -> Result<Value, FlowError> {
+        let Value::Thread(id) = self.coroutine_create(args)? else {
+            return Err(FlowError::InvalidBytecode);
+        };
+        Ok(Value::Builtin(Builtin::CoroutineWrapped(id)))
+    }
+
+    /// Unlike resume, wrap removes the success flag and throws the failure
+    /// object. Suspended frames are kept by coroutine_resume, not replayed.
+    fn coroutine_wrapped(
+        &mut self,
+        id: usize,
+        args: &[Value],
+    ) -> Result<Vec<Value>, FlowError> {
+        let mut inputs = Vec::with_capacity(args.len().saturating_add(1));
+        inputs.push(Value::Thread(id));
+        inputs.extend_from_slice(args);
+        let mut results = self.coroutine_resume(&inputs)?;
+        match results.first().copied() {
+            Some(Value::Boolean(true)) => {
+                results.remove(0);
+                Ok(results)
+            }
+            Some(Value::Boolean(false)) => {
+                let error = results.get(1).copied().unwrap_or(Value::Nil);
+                Err(FlowError::Thrown(error))
+            }
+            _ => Err(FlowError::InvalidBytecode),
+        }
+    }
+
     fn coroutine_running(&self) -> Vec<Value> {
         let main = self.current_coroutine.is_none();
         vec![
@@ -8349,6 +8391,8 @@ impl Execution<'_> {
                                     | Builtin::CoroutineYield
                                     | Builtin::CoroutineRunning
                                     | Builtin::CoroutineIsYieldable
+                                    | Builtin::CoroutineWrap
+                                    | Builtin::CoroutineWrapped(_)
                             )
                         {
                             return Err(FlowError::TypeError);
@@ -8387,6 +8431,7 @@ impl Execution<'_> {
                                 | Builtin::MathRandomSeed
                                 | Builtin::CoroutineResume
                                 | Builtin::CoroutineRunning
+                                | Builtin::CoroutineWrapped(_)
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
@@ -8432,6 +8477,9 @@ impl Execution<'_> {
                                 Builtin::MathRandomSeed => self.math_randomseed_builtin(&args)?,
                                 Builtin::CoroutineResume => self.coroutine_resume(&args)?,
                                 Builtin::CoroutineRunning => self.coroutine_running(),
+                                Builtin::CoroutineWrapped(id) => {
+                                    self.coroutine_wrapped(id, &args)?
+                                }
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
@@ -8467,6 +8515,7 @@ impl Execution<'_> {
                             Builtin::CoroutineCreate => self.coroutine_create(&args)?,
                             Builtin::CoroutineStatus => self.coroutine_status(&args)?,
                             Builtin::CoroutineIsYieldable => self.coroutine_isyieldable(&args)?,
+                            Builtin::CoroutineWrap => self.coroutine_wrap(&args)?,
                             Builtin::RawEqual => {
                                 let left = *args.first().ok_or(FlowError::TypeError)?;
                                 let right = *args.get(1).ok_or(FlowError::TypeError)?;
@@ -8514,6 +8563,7 @@ impl Execution<'_> {
                             | Builtin::MathRandomSeed
                             | Builtin::CoroutineResume
                             | Builtin::CoroutineRunning
+                            | Builtin::CoroutineWrapped(_)
                             | Builtin::CoroutineYield => {
                                 unreachable!(
                                     "iteration/selection builtins handled as multiple results"

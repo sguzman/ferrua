@@ -173,6 +173,20 @@ fn owned_coroutine_running_and_isyieldable_match_lua54() {
 }
 
 #[test]
+fn owned_coroutine_wrap_returns_values_and_propagates_errors_like_lua54() {
+    for source in [
+        "local w=coroutine.wrap(function(x) local n=coroutine.yield(x+1,x+2); return n,x end); print(type(w),w(5)); print(w(8))",
+        "local w=coroutine.wrap(function() return 7,8 end); print(w()); local ok,e=pcall(w); print(ok,type(e))",
+        "local w=coroutine.wrap(function() error('boom',0) end); local ok,e=pcall(w); print(ok,type(e),tostring(e):find('boom')~=nil)",
+        "local w=coroutine.wrap(function() local function inner(x) return coroutine.yield(x) end return inner(9) end); print(w()); print(w(7))",
+        "local w=coroutine.wrap(function() coroutine.yield(); collectgarbage('collect'); return 'done' end); print(select('#',w())); print(w())",
+        "local ok=pcall(coroutine.wrap,123); print(ok)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn curated_global_function_print_and_error_semantics_match_lua54() {
     for source in [
         "function first() return second() end; function second() return 7 end; print(first())",
