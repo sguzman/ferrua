@@ -113,6 +113,81 @@ fn register_dynamic_concatenation_and_string_operations_match_lua54() {
 }
 
 #[test]
+fn register_call_statements_discard_values_and_preserve_lua_errors() {
+    use ferrua::owned_vm::Error;
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+
+    for (chunk, expected) in [
+        ("type(4);return 8", 8),
+        ("select(1,4,5,6);return 7", 7),
+        ("tostring('abc');return 9", 9),
+        ("local n=0; while n<3 do type(n);n=n+1 end return n", 3),
+        ("x=5; type(x); return x", 5),
+        ("type(select(1,10,20));return 6", 6),
+        ("local type=tostring;type(9); return 7", 7),
+        ("select(9,10,20);return 1", 1),
+        ("type(3); return select(2,10,20,30)", 20),
+        ("if true then type(7) else tostring(8) end return 7", 7),
+        ("do type(3) end return 4", 4),
+        ("type(1); local x=1; return x", 1),
+    ] {
+        let program = compile_integer_chunk(chunk).unwrap();
+        assert_eq!(execute_integer_program(&program), Ok(expected), "{chunk}");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let source = format!("local function f() {chunk} end; io.write(f())");
+            let output = command.args(["-e", &source]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{executable}: {chunk}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout),
+                expected.to_string(),
+                "{executable}: {chunk}"
+            );
+        }
+    }
+    for chunk in [
+        "type();return 1",
+        "x=3;x(1);return 9",
+        "type=nil;type(7);return 8",
+        "doesnotexist(1);return 9",
+        "local x=2; x(1); return 3",
+        "type(1//0);return 5",
+    ] {
+        let program = compile_integer_chunk(chunk).unwrap();
+        let error = execute_integer_program(&program).unwrap_err();
+        assert!(
+            matches!(error, Error::TypeError | Error::DivisionByZero),
+            "{chunk}: {error}"
+        );
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let source = format!("local function f() {chunk} end; f()");
+            let output = command.args(["-e", &source]).output().unwrap();
+            assert!(!output.status.success(), "{executable}: {chunk}");
+        }
+    }
+}
+
+#[test]
 fn register_global_environment_and_shadowing_match_lua54() {
     use ferrua::owned_vm::{Error, execute_register_program_with_strings};
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
