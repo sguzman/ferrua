@@ -101,6 +101,20 @@ owned_first_party_conformance!(owned_conformance_bitwise, "conformance/11-bitwis
 owned_first_party_conformance!(owned_conformance_utf8, "conformance/12-utf8.lua");
 
 #[test]
+fn owned_hex_float_extreme_exponents_match_lua54() {
+    for source in [
+        "local x=0x0p2000; print(math.type(x),x)",
+        "local x=0x0p5000; print(math.type(x),x)",
+        "local x=0x1p5000; print(math.type(x),x)",
+        "local x=0x1p-5000; print(math.type(x),x)",
+        "local x=0x1p-1074; print(math.type(x),x)",
+        "local x=0x1p-1075; print(math.type(x),x)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_receivers_index_the_shared_mutable_string_library_like_lua54() {
     for source in [
         "local s='ferrua lua'; print(s:upper(),s:sub(1,6))",

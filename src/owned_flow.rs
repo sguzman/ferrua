@@ -1638,9 +1638,6 @@ pub(crate) fn parse_lua_hex_float(source: &str) -> Option<f64> {
         }
         (body, 0)
     };
-    if exponent.unsigned_abs() > 4096 {
-        return None;
-    }
     let mut value = 0.0_f64;
     let mut fractional = false;
     let mut scale = 1.0_f64;
@@ -1659,7 +1656,15 @@ pub(crate) fn parse_lua_hex_float(source: &str) -> Option<f64> {
             value = value * 16.0 + f64::from(digit);
         }
     }
-    (digits > 0).then(|| value * 2.0_f64.powi(exponent))
+    if digits == 0 {
+        return None;
+    }
+    // Avoid turning an exactly zero mantissa into NaN when the binary
+    // exponent would otherwise overflow the floating multiplier.
+    if value == 0.0 {
+        return Some(0.0);
+    }
+    Some(value * 2.0_f64.powi(exponent))
 }
 
 fn number_to_f64(value: Value) -> Result<f64, FlowError> {
