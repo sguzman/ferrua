@@ -862,10 +862,11 @@
                 },
                 {
                   "text": "Closures, frames and coroutines tested",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "src/owned_flow.rs: retained owned VM activation-frame scheduler, closures and native Lua coroutine yield/resume/status/wrap/close; tests/owned_cli_differential.rs: 12/12 first-party golden Lua programs plus nested yield/reentry/error/close/GC differential cases; GitHub Actions 40368536519 (all 5 jobs passed)"
                 }
               ],
-              "progress": 0
+              "progress": 50
             },
             {
               "id": "T303",

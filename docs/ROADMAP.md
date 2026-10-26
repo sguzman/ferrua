@@ -167,9 +167,9 @@
 - 🧩 **T301** Lexing, parsing and lexical scope — `█████░░░░░ 50%`
   - [ ] Implement owned lexer/parser
   - [x] Parse golden Lua fixtures — tests/owned_syntax.rs: 27 checked-in Lua scripts parsed into owned ASTs; GitHub Actions 40351211626 (five jobs passed, including upstream Lua 5.4 differential)
-- 📜 **T302** Bytecode compiler and register VM — `░░░░░░░░░░ 0%`
+- 📜 **T302** Bytecode compiler and register VM — `█████░░░░░ 50%`
   - [ ] Implement compiler and register dispatcher
-  - [ ] Closures, frames and coroutines tested
+  - [x] Closures, frames and coroutines tested — src/owned_flow.rs: retained owned VM activation-frame scheduler, closures and native Lua coroutine yield/resume/status/wrap/close; tests/owned_cli_differential.rs: 12/12 first-party golden Lua programs plus nested yield/reentry/error/close/GC differential cases; GitHub Actions 40368536519 (all 5 jobs passed)
 - 🔬 **T303** Lua conformance and differential tests — `██████████ 100%`
   - [x] Pin official Lua reference and fixtures — tools/diff_lua.lua pins upstream Lua 5.4.6, 12 fixtures in tests/conformance/; CI 39950728455
   - [x] Differential test runner integrated — CI 39950728455: all 12 deterministic parity fixtures passed against Lua 5.4.6 reference
@@ -984,7 +984,7 @@
 
 **Feature inventory** (computed from associated atomic task progress):
 
-- 🔩 Independent compiler and VM — `███░░░░░░░ 25%`
+- 🔩 Independent compiler and VM — `█████░░░░░ 50%`
 - 🧪 Verified Lua compatibility — `███████░░░ 67%`
 - 🔡 Ferrua-owned lexer scaffold — `██████████ 100%`
 - 🧮 Experimental expression AST — `██████████ 100%`
