@@ -19,6 +19,8 @@ pub enum RegisterBuiltin {
     Type,
     ToString,
     Select,
+    RawGet,
+    RawSet,
 }
 
 /// Bounded scalar values, execution-owned tables, byte strings and first-class
@@ -2567,6 +2569,8 @@ pub fn execute_register_program_with_strings_and_budget(
                         b"type" => RegisterValue::Builtin(RegisterBuiltin::Type),
                         b"tostring" => RegisterValue::Builtin(RegisterBuiltin::ToString),
                         b"select" => RegisterValue::Builtin(RegisterBuiltin::Select),
+                        b"rawget" => RegisterValue::Builtin(RegisterBuiltin::RawGet),
+                        b"rawset" => RegisterValue::Builtin(RegisterBuiltin::RawSet),
                         _ => RegisterValue::Nil,
                     }
                 };
@@ -2664,6 +2668,58 @@ pub fn execute_register_program_with_strings_and_budget(
                                 arguments[1 + offset.min(available)..].to_vec()
                             }
                         }
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::RawGet) => {
+                        let Some(RegisterValue::Table(index)) = arguments.first() else {
+                            return Err(Error::TypeError);
+                        };
+                        let key = *arguments.get(1).ok_or(Error::TypeError)?;
+                        // Reading a nil or NaN key is an absent-key read.
+                        let value = if matches!(key, RegisterValue::Nil)
+                            || matches!(key, RegisterValue::Float(bits) if f64::from_bits(bits).is_nan())
+                        {
+                            RegisterValue::Nil
+                        } else {
+                            let key = register_table_key(key, &strings)?;
+                            tables
+                                .get(*index)
+                                .ok_or(Error::InvalidBytecode)?
+                                .entries
+                                .iter()
+                                .find(|(candidate, _)| *candidate == key)
+                                .map_or(RegisterValue::Nil, |(_, value)| *value)
+                        };
+                        vec![value]
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::RawSet) => {
+                        let Some(RegisterValue::Table(index)) = arguments.first() else {
+                            return Err(Error::TypeError);
+                        };
+                        let key = register_table_key(
+                            *arguments.get(1).ok_or(Error::TypeError)?,
+                            &strings,
+                        )?;
+                        let value = *arguments.get(2).ok_or(Error::TypeError)?;
+                        let entries = &mut tables
+                            .get_mut(*index)
+                            .ok_or(Error::InvalidBytecode)?
+                            .entries;
+                        if let Some(position) = entries.iter().position(|(candidate, _)| *candidate == key)
+                        {
+                            if value == RegisterValue::Nil {
+                                entries.swap_remove(position);
+                                table_entries_used -= 1;
+                            } else {
+                                entries[position].1 = value;
+                            }
+                        } else if value != RegisterValue::Nil {
+                            if table_entries_used >= MAX_REGISTER_TABLE_ENTRIES {
+                                return Err(Error::TooLarge);
+                            }
+                            entries.push((key, value));
+                            table_entries_used += 1;
+                        }
+                        vec![RegisterValue::Table(*index)]
                     }
                     _ => return Err(Error::TypeError),
                 };
