@@ -129,6 +129,22 @@ pub enum Instruction {
         condition: usize,
         target: usize,
     },
+    /// Integer numeric-for controls are evaluated once before the loop
+    /// variable enters scope. The induction value is copied into the
+    /// read-only visible register on each iteration.
+    NumericForCheck {
+        counter: usize,
+        limit: usize,
+        step: usize,
+        visible: usize,
+        exit: usize,
+    },
+    /// Advance without wrapping: an integer loop ends on overflow.
+    NumericForStep {
+        counter: usize,
+        step: usize,
+        exit: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -161,6 +177,7 @@ pub enum Error {
     TooLarge,
     InvalidBytecode,
     DivisionByZero,
+    ZeroForStep,
     StepBudgetExceeded,
 }
 impl fmt::Display for Error {
@@ -170,6 +187,7 @@ impl fmt::Display for Error {
             Self::TooLarge => write!(f, "experimental program is too large"),
             Self::InvalidBytecode => write!(f, "invalid experimental register bytecode"),
             Self::DivisionByZero => write!(f, "integer division by zero"),
+            Self::ZeroForStep => write!(f, "numeric for step cannot be zero"),
             Self::StepBudgetExceeded => write!(f, "bounded register VM step budget exhausted"),
         }
     }
@@ -524,7 +542,8 @@ fn assigned_names<'a>(body: &[Statement<'a>], names: &mut HashSet<&'a str>) {
                 }
                 Statement::Block(inner)
                 | Statement::While { body: inner, .. }
-                | Statement::Repeat { body: inner, .. } => pending.push(inner),
+                | Statement::Repeat { body: inner, .. }
+                | Statement::NumericFor { body: inner, .. } => pending.push(inner),
                 Statement::If {
                     branches,
                     else_branch,
@@ -944,6 +963,161 @@ fn compile_statements<'a>(
                     program.code[at] = Instruction::Jump { target: after };
                 }
             }
+            Statement::NumericFor {
+                variable,
+                start,
+                limit,
+                step,
+                body,
+            } => {
+                // Evaluate all controls before declaring the read-only
+                // induction variable. Bounds remain fixed while body runs.
+                let first = emit(program, start, 0, scopes)?;
+                let bound = emit(program, limit, 0, scopes)?;
+                let stride = if let Some(step) = step {
+                    emit(program, step, 0, scopes)?
+                } else {
+                    if program.registers >= MAX_REGISTERS {
+                        return Err(Error::TooLarge);
+                    }
+                    let reg = program.registers;
+                    program.registers += 1;
+                    emit_instruction(program, Instruction::Load { dest: reg, value: 1 })?;
+                    reg
+                };
+                if program.registers >= MAX_REGISTERS {
+                    return Err(Error::TooLarge);
+                }
+                let counter = program.registers;
+                program.registers += 1;
+                emit_instruction(
+                    program,
+                    Instruction::LoopCopy {
+                        dest: counter,
+                        input: first,
+                    },
+                )?;
+
+                let mut assigned = HashSet::new();
+                assigned_names(body, &mut assigned);
+                let mut candidates = scopes
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(level, scope)| {
+                        scope
+                            .iter()
+                            .filter(|(name, binding)| !binding.constant && assigned.contains(*name))
+                            .map(move |(name, _)| (level, *name))
+                    })
+                    .collect::<Vec<_>>();
+                candidates.sort_unstable();
+                let mut carried = Vec::new();
+                for (level, name) in candidates {
+                    if program.registers >= MAX_REGISTERS {
+                        return Err(Error::TooLarge);
+                    }
+                    let source = scopes
+                        .get(level)
+                        .and_then(|scope| scope.get(name))
+                        .ok_or(Error::InvalidBytecode)?
+                        .register;
+                    let dest = program.registers;
+                    program.registers += 1;
+                    emit_instruction(program, Instruction::LoopCopy { dest, input: source })?;
+                    scopes
+                        .get_mut(level)
+                        .and_then(|scope| scope.get_mut(name))
+                        .ok_or(Error::InvalidBytecode)?
+                        .register = dest;
+                    carried.push((level, name, dest));
+                }
+
+                let header = program.code.len();
+                let reset_start = program.registers;
+                emit_instruction(
+                    program,
+                    Instruction::LoopReset {
+                        start: reset_start,
+                        end: usize::MAX,
+                    },
+                )?;
+                if program.registers >= MAX_REGISTERS {
+                    return Err(Error::TooLarge);
+                }
+                let visible = program.registers;
+                program.registers += 1;
+                let check = program.code.len();
+                emit_instruction(
+                    program,
+                    Instruction::NumericForCheck {
+                        counter,
+                        limit: bound,
+                        step: stride,
+                        visible,
+                        exit: usize::MAX,
+                    },
+                )?;
+                let mut inner = scopes.clone();
+                let mut loop_scope = HashMap::new();
+                loop_scope.insert(
+                    *variable,
+                    RegisterBinding {
+                        register: visible,
+                        constant: true,
+                    },
+                );
+                inner.push(loop_scope);
+                loops.push(LoopExit {
+                    carried: carried.clone(),
+                    jumps: Vec::new(),
+                });
+                let compiled = compile_statements(body, program, &mut inner, loops, depth + 1);
+                let exits = loops.pop().ok_or(Error::InvalidBytecode)?;
+                let returned = compiled?;
+                let mut advance = None;
+                if returned.is_none() {
+                    for &(level, name, dest) in &carried {
+                        let source = inner
+                            .get(level)
+                            .and_then(|scope| scope.get(name))
+                            .ok_or(Error::InvalidBytecode)?
+                            .register;
+                        emit_instruction(program, Instruction::LoopCopy { dest, input: source })?;
+                    }
+                    advance = Some(program.code.len());
+                    emit_instruction(
+                        program,
+                        Instruction::NumericForStep {
+                            counter,
+                            step: stride,
+                            exit: usize::MAX,
+                        },
+                    )?;
+                    emit_instruction(program, Instruction::LoopJump { target: header })?;
+                }
+                program.code[header] = Instruction::LoopReset {
+                    start: reset_start,
+                    end: program.registers,
+                };
+                let after = program.code.len();
+                program.code[check] = Instruction::NumericForCheck {
+                    counter,
+                    limit: bound,
+                    step: stride,
+                    visible,
+                    exit: after,
+                };
+                if let Some(at) = advance {
+                    program.code[at] = Instruction::NumericForStep {
+                        counter,
+                        step: stride,
+                        exit: after,
+                    };
+                }
+                for at in exits.jumps {
+                    program.code[at] = Instruction::Jump { target: after };
+                }
+            }
             Statement::Break => {
                 let carried = loops
                     .last()
@@ -1078,6 +1252,25 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             }
             Instruction::Jump { target } => target > pc && target < size,
             Instruction::LoopReset { start, end } => start < end && end <= program.registers,
+            Instruction::NumericForCheck {
+                counter,
+                limit,
+                step,
+                visible,
+                exit,
+            } => {
+                register(counter)
+                    && register(limit)
+                    && register(step)
+                    && register(visible)
+                    && exit > pc
+                    && exit < size
+            }
+            Instruction::NumericForStep {
+                counter,
+                step,
+                exit,
+            } => register(counter) && register(step) && exit > pc && exit < size,
             Instruction::LoopJump { target }
             | Instruction::LoopBranchIfFalse {
                 target,
@@ -1134,6 +1327,45 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
                 continue;
             }
             Instruction::Return { source } => return read(&registers, source),
+            Instruction::NumericForCheck {
+                counter,
+                limit,
+                step,
+                visible,
+                exit,
+            } => {
+                let current = read(&registers, counter)?;
+                let bound = read(&registers, limit)?;
+                let stride = read(&registers, step)?;
+                if stride == 0 {
+                    return Err(Error::ZeroForStep);
+                }
+                if (stride > 0 && current > bound) || (stride < 0 && current < bound) {
+                    pc = exit;
+                } else {
+                    let slot = registers.get_mut(visible).ok_or(Error::InvalidBytecode)?;
+                    if slot.replace(current).is_some() {
+                        return Err(Error::InvalidBytecode);
+                    }
+                    pc += 1;
+                }
+                continue;
+            }
+            Instruction::NumericForStep {
+                counter,
+                step,
+                exit,
+            } => {
+                let value = read(&registers, counter)?;
+                let stride = read(&registers, step)?;
+                if let Some(next) = value.checked_add(stride) {
+                    *registers.get_mut(counter).ok_or(Error::InvalidBytecode)? = Some(next);
+                    pc += 1;
+                } else {
+                    pc = exit;
+                }
+                continue;
+            }
             Instruction::LoopReset { start, end } => {
                 for value in registers
                     .get_mut(start..end)
