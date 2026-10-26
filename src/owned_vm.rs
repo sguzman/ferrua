@@ -2005,7 +2005,10 @@ mod tests {
             execute_register_program(&float_return),
             Ok(RegisterValue::Float(1.5_f64.to_bits()))
         );
-        assert_eq!(execute_integer_program(&float_return), Err(Error::TypeError));
+        assert_eq!(
+            execute_integer_program(&float_return),
+            Err(Error::TypeError)
+        );
         for source in ["do return 1, 2 end", "do return math.max(1,2) end"] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
@@ -2062,7 +2065,10 @@ mod tests {
             execute_register_program(&float_return),
             Ok(RegisterValue::Float(1.5_f64.to_bits()))
         );
-        assert_eq!(execute_integer_program(&float_return), Err(Error::TypeError));
+        assert_eq!(
+            execute_integer_program(&float_return),
+            Err(Error::TypeError)
+        );
         let invalid = Program {
             code: vec![
                 Instruction::Load { dest: 0, value: 1 },
