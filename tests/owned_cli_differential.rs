@@ -598,6 +598,23 @@ fn owned_string_format_lua_quoted_strings_and_scalars_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_width_precision_and_alignment_match_lua54() {
+    for source in [
+        "print(string.format('%5s','a')=='    a',string.format('%-5s','a')=='a    ')",
+        "print(string.format('%.3s','abcdef')=='abc',string.format('%8.3s','abcdef')=='     abc')",
+        "print(string.format('%-8.3s','abcdef')=='abc     ')",
+        "print(string.format('%.0s','abcdef')=='',string.format('%3.0s','abc')=='   ')",
+        "print(string.format('%3s','abcdef')=='abcdef',string.format('%-3s','abcdef')=='abcdef')",
+        "print(string.format('%.1s','é')==string.sub('é',1,1))",
+        "print(string.format('hello %-5s:%2s', 'A','B')=='hello A    : B')",
+        "print(string.format('%6.6s','abcdef')=='abcdef')",
+        "local ok,x=pcall(string.format,'%4s','a'); print(ok,x); local bad,e=pcall(string.format,'%4s'); print(bad,type(e))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",

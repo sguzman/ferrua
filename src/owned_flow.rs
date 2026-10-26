@@ -5801,14 +5801,51 @@ impl Execution<'_> {
                         output.push(text[index]);
                         index += 1;
                     } else {
-                        let specifier = *text.get(index + 1).ok_or(FlowError::TypeError)?;
-                        index += 2;
-                        if specifier == b'%' {
+                        let mut cursor = index + 1;
+                        let left_align = text.get(cursor) == Some(&b'-');
+                        if left_align {
+                            cursor += 1;
+                        }
+                        let mut width = 0usize;
+                        while let Some(byte @ b'0'..=b'9') = text.get(cursor).copied() {
+                            width = width
+                                .checked_mul(10)
+                                .and_then(|n| n.checked_add(usize::from(byte - b'0')))
+                                .ok_or(FlowError::TooLarge)?;
+                            if width > MAX_STRING_POOL_BYTES {
+                                return Err(FlowError::TooLarge);
+                            }
+                            cursor += 1;
+                        }
+                        let mut precision = None;
+                        if text.get(cursor) == Some(&b'.') {
+                            cursor += 1;
+                            let mut digits = 0usize;
+                            while let Some(byte @ b'0'..=b'9') = text.get(cursor).copied() {
+                                digits = digits
+                                    .checked_mul(10)
+                                    .and_then(|n| n.checked_add(usize::from(byte - b'0')))
+                                    .ok_or(FlowError::TooLarge)?;
+                                if digits > MAX_STRING_POOL_BYTES {
+                                    return Err(FlowError::TooLarge);
+                                }
+                                cursor += 1;
+                            }
+                            precision = Some(digits);
+                        }
+                        let specifier = *text.get(cursor).ok_or(FlowError::TypeError)?;
+                        index = cursor + 1;
+                        if specifier == b'%' && !left_align && width == 0 && precision.is_none() {
                             output.push(b'%');
                         } else {
+                            if (left_align || width > 0 || precision.is_some()) && specifier != b's' {
+                                return Err(FlowError::Unsupported(
+                                    "Lua numeric width and precision are not implemented".into(),
+                                ));
+                            }
                             let value = *args.get(argument).ok_or(FlowError::TypeError)?;
                             argument += 1;
-                            let part = match specifier {
+                            let mut part = match specifier {
                                 b's' => self.string_bytes(value)?,
                                 b'q' => match value {
                                     Value::Nil => b"nil".to_vec(),
@@ -5867,6 +5904,21 @@ impl Execution<'_> {
                                     ));
                                 }
                             };
+                            if specifier == b's' {
+                                if let Some(precision) = precision {
+                                    part.truncate(precision);
+                                }
+                                if part.len() < width {
+                                    let padding = width - part.len();
+                                    if left_align {
+                                        part.extend(std::iter::repeat_n(b' ', padding));
+                                    } else {
+                                        let mut padded = vec![b' '; padding];
+                                        padded.extend_from_slice(&part);
+                                        part = padded;
+                                    }
+                                }
+                            }
                             if self.steps.saturating_add(part.len()) > self.budget {
                                 return Err(FlowError::StepBudgetExceeded);
                             }
