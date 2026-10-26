@@ -1959,6 +1959,13 @@ struct OwnedCallFrame {
 enum FrameProgress {
     Paused,
     Returned(Vec<Value>),
+    /// The parent cursor has already advanced. A future trampoline can
+    /// enqueue the child instead of invoking it on the Rust call stack.
+    Call {
+        handle: usize,
+        args: Vec<Value>,
+        many: bool,
+    },
 }
 
 const FRAME_STEP_QUANTUM: usize = 64;
@@ -7596,6 +7603,23 @@ impl Execution<'_> {
             match self.execute_frame(instructions, &mut frame, FRAME_STEP_QUANTUM)? {
                 FrameProgress::Paused => continue,
                 FrameProgress::Returned(values) => return Ok(values),
+                FrameProgress::Call { handle, args, many } => {
+                    // Nested Lua calls still execute synchronously. Keeping
+                    // the calling frame intact here is a trampoline seam
+                    // for an explicit scheduler, not a simulated coroutine.
+                    let returned = self.call_owned_function(handle, &args)?;
+                    if many {
+                        frame.last_multiple = Some(returned.len());
+                        frame.stack.extend(returned);
+                    } else {
+                        frame
+                            .stack
+                            .push(returned.into_iter().next().unwrap_or(Value::Nil));
+                    }
+                    if frame.stack.len() > MAX_STACK {
+                        return Err(FlowError::TooLarge);
+                    }
+                }
             }
         }
     }
@@ -7972,16 +7996,12 @@ impl Execution<'_> {
                     let Value::Function(handle) = callable else {
                         return Err(FlowError::TypeError);
                     };
-                    let returned = self.call_owned_function(handle, &args)?;
-                    if matches!(
+                    let many = matches!(
                         instructions[*pc],
                         Op::CallMany(_) | Op::CallSpread { many: true, .. }
-                    ) {
-                        *last_multiple = Some(returned.len());
-                        stack.extend(returned);
-                    } else {
-                        stack.push(returned.into_iter().next().unwrap_or(Value::Nil));
-                    }
+                    );
+                    *pc = next;
+                    return Ok(FrameProgress::Call { handle, args, many });
                 }
                 Op::VarargSingle => {
                     stack.push(varargs.first().copied().unwrap_or(Value::Nil));
