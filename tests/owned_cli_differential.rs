@@ -326,6 +326,27 @@ fn owned_string_byte_char_binary_and_return_arity_match_lua54() {
 }
 
 #[test]
+fn owned_string_library_exact_numeric_text_indices_match_lua54() {
+    for source in [
+        "print(string.find('aaba','a','2.0'),string.find('aaba','a','0x1p+1'))",
+        "print(string.match('aaba','a','2.0'),string.match('abc','%a','2e0'))",
+        "print(string.byte('abc','2.0','2e0'),string.byte('abc','0x1p+1'))",
+        "print(string.sub('abcdef','2.0','4e0'),string.sub('abcdef','0x2','0x4'))",
+        "local s,n=string.gsub('ababa','a','X','2.0'); print(s,n)",
+        "local s,n=string.gsub('ababa','a','X','0x1p+1'); print(s,n)",
+        "print(string.find('abc','b','-0x2p+0'),string.match('abc','%a','-2.0'))",
+        "local ok=pcall(string.byte,'abc','2.5'); print(ok)",
+        "local ok=pcall(string.sub,'abc','2.5'); print(ok)",
+        "local ok=pcall(string.match,'abc','a','1.5'); print(ok)",
+        "local ok=pcall(string.find,'abc','a','2.5'); print(ok)",
+        "local ok=pcall(string.gsub,'abc','a','X','1.5'); print(ok)",
+        "local nbsp=string.char(194,160); local ok=pcall(string.byte,'abc',nbsp..'2'); print(ok)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_find_literal_subset_matches_lua54() {
     for source in [
         "print(string.find('abcabc','bc')); print(string.find('abcabc','bc',3)); print(string.find('abcabc','bc',-3))",

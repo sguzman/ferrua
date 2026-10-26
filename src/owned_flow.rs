@@ -4945,9 +4945,7 @@ impl Execution<'_> {
         let source = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         let pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
         let initial = match args.get(2).copied() {
-            Some(index) if index != Value::Nil => self
-                .exact_integer_operand(index)
-                .or_else(|_| self.integer_operand(index))?,
+            Some(index) if index != Value::Nil => self.lua_checked_integer_argument(index)?,
             _ => 1,
         };
         // Lua's string.find skips pattern matching when no characters
@@ -4983,9 +4981,7 @@ impl Execution<'_> {
         };
         let limit = match args.get(3).copied() {
             Some(value) if value != Value::Nil => {
-                let count = self
-                    .exact_integer_operand(value)
-                    .or_else(|_| self.integer_operand(value))?;
+                let count = self.lua_checked_integer_argument(value)?;
                 if count <= 0 {
                     0
                 } else {
@@ -5188,9 +5184,7 @@ impl Execution<'_> {
         let source = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         let pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
         let initial = match args.get(2).copied() {
-            Some(index) if index != Value::Nil => self
-                .exact_integer_operand(index)
-                .or_else(|_| self.integer_operand(index))?,
+            Some(index) if index != Value::Nil => self.lua_checked_integer_argument(index)?,
             _ => 1,
         };
         match self.simple_pattern_match(&source, &pattern, initial, false)? {
@@ -5444,6 +5438,15 @@ impl Execution<'_> {
             }
         }
         Ok(value)
+    }
+
+    /// Convert optional/required Lua library integer arguments using
+    /// luaL_checkinteger's exact numeric conversion (not token-only
+    /// integer parsing). This accepts integral decimal/exponent/hex text,
+    /// but not fractional numbers or Unicode whitespace.
+    fn lua_checked_integer_argument(&self, value: Value) -> Result<i64, FlowError> {
+        let number = self.lua_numeric_operand(value)?;
+        self.exact_integer_operand(number)
     }
 
     /// Lua-style number conversion used by the bounded binary formats
@@ -5808,9 +5811,7 @@ impl Execution<'_> {
         // zero and overly negative values clip to the first byte, and
         // positions past the end yield an exhausted iterator.
         let initial = match args.get(2).copied() {
-            Some(value) if value != Value::Nil => {
-                self.exact_integer_operand(self.lua_numeric_operand(value)?)?
-            }
+            Some(value) if value != Value::Nil => self.lua_checked_integer_argument(value)?,
             _ => 1,
         };
         let start = Self::string_offset(initial, source.len() as i64).max(1);
@@ -6345,15 +6346,11 @@ impl Execution<'_> {
     fn string_byte_builtin(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
         let bytes = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         let start = match args.get(1).copied() {
-            Some(value) if value != Value::Nil => self
-                .exact_integer_operand(value)
-                .or_else(|_| self.integer_operand(value))?,
+            Some(value) if value != Value::Nil => self.lua_checked_integer_argument(value)?,
             _ => 1,
         };
         let end = match args.get(2).copied() {
-            Some(value) if value != Value::Nil => self
-                .exact_integer_operand(value)
-                .or_else(|_| self.integer_operand(value))?,
+            Some(value) if value != Value::Nil => self.lua_checked_integer_argument(value)?,
             _ => start,
         };
         let length = bytes.len() as i64;
@@ -7134,15 +7131,12 @@ impl Execution<'_> {
             }
             Builtin::StringSub => {
                 let start = *args.get(1).ok_or(FlowError::TypeError)?;
-                let start = self
-                    .exact_integer_operand(start)
-                    .or_else(|_| self.integer_operand(start))?;
+                let start = self.lua_checked_integer_argument(start)?;
                 let end = args.get(2).copied().unwrap_or(Value::Nil);
                 let end = if end == Value::Nil {
                     -1
                 } else {
-                    self.exact_integer_operand(end)
-                        .or_else(|_| self.integer_operand(end))?
+                    self.lua_checked_integer_argument(end)?
                 };
                 let length = text.len() as i64;
                 let begin = Self::string_offset(start, length).max(1);
