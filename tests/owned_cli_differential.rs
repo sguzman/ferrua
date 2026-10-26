@@ -446,7 +446,7 @@ fn owned_pattern_unreachable_invalid_closer_is_deferred_like_lua54() {
     // invalid capture syntax.
     for source in [
         "print(string.match('abc','z)')==nil)",
-        "print(string.match('abc','a)')==nil)",
+        "print(string.match('abc','zz)')==nil)",
         "local ok=pcall(string.match,'abc','a)'); print(ok)",
         "local out,count=string.gsub('abc','z)','X'); print(out,count)",
         "local it=string.gmatch('abc','z)'); print(it()==nil)",
