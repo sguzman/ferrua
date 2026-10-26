@@ -6054,9 +6054,9 @@ impl Execution<'_> {
             }
             atoms.push((atom, repetition));
         }
-        if opened != 0 {
-            return Err(FlowError::TypeError);
-        }
+        // An unfinished '(' raises an error only when the matching
+        // traversal reaches the end with a still-open capture. A literal
+        // prefix that never matches must not fail at parse time.
         let start = Self::string_offset(initial, source.len() as i64).max(1);
         if start > source.len() as i64 + 1 {
             return Ok(None);
@@ -6077,6 +6077,12 @@ impl Execution<'_> {
                 self.steps += 1;
                 if atom_index == atoms.len() {
                     if !anchored_end || position == source.len() {
+                        if captures
+                            .iter()
+                            .any(|&(_, end, is_position)| end == usize::MAX && !is_position)
+                        {
+                            return Err(FlowError::TypeError);
+                        }
                         return Ok(Some((begin, position, captures)));
                     }
                     continue;

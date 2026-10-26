@@ -458,6 +458,24 @@ fn owned_pattern_unreachable_invalid_closer_is_deferred_like_lua54() {
 }
 
 #[test]
+fn owned_pattern_unfinished_opening_capture_checks_reachable_paths_like_lua54() {
+    for source in [
+        "print(string.match('abc','z(')==nil)",
+        "print(string.find('abc','z(')==nil)",
+        "local s,n=string.gsub('abc','z(','X'); print(s,n)",
+        "local it=string.gmatch('abc','z('); print(it()==nil)",
+        "local ok=pcall(string.match,'abc','a('); print(ok)",
+        "local ok=pcall(string.find,'abc','a('); print(ok)",
+        "local ok=pcall(string.gsub,'abc','a(','X'); print(ok)",
+        "local it=string.gmatch('abc','a('); local ok=pcall(it); print(ok)",
+        "local ok=pcall(string.match,'abc','('); print(ok)",
+        "print(string.match('abc','(a)'))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_pattern_standalone_repetition_markers_and_closing_bracket_match_lua54() {
     // Lua 5.4 classend() returns a one-byte pattern atom for these raw
     // bytes; only a marker *after* another atom becomes a repetition suffix.
