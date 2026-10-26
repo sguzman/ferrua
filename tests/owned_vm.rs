@@ -44,6 +44,49 @@ fn register_immutable_lua_strings_use_byte_length_and_value_comparison() {
 }
 
 #[test]
+fn register_string_literals_have_upstream_lua54_output_parity() {
+    let check_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for source in [
+        "#'abc'",
+        "#'é'",
+        "#'a\\0b'",
+        "'a'=='a'",
+        "'a'<'b'",
+        "'z'>='a'",
+        "'a'==nil",
+        "'hello'",
+        "'a\\0b'",
+    ] {
+        let program = compile_integer_expression(source).unwrap();
+        let result = execute_register_program(&program).unwrap();
+        let mut expected = match result {
+            RegisterValue::Integer(number) => number.to_string().into_bytes(),
+            RegisterValue::Boolean(boolean) => boolean.to_string().into_bytes(),
+            RegisterValue::Nil => b"nil".to_vec(),
+            RegisterValue::Float(bits) => format!("{:?}", f64::from_bits(bits)).into_bytes(),
+            RegisterValue::String(_) => program.string_bytes(result).unwrap().to_vec(),
+        };
+        expected.push(b'\n');
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !check_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let program = format!("print({source})");
+            let output = command.args(["-e", &program]).output().unwrap();
+            assert!(output.status.success(), "{source}: {}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(output.stdout, expected, "register Lua string parity: {source}");
+        }
+    }
+}
+
+#[test]
 fn tagged_register_decimal_floats_and_mixed_number_order_match_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()

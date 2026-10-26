@@ -2878,6 +2878,36 @@ mod tests {
         );
     }
     #[test]
+    fn validates_unreachable_register_string_pool_indices() {
+        let valid = Program {
+            code: vec![
+                Instruction::LoadString { dest: 0, index: 0 },
+                Instruction::Return { source: 0 },
+            ],
+            registers: 1,
+            result: 0,
+            strings: vec![b"ok".to_vec()],
+        };
+        let result = execute_register_program(&valid).unwrap();
+        assert_eq!(valid.string_bytes(result), Some(b"ok".as_slice()));
+        let mut invalid = valid.clone();
+        invalid.code.push(Instruction::LoadString {
+            dest: 0,
+            index: usize::MAX,
+        });
+        assert_eq!(
+            execute_register_program_with_budget(&invalid, 0),
+            Err(Error::InvalidBytecode)
+        );
+        let mut oversized = valid;
+        oversized.strings = vec![vec![b'x'; MAX_REGISTER_STRING_BYTES + 1]];
+        assert_eq!(
+            execute_register_program_with_budget(&oversized, 0),
+            Err(Error::InvalidBytecode)
+        );
+    }
+
+    #[test]
     fn validates_unreachable_integer_bytecode_and_register_bounds() {
         let valid = Program {
             code: vec![
