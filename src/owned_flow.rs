@@ -6069,7 +6069,8 @@ impl Execution<'_> {
             self.steps += 1;
             // Explicit DFS replaces recursive Lua pattern backtracking.
             // Branch order is greedy for *, + and ?, lazy for -.
-            let mut states = vec![(0usize, begin, Vec::new())];
+            let mut states: Vec<(usize, usize, Vec<PatternCapture>)> =
+                vec![(0usize, begin, Vec::new())];
             while let Some((atom_index, position, captures)) = states.pop() {
                 if self.steps >= self.budget {
                     return Err(FlowError::StepBudgetExceeded);
