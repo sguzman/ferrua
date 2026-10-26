@@ -589,13 +589,13 @@ impl<'a> JumpCollector<'a> {
                             .iter()
                             .all(|statement| matches!(statement, Statement::Label(_)));
                     self.labels.push(JumpSite {
-                        name,
+                        name: *name,
                         block,
                         live: if trailing { inherited.to_vec() } else { live.clone() },
                     });
                 }
                 Statement::Goto(name) => self.gotos.push(JumpSite {
-                    name,
+                    name: *name,
                     block,
                     live: live.clone(),
                 }),
