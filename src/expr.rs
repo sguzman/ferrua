@@ -353,8 +353,16 @@ impl<'a> Parser<'a> {
     }
 
     fn expression_inner(&mut self, min_bp: u8) -> Result<Expr<'a>, ParseError> {
+        // Lua postfix operators require a prefixexp: a variable or an
+        // explicitly parenthesized expression. Literal values, constructors
+        // and anonymous function expressions need parentheses first.
+        let postfix_allowed = self.peek().is_some_and(|token| {
+            token.kind == Kind::Identifier || token.spelling == "("
+        });
         let mut left = self.prefix()?;
-        left = self.postfix(left)?;
+        if postfix_allowed {
+            left = self.postfix(left)?;
+        }
         let mut chain_depth = self.expression_depth;
         while let Some(op) = self.peek().map(|t| t.spelling) {
             let Some((l_bp, r_bp)) = binding_power(op) else {

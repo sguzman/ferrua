@@ -282,6 +282,53 @@ fn lua_short_string_escape_syntax_matches_upstream_when_requested() {
 }
 
 #[test]
+fn lua_prefix_expression_postfix_grammar_matches_lua54() {
+    let cases = [
+        ("f(1)", true),
+        ("f'hello'", true),
+        ("f{k=1}", true),
+        ("f(1).value", true),
+        ("(f)(1)", true),
+        ("(function() return 4 end)()", true),
+        ("({k=3}).k", true),
+        ("(nil).value", true),
+        ("('abc'):upper()", true),
+        ("(42)()", true),
+        ("42()", false),
+        ("nil.value", false),
+        ("true()", false),
+        ("false[1]", false),
+        ("'abc'[1]", false),
+        ("'abc':upper()", false),
+        ("{}[1]", false),
+        ("{k=3}.k", false),
+        ("function() return 4 end()", false),
+        ("function() end.value", false),
+    ];
+    for (source, valid) in cases {
+        let owned = ferrua::expr::parse_expression(source).is_ok();
+        assert_eq!(owned, valid, "owned postfix syntax: {source}");
+        if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
+            let check = format!("assert(load([====[return {source}]====]))");
+            let output = std::process::Command::new("lua5.4")
+                .args(["-e", &check])
+                .output()
+                .expect("upstream reference interpreter");
+            assert_eq!(
+                output.status.success(),
+                valid,
+                "Lua 5.4 postfix syntax differs on {source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+}
+
+#[test]
 fn owned_method_call_syntax_matches_lua_54_when_requested() {
     if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
