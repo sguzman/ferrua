@@ -7,14 +7,14 @@ The production `fer` executable still uses the pinned, independently maintained 
 - **Lexer:** [`src/lex.rs`](../src/lex.rs) tokenizes a documented Lua 5.4 subset, preserving spelling, line number and source byte offsets; [the first-party source corpus](../tests/owned_syntax.rs) covers 27 real Lua scripts.
 - **Parser:** [`src/expr.rs`](../src/expr.rs) builds Pratt expression trees with operator precedence, chained calls, fields and indexing. Its limited chunk grammar includes local declarations, assignments, calls, returns, nested `do/end`, `if/elseif/else`, `while`, `repeat/until`, numeric `for`, and generic `for/in`.
 - **Scope analysis:** [`src/scope.rs`](../src/scope.rs) records local bindings and name references, including block/branch/loop scopes, shadowing, parallel declaration visibility, and `repeat` conditions evaluated in the body scope.
-- **Register prototype:** [`src/owned_vm.rs`](../src/owned_vm.rs) compiles and runs integer expression bytecode with bounded registers. Supported operators include unary minus, integer addition/subtraction/multiplication, Lua floor division and modulo, and integer bitwise/shift operations. Division by zero yields an explicit error. Integer overflow wraps as on the supported 64-bit Lua reference.
-- **Static integer chunks:** `compile_integer_chunk` compiles straight-line integer locals, parallel assignments to existing locals, nested `do/end` scopes, and a final scalar return into the same owned register IR. An initializer sees the outer/previous binding, while parallel assignment evaluates all RHS expressions before rebinding names.
+- **Register prototype:** [`src/owned_vm.rs`](../src/owned_vm.rs) compiles bounded tagged scalar bytecode (nil, Boolean, integer, IEEE-754 float). Its register dispatcher supports mixed numeric arithmetic, division and exponentiation, Lua floor division and modulo, exact integral-float coercion for bitwise operators, Boolean operand selection, comparisons, conditionals, and integer/float numeric-for loops. Resource quotas remain enforced; this is not the production backend.
+- **Static register chunks:** The legacy-named `compile_integer_chunk` supports typed scalar locals, parallel assignment, lexical `do/end`, conditions, while/repeat and numeric-for loops, breaks, and scalar returns. Initializers read earlier bindings and parallel RHS evaluation precedes assignment. Dynamic calls, strings, tables, arbitrary multiple returns, and complete scope semantics remain outside this backend.
 
 ## Explicit boundaries
 
-The parser is **not** complete Lua syntax. The original register-based integer bytecode engine supports neither Lua functions nor dynamic loops, branches, global variables, calls, Lua tables, strings, floats, metatables, coroutines, closures/upvalues, garbage collection, or a standard library. The separate stack-based flow engine has since added some of these capabilities. The static chunk compiler refuses unsupported forms instead of silently falling back to the production engine. Native script entrypoints remain powered by `luna-core`.
+The parser is **not** complete Lua syntax. The tagged register backend remains a bounded scalar compiler/dispatcher, without Lua functions, globals, arbitrary calls, tables, strings, metatables, coroutines, closures, garbage collection, or standard libraries. Ferrua's separate experimental stack/flow engine implements and tests more features, including native Lua coroutine operations, but neither backend authorizes production cutover. Unsupported register operations fail without silent fallback; the default interpreter remains `luna-core`.
 
-The tests compare the narrow owned integer subset to the production `fer` CLI and, in a separate Linux CI job, directly to upstream **Lua 5.4.6**. These comparisons do not certify full Lua conformance.
+Register differential tests compare the typed scalar subset with the production `fer` CLI and upstream **Lua 5.4.6**, including mixed float floor division/modulus, integral-float bitwise conversion, floating numeric-for controls, and error cases. These do not establish full Lua compatibility.
 
 ## Acceptance evidence
 
@@ -24,7 +24,7 @@ The tests compare the narrow owned integer subset to the production `fer` CLI an
 - [Extended floor/modulo/bitwise parity — CI #39960437635](https://github.com/sguzman/ferrua/actions/runs/39960437635)
 - [Static integer local chunks against upstream Lua — CI #39961500042](https://github.com/sguzman/ferrua/actions/runs/39961500042)
 
-Each cited CI run passed all four existing jobs. The ledger in [`progress.json`](progress.json) credits only these narrower implemented tasks; **full parser/scoping (T301), full VM/compiler (T302), and native runtime graduation (T304) remain open**.
+Older evidence reflects the CI matrix at the time. New five-job acceptance: [mixed float floor/mod #40387679839](https://github.com/sguzman/ferrua/actions/runs/40387679839), [integral-float bitwise #40388400987](https://github.com/sguzman/ferrua/actions/runs/40388400987), and [floating numeric-for #40389467578](https://github.com/sguzman/ferrua/actions/runs/40389467578). **T301 full parser, T302 full compiler/register dispatcher, and T304 production graduation remain open** in the machine-readable ledger.
 
 ## Graduation sequence
 
