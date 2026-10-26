@@ -731,6 +731,21 @@ fn owned_tonumber_numeric_string_bases_match_lua54() {
 }
 
 #[test]
+fn owned_tonumber_missing_argument_error_matches_lua54() {
+    assert_parity("print('before'); tonumber()", false);
+    assert_parity("tonumber(nil,16)", false);
+    for source in [
+        "print(tonumber(nil)==nil,tonumber(nil,nil)==nil)",
+        "local ok=pcall(tonumber); print(ok)",
+        "local ok,err=pcall(tonumber); print(ok,type(err))",
+        "local ok=pcall(tonumber,nil,16); print(ok)",
+        "local ok,v=pcall(tonumber,nil); print(ok,v==nil)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_tonumber_explicit_base_wraps_like_lua54() {
     // Lua's base-specific conversion accumulates modulo 2^64 rather
     // than rejecting input above the signed or unsigned integer limit.

@@ -3661,7 +3661,9 @@ impl Execution<'_> {
     }
 
     fn tonumber_builtin(&self, args: &[Value]) -> Result<Value, FlowError> {
-        let value = args.first().copied().unwrap_or(Value::Nil);
+        // Lua's luaL_checkany rejects a missing argument, while an
+        // explicitly supplied nil is valid and converts to nil.
+        let value = *args.first().ok_or(FlowError::TypeError)?;
         if let Some(base_value) = args.get(1).copied().filter(|arg| *arg != Value::Nil) {
             // luaL_checkinteger accepts numeric-string bases when they
             // represent exact integers, just as it accepts integer floats.
