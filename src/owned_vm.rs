@@ -899,7 +899,13 @@ fn compile_statements<'a>(
                 )?;
                 let mut inner = scopes.clone();
                 inner.push(HashMap::new());
-                let returned = compile_statements(body, program, &mut inner, depth + 1)?;
+                loops.push(LoopExit {
+                    carried: carried.clone(),
+                    jumps: Vec::new(),
+                });
+                let compiled = compile_statements(body, program, &mut inner, loops, depth + 1);
+                let exits = loops.pop().ok_or(Error::InvalidBytecode)?;
+                let returned = compiled?;
                 if returned.is_none() {
                     let guard = emit_condition(program, condition, &inner, 0)?;
                     for &(level, name, dest) in &carried {
