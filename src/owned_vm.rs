@@ -1248,11 +1248,12 @@ fn compile_statements<'a>(
                 // An unconditional true loop whose body definitely returns
                 // also terminates the chunk. A body that merely breaks or
                 // conditionally returns does not establish that guarantee.
-                if matches!(condition, Expr::Atom("true")) && statements_definitely_return(body) {
-                    if let Some(value) = returned {
-                        result = Some(value);
-                        break;
-                    }
+                if matches!(condition, Expr::Atom("true"))
+                    && statements_definitely_return(body)
+                    && let Some(value) = returned
+                {
+                    result = Some(value);
+                    break;
                 }
             }
             Statement::Repeat { body, condition } => {
