@@ -4850,6 +4850,13 @@ impl Execution<'_> {
                 if begin < cursor || end < begin || end > source.len() {
                     return Err(FlowError::InvalidBytecode);
                 }
+                // Retain only arguments and values for this match.
+                // Callback-local roots must not accumulate per occurrence.
+                let match_root_base = self
+                    .gc_temporary_roots
+                    .last()
+                    .ok_or(FlowError::InvalidBytecode)?
+                    .len();
                 output.extend_from_slice(&source[cursor..begin]);
                 if let Some(replacement) = &replacement {
                     let mut index = 0usize;
@@ -4937,6 +4944,10 @@ impl Execution<'_> {
                     self.steps += selected.len();
                     output.extend_from_slice(&selected);
                 }
+                self.gc_temporary_roots
+                    .last_mut()
+                    .ok_or(FlowError::InvalidBytecode)?
+                    .truncate(match_root_base);
                 substitutions += 1;
                 cursor = end;
                 if begin == end {

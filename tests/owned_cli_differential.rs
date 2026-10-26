@@ -615,6 +615,18 @@ fn owned_string_format_width_precision_and_alignment_match_lua54() {
 }
 
 #[test]
+fn owned_gsub_short_lived_gc_roots_preserve_long_replacement_semantics() {
+    for source in [
+        "local n=0; local s=string.rep('a',100); local out,c=string.gsub(s,'.',function(x) n=n+1; return x..'b' end); print(#out,c,n)",
+        "local source=string.rep('a',32); local out,n=string.gsub(source,'.',function(x) collectgarbage('collect'); return x end); print(out==source,n)",
+        "local source=string.rep('ab',30); local lookup=setmetatable({},{__index=function(_,k) collectgarbage('collect'); return k..'!' end}); local out,n=string.gsub(source,'.',lookup); print(#out,n)",
+        "local source=string.rep('x',64); local t={x='y'}; local out,n=string.gsub(source,'.',t); print(out==string.rep('y',64),n)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
