@@ -43,6 +43,11 @@ pub enum Value {
     Builtin(Builtin),
 }
 
+// Capture bounds are zero-based byte offsets; the Boolean tags position
+// captures, which return Lua one-based integers instead of byte substrings.
+type PatternCapture = (usize, usize, bool);
+type PatternMatch = (usize, usize, Vec<PatternCapture>);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Builtin {
     Print,
@@ -4854,7 +4859,7 @@ impl Execution<'_> {
         pattern: &[u8],
         initial: i64,
         plain: bool,
-    ) -> Result<Option<(usize, usize, Vec<(usize, usize, bool)>)>, FlowError> {
+    ) -> Result<Option<PatternMatch>, FlowError> {
         let mut body = pattern;
         let mut anchored_start = false;
         let mut anchored_end = false;
