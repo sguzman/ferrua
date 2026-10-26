@@ -740,6 +740,7 @@ fn render(values: &[Value]) -> String {
             Value::String(_) => "string".to_owned(),
             Value::Table(_) => "table".to_owned(),
             Value::Function(_) | Value::Builtin(_) => "function".to_owned(),
+            Value::Thread(_) => "thread".to_owned(),
         })
         .collect::<Vec<_>>()
         .join("\t")
