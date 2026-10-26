@@ -730,9 +730,27 @@ fn owned_gmatch_initial_byte_position_matches_lua54() {
         "print(string.gmatch('a1b2c3','%d',4.0)())",
         "local a=pcall(string.gmatch,'abc','%a',2.5); local b=pcall(string.gmatch,'abc','%a','wrong'); print(a,b)",
         "local ok=pcall(string.gmatch,'abc','%a',true); print(ok)",
-        "local t={}; for p in string.gmatch('abc','()',4) do t[#t+1]=p end; print(table.concat(t,','))",
+
     ] {
         assert_parity(source, true);
+    }
+}
+
+#[test]
+fn owned_gmatch_end_position_capture_matches_upstream_not_pinned_backend() {
+    // Pinned luna-core omits a position capture beginning just after the
+    // last byte. Lua 5.4 allows that empty capture at len + 1.
+    let source =
+        "local t={}; for p in string.gmatch('abc','()',4) do t[#t+1]=p end; print(table.concat(t,','))";
+    let owned = run_fer(true, source);
+    let production = run_fer(false, source);
+    assert!(owned.status.success());
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"4\n");
+    assert_eq!(production.stdout, b"\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, reference.stdout);
     }
 }
 
