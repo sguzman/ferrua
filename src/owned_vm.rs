@@ -3340,10 +3340,8 @@ fn register_tonumber(
                     && text.bytes().all(|byte| {
                         byte.is_ascii_digit() || matches!(byte, b'+' | b'-' | b'.' | b'e' | b'E')
                     });
-                if valid_decimal {
-                    if let Ok(number) = text.parse::<f64>() {
-                        return Ok(RegisterValue::Float(number.to_bits()));
-                    }
+                if valid_decimal && let Ok(number) = text.parse::<f64>() {
+                    return Ok(RegisterValue::Float(number.to_bits()));
                 }
                 return Ok(RegisterValue::Nil);
             }
