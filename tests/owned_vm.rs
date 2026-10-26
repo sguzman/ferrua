@@ -130,7 +130,10 @@ fn register_global_environment_and_shadowing_match_lua54() {
         ("local x=2; do x=3 end; return x", "1|3"),
         ("global=99; local x=global; return x", "1|99"),
         ("x=1; local x=x+1; return x", "1|2"),
-        ("if false then global=1 else global=2 end return global", "1|2"),
+        (
+            "if false then global=1 else global=2 end return global",
+            "1|2",
+        ),
         ("local x=1; a,b=3,4; return a,b", "2|3|4"),
         ("a,b=1,2; a,b=b,a; return a,b", "2|2|1"),
         ("a=1; while a<4 do a=a+1 end return a", "1|4"),
@@ -140,7 +143,10 @@ fn register_global_environment_and_shadowing_match_lua54() {
         ("type=nil; return type", "1|nil"),
         ("select=nil; return select", "1|nil"),
         ("local type=tostring; return type(8)", "1|8"),
-        ("local type=9; do local type=tostring; return type(8) end", "1|8"),
+        (
+            "local type=9; do local type=tostring; return type(8) end",
+            "1|8",
+        ),
     ] {
         let program = compile_integer_chunk(chunk).unwrap();
         let result = execute_register_program_with_strings(&program).unwrap();
@@ -155,9 +161,9 @@ fn register_global_environment_and_shadowing_match_lua54() {
                     actual.push_str(&format!("{:?}", f64::from_bits(*bits)));
                 }
                 RegisterValue::String(_) => {
-                    actual.push_str(
-                        &String::from_utf8_lossy(result.value_string_bytes(*value).unwrap()),
-                    );
+                    actual.push_str(&String::from_utf8_lossy(
+                        result.value_string_bytes(*value).unwrap(),
+                    ));
                 }
                 RegisterValue::Builtin(_) => actual.push_str("function"),
             }
