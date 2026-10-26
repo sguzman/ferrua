@@ -803,7 +803,7 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 
 /// Compile a static subset of Lua chunks to Ferrua-owned register bytecode.
 ///
-/// Supports integer locals with initializers, parallel assignments to locals,
+/// Supports scalar locals with Lua nil-padding/value-discard adjustment, parallel assignments,
 /// nested do/end blocks, bounded integer/Boolean if/elseif/else branches
 /// with returning or continuing branches, SSA-like single-assignment
 /// integer merge copies, bounded while, repeat-until and integer numeric-for
@@ -912,6 +912,34 @@ fn assigned_names<'a>(body: &[Statement<'a>], names: &mut HashSet<&'a str>) {
     }
 }
 
+/// Evaluate each scalar RHS before changing bindings, discard surplus
+/// results, and fill missing values with nil. Multi-result call expansion
+/// remains unsupported by this independent register subset.
+fn adjusted_rhs<'a>(
+    program: &mut Program,
+    expressions: &[Expr<'a>],
+    targets: usize,
+    scopes: &[HashMap<&'a str, RegisterBinding>],
+) -> Result<Vec<usize>, Error> {
+    let mut sources = Vec::with_capacity(targets);
+    for expression in expressions {
+        let register = emit(program, expression, 0, scopes)?;
+        if sources.len() < targets {
+            sources.push(register);
+        }
+    }
+    while sources.len() < targets {
+        if program.registers >= MAX_REGISTERS {
+            return Err(Error::TooLarge);
+        }
+        let register = program.registers;
+        program.registers += 1;
+        emit_instruction(program, Instruction::LoadNil { dest: register })?;
+        sources.push(register);
+    }
+    Ok(sources)
+}
+
 fn compile_statements<'a>(
     statements: &[Statement<'a>],
     program: &mut Program,
@@ -941,19 +969,13 @@ fn compile_statements<'a>(
                         "to-be-closed local variables require unavailable finalizers".into(),
                     ));
                 }
-                if names.is_empty()
-                    || names.len() != initializers.len()
-                    || names.len() != attributes.len()
-                {
-                    return Err(Error::Unsupported(
-                        "all integer locals need one initializer".into(),
-                    ));
+                if names.is_empty() || names.len() != attributes.len() {
+                    return Err(Error::InvalidBytecode);
                 }
-                // Evaluate RHS before adding newly declared bindings.
-                let rhs = initializers
-                    .iter()
-                    .map(|e| emit(program, e, 0, scopes))
-                    .collect::<Result<Vec<_>, _>>()?;
+                // All initializers use the preceding lexical scope.
+                // Missing values are nil; surplus scalar results are
+                // evaluated and discarded, matching Lua assignment order.
+                let rhs = adjusted_rhs(program, initializers, names.len(), scopes)?;
                 for ((name, attribute), register) in names.iter().zip(attributes).zip(rhs) {
                     scopes.last_mut().expect("root scope").insert(
                         *name,
@@ -965,14 +987,11 @@ fn compile_statements<'a>(
                 }
             }
             Statement::Assign { targets, values } => {
-                if targets.is_empty() || targets.len() != values.len() {
-                    return Err(Error::Unsupported("assignment RHS count mismatch".into()));
+                if targets.is_empty() {
+                    return Err(Error::InvalidBytecode);
                 }
                 // All RHS expressions see the original bindings, as in Lua.
-                let rhs = values
-                    .iter()
-                    .map(|e| emit(program, e, 0, scopes))
-                    .collect::<Result<Vec<_>, _>>()?;
+                let rhs = adjusted_rhs(program, values, targets.len(), scopes)?;
                 for (target, register) in targets.iter().zip(rhs) {
                     let Expr::Atom(name) = target else {
                         return Err(Error::Unsupported("only local variable targets".into()));
