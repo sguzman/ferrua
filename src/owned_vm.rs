@@ -834,7 +834,7 @@ pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
 fn statements_definitely_return(statements: &[Statement<'_>]) -> bool {
     for statement in statements {
         match statement {
-            Statement::Return(values) if values.len() == 1 => return true,
+            Statement::Return(values) if values.len() <= 1 => return true,
             Statement::Block(body) if statements_definitely_return(body) => return true,
             Statement::If {
                 branches,
@@ -1545,8 +1545,20 @@ fn compile_statements<'a>(
                 result = Some(0);
                 break;
             }
-            Statement::Return(values) if values.len() == 1 => {
-                let value = emit(program, &values[0], 0, scopes)?;
+            Statement::Return(values) if values.len() <= 1 => {
+                let value = if let Some(expression) = values.first() {
+                    emit(program, expression, 0, scopes)?
+                } else {
+                    // The scalar register API observes zero Lua results as nil.
+                    // The exact Lua result-count protocol remains future work.
+                    if program.registers >= MAX_REGISTERS {
+                        return Err(Error::TooLarge);
+                    }
+                    let register = program.registers;
+                    program.registers += 1;
+                    emit_instruction(program, Instruction::LoadNil { dest: register })?;
+                    register
+                };
                 emit_instruction(program, Instruction::Return { source: value })?;
                 result = Some(value);
             }
@@ -2884,6 +2896,21 @@ mod tests {
             execute_integer_program_with_budget(&invalid, 0),
             Err(Error::InvalidBytecode)
         );
+    }
+
+    #[test]
+    fn register_zero_result_returns_coerce_to_nil_in_scalar_context() {
+        for (source, expected) in [
+            ("return", RegisterValue::Nil),
+            ("do return end", RegisterValue::Nil),
+            ("if true then return else return 7 end", RegisterValue::Nil),
+            ("if false then return else return 7 end", RegisterValue::Integer(7)),
+            ("local x=3; if x==3 then return end; return x", RegisterValue::Nil),
+            ("local x=1; while true do return end", RegisterValue::Nil),
+        ] {
+            let program = compile_integer_chunk(source).unwrap();
+            assert_eq!(execute_register_program(&program), Ok(expected), "{source}");
+        }
     }
 
     #[test]
