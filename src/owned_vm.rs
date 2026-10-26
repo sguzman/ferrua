@@ -2157,9 +2157,7 @@ pub fn execute_register_program_with_strings_and_budget(
             Instruction::LoadBoolean { dest, value } => (dest, RegisterValue::Boolean(value)),
             Instruction::LoadFloat { dest, bits } => (dest, RegisterValue::Float(bits)),
             Instruction::LoadString { dest, index } => (dest, RegisterValue::String(index)),
-            Instruction::LoadBuiltin { dest, builtin } => {
-                (dest, RegisterValue::Builtin(builtin))
-            }
+            Instruction::LoadBuiltin { dest, builtin } => (dest, RegisterValue::Builtin(builtin)),
             Instruction::Call { dest, callee, argc } => {
                 let function = read(&registers, callee)?;
                 let start = call_arguments
