@@ -1775,7 +1775,7 @@ mod tests {
             assert_eq!(execute_integer_program(&bytecode), Ok(expected), "{source}");
         }
         for source in [
-            "do return nil end",
+            "do return 1.5 end",
             "do return 1, 2 end",
             "do return math.max(1,2) end",
         ] {
@@ -1825,7 +1825,7 @@ mod tests {
             "if true then local a=2 else return 3 end",
             "if {} then return 1 else return 2 end",
             "if false then return 2 else local a=3 end",
-            "if true then return nil else return 2 end",
+            "if true then return 1.5 else return 2 end",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
