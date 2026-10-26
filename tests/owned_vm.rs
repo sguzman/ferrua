@@ -15,6 +15,19 @@ fn register_adjusted_scalar_assignments_match_lua54() {
     for (source, expected, printed) in [
         ("local x; return x", RegisterValue::Nil, "nil\tnil\n"),
         ("return", RegisterValue::Nil, "nil\tnil\n"),
+        ("local x=3", RegisterValue::Nil, "nil\tnil\n"),
+        ("do local x=3 end", RegisterValue::Nil, "nil\tnil\n"),
+        ("if false then return 7 end", RegisterValue::Nil, "nil\tnil\n"),
+        (
+            "if true then return 7 end",
+            RegisterValue::Integer(7),
+            "number\t7\n",
+        ),
+        (
+            "local n=0; while n<3 do n=n+1 end",
+            RegisterValue::Nil,
+            "nil\tnil\n",
+        ),
         ("do return end", RegisterValue::Nil, "nil\tnil\n"),
         (
             "if true then return else return 7 end",
