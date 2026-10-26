@@ -241,7 +241,7 @@ impl Scanner<'_> {
         // Preserve the separate concatenation operator after whitespace.
         if self
             .peek(0)
-            .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'.' || b >= 128)
+            .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'.')
         {
             return Err(self.error("malformed number"));
         }
@@ -406,13 +406,26 @@ mod tests {
             "return 1...2",
             "return 3.4.5",
             "return .5abc",
-            "return 7é",
         ] {
             let error = tokenize(source).unwrap_err();
             assert_eq!(error.message, "malformed number", "{source}");
         }
         let error = tokenize("local x=12abc").unwrap_err();
         assert_eq!((error.line, error.byte_offset), (1, 10));
+    }
+
+    #[test]
+    fn non_ascii_numeric_suffix_reports_unexpected_character() {
+        for source in ["return 7é", "return 1e2é", "return 0x1é", "return .5é"] {
+            let error = tokenize(source).unwrap_err();
+            assert_eq!(error.message, "unexpected character", "{source}");
+        }
+        assert_eq!(tokenize("return 7é").unwrap_err().byte_offset, 8);
+        // ASCII identifier suffixes remain malformed numeral errors.
+        assert_eq!(
+            tokenize("return 7abc").unwrap_err().message,
+            "malformed number"
+        );
     }
 
     #[test]
