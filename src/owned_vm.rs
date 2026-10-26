@@ -694,7 +694,7 @@ fn emit<'a>(
             for (position, field) in fields.iter().enumerate() {
                 if let TableField::Value(value) = field
                     && Some(position) == last_array_field
-                    && matches!(value, Expr::Call { .. })
+                    && expands_lua_call(value)
                 {
                     sequence = sequence.checked_add(1).ok_or(Error::TooLarge)?;
                     let _ = emit(program, value, depth + 1, locals)?;
@@ -775,7 +775,7 @@ fn emit<'a>(
                 },
             )?;
             emit_instruction(program, Instruction::PushArgument { source: receiver })?;
-            let expand_tail = matches!(arguments.last(), Some(Expr::Call { .. }));
+            let expand_tail = arguments.last().is_some_and(expands_lua_call);
             for (index, argument) in arguments.iter().enumerate() {
                 let source = emit(program, argument, depth + 1, locals)?;
                 if !(expand_tail && index + 1 == arguments.len()) {
@@ -796,7 +796,7 @@ fn emit<'a>(
                 return Err(Error::TooLarge);
             }
             let callee = emit(program, callee, depth + 1, locals)?;
-            let expand_tail = matches!(arguments.last(), Some(Expr::Call { .. }));
+            let expand_tail = arguments.last().is_some_and(expands_lua_call);
             for (index, argument) in arguments.iter().enumerate() {
                 let source = emit(program, argument, depth + 1, locals)?;
                 if !(expand_tail && index + 1 == arguments.len()) {
@@ -1284,6 +1284,12 @@ fn assigned_names<'a>(body: &[Statement<'a>], names: &mut HashSet<&'a str>) {
     }
 }
 
+/// Only a bare function or method call expands multiple Lua results.
+/// Parenthesized/grouped calls are deliberately scalar.
+fn expands_lua_call(expression: &Expr<'_>) -> bool {
+    matches!(expression, Expr::Call { .. } | Expr::MethodCall { .. })
+}
+
 /// Evaluate RHS values before changing bindings. Lua expands a final
 /// unparenthesized call into its available results; every other expression
 /// contributes exactly one scalar. Extra results are discarded and missing
@@ -1299,7 +1305,7 @@ fn adjusted_rhs<'a>(
         let register = emit(program, expression, 0, scopes)?;
         if sources.len() < targets {
             sources.push(register);
-            if position + 1 == expressions.len() && matches!(expression, Expr::Call { .. }) {
+            if position + 1 == expressions.len() && expands_lua_call(expression) {
                 let remaining = targets - sources.len();
                 for index in 1..=remaining {
                     if program.registers >= MAX_REGISTERS {
@@ -2173,7 +2179,7 @@ fn compile_statements<'a>(
                 let mut first = None;
                 for (position, expression) in values.iter().enumerate() {
                     let register = emit(program, expression, 0, scopes)?;
-                    if position + 1 == values.len() && matches!(expression, Expr::Call { .. }) {
+                    if position + 1 == values.len() && expands_lua_call(expression) {
                         emit_instruction(program, Instruction::AppendReturnExpansion)?;
                     } else {
                         emit_instruction(program, Instruction::AppendReturn { source: register })?;
