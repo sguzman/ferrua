@@ -4807,15 +4807,17 @@ impl Execution<'_> {
         let source = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         let pattern = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
         let replacement_value = *args.get(2).ok_or(FlowError::TypeError)?;
-        if !matches!(
-            replacement_value,
-            Value::String(_) | Value::Integer(_) | Value::Float(_)
-        ) {
-            return Err(FlowError::Unsupported(
-                "Lua table and function string.gsub replacements are not implemented".into(),
-            ));
-        }
-        let replacement = self.string_bytes(replacement_value)?;
+        let replacement = match replacement_value {
+            Value::String(_) | Value::Integer(_) | Value::Float(_) => {
+                Some(self.string_bytes(replacement_value)?)
+            }
+            Value::Table(_) => None,
+            _ => {
+                return Err(FlowError::Unsupported(
+                    "Lua function string.gsub replacements are not implemented".into(),
+                ));
+            }
+        };
         let limit = match args.get(3).copied() {
             Some(value) if value != Value::Nil => {
                 let count = self
@@ -4829,80 +4831,114 @@ impl Execution<'_> {
             }
             _ => source.len().saturating_add(1),
         };
-        let mut output = Vec::new();
-        let mut cursor = 0usize;
-        let mut substitutions = 0usize;
-        let anchored = pattern.first() == Some(&b'^');
-        while substitutions < limit && cursor <= source.len() {
-            let Some((begin, end, captures)) =
-                self.simple_pattern_match(&source, &pattern, cursor as i64 + 1, false)?
-            else {
-                break;
-            };
-            if self.steps >= self.budget {
-                return Err(FlowError::StepBudgetExceeded);
-            }
-            self.steps += 1;
-            if begin < cursor || end < begin || end > source.len() {
-                return Err(FlowError::InvalidBytecode);
-            }
-            output.extend_from_slice(&source[cursor..begin]);
-            let mut index = 0usize;
-            while index < replacement.len() {
-                if replacement[index] == b'%' {
-                    let specifier = *replacement.get(index + 1).ok_or(FlowError::TypeError)?;
-                    if specifier == b'%' {
-                        output.push(b'%');
-                    } else if specifier == b'0' {
-                        output.extend_from_slice(&source[begin..end]);
-                    } else if (b'1'..=b'9').contains(&specifier) {
-                        let capture_index = usize::from(specifier - b'1');
-                        let &(first, last, position) =
-                            captures.get(capture_index).ok_or(FlowError::TypeError)?;
-                        if position {
-                            output.extend_from_slice((first + 1).to_string().as_bytes());
-                        } else {
-                            output.extend_from_slice(&source[first..last]);
-                        }
-                    } else {
-                        return Err(FlowError::TypeError);
-                    }
-                    index += 2;
-                } else {
-                    output.push(replacement[index]);
-                    index += 1;
-                }
-                if output.len() > MAX_STRING_POOL_BYTES {
-                    return Err(FlowError::TooLarge);
-                }
+        // Table __index callbacks may trigger the collector; the original
+        // table, pattern, and replacement must survive all nested calls.
+        self.gc_temporary_roots.push(args.to_vec());
+        let result = (|| {
+            let mut output = Vec::new();
+            let mut cursor = 0usize;
+            let mut substitutions = 0usize;
+            let anchored = pattern.first() == Some(&b'^');
+            while substitutions < limit && cursor <= source.len() {
+                let Some((begin, end, captures)) =
+                    self.simple_pattern_match(&source, &pattern, cursor as i64 + 1, false)?
+                else {
+                    break;
+                };
                 if self.steps >= self.budget {
                     return Err(FlowError::StepBudgetExceeded);
                 }
                 self.steps += 1;
-            }
-            substitutions += 1;
-            cursor = end;
-            if begin == end {
-                if cursor < source.len() {
-                    output.push(source[cursor]);
-                    cursor += 1;
-                } else {
+                if begin < cursor || end < begin || end > source.len() {
+                    return Err(FlowError::InvalidBytecode);
+                }
+                output.extend_from_slice(&source[cursor..begin]);
+                if let Some(replacement) = &replacement {
+                    let mut index = 0usize;
+                    while index < replacement.len() {
+                        if replacement[index] == b'%' {
+                            let specifier =
+                                *replacement.get(index + 1).ok_or(FlowError::TypeError)?;
+                            if specifier == b'%' {
+                                output.push(b'%');
+                            } else if specifier == b'0' {
+                                output.extend_from_slice(&source[begin..end]);
+                            } else if (b'1'..=b'9').contains(&specifier) {
+                                let capture_index = usize::from(specifier - b'1');
+                                let &(first, last, position) =
+                                    captures.get(capture_index).ok_or(FlowError::TypeError)?;
+                                if position {
+                                    output.extend_from_slice((first + 1).to_string().as_bytes());
+                                } else {
+                                    output.extend_from_slice(&source[first..last]);
+                                }
+                            } else {
+                                return Err(FlowError::TypeError);
+                            }
+                            index += 2;
+                        } else {
+                            output.push(replacement[index]);
+                            index += 1;
+                        }
+                        if output.len() > MAX_STRING_POOL_BYTES {
+                            return Err(FlowError::TooLarge);
+                        }
+                        if self.steps >= self.budget {
+                            return Err(FlowError::StepBudgetExceeded);
+                        }
+                        self.steps += 1;
+                    }
+                } else if let Value::Table(handle) = replacement_value {
+                    let key = match captures.first().copied() {
+                        Some((start, _, true)) => Value::Integer(start as i64 + 1),
+                        Some((start, end, false)) => {
+                            self.intern_rooted_string(source[start..end].to_vec(), args)?
+                        }
+                        None => self.intern_rooted_string(source[begin..end].to_vec(), args)?,
+                    };
+                    self.gc_temporary_roots
+                        .last_mut()
+                        .ok_or(FlowError::InvalidBytecode)?
+                        .push(key);
+                    let table_key = self.table_key(key)?;
+                    let value = self.lookup_with_metatable(handle, table_key)?;
+                    let selected = if value == Value::Nil || value == Value::Boolean(false) {
+                        source[begin..end].to_vec()
+                    } else {
+                        self.string_bytes(value)?
+                    };
+                    if self.steps.saturating_add(selected.len()) > self.budget {
+                        return Err(FlowError::StepBudgetExceeded);
+                    }
+                    self.steps += selected.len();
+                    output.extend_from_slice(&selected);
+                }
+                substitutions += 1;
+                cursor = end;
+                if begin == end {
+                    if cursor < source.len() {
+                        output.push(source[cursor]);
+                        cursor += 1;
+                    } else {
+                        break;
+                    }
+                }
+                if output.len() > MAX_STRING_POOL_BYTES {
+                    return Err(FlowError::TooLarge);
+                }
+                if anchored {
                     break;
                 }
             }
+            output.extend_from_slice(&source[cursor..]);
             if output.len() > MAX_STRING_POOL_BYTES {
                 return Err(FlowError::TooLarge);
             }
-            if anchored {
-                break;
-            }
-        }
-        output.extend_from_slice(&source[cursor..]);
-        if output.len() > MAX_STRING_POOL_BYTES {
-            return Err(FlowError::TooLarge);
-        }
-        let result = self.intern_rooted_string(output, args)?;
-        Ok(vec![result, Value::Integer(substitutions as i64)])
+            let output = self.intern_rooted_string(output, args)?;
+            Ok(vec![output, Value::Integer(substitutions as i64)])
+        })();
+        self.gc_temporary_roots.pop();
+        result
     }
 
     /// Root each captured byte string across subsequent GC-capable interns.

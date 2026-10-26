@@ -517,6 +517,26 @@ fn owned_string_gsub_text_replacement_and_captures_match_lua54() {
 }
 
 #[test]
+fn owned_string_gsub_table_replacements_and_metatables_match_lua54() {
+    for source in [
+        "local s,n=string.gsub('abca','.',{a='X',b='Y'}); print(s,n)",
+        "print(string.gsub('aba','a',{a='z'}))",
+        "print(string.gsub('foo bar','%a+', {foo='FOO',bar='BAR'}))",
+        "print(string.gsub('ab','(.)',{a='x',b='y'}))",
+        "print(string.gsub('abc','.',{a=false,b='B'}))",
+        "print(string.gsub('a1a2','(%d)',{['1']='ONE',['2']='TWO'}))",
+        "local t=setmetatable({},{__index=function(_,key) return key..'!' end}); print(string.gsub('ab','.',t))",
+        "local t=setmetatable({},{__index=function(_,key) collectgarbage('collect'); return key..key end}); print(string.gsub('abc','.',t))",
+        "local t={[1]='LEFT',[2]='MID',[3]='RIGHT'}; print(string.gsub('ab','()',t))",
+        "local t={a=1}; local good,s,n=pcall(string.gsub,'aa','a',t); print(good,s,n)",
+        "local t={a=true}; local good,err=pcall(string.gsub,'a','a',t); print(good,type(err))",
+        "local t=setmetatable({},{__index=function() error(17) end}); local good,err=pcall(string.gsub,'abc','a',t); print(good,err)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",
