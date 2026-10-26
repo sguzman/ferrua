@@ -21,6 +21,8 @@ pub enum RegisterBuiltin {
     Select,
     RawGet,
     RawSet,
+    RawLen,
+    RawEqual,
 }
 
 /// Bounded scalar values, execution-owned tables, byte strings and first-class
@@ -2616,6 +2618,8 @@ pub fn execute_register_program_with_strings_and_budget(
                         b"select" => RegisterValue::Builtin(RegisterBuiltin::Select),
                         b"rawget" => RegisterValue::Builtin(RegisterBuiltin::RawGet),
                         b"rawset" => RegisterValue::Builtin(RegisterBuiltin::RawSet),
+                        b"rawlen" => RegisterValue::Builtin(RegisterBuiltin::RawLen),
+                        b"rawequal" => RegisterValue::Builtin(RegisterBuiltin::RawEqual),
                         _ => RegisterValue::Nil,
                     }
                 };
@@ -2736,6 +2740,32 @@ pub fn execute_register_program_with_strings_and_budget(
                         };
                         vec![value]
                     }
+                    RegisterValue::Builtin(RegisterBuiltin::RawLen) => {
+                        let value = *arguments.first().ok_or(Error::TypeError)?;
+                        let length = register_raw_length(value, &strings, &tables)?;
+                        vec![RegisterValue::Integer(length as i64)]
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::RawEqual) => {
+                        let left = *arguments.first().ok_or(Error::TypeError)?;
+                        let right = *arguments.get(1).ok_or(Error::TypeError)?;
+                        let both_numbers =
+                            matches!(left, RegisterValue::Integer(_) | RegisterValue::Float(_))
+                                && matches!(
+                                    right,
+                                    RegisterValue::Integer(_) | RegisterValue::Float(_)
+                                );
+                        let equal = if both_numbers {
+                            numeric_comparison(left, right)? == Some(Ordering::Equal)
+                        } else if let (RegisterValue::String(a), RegisterValue::String(b)) =
+                            (left, right)
+                        {
+                            strings.get(a).ok_or(Error::InvalidBytecode)?
+                                == strings.get(b).ok_or(Error::InvalidBytecode)?
+                        } else {
+                            left == right
+                        };
+                        vec![RegisterValue::Boolean(equal)]
+                    }
                     RegisterValue::Builtin(RegisterBuiltin::RawSet) => {
                         let Some(RegisterValue::Table(index)) = arguments.first() else {
                             return Err(Error::TypeError);
@@ -2785,24 +2815,7 @@ pub fn execute_register_program_with_strings_and_budget(
                     .unwrap_or(RegisterValue::Nil),
             ),
             Instruction::Length { dest, input } => {
-                let length = match read(&registers, input)? {
-                    RegisterValue::String(index) => {
-                        strings.get(index).ok_or(Error::InvalidBytecode)?.len()
-                    }
-                    RegisterValue::Table(index) => {
-                        let entries = &tables.get(index).ok_or(Error::InvalidBytecode)?.entries;
-                        let mut border = 0_usize;
-                        while border < entries.len()
-                            && entries
-                                .iter()
-                                .any(|(key, _)| *key == TableKey::Integer((border + 1) as i64))
-                        {
-                            border += 1;
-                        }
-                        border
-                    }
-                    _ => return Err(Error::TypeError),
-                };
+                let length = register_raw_length(read(&registers, input)?, &strings, &tables)?;
                 (dest, RegisterValue::Integer(length as i64))
             }
             Instruction::Concat { dest, lhs, rhs } => {
@@ -2966,6 +2979,31 @@ pub fn execute_register_program_with_strings_and_budget(
         strings,
         tables,
     })
+}
+
+/// Length for Lua byte strings and the bounded raw table array border.
+/// No __len metamethod is consulted by this independent register subset.
+fn register_raw_length(
+    value: RegisterValue,
+    strings: &[Vec<u8>],
+    tables: &[RegisterTable],
+) -> Result<usize, Error> {
+    match value {
+        RegisterValue::String(index) => Ok(strings.get(index).ok_or(Error::InvalidBytecode)?.len()),
+        RegisterValue::Table(index) => {
+            let entries = &tables.get(index).ok_or(Error::InvalidBytecode)?.entries;
+            let mut border = 0_usize;
+            while border < entries.len()
+                && entries
+                    .iter()
+                    .any(|(key, _)| *key == TableKey::Integer((border + 1) as i64))
+            {
+                border += 1;
+            }
+            Ok(border)
+        }
+        _ => Err(Error::TypeError),
+    }
 }
 
 /// Normalize Lua table keys for the bounded register heap. Integral float
