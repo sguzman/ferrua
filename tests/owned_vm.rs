@@ -113,6 +113,100 @@ fn register_dynamic_concatenation_and_string_operations_match_lua54() {
 }
 
 #[test]
+fn register_select_multireturn_adjustment_matches_lua54() {
+    use ferrua::owned_vm::{Error, execute_register_program_with_strings};
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+
+    for (chunk, expected) in [
+        ("return select('#')", "1|0"),
+        ("return select('#',nil,2)", "1|2"),
+        ("return select(1,10,20,30)", "3|10|20|30"),
+        ("return select(2,10,20,30)", "2|20|30"),
+        ("return select(-1,10,20,30)", "1|30"),
+        ("return select(-3,10,20,30)", "3|10|20|30"),
+        ("return select(9,10,20)", "0"),
+        ("return 7,select(2,10,20,30)", "3|7|20|30"),
+        ("return (select(1,10,20,30))", "1|10"),
+        ("return select(1,10,20,30),99", "2|10|99"),
+        ("local f=select; return f(2,10,20,30)", "2|20|30"),
+        ("local a,b=select(1,10,20); return a,b", "2|10|20"),
+        ("local a,b=select(2,10,20); return a,b", "2|20|nil"),
+        ("local a,b=select(9,10,20); return a,b", "2|nil|nil"),
+        ("local a,b,c=1,select(1,2,3); return a,b,c", "3|1|2|3"),
+        (
+            "local a,b=select('#',3,4),select(1,10,20); return a,b",
+            "2|2|10",
+        ),
+        ("return type(select(2,10,20))", "1|number"),
+    ] {
+        let program = compile_integer_chunk(chunk).unwrap();
+        let owned = execute_register_program_with_strings(&program).unwrap();
+        let mut actual = owned.values().len().to_string();
+        for &value in owned.values() {
+            let text = match value {
+                RegisterValue::Nil => "nil".to_string(),
+                RegisterValue::Boolean(value) => value.to_string(),
+                RegisterValue::Integer(value) => value.to_string(),
+                RegisterValue::Float(bits) => format!("{:?}", f64::from_bits(bits)),
+                RegisterValue::String(_) => {
+                    String::from_utf8_lossy(owned.value_string_bytes(value).unwrap()).into_owned()
+                }
+                RegisterValue::Builtin(_) => "function".to_string(),
+            };
+            actual.push('|');
+            actual.push_str(&text);
+        }
+        assert_eq!(actual, expected, "{chunk}");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let source = format!(
+                "local function f() {chunk} end; local t=table.pack(f()); io.write(t.n); for i=1,t.n do io.write('|',tostring(t[i])) end"
+            );
+            let output = command.args(["-e", &source]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{executable}: {chunk}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, expected.as_bytes(), "{executable}: {chunk}");
+        }
+    }
+    for chunk in [
+        "return select()",
+        "return select(0,10,20)",
+        "return select(-3,10,20)",
+        "return select(false,10,20)",
+    ] {
+        let program = compile_integer_chunk(chunk).unwrap();
+        assert_eq!(
+            execute_register_program_with_strings(&program),
+            Err(Error::TypeError),
+            "{chunk}"
+        );
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", chunk]).output().unwrap();
+            assert!(!output.status.success(), "{executable}: {chunk}");
+        }
+    }
+}
+
+#[test]
 fn register_first_class_builtins_and_nested_calls_match_lua54() {
     use ferrua::owned_vm::{Error, execute_register_program_with_strings};
     let reference = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
