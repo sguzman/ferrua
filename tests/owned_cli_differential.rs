@@ -768,6 +768,24 @@ fn owned_binary_hexadecimal_numeric_strings_match_lua54() {
 }
 
 #[test]
+fn owned_binary_hexadecimal_integer_wrapping_matches_lua54() {
+    // Lua's hexadecimal string-to-integer parser wraps at 64 bits; it
+    // is not subject to the decimal signed-integer parse limit.
+    for source in [
+        "local p=string.pack('>I8','0xffffffffffffffff'); print(#p,string.unpack('>I8',p))",
+        "local p=string.pack('<i8','0x8000000000000000'); print(string.unpack('<i8',p),math.mininteger)",
+        "local p=string.pack('>i8','-0xffffffffffffffff'); print(string.unpack('>i8',p))",
+        "local p=string.pack('<I8','0x10000000000000000'); print(string.unpack('<I8',p))",
+        "local p=string.pack('>d','0xffffffffffffffff'); print(string.unpack('>d',p))",
+        "local p=string.pack('BBB',10,20,30); print(string.unpack('B',p,'0x0000000000000002'))",
+        "local p=string.pack('B',7); print(string.unpack('B',p,'0xffffffffffffffff'))",
+        "local a=pcall(string.pack,'i8','0x'); local b=pcall(string.pack,'i8','0xg'); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",

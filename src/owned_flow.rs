@@ -1571,6 +1571,23 @@ fn decode_lua_string(spelling: &str) -> Result<Vec<u8>, FlowError> {
 
 /// Decode a bounded Lua hexadecimal floating literal independently of Rust's
 /// decimal-only f64 parser. The lexer already validates lexical digits.
+// Lua 5.4's integer-string scanner accumulates hexadecimal digits in an
+// unsigned Lua integer with modulo-2^64 arithmetic, unlike decimal integers.
+fn parse_lua_hex_integer_wrapping(source: &str) -> Option<i64> {
+    let digits = source
+        .strip_prefix("0x")
+        .or_else(|| source.strip_prefix("0X"))?;
+    if digits.is_empty() {
+        return None;
+    }
+    let mut value = 0u64;
+    for byte in digits.bytes() {
+        let digit = (byte as char).to_digit(16)?;
+        value = value.wrapping_mul(16).wrapping_add(u64::from(digit));
+    }
+    Some(value as i64)
+}
+
 fn parse_lua_hex_float(source: &str) -> Option<f64> {
     let body = source
         .strip_prefix("0x")
@@ -5416,6 +5433,13 @@ impl Execution<'_> {
         } else {
             (false, text.strip_prefix('+').unwrap_or(text))
         };
+        if let Some(number) = parse_lua_hex_integer_wrapping(unsigned) {
+            return Ok(Value::Integer(if negative {
+                number.wrapping_neg()
+            } else {
+                number
+            }));
+        }
         let number = parse_lua_hex_float(unsigned).ok_or(FlowError::TypeError)?;
         let number = if negative { -number } else { number };
         Ok(Value::Float(number.to_bits()))
