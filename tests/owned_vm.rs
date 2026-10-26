@@ -344,26 +344,84 @@ fn tagged_nil_boolean_integer_register_returns_match_lua54() {
     for (source, expected, reference) in [
         ("return nil", RegisterValue::Nil, "nil\tnil"),
         ("return true", RegisterValue::Boolean(true), "boolean\ttrue"),
-        ("return false", RegisterValue::Boolean(false), "boolean\tfalse"),
+        (
+            "return false",
+            RegisterValue::Boolean(false),
+            "boolean\tfalse",
+        ),
         ("return 0", RegisterValue::Integer(0), "number\t0"),
-        ("local x=nil; if x then return 1 else return 7 end", RegisterValue::Integer(7), "number\t7"),
-        ("local x=false; if not x then return 9 else return 1 end", RegisterValue::Integer(9), "number\t9"),
-        ("local x=0; if x then return 11 else return 0 end", RegisterValue::Integer(11), "number\t11"),
-        ("local x=true; if x==true then return 13 else return 0 end", RegisterValue::Integer(13), "number\t13"),
-        ("local x=nil; if x==nil then return 17 else return 0 end", RegisterValue::Integer(17), "number\t17"),
-        ("local x=true; x=false; return x", RegisterValue::Boolean(false), "boolean\tfalse"),
-        ("local x=3; if x==true then return 0 else return 19 end", RegisterValue::Integer(19), "number\t19"),
-        ("local x=false; if x==0 then return 0 else return 23 end", RegisterValue::Integer(23), "number\t23"),
-        ("local x=nil; if x==false then return 0 else return 29 end", RegisterValue::Integer(29), "number\t29"),
-        ("local x=1; local y=true; x,y=2,false; return y", RegisterValue::Boolean(false), "boolean\tfalse"),
-        ("local x=true; do local x=nil; if x then return 0 else return 31 end end; return 0", RegisterValue::Integer(31), "number\t31"),
-        ("local x=false; if x then return 0 else x=true end; if x then return 37 else return 0 end", RegisterValue::Integer(37), "number\t37"),
-        ("local again=true; local n=0; while again do n=n+1; if n==3 then again=false end end; return n", RegisterValue::Integer(3), "number\t3"),
+        (
+            "local x=nil; if x then return 1 else return 7 end",
+            RegisterValue::Integer(7),
+            "number\t7",
+        ),
+        (
+            "local x=false; if not x then return 9 else return 1 end",
+            RegisterValue::Integer(9),
+            "number\t9",
+        ),
+        (
+            "local x=0; if x then return 11 else return 0 end",
+            RegisterValue::Integer(11),
+            "number\t11",
+        ),
+        (
+            "local x=true; if x==true then return 13 else return 0 end",
+            RegisterValue::Integer(13),
+            "number\t13",
+        ),
+        (
+            "local x=nil; if x==nil then return 17 else return 0 end",
+            RegisterValue::Integer(17),
+            "number\t17",
+        ),
+        (
+            "local x=true; x=false; return x",
+            RegisterValue::Boolean(false),
+            "boolean\tfalse",
+        ),
+        (
+            "local x=3; if x==true then return 0 else return 19 end",
+            RegisterValue::Integer(19),
+            "number\t19",
+        ),
+        (
+            "local x=false; if x==0 then return 0 else return 23 end",
+            RegisterValue::Integer(23),
+            "number\t23",
+        ),
+        (
+            "local x=nil; if x==false then return 0 else return 29 end",
+            RegisterValue::Integer(29),
+            "number\t29",
+        ),
+        (
+            "local x=1; local y=true; x,y=2,false; return y",
+            RegisterValue::Boolean(false),
+            "boolean\tfalse",
+        ),
+        (
+            "local x=true; do local x=nil; if x then return 0 else return 31 end end; return 0",
+            RegisterValue::Integer(31),
+            "number\t31",
+        ),
+        (
+            "local x=false; if x then return 0 else x=true end; if x then return 37 else return 0 end",
+            RegisterValue::Integer(37),
+            "number\t37",
+        ),
+        (
+            "local again=true; local n=0; while again do n=n+1; if n==3 then again=false end end; return n",
+            RegisterValue::Integer(3),
+            "number\t3",
+        ),
     ] {
         let program = compile_integer_chunk(source)
             .unwrap_or_else(|error| panic!("tagged register compile rejected {source}: {error}"));
         assert_eq!(execute_register_program(&program), Ok(expected), "{source}");
-        let code = format!("local result=(function() {source} end)(); print(type(result), tostring(result))");
+        let code = format!(
+            "local result=(function() {source} end)(); print(type(result), tostring(result))"
+        );
         for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
             if executable == "lua5.4" && !compare_upstream {
                 continue;

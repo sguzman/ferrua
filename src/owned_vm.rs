@@ -1554,12 +1554,14 @@ pub fn execute_register_program_with_budget(
             Instruction::BooleanCopy { dest, input } | Instruction::MergeCopy { dest, input } => {
                 (dest, read(&registers, input)?)
             }
-            Instruction::NumericTruthy { dest, input } => {
-                (dest, RegisterValue::Boolean(read(&registers, input)?.truthy()))
-            }
-            Instruction::BooleanNot { dest, input } => {
-                (dest, RegisterValue::Boolean(!read(&registers, input)?.truthy()))
-            }
+            Instruction::NumericTruthy { dest, input } => (
+                dest,
+                RegisterValue::Boolean(read(&registers, input)?.truthy()),
+            ),
+            Instruction::BooleanNot { dest, input } => (
+                dest,
+                RegisterValue::Boolean(!read(&registers, input)?.truthy()),
+            ),
             Instruction::Compare {
                 dest,
                 lhs,
