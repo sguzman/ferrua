@@ -8828,7 +8828,8 @@ mod tests {
 
     #[test]
     fn owned_activation_stack_enforces_lua_call_depth_without_host_recursion() {
-        let source = "local function sum(n) if n==0 then return 0 end return n+sum(n-1) end return sum(12)";
+        let source =
+            "local function sum(n) if n==0 then return 0 end return n+sum(n-1) end return sum(12)";
         let program = compile_flow_chunk(source).unwrap();
         assert_eq!(
             execute_flow_values(&program, DEFAULT_STEP_BUDGET),
