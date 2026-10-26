@@ -217,6 +217,32 @@ fn goto_syntax_and_scope_boundaries_match_lua_54_when_requested() {
 }
 
 #[test]
+fn goto_resolution_diagnostics_point_to_the_offending_source_token() {
+    for (source, name, expected_line) in [
+        ("goto missing", "missing", 1),
+        ("local x=1\r\n goto missing\r\n return x", "missing", 2),
+        ("local x=1\nif true then goto target end\nlocal y=2\n::target:: return x", "target", 2),
+        ("do\r\n goto target\r\nend\r\nlocal y=2\r\n::target:: return y", "target", 2),
+    ] {
+        let error = parse_chunk(source).expect_err("invalid goto must fail");
+        assert!(
+            matches!(
+                error.message,
+                "no visible label for goto" | "goto jumps into the scope of a local variable"
+            ),
+            "{source}: {error}"
+        );
+        assert_eq!(
+            error.byte_offset,
+            source.find(name).unwrap(),
+            "wrong goto token position: {source}"
+        );
+        assert_eq!(error.line, expected_line, "{source}");
+    }
+    assert!(parse_chunk("do goto outer end ::outer:: return 1").is_ok());
+}
+
+#[test]
 fn lua_c_locale_unicode_identifier_rules_match_upstream_when_requested() {
     let cases = [
         ("local cafe_42=7; return cafe_42", true),
