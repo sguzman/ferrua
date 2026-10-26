@@ -1887,7 +1887,10 @@ enum PackField {
     },
     FixedString(usize),
     NullTerminated,
-    LengthPrefixed { size: usize, little: bool },
+    LengthPrefixed {
+        size: usize,
+        little: bool,
+    },
     Padding,
 }
 
@@ -5277,10 +5280,12 @@ impl Execution<'_> {
         }
         self.steps += cost;
         if builtin == Builtin::StringPackSize {
-            if fields.iter().any(|field| matches!(
-                field,
-                PackField::NullTerminated | PackField::LengthPrefixed { .. }
-            )) {
+            if fields.iter().any(|field| {
+                matches!(
+                    field,
+                    PackField::NullTerminated | PackField::LengthPrefixed { .. }
+                )
+            }) {
                 return Err(FlowError::TypeError);
             }
             return Ok(vec![Value::Integer(total as i64)]);
@@ -5292,9 +5297,8 @@ impl Execution<'_> {
                 match field {
                     PackField::Padding => output.push(0),
                     PackField::NullTerminated | PackField::LengthPrefixed { .. } => {
-                        let bytes = self.string_bytes(
-                            *args.get(argument).ok_or(FlowError::TypeError)?,
-                        )?;
+                        let bytes =
+                            self.string_bytes(*args.get(argument).ok_or(FlowError::TypeError)?)?;
                         argument += 1;
                         let overhead = match field {
                             PackField::NullTerminated => {
@@ -5419,7 +5423,9 @@ impl Execution<'_> {
                         let (begin, end) = match field {
                             PackField::NullTerminated => {
                                 let remaining = bytes.get(cursor..).ok_or(FlowError::TypeError)?;
-                                let count = remaining.iter().position(|&byte| byte == 0)
+                                let count = remaining
+                                    .iter()
+                                    .position(|&byte| byte == 0)
                                     .ok_or(FlowError::TypeError)?;
                                 let start = cursor;
                                 let end = cursor + count;
@@ -5435,7 +5441,8 @@ impl Execution<'_> {
                                         length = (length << 8) | u64::from(byte);
                                     }
                                 }
-                                let length = usize::try_from(length).map_err(|_| FlowError::TooLarge)?;
+                                let length =
+                                    usize::try_from(length).map_err(|_| FlowError::TooLarge)?;
                                 if length > MAX_STRING_POOL_BYTES {
                                     return Err(FlowError::TooLarge);
                                 }
@@ -5447,13 +5454,17 @@ impl Execution<'_> {
                             }
                             _ => unreachable!("dynamic field guarded above"),
                         };
-                        let consumed = end - begin + usize::from(matches!(field, PackField::NullTerminated));
+                        let consumed =
+                            end - begin + usize::from(matches!(field, PackField::NullTerminated));
                         if self.steps.saturating_add(consumed) > self.budget {
                             return Err(FlowError::StepBudgetExceeded);
                         }
                         self.steps += consumed;
-                        let roots = self.gc_temporary_roots.last()
-                            .ok_or(FlowError::InvalidBytecode)?.clone();
+                        let roots = self
+                            .gc_temporary_roots
+                            .last()
+                            .ok_or(FlowError::InvalidBytecode)?
+                            .clone();
                         self.intern_rooted_string(bytes[begin..end].to_vec(), &roots)?
                     }
                     PackField::FixedString(_) => {
