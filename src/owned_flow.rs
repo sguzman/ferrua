@@ -5919,7 +5919,8 @@ impl Execution<'_> {
                                     // Keep the output bounded by the same
                                     // checked precision and string quota.
                                     let digits = precision.unwrap_or(6);
-                                    let mut formatted = format!("{:.*}", digits, number).into_bytes();
+                                    let mut formatted =
+                                        format!("{:.*}", digits, number).into_bytes();
                                     if !number.is_sign_negative() {
                                         if plus_sign {
                                             formatted.insert(0, b'+');
