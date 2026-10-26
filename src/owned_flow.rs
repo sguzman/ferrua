@@ -5153,9 +5153,9 @@ impl Execution<'_> {
         }
     }
 
-    /// Parse a portable, byte-aligned subset of Lua 5.4 binary formats.
-    /// Native ABI-dependent alignment, variable-length strings and exotic
-    /// integer widths are intentionally rejected instead of misencoded.
+    /// Parse bounded Lua 5.4 binary formats against Linux x86-64 sizes,
+    /// keeping endianness and alignment metadata through runtime layout.
+    /// Other host ABIs and exhaustive native diagnostics remain unaccepted.
     fn parse_pack_fields(format: &[u8]) -> Result<Vec<PackField>, FlowError> {
         let mut fields = Vec::new();
         let mut index = 0;
@@ -5391,9 +5391,9 @@ impl Execution<'_> {
         Ok(value)
     }
 
-    /// Portable byte-aligned string.pack / unpack / packsize. All three share
-    /// the exact format parser, endianness and signedness bounds. This is a
-    /// bounded subset, not an implementation of native Lua's whole ABI.
+    /// Bounded Lua 5.4 pack/unpack/packsize share one parser and support
+    /// 1–16-byte integer and length fields, binary strings, and dynamic
+    /// alignment padding. Native ABI portability remains a separate gate.
     fn string_pack_dispatch(
         &mut self,
         builtin: Builtin,
