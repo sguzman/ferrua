@@ -257,7 +257,11 @@ fn function_goto_diagnostics_retain_inner_source_locations() {
         ("local f=function()\r\n goto lost\r\nend", "lost", 2),
         ("local t={f=function()\n goto lost\nend}", "lost", 2),
         ("return (function() goto absent end)()", "absent", 1),
-        ("local function outer()\n local function inner()\n goto lost\n end\nend", "lost", 3),
+        (
+            "local function outer()\n local function inner()\n goto lost\n end\nend",
+            "lost",
+            3,
+        ),
         (
             "local function f()\n goto finish\n local x=1\n ::finish:: return x\nend",
             "finish",
