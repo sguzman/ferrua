@@ -23,6 +23,7 @@ pub enum RegisterBuiltin {
     RawSet,
     RawLen,
     RawEqual,
+    Assert,
     Next,
     Pairs,
 }
@@ -2622,6 +2623,7 @@ pub fn execute_register_program_with_strings_and_budget(
                         b"rawset" => RegisterValue::Builtin(RegisterBuiltin::RawSet),
                         b"rawlen" => RegisterValue::Builtin(RegisterBuiltin::RawLen),
                         b"rawequal" => RegisterValue::Builtin(RegisterBuiltin::RawEqual),
+                        b"assert" => RegisterValue::Builtin(RegisterBuiltin::Assert),
                         b"next" => RegisterValue::Builtin(RegisterBuiltin::Next),
                         b"pairs" => RegisterValue::Builtin(RegisterBuiltin::Pairs),
                         _ => RegisterValue::Nil,
@@ -2721,6 +2723,13 @@ pub fn execute_register_program_with_strings_and_budget(
                                 arguments[1 + offset.min(available)..].to_vec()
                             }
                         }
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::Assert) => {
+                        let condition = arguments.first().ok_or(Error::TypeError)?;
+                        if !condition.truthy() {
+                            return Err(Error::TypeError);
+                        }
+                        arguments.to_vec()
                     }
                     RegisterValue::Builtin(RegisterBuiltin::RawGet) => {
                         let Some(RegisterValue::Table(index)) = arguments.first() else {
