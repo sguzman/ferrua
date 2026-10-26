@@ -309,6 +309,52 @@ fn emit<'a>(
                 input,
             }
         }
+        Expr::Binary { op, left, right } if matches!(*op, "and" | "or") => {
+            // Lua returns the selected operand, not a coerced Boolean.
+            // Only one predecessor executes per evaluation.
+            let lhs = emit(program, left, depth + 1, locals)?;
+            if program.registers >= MAX_REGISTERS {
+                return Err(Error::TooLarge);
+            }
+            let dest = program.registers;
+            program.registers += 1;
+            let branch_at = program.code.len();
+            emit_instruction(
+                program,
+                Instruction::BranchIfFalse {
+                    condition: lhs,
+                    target: usize::MAX,
+                },
+            )?;
+            if *op == "and" {
+                let rhs = emit(program, right, depth + 1, locals)?;
+                emit_instruction(program, Instruction::MergeCopy { dest, input: rhs })?;
+                let jump_at = program.code.len();
+                emit_instruction(program, Instruction::Jump { target: usize::MAX })?;
+                let false_at = program.code.len();
+                emit_instruction(program, Instruction::MergeCopy { dest, input: lhs })?;
+                let after = program.code.len();
+                program.code[branch_at] = Instruction::BranchIfFalse {
+                    condition: lhs,
+                    target: false_at,
+                };
+                program.code[jump_at] = Instruction::Jump { target: after };
+            } else {
+                emit_instruction(program, Instruction::MergeCopy { dest, input: lhs })?;
+                let jump_at = program.code.len();
+                emit_instruction(program, Instruction::Jump { target: usize::MAX })?;
+                let rhs_at = program.code.len();
+                let rhs = emit(program, right, depth + 1, locals)?;
+                emit_instruction(program, Instruction::MergeCopy { dest, input: rhs })?;
+                let after = program.code.len();
+                program.code[branch_at] = Instruction::BranchIfFalse {
+                    condition: lhs,
+                    target: rhs_at,
+                };
+                program.code[jump_at] = Instruction::Jump { target: after };
+            }
+            return Ok(dest);
+        }
         Expr::Binary { op, left, right }
             if matches!(*op, "==" | "~=" | "<" | "<=" | ">" | ">=") =>
         {
@@ -569,6 +615,15 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
     };
     let result = emit(&mut program, &ast, 0, &[])?;
     program.result = result;
+    // Branch targets in a standalone short-circuit expression must
+    // point at a real terminal instruction, not one-past-bytecode.
+    if program
+        .code
+        .iter()
+        .any(|op| matches!(op, Instruction::BranchIfFalse { .. }))
+    {
+        emit_instruction(&mut program, Instruction::Return { source: result })?;
+    }
     Ok(program)
 }
 
