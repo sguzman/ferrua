@@ -5200,9 +5200,9 @@ impl Execution<'_> {
                                 index += 1;
                             }
                         }
-                        if !(1..=8).contains(&size) {
+                        if !(1..=16).contains(&size) {
                             return Err(FlowError::Unsupported(
-                                "pack supports integer widths from 1 to 8 bytes".into(),
+                                "pack supports integer widths from 1 to 16 bytes".into(),
                             ));
                         }
                         PackField::Integer {
@@ -5228,9 +5228,9 @@ impl Execution<'_> {
                                 index += 1;
                             }
                         }
-                        if !(1..=8).contains(&size) {
+                        if !(1..=16).contains(&size) {
                             return Err(FlowError::Unsupported(
-                                "pack supports string-length prefixes from 1 to 8 bytes".into(),
+                                "pack supports string-length prefixes from 1 to 16 bytes".into(),
                             ));
                         }
                         PackField::LengthPrefixed { size, little }
@@ -5261,6 +5261,56 @@ impl Execution<'_> {
             fields.push(field);
         }
         Ok(fields)
+    }
+
+    /// Append an integer in Lua's requested byte order, extending beyond
+    /// the native 64-bit integer width with explicit sign/zero bytes.
+    fn append_pack_width(
+        output: &mut Vec<u8>,
+        value: u64,
+        size: usize,
+        little: bool,
+        extension: u8,
+    ) {
+        for offset in 0..size {
+            let significance = if little { offset } else { size - 1 - offset };
+            let byte = if significance < 8 {
+                (value >> (8 * significance)) as u8
+            } else {
+                extension
+            };
+            output.push(byte);
+        }
+    }
+
+    /// Recover the native low 64 bits and reject high bytes that do not
+    /// agree with Lua 5.4's extension/overflow rules. The caller applies
+    /// sub-64-bit sign extension only for signed small integer fields.
+    fn read_pack_width(chunk: &[u8], little: bool, signed: bool) -> Result<u64, FlowError> {
+        let size = chunk.len();
+        let mut value = 0u64;
+        for significance in 0..size.min(8) {
+            let index = if little {
+                significance
+            } else {
+                size - 1 - significance
+            };
+            value |= u64::from(chunk[index]) << (significance * 8);
+        }
+        if size > 8 {
+            let extension = if signed && (value as i64) < 0 { 255 } else { 0 };
+            for significance in 8..size {
+                let index = if little {
+                    significance
+                } else {
+                    size - 1 - significance
+                };
+                if chunk[index] != extension {
+                    return Err(FlowError::TypeError);
+                }
+            }
+        }
+        Ok(value)
     }
 
     /// Portable byte-aligned string.pack / unpack / packsize. All three share
@@ -5314,11 +5364,7 @@ impl Execution<'_> {
                                     return Err(FlowError::TypeError);
                                 }
                                 let length = bytes.len() as u64;
-                                if little {
-                                    output.extend_from_slice(&length.to_le_bytes()[..size]);
-                                } else {
-                                    output.extend_from_slice(&length.to_be_bytes()[8 - size..]);
-                                }
+                                Self::append_pack_width(&mut output, length, size, little, 0);
                                 output.extend_from_slice(&bytes);
                                 bytes.len()
                             }
@@ -5364,11 +5410,14 @@ impl Execution<'_> {
                                 return Err(FlowError::TypeError);
                             }
                         }
-                        if little {
-                            output.extend_from_slice(&(integer as u64).to_le_bytes()[..size]);
-                        } else {
-                            output.extend_from_slice(&(integer as u64).to_be_bytes()[8 - size..]);
-                        }
+                        let extension = if signed && integer < 0 { 255 } else { 0 };
+                        Self::append_pack_width(
+                            &mut output,
+                            integer as u64,
+                            size,
+                            little,
+                            extension,
+                        );
                     }
                     PackField::Float { size, little } => {
                         let value = *args.get(argument).ok_or(FlowError::TypeError)?;
@@ -5433,14 +5482,7 @@ impl Execution<'_> {
                                 (start, end)
                             }
                             PackField::LengthPrefixed { little, .. } => {
-                                let mut length = 0u64;
-                                for (index, &byte) in chunk.iter().enumerate() {
-                                    if little {
-                                        length |= u64::from(byte) << (index * 8);
-                                    } else {
-                                        length = (length << 8) | u64::from(byte);
-                                    }
-                                }
+                                let length = Self::read_pack_width(chunk, little, false)?;
                                 let length =
                                     usize::try_from(length).map_err(|_| FlowError::TooLarge)?;
                                 if length > MAX_STRING_POOL_BYTES {
@@ -5480,14 +5522,7 @@ impl Execution<'_> {
                         signed,
                         little,
                     } => {
-                        let mut integer = 0u64;
-                        for (index, &byte) in chunk.iter().enumerate() {
-                            if little {
-                                integer |= u64::from(byte) << (index * 8);
-                            } else {
-                                integer = (integer << 8) | u64::from(byte);
-                            }
-                        }
+                        let mut integer = Self::read_pack_width(chunk, little, signed)?;
                         if signed && size < 8 && integer & (1u64 << (size * 8 - 1)) != 0 {
                             integer |= !0u64 << (size * 8);
                         }

@@ -653,6 +653,24 @@ fn owned_string_pack_nonpoweroftwo_integer_and_string_widths_match_lua54() {
 }
 
 #[test]
+fn owned_string_pack_extended_9_to_16_byte_widths_match_lua54() {
+    for source in [
+        "local p=string.pack('<i9I9',-1,-1); print(#p,string.unpack('<i9I9',p),string.packsize('<i9I9'))",
+        "local p=string.pack('>i9I9',-2,0x12345678); print(string.byte(p,1,9)); print(string.unpack('>i9I9',p))",
+        "local p=string.pack('>i16I16',-1234567,7654321); local a,b,n=string.unpack('>i16I16',p); print(#p,a,b,n,string.packsize('>i16I16'))",
+        "local p=string.pack('<i12I12',math.mininteger,math.maxinteger); print(string.unpack('<i12I12',p))",
+        "local p=string.pack('>s9','ab\\0c'); local a,n=string.unpack('>s9',p); print(#p,a=='ab\\0c',n)",
+        "local p=string.pack('<s16','end'); print(#p,string.unpack('<s16',p))",
+        "local p=string.pack('>I9s9i9',100,'a\\0b',-99); local a,b,c,n=string.unpack('>I9s9i9',p); print(#p,a,b=='a\\0b',c,n)",
+        "local raw=string.char(1,0,0,0,0,0,0,0,1); print(pcall(string.unpack,'<I9',raw))",
+        "local raw=string.char(1,0,0,0,0,0,0,0,255); local ok=pcall(string.unpack,'<i9',raw); print(ok)",
+        "local a=pcall(string.packsize,'i17'); local b=pcall(string.packsize,'s17'); local c=pcall(string.packsize,'I0'); print(a,b,c)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",
