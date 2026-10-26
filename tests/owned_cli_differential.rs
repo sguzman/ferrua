@@ -580,6 +580,24 @@ fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_lua_quoted_strings_and_scalars_match_lua54() {
+    for source in [
+        "print(string.format('%q','abc'))",
+        "print(string.format('%q','a\"b'))",
+        "print(string.format('%q','back\\\\slash'))",
+        "print(string.format('%q','line\\nbreak'))",
+        "print(string.format('%q',string.char(0,49)))",
+        "print(string.format('%q',string.char(9,65,13,127)))",
+        "print(string.format('%q',true),string.format('%q',false),string.format('%q',nil))",
+        "print(string.format('%q',42),string.format('%q',-42))",
+        "print(string.format('%q %s','quoted','plain'))",
+        "local a,s=pcall(string.format,'%q','x'); print(a,s)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",

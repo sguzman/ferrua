@@ -5810,6 +5810,42 @@ impl Execution<'_> {
                             argument += 1;
                             let part = match specifier {
                                 b's' => self.string_bytes(value)?,
+                                b'q' => match value {
+                                    Value::Nil => b"nil".to_vec(),
+                                    Value::Boolean(true) => b"true".to_vec(),
+                                    Value::Boolean(false) => b"false".to_vec(),
+                                    Value::Integer(integer) => integer.to_string().into_bytes(),
+                                    Value::String(_) => {
+                                        let bytes = self.string_bytes(value)?;
+                                        let mut quoted = vec![b'"'];
+                                        for (index, &byte) in bytes.iter().enumerate() {
+                                            if byte == b'"' || byte == b'\\' || byte == b'\n' {
+                                                quoted.push(b'\\');
+                                                quoted.push(byte);
+                                            } else if byte.is_ascii_control() {
+                                                let decimal = if bytes
+                                                    .get(index + 1)
+                                                    .is_some_and(u8::is_ascii_digit)
+                                                {
+                                                    format!("\\\\{:03}", byte)
+                                                } else {
+                                                    format!("\\\\{}", byte)
+                                                };
+                                                quoted.extend_from_slice(decimal.as_bytes());
+                                            } else {
+                                                quoted.push(byte);
+                                            }
+                                        }
+                                        quoted.push(b'"');
+                                        quoted
+                                    }
+                                    _ => {
+                                        return Err(FlowError::Unsupported(
+                                            "Lua float and non-scalar %q quoting is not implemented"
+                                                .into(),
+                                        ));
+                                    }
+                                },
                                 b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'c' => {
                                     let integer = self
                                         .exact_integer_operand(value)
