@@ -1876,8 +1876,15 @@ fn lua_utf8_pos(pos: i64, length: usize) -> i64 {
 /// Subject/pattern bytes are owned so GC cannot invalidate iterator inputs.
 #[derive(Clone, Copy)]
 enum PackField {
-    Integer { size: usize, signed: bool, little: bool },
-    Float { size: usize, little: bool },
+    Integer {
+        size: usize,
+        signed: bool,
+        little: bool,
+    },
+    Float {
+        size: usize,
+        little: bool,
+    },
     FixedString(usize),
     Padding,
 }
@@ -4252,8 +4259,12 @@ impl Execution<'_> {
                 self.string_gmatch_iterator(handle, &arguments)
             }
             Value::Builtin(Builtin::StringGsub) => self.string_gsub_builtin(&arguments),
-            Value::Builtin(Builtin::StringPack | Builtin::StringUnpack | Builtin::StringPackSize) => {
-                let Value::Builtin(builtin) = callable else { unreachable!() };
+            Value::Builtin(
+                Builtin::StringPack | Builtin::StringUnpack | Builtin::StringPackSize,
+            ) => {
+                let Value::Builtin(builtin) = callable else {
+                    unreachable!()
+                };
                 self.string_pack_dispatch(builtin, &arguments)
             }
             Value::Builtin(Builtin::TableUnpack) => self.table_unpack_builtin(&arguments),
@@ -5143,69 +5154,77 @@ impl Execution<'_> {
         while index < format.len() {
             let code = format[index];
             index += 1;
-            let field = match code {
-                b' ' | b'\t' | b'\n' => continue,
-                b'<' => {
-                    little = true;
-                    continue;
-                }
-                b'>' => {
-                    little = false;
-                    continue;
-                }
-                b'=' => {
-                    little = cfg!(target_endian = "little");
-                    continue;
-                }
-                b'x' => PackField::Padding,
-                b'b' | b'B' | b'h' | b'H' | b'l' | b'L' | b'j' | b'J'
-                | b'T' | b'i' | b'I' => {
-                    let signed = matches!(code, b'b' | b'h' | b'l' | b'j' | b'i');
-                    let mut size = match code {
-                        b'b' | b'B' => 1,
-                        b'h' | b'H' => 2,
-                        b'i' | b'I' => 4,
-                        _ => 8,
-                    };
-                    if matches!(code, b'i' | b'I') && index < format.len()
-                        && format[index].is_ascii_digit()
-                    {
-                        size = 0;
+            let field =
+                match code {
+                    b' ' | b'\t' | b'\n' => continue,
+                    b'<' => {
+                        little = true;
+                        continue;
+                    }
+                    b'>' => {
+                        little = false;
+                        continue;
+                    }
+                    b'=' => {
+                        little = cfg!(target_endian = "little");
+                        continue;
+                    }
+                    b'x' => PackField::Padding,
+                    b'b' | b'B' | b'h' | b'H' | b'l' | b'L' | b'j' | b'J' | b'T' | b'i' | b'I' => {
+                        let signed = matches!(code, b'b' | b'h' | b'l' | b'j' | b'i');
+                        let mut size: usize = match code {
+                            b'b' | b'B' => 1,
+                            b'h' | b'H' => 2,
+                            b'i' | b'I' => 4,
+                            _ => 8,
+                        };
+                        if matches!(code, b'i' | b'I')
+                            && index < format.len()
+                            && format[index].is_ascii_digit()
+                        {
+                            size = 0;
+                            while index < format.len() && format[index].is_ascii_digit() {
+                                size = size
+                                    .checked_mul(10)
+                                    .and_then(|n| n.checked_add(usize::from(format[index] - b'0')))
+                                    .ok_or(FlowError::TooLarge)?;
+                                index += 1;
+                            }
+                        }
+                        if !matches!(size, 1 | 2 | 4 | 8) {
+                            return Err(FlowError::Unsupported(
+                                "pack supports 1-, 2-, 4- and 8-byte integers".into(),
+                            ));
+                        }
+                        PackField::Integer {
+                            size,
+                            signed,
+                            little,
+                        }
+                    }
+                    b'f' | b'd' | b'n' => PackField::Float {
+                        size: if code == b'f' { 4 } else { 8 },
+                        little,
+                    },
+                    b'c' => {
+                        if index >= format.len() || !format[index].is_ascii_digit() {
+                            return Err(FlowError::TypeError);
+                        }
+                        let mut size = 0usize;
                         while index < format.len() && format[index].is_ascii_digit() {
-                            size = size.checked_mul(10)
+                            size = size
+                                .checked_mul(10)
                                 .and_then(|n| n.checked_add(usize::from(format[index] - b'0')))
                                 .ok_or(FlowError::TooLarge)?;
                             index += 1;
                         }
+                        PackField::FixedString(size)
                     }
-                    if !matches!(size, 1 | 2 | 4 | 8) {
-                        return Err(FlowError::Unsupported(
-                            "pack supports 1-, 2-, 4- and 8-byte integers".into(),
-                        ));
-                    }
-                    PackField::Integer { size, signed, little }
-                }
-                b'f' | b'd' | b'n' => PackField::Float {
-                    size: if code == b'f' { 4 } else { 8 },
-                    little,
-                },
-                b'c' => {
-                    if index >= format.len() || !format[index].is_ascii_digit() {
-                        return Err(FlowError::TypeError);
-                    }
-                    let mut size = 0usize;
-                    while index < format.len() && format[index].is_ascii_digit() {
-                        size = size.checked_mul(10)
-                            .and_then(|n| n.checked_add(usize::from(format[index] - b'0')))
-                            .ok_or(FlowError::TooLarge)?;
-                        index += 1;
-                    }
-                    PackField::FixedString(size)
-                }
-                _ => return Err(FlowError::Unsupported(
-                    "Lua pack alignment, variable-length strings or directive not supported".into(),
-                )),
-            };
+                    _ => return Err(FlowError::Unsupported(
+                        "Lua pack alignment, variable-length strings or directive not supported"
+                            .into(),
+                    )),
+                };
             total = total.checked_add(field.size()).ok_or(FlowError::TooLarge)?;
             if total > MAX_STRING_POOL_BYTES || fields.len() >= MAX_STACK {
                 return Err(FlowError::TooLarge);
@@ -5241,9 +5260,8 @@ impl Execution<'_> {
                 match field {
                     PackField::Padding => output.push(0),
                     PackField::FixedString(size) => {
-                        let bytes = self.string_bytes(
-                            *args.get(argument).ok_or(FlowError::TypeError)?,
-                        )?;
+                        let bytes =
+                            self.string_bytes(*args.get(argument).ok_or(FlowError::TypeError)?)?;
                         argument += 1;
                         if bytes.len() > size {
                             return Err(FlowError::TypeError);
@@ -5251,10 +5269,15 @@ impl Execution<'_> {
                         output.extend_from_slice(&bytes);
                         output.resize(output.len() + size - bytes.len(), 0);
                     }
-                    PackField::Integer { size, signed, little } => {
+                    PackField::Integer {
+                        size,
+                        signed,
+                        little,
+                    } => {
                         let value = *args.get(argument).ok_or(FlowError::TypeError)?;
                         argument += 1;
-                        let integer = self.exact_integer_operand(value)
+                        let integer = self
+                            .exact_integer_operand(value)
                             .or_else(|_| self.integer_operand(value))?;
                         if size < 8 {
                             let bits = size * 8;
@@ -5302,7 +5325,8 @@ impl Execution<'_> {
         }
         let bytes = self.string_bytes(*args.get(1).ok_or(FlowError::TypeError)?)?;
         let position = match args.get(2).copied() {
-            Some(value) if value != Value::Nil => self.exact_integer_operand(value)
+            Some(value) if value != Value::Nil => self
+                .exact_integer_operand(value)
                 .or_else(|_| self.integer_operand(value))?,
             _ => 1,
         };
@@ -5315,17 +5339,26 @@ impl Execution<'_> {
         self.gc_temporary_roots.push(args.to_vec());
         let outcome = (|| {
             for field in fields {
-                let end = cursor.checked_add(field.size()).ok_or(FlowError::TooLarge)?;
+                let end = cursor
+                    .checked_add(field.size())
+                    .ok_or(FlowError::TooLarge)?;
                 let chunk = bytes.get(cursor..end).ok_or(FlowError::TypeError)?;
                 cursor = end;
                 let value = match field {
                     PackField::Padding => continue,
                     PackField::FixedString(_) => {
-                        let roots = self.gc_temporary_roots.last()
-                            .ok_or(FlowError::InvalidBytecode)?.clone();
+                        let roots = self
+                            .gc_temporary_roots
+                            .last()
+                            .ok_or(FlowError::InvalidBytecode)?
+                            .clone();
                         self.intern_rooted_string(chunk.to_vec(), &roots)?
                     }
-                    PackField::Integer { size, signed, little } => {
+                    PackField::Integer {
+                        size,
+                        signed,
+                        little,
+                    } => {
                         let mut integer = 0u64;
                         for (index, &byte) in chunk.iter().enumerate() {
                             if little {
@@ -7310,7 +7343,9 @@ impl Execution<'_> {
                                     self.string_gmatch_iterator(handle, &args)?
                                 }
                                 Builtin::StringGsub => self.string_gsub_builtin(&args)?,
-                                Builtin::StringUnpack => self.string_pack_dispatch(builtin, &args)?, 
+                                Builtin::StringUnpack => {
+                                    self.string_pack_dispatch(builtin, &args)?
+                                }
                                 Builtin::Utf8Len => self.utf8_len_builtin(&args)?,
                                 Builtin::Utf8Codepoint => self.utf8_codepoint_builtin(&args)?,
                                 Builtin::Utf8Codes => self.utf8_codes_builtin(&args)?,
@@ -7436,12 +7471,11 @@ impl Execution<'_> {
                             | Builtin::StringReverse
                             | Builtin::StringRep
                             | Builtin::StringFormat => self.string_builtin(builtin, &args)?,
-                            Builtin::StringPack | Builtin::StringPackSize => {
-                                self.string_pack_dispatch(builtin, &args)?
-                                    .into_iter()
-                                    .next()
-                                    .ok_or(FlowError::InvalidBytecode)?
-                            }
+                            Builtin::StringPack | Builtin::StringPackSize => self
+                                .string_pack_dispatch(builtin, &args)?
+                                .into_iter()
+                                .next()
+                                .ok_or(FlowError::InvalidBytecode)?,
                             Builtin::Utf8Char => self.utf8_char_builtin(&args)?,
                             Builtin::Utf8Offset => self.utf8_offset_builtin(&args)?,
                             Builtin::TableConcat => self.table_concat_builtin(&args)?,
