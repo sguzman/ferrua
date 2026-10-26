@@ -5092,7 +5092,15 @@ impl Execution<'_> {
                         return Err(FlowError::TypeError);
                     }
                     let span = end - start;
-                    if position.checked_add(span).is_some_and(|last| last <= source.len())
+                    // A backreference comparison must charge its byte
+                    // traversal to the same bounded execution budget.
+                    if self.steps.saturating_add(span) > self.budget {
+                        return Err(FlowError::StepBudgetExceeded);
+                    }
+                    self.steps += span;
+                    if position
+                        .checked_add(span)
+                        .is_some_and(|last| last <= source.len())
                         && source[position..position + span] == source[start..end]
                     {
                         states.push((atom_index + 1, position + span, captures.clone()));
