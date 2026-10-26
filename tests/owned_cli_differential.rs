@@ -418,12 +418,49 @@ fn owned_lua_pattern_quantifiers_use_bounded_backtracking_like_lua54() {
 }
 
 #[test]
-fn owned_pattern_unmatched_closing_capture_is_an_error_like_lua54() {
+fn owned_pattern_unmatched_closing_capture_matches_upstream_not_pinned_backend() {
+    // Upstream Lua 5.4 treats unmatched ')' as invalid capture syntax.
+    // Pinned luna-core 4.0.2 instead permits it as a literal, including in
+    // the original protected-find fixture. Keep reference conformance strict
+    // and record the existing backend divergence explicitly.
     for source in [
         "local ok=pcall(string.match,')',')'); print(ok)",
         "local ok=pcall(string.find,'a)','a)'); print(ok)",
         "local ok=pcall(string.gsub,')',')','X'); print(ok)",
         "local iter=string.gmatch(')',')'); local ok=pcall(iter); print(ok)",
+    ] {
+        let owned = run_fer(true, source);
+        assert!(owned.status.success(), "{source}: {:?}", owned.stderr);
+        assert_eq!(owned.stdout, b"false\n", "{source}");
+        let production = run_fer(false, source);
+        assert!(production.status.success(), "{source}: {:?}", production.stderr);
+        if source.contains("string.find") {
+            assert_eq!(production.stdout, b"true\n", "{source}");
+        }
+        if let Some(reference) = reference_output(source) {
+            assert!(reference.status.success(), "{source}: {:?}", reference.stderr);
+            assert_eq!(owned.stdout, reference.stdout, "{source}");
+        }
+    }
+    // This older regression exposes the same upstream/production difference
+    // without removing its original unfinished-opening-capture assertion.
+    let source =
+        "local a=pcall(string.match,'abc','('); local b=pcall(string.find,'abc','a)'); print(a,b)";
+    let owned = run_fer(true, source);
+    let production = run_fer(false, source);
+    assert!(owned.status.success());
+    assert!(production.status.success());
+    assert_eq!(owned.stdout, b"false\tfalse\n");
+    assert_eq!(production.stdout, b"false\ttrue\n");
+    if let Some(reference) = reference_output(source) {
+        assert!(reference.status.success());
+        assert_eq!(owned.stdout, reference.stdout);
+    }
+}
+
+#[test]
+fn owned_pattern_escaped_closers_and_balanced_captures_match_lua54() {
+    for source in [
         "local ok=pcall(string.match,')','('); print(ok)",
         "print(string.match('a(b)c','a%(b%)c'))",
         "print(string.find('a)b',')',1,true))",
@@ -519,7 +556,6 @@ fn owned_lua_pattern_substring_and_position_captures_match_lua54() {
         "local x,y=string.match('xy','()%a+()'); print(x,y)",
         "print(string.match('abc','(a)bc'),string.match('abc','(a)(b)c',2)==nil)",
         "local x,y=string.match('ab\\0cd','(ab)(\\0c)'); print(x=='ab',y=='\\0c')",
-        "local a=pcall(string.match,'abc','('); local b=pcall(string.find,'abc','a)'); print(a,b)",
         "print(string.find('abc','(a)',1,true)==nil,string.match('abc','a')=='a')",
     ] {
         assert_parity(source, true);
