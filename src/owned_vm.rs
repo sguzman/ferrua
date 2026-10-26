@@ -173,6 +173,11 @@ pub enum Instruction {
         key: usize,
         value: usize,
     },
+    /// Expand a final unparenthesized call into consecutive array fields.
+    ExpandTableResults {
+        table: usize,
+        first: i64,
+    },
     /// Write a global after every right-hand side has been evaluated.
     StoreGlobal {
         name: usize,
@@ -666,7 +671,22 @@ fn emit<'a>(
             program.registers += 1;
             emit_instruction(program, Instruction::NewTable { dest })?;
             let mut sequence = 0_i64;
-            for field in fields {
+            for (position, field) in fields.iter().enumerate() {
+                if let TableField::Value(value) = field
+                    && position + 1 == fields.len()
+                    && matches!(value, Expr::Call { .. })
+                {
+                    sequence = sequence.checked_add(1).ok_or(Error::TooLarge)?;
+                    let _ = emit(program, value, depth + 1, locals)?;
+                    emit_instruction(
+                        program,
+                        Instruction::ExpandTableResults {
+                            table: dest,
+                            first: sequence,
+                        },
+                    )?;
+                    continue;
+                }
                 let (key, value) = match field {
                     TableField::Named { name, value } => {
                         (emit_table_key_string(program, name)?, value)
@@ -2040,6 +2060,9 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             Instruction::SetTable { table, key, value } => {
                 register(table) && register(key) && register(value)
             }
+            Instruction::ExpandTableResults { table, first } => {
+                register(table) && first >= 1
+            }
             Instruction::LoadGlobal { dest, name } => {
                 register(dest) && name < program.strings.len()
             }
@@ -2499,6 +2522,36 @@ pub fn execute_register_program_with_strings_and_budget(
                     }
                     entries.push((key, value));
                     table_entries_used += 1;
+                }
+                pc += 1;
+                continue;
+            }
+            Instruction::ExpandTableResults { table, first } => {
+                let RegisterValue::Table(index) = read(&registers, table)? else {
+                    return Err(Error::TypeError);
+                };
+                let entries = &mut tables.get_mut(index).ok_or(Error::InvalidBytecode)?.entries;
+                for (offset, &value) in last_call_results.iter().enumerate() {
+                    let number = first
+                        .checked_add(i64::try_from(offset).map_err(|_| Error::TooLarge)?)
+                        .ok_or(Error::TooLarge)?;
+                    let key = TableKey::Integer(number);
+                    if let Some(position) =
+                        entries.iter().position(|(candidate, _)| *candidate == key)
+                    {
+                        if value == RegisterValue::Nil {
+                            entries.swap_remove(position);
+                            table_entries_used -= 1;
+                        } else {
+                            entries[position].1 = value;
+                        }
+                    } else if value != RegisterValue::Nil {
+                        if table_entries_used >= MAX_REGISTER_TABLE_ENTRIES {
+                            return Err(Error::TooLarge);
+                        }
+                        entries.push((key, value));
+                        table_entries_used += 1;
+                    }
                 }
                 pc += 1;
                 continue;
