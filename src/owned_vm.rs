@@ -1184,7 +1184,13 @@ fn compile_statements<'a>(
                             ));
                         }
                         let name = intern_global_name(program, name)?;
-                        emit_instruction(program, Instruction::StoreGlobal { name, source: register })?;
+                        emit_instruction(
+                            program,
+                            Instruction::StoreGlobal {
+                                name,
+                                source: register,
+                            },
+                        )?;
                     }
                 }
             }
@@ -2691,7 +2697,7 @@ mod tests {
     }
     #[test]
     fn rejects_noninteger_or_side_effectful_expressions() {
-        for source in ["math.abs(1)", "x+1", "t[1]"] {
+        for source in ["math.abs(1)", "t[1]", "_ENV"] {
             assert!(
                 matches!(
                     compile_integer_expression(source),
@@ -3525,8 +3531,8 @@ mod tests {
     #[test]
     fn rejects_unsupported_dynamic_chunk_features() {
         for source in [
-            "return x",
-            "x=1; return x",
+            "return _ENV",
+            "_ENV=1; return _ENV",
             "local x=1; print(x); return x",
             "local x=1; x.y=2; return x",
         ] {
