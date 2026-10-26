@@ -728,8 +728,8 @@ fn owned_gmatch_initial_byte_position_matches_lua54() {
         "print(string.gmatch('a1b2c3','%d',nil)())",
         "print(string.gmatch('a1b2c3','%d','4.0')())",
         "print(string.gmatch('a1b2c3','%d',4.0)())",
-        "print(pcall(string.gmatch,'abc','%a',2.5),pcall(string.gmatch,'abc','%a','wrong'))",
-        "print(pcall(string.gmatch,'abc','%a',true))",
+        "local a=pcall(string.gmatch,'abc','%a',2.5); local b=pcall(string.gmatch,'abc','%a','wrong'); print(a,b)",
+        "local ok=pcall(string.gmatch,'abc','%a',true); print(ok)",
         "local t={}; for p in string.gmatch('abc','()',4) do t[#t+1]=p end; print(table.concat(t,','))",
     ] {
         assert_parity(source, true);
