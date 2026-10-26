@@ -1252,6 +1252,16 @@ fn compile_statements<'a>(
                     && statements_definitely_return(body)
                     && let Some(value) = returned
                 {
+                    // Even an unreachable loop exit must target a valid
+                    // instruction; the validator checks every branch.
+                    // Materialize a nil epilogue as a defensive exit path.
+                    if program.registers >= MAX_REGISTERS {
+                        return Err(Error::TooLarge);
+                    }
+                    let fallback = program.registers;
+                    program.registers += 1;
+                    emit_instruction(program, Instruction::LoadNil { dest: fallback })?;
+                    emit_instruction(program, Instruction::Return { source: fallback })?;
                     result = Some(value);
                     break;
                 }
