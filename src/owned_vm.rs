@@ -2576,6 +2576,51 @@ mod tests {
     }
 
     #[test]
+    fn tagged_register_values_obey_exact_budgets_and_unreachable_validation() {
+        let program = compile_integer_chunk("return nil").unwrap();
+        assert_eq!(program.code.len(), 2);
+        assert_eq!(
+            execute_register_program_with_budget(&program, 0),
+            Err(Error::StepBudgetExceeded)
+        );
+        assert_eq!(
+            execute_register_program_with_budget(&program, 1),
+            Err(Error::StepBudgetExceeded)
+        );
+        assert_eq!(
+            execute_register_program_with_budget(&program, 2),
+            Ok(RegisterValue::Nil)
+        );
+        assert_eq!(
+            execute_register_program_with_budget(&program, usize::MAX),
+            Ok(RegisterValue::Nil)
+        );
+
+        let boolean = compile_integer_chunk("local n=0; if n then return true else return false end")
+            .unwrap();
+        assert_eq!(
+            execute_register_program(&boolean),
+            Ok(RegisterValue::Boolean(true))
+        );
+
+        let bad_control =
+            compile_integer_chunk("for i=true,3 do end; return 7").unwrap();
+        assert_eq!(
+            execute_register_program(&bad_control),
+            Err(Error::TypeError)
+        );
+
+        let mut unreachable = program;
+        unreachable.code.push(Instruction::LoadNil {
+            dest: unreachable.registers,
+        });
+        assert_eq!(
+            execute_register_program_with_budget(&unreachable, 0),
+            Err(Error::InvalidBytecode)
+        );
+    }
+
+    #[test]
     fn rejects_invalid_register_bytecode() {
         let p = Program {
             code: vec![Instruction::Add {
