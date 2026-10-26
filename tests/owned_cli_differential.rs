@@ -776,7 +776,7 @@ fn owned_string_format_hex_float_flags_and_width_match_lua54() {
         "print(string.format('%+12a',0.0),string.format('% 12a',0.0))",
         "print(string.format('%012a',-1.0),string.format('%012A',-1.5))",
         "print(string.format('%+a',math.huge),string.format('%#A',-math.huge))",
-        "local a=pcall(string.format,'%.1a',1.0); local b=pcall(string.format,'%+a',false); print(a,b)",
+        "local good=pcall(string.format,'%+a',false); local missing=pcall(string.format,'%a'); print(good,missing)",
     ] {
         assert_parity(source, true);
     }
