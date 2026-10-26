@@ -656,6 +656,24 @@ fn owned_string_format_signed_and_alternate_integer_flags_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_fixed_float_width_precision_and_flags_match_lua54() {
+    for source in [
+        "print(string.format('%f',1.5)=='1.500000',string.format('%.2f',1.5)=='1.50')",
+        "print(string.format('%8.2f',1.5)=='    1.50',string.format('%-8.2f',1.5)=='1.50    ')",
+        "print(string.format('%08.2f',1.5)=='00001.50',string.format('%+08.2f',1.5)=='+0001.50')",
+        "print(string.format('% 8.2f',1.5)=='    1.50',string.format('%+8.2f',1.5)=='   +1.50')",
+        "print(string.format('%.0f',2.0)=='2',string.format('%#.0f',2.0)=='2.')",
+        "print(string.format('%.3f',-2.5)=='-2.500',string.format('%+8.2f',-1.5)=='   -1.50')",
+        "print(string.format('%06.0f',1.0)=='000001',string.format('%-6.0f',1.0)=='1     ')",
+        "print(string.format('%f',3)=='3.000000',string.format('%f','2.5')=='2.500000')",
+        "print(string.format('%.2f',-0.0)=='-0.00',string.format('%.3f',0.125)=='0.125')",
+        "local a=pcall(string.format,'%f',false); local b=pcall(string.format,'%f'); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_gsub_short_lived_gc_roots_preserve_long_replacement_semantics() {
     for source in [
         "local n=0; local s=string.rep('a',100); local out,c=string.gsub(s,'.',function(x) n=n+1; return x..'b' end); print(#out,c,n)",

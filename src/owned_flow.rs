@@ -5871,6 +5871,7 @@ impl Execution<'_> {
                         } else {
                             let numeric =
                                 matches!(specifier, b'd' | b'i' | b'u' | b'o' | b'x' | b'X');
+                            let floating = specifier == b'f';
                             if (left_align
                                 || width > 0
                                 || precision.is_some()
@@ -5880,7 +5881,7 @@ impl Execution<'_> {
                                 || alternate)
                                 && !matches!(
                                     specifier,
-                                    b's' | b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'c'
+                                    b's' | b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'c' | b'f'
                                 )
                             {
                                 return Err(FlowError::Unsupported(
@@ -5896,6 +5897,7 @@ impl Execution<'_> {
                                 b'u' => plus_sign || space_sign || alternate,
                                 b'o' | b'x' | b'X' => plus_sign || space_sign,
                                 b's' | b'c' => zero_pad || plus_sign || space_sign || alternate,
+                                b'f' => false,
                                 _ => false,
                             };
                             if invalid_flag || (specifier == b'c' && precision.is_some()) {
@@ -5906,6 +5908,30 @@ impl Execution<'_> {
                             let value = *args.get(argument).ok_or(FlowError::TypeError)?;
                             argument += 1;
                             let mut part = match specifier {
+                                b'f' => {
+                                    let operand = self.arithmetic_operand(value)?;
+                                    let number = match operand {
+                                        Value::Integer(integer) => integer as f64,
+                                        Value::Float(bits) => f64::from_bits(bits),
+                                        _ => return Err(FlowError::TypeError),
+                                    };
+                                    // Lua's %f uses C-locale fixed notation.
+                                    // Keep the output bounded by the same
+                                    // checked precision and string quota.
+                                    let digits = precision.unwrap_or(6);
+                                    let mut formatted = format!("{:.*}", digits, number).into_bytes();
+                                    if !number.is_sign_negative() {
+                                        if plus_sign {
+                                            formatted.insert(0, b'+');
+                                        } else if space_sign {
+                                            formatted.insert(0, b' ');
+                                        }
+                                    }
+                                    if alternate && digits == 0 && number.is_finite() {
+                                        formatted.push(b'.');
+                                    }
+                                    formatted
+                                }
                                 b's' => self.string_bytes(value)?,
                                 b'q' => match value {
                                     Value::Nil => b"nil".to_vec(),
@@ -6008,13 +6034,15 @@ impl Execution<'_> {
                                     }
                                 }
                             }
-                            if (specifier == b's' || specifier == b'c' || numeric)
+                            if (specifier == b's' || specifier == b'c' || numeric || floating)
                                 && part.len() < width
                             {
                                 let padding = width - part.len();
                                 if left_align {
                                     part.extend(std::iter::repeat_n(b' ', padding));
-                                } else if numeric && zero_pad && precision.is_none() {
+                                } else if (numeric && zero_pad && precision.is_none())
+                                    || (floating && zero_pad)
+                                {
                                     let prefix = if matches!(specifier, b'x' | b'X')
                                         && alternate
                                         && part.len() >= 2
