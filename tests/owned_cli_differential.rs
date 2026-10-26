@@ -719,8 +719,8 @@ fn owned_binary_format_nul_termination_and_whitespace_match_lua54() {
 
 #[test]
 fn owned_binary_unpack_start_position_bounds_match_lua54() {
-    // Lua 5.4 rejects position zero and negative indices beyond the
-    // data string; these must not be clamped like string.sub indices.
+    // Lua 5.4 clips zero and excessively negative positions to the
+    // first byte, just as string.sub does, but rejects too-large starts.
     for source in [
         "local s=string.char(7,42,9); local a,pos=string.unpack('B',s,-2); print(a,pos)",
         "local s=string.char(7); local a,pos=string.unpack('B',s,-1); print(a,pos)",
