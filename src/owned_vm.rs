@@ -2596,15 +2596,15 @@ mod tests {
             Ok(RegisterValue::Nil)
         );
 
-        let boolean = compile_integer_chunk("local n=0; if n then return true else return false end")
-            .unwrap();
+        let boolean =
+            compile_integer_chunk("local n=0; if n then return true else return false end")
+                .unwrap();
         assert_eq!(
             execute_register_program(&boolean),
             Ok(RegisterValue::Boolean(true))
         );
 
-        let bad_control =
-            compile_integer_chunk("for i=true,3 do end; return 7").unwrap();
+        let bad_control = compile_integer_chunk("for i=true,3 do end; return 7").unwrap();
         assert_eq!(
             execute_register_program(&bad_control),
             Err(Error::TypeError)
