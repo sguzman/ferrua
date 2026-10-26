@@ -8724,6 +8724,24 @@ mod tests {
     }
 
     #[test]
+    fn owned_call_checkpoint_preserves_multiple_returns_gc_roots_and_tail_adjustment() {
+        let script = "local function triple(n) local t={} for i=1,80 do t[i]=i end collectgarbage('collect') return n,n+1,n+2 end local function swap(a,b,c) return c,b,a end return swap(triple(4))";
+        let program = compile_flow_chunk(script).unwrap();
+        assert_eq!(
+            execute_flow_values(&program, DEFAULT_STEP_BUDGET),
+            Ok(vec![
+                Value::Integer(6),
+                Value::Integer(5),
+                Value::Integer(4),
+            ])
+        );
+        assert_eq!(
+            execute_flow_values(&program, 60),
+            Err(FlowError::StepBudgetExceeded)
+        );
+    }
+
+    #[test]
     fn instruction_quantum_preserves_nested_frames_varargs_and_shared_budget() {
         // More than 64 instructions execute in both the enclosing frame
         // and the closure. A pause must not restart a loop or lose varargs.
