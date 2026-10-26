@@ -2015,7 +2015,10 @@ struct SavedCallContext {
 enum FrameProgress {
     Paused,
     Returned(Vec<Value>),
-    Yield { values: Vec<Value>, many: bool },
+    Yield {
+        values: Vec<Value>,
+        many: bool,
+    },
     /// The parent cursor has already advanced. A future trampoline can
     /// enqueue the child instead of invoking it on the Rust call stack.
     Call {
@@ -7721,11 +7724,18 @@ impl Execution<'_> {
             b"normal".as_slice()
         } else {
             match self.coroutines.get(id).and_then(Option::as_ref) {
-                Some(OwnedCoroutine { status: CoroutineStatus::Suspended, .. }) => {
-                    b"suspended".as_slice()
-                }
-                Some(OwnedCoroutine { status: CoroutineStatus::Dead, .. }) => b"dead",
-                Some(OwnedCoroutine { status: CoroutineStatus::Running, .. }) => b"running",
+                Some(OwnedCoroutine {
+                    status: CoroutineStatus::Suspended,
+                    ..
+                }) => b"suspended".as_slice(),
+                Some(OwnedCoroutine {
+                    status: CoroutineStatus::Dead,
+                    ..
+                }) => b"dead",
+                Some(OwnedCoroutine {
+                    status: CoroutineStatus::Running,
+                    ..
+                }) => b"running",
                 None => return Err(FlowError::InvalidBytecode),
             }
         };
@@ -7768,7 +7778,8 @@ impl Execution<'_> {
         self.frame_allocations = std::mem::take(&mut state.allocations);
         self.gc_frame_roots = std::mem::take(&mut state.roots);
         self.current_coroutine = Some(id);
-        self.active_coroutine_entries.push(Value::Function(state.entry));
+        self.active_coroutine_entries
+            .push(Value::Function(state.entry));
         self.depth = previous_depth + retained_depth;
 
         let outcome = (|| -> Result<SchedulerOutcome, FlowError> {
@@ -7801,19 +7812,18 @@ impl Execution<'_> {
                 };
                 self.frame_allocations.push(Vec::new());
                 self.gc_frame_roots.push(GcFrameRoots::default());
-                let frame = self.prepare_call_frame(
-                    function.slots,
-                    &initial,
-                    &closure.captures,
-                    varargs,
-                )?;
+                let frame =
+                    self.prepare_call_frame(function.slots, &initial, &closure.captures, varargs)?;
                 state.scheduler = Some(OwnedScheduler {
                     instructions: function.instructions,
                     root: frame,
                     active: Vec::new(),
                 });
             } else {
-                let many = state.awaiting_resume.take().ok_or(FlowError::InvalidBytecode)?;
+                let many = state
+                    .awaiting_resume
+                    .take()
+                    .ok_or(FlowError::InvalidBytecode)?;
                 let scheduler = state.scheduler.as_mut().ok_or(FlowError::InvalidBytecode)?;
                 let frame = if let Some(child) = scheduler.active.last_mut() {
                     &mut child.frame
@@ -7824,7 +7834,9 @@ impl Execution<'_> {
                     frame.last_multiple = Some(inputs.len());
                     frame.stack.extend_from_slice(inputs);
                 } else {
-                    frame.stack.push(inputs.first().copied().unwrap_or(Value::Nil));
+                    frame
+                        .stack
+                        .push(inputs.first().copied().unwrap_or(Value::Nil));
                 }
                 if frame.stack.len() > MAX_STACK {
                     return Err(FlowError::TooLarge);
@@ -7854,7 +7866,10 @@ impl Execution<'_> {
         state.allocations = std::mem::take(&mut self.frame_allocations);
         state.roots = std::mem::take(&mut self.gc_frame_roots);
         self.active_coroutine_entries.pop();
-        let previous = self.saved_call_contexts.pop().ok_or(FlowError::InvalidBytecode)?;
+        let previous = self
+            .saved_call_contexts
+            .pop()
+            .ok_or(FlowError::InvalidBytecode)?;
         self.frame_allocations = previous.allocations;
         self.gc_frame_roots = previous.roots;
         self.current_coroutine = previous_coroutine;
@@ -7973,10 +7988,12 @@ impl Execution<'_> {
             root: self.prepare_call_frame(slot_count, initial, captures, varargs)?,
             active: Vec::new(),
         };
-        let result = self.drive_scheduler(&mut scheduler).and_then(|outcome| match outcome {
-            SchedulerOutcome::Returned(values) => Ok(values),
-            SchedulerOutcome::Yield { .. } => Err(FlowError::TypeError),
-        });
+        let result = self
+            .drive_scheduler(&mut scheduler)
+            .and_then(|outcome| match outcome {
+                SchedulerOutcome::Returned(values) => Ok(values),
+                SchedulerOutcome::Yield { .. } => Err(FlowError::TypeError),
+            });
         while scheduler.active.pop().is_some() {
             self.release_call_frame()?;
             self.depth -= 1;
@@ -8362,7 +8379,7 @@ impl Execution<'_> {
                                     Value::String(_) => b"string",
                                     Value::Table(_) => b"table",
                                     Value::Function(_) | Value::Builtin(_) => b"function",
-                    Value::Thread(_) => b"thread",
+                                    Value::Thread(_) => b"thread",
                                 };
                                 self.intern_rooted_string(name.to_vec(), &args)?
                             }
