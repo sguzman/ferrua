@@ -704,6 +704,26 @@ fn owned_string_pack_explicit_x_alignment_directives_match_lua54() {
 }
 
 #[test]
+fn owned_tonumber_explicit_base_wraps_like_lua54() {
+    // Lua's base-specific conversion accumulates modulo 2^64 rather
+    // than rejecting input above the signed or unsigned integer limit.
+    for source in [
+        "print(tonumber('101101',2),tonumber('ff',16),tonumber('Z',36))",
+        "print(tonumber('7fffffffffffffff',16)==math.maxinteger)",
+        "print(tonumber('8000000000000000',16)==math.mininteger)",
+        "print(tonumber('ffffffffffffffff',16),tonumber('10000000000000000',16))",
+        "print(tonumber('18446744073709551615',10),tonumber('18446744073709551616',10))",
+        "print(tonumber('-ffffffffffffffff',16),tonumber('-8000000000000000',16))",
+        "print(tonumber('FFFFFFFFFFFFFFFF',16),tonumber('  +ff  ',16))",
+        "print(tonumber('2',2)==nil,tonumber('',16)==nil,tonumber('0x10',16)==nil,tonumber('12x',10)==nil)",
+        "print(tonumber('-1',2),tonumber('+00000001',2),tonumber('-0',10))",
+        "local a=pcall(tonumber,'12',1); local b=pcall(tonumber,'12',37); print(a,b)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_binary_format_nul_termination_and_whitespace_match_lua54() {
     // Lua's format parser uses a NUL-terminated C string, even though
     // ordinary Lua string values can contain embedded NUL bytes.

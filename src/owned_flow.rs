@@ -3672,20 +3672,26 @@ impl Execution<'_> {
             } else {
                 (false, source.strip_prefix('+').unwrap_or(source))
             };
-            let Ok(number) = u64::from_str_radix(unsigned, base as u32) else {
+            // Lua's b_str2int accumulates as lua_Unsigned and wraps at
+            // 64 bits, even for a non-hexadecimal base and a negative sign.
+            // Standard u64 parsing rejects the high-bit and overflow cases.
+            if unsigned.is_empty() {
                 return Ok(Value::Nil);
-            };
-            if negative {
-                if number == (i64::MAX as u64) + 1 {
-                    return Ok(Value::Integer(i64::MIN));
-                }
-                if let Ok(integer) = i64::try_from(number) {
-                    return Ok(Value::Integer(-integer));
-                }
-            } else if let Ok(integer) = i64::try_from(number) {
-                return Ok(Value::Integer(integer));
             }
-            return Ok(Value::Nil);
+            let mut number = 0u64;
+            for byte in unsigned.bytes() {
+                let Some(digit) = (byte as char).to_digit(base as u32) else {
+                    return Ok(Value::Nil);
+                };
+                number = number
+                    .wrapping_mul(base as u64)
+                    .wrapping_add(u64::from(digit));
+            }
+            Ok(Value::Integer(if negative {
+                number.wrapping_neg() as i64
+            } else {
+                number as i64
+            }))
         }
         match value {
             Value::Integer(_) | Value::Float(_) => Ok(value),
