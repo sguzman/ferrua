@@ -1743,6 +1743,12 @@ fn compile_statements<'a>(
                 result = Some(0);
                 break;
             }
+            Statement::Call(expression) => {
+                // Lua discards every result of a call used as a statement.
+                // The call still executes, including argument evaluation
+                // and any runtime errors, under the shared step budget.
+                let _ = emit(program, expression, 0, scopes)?;
+            }
             Statement::Return(values) => {
                 // Every expression is scalar except an unparenthesized
                 // final call, which expands its complete result vector.
@@ -3535,7 +3541,6 @@ mod tests {
         for source in [
             "return _ENV",
             "_ENV=1; return _ENV",
-            "local x=1; print(x); return x",
             "local x=1; x.y=2; return x",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
