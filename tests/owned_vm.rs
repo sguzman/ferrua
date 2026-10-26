@@ -207,6 +207,58 @@ fn integer_conditional_branches_match_fer_and_upstream_lua() {
 }
 
 #[test]
+fn register_while_loops_match_production_and_upstream_lua54() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (source, expected) in [
+        ("local n=0; while n<5 do n=n+1 end; return n", 5),
+        (
+            "local n=1; local i=0; while i<4 do n=n*2; i=i+1 end; return n",
+            16,
+        ),
+        (
+            "local n=0; while n<3 do local i=0; while i<2 do n=n+1; i=i+1 end end; return n",
+            4,
+        ),
+        (
+            "local x=0; while x<5 do if x<2 then x=x+2 else x=x+1 end end; return x",
+            5,
+        ),
+        ("local n=0; while false do n=n+1 end; return n", 0),
+        (
+            "local n=9223372036854775807; while n>0 do n=n+1 end; return n",
+            i64::MIN,
+        ),
+    ] {
+        let program = compile_integer_chunk(source).unwrap();
+        assert_eq!(execute_integer_program(&program), Ok(expected), "{source}");
+        let code = format!("print((function() {source} end)())");
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let result = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                result.status.success(),
+                "{source}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&result.stdout).trim(),
+                expected.to_string(),
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
 fn integer_register_guard_clauses_match_fer_and_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
