@@ -1728,7 +1728,7 @@ mod tests {
     }
     #[test]
     fn rejects_noninteger_or_side_effectful_expressions() {
-        for source in ["1.5+2", "1/2", "math.abs(1)", "x+1", "true", "2^3", "t[1]"] {
+        for source in ["1.5+2", "1/2", "math.abs(1)", "x+1", "2^3", "t[1]"] {
             assert!(
                 matches!(
                     compile_integer_expression(source),
@@ -1738,6 +1738,22 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn typed_literal_register_expressions_do_not_coerce_to_integers() {
+        for (source, expected) in [
+            ("true", RegisterValue::Boolean(true)),
+            ("false", RegisterValue::Boolean(false)),
+            ("nil", RegisterValue::Nil),
+            ("0", RegisterValue::Integer(0)),
+        ] {
+            let program = compile_integer_expression(source).unwrap();
+            assert_eq!(execute_register_program(&program), Ok(expected));
+            if !matches!(expected, RegisterValue::Integer(_)) {
+                assert_eq!(execute_integer_program(&program), Err(Error::TypeError));
+            }
+        }
+    }
+
     #[test]
     fn compiles_integer_chunks_with_local_scopes_and_parallel_assignment() {
         let examples = [
