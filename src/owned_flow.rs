@@ -77,6 +77,8 @@ pub enum Builtin {
     CoroutineResume,
     CoroutineYield,
     CoroutineStatus,
+    CoroutineRunning,
+    CoroutineIsYieldable,
     MathAbs,
     MathFloor,
     MathCeil,
@@ -138,9 +140,14 @@ const COROUTINE_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"resume", Builtin::CoroutineResume),
     (b"yield", Builtin::CoroutineYield),
     (b"status", Builtin::CoroutineStatus),
+    (b"running", Builtin::CoroutineRunning),
+    (b"isyieldable", Builtin::CoroutineIsYieldable),
 ];
 
 const MAX_COROUTINES: usize = 64;
+// Stable synthetic identity for the main Lua thread. Coroutine slots occupy
+// [0, MAX_COROUTINES); this sentinel never indexes the coroutine storage.
+const MAIN_THREAD_ID: usize = usize::MAX;
 
 const MATH_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"abs", Builtin::MathAbs),
@@ -4398,6 +4405,10 @@ impl Execution<'_> {
                 Ok(vec![self.coroutine_status(&arguments)?])
             }
             Value::Builtin(Builtin::CoroutineResume) => self.coroutine_resume(&arguments),
+            Value::Builtin(Builtin::CoroutineRunning) => Ok(self.coroutine_running()),
+            Value::Builtin(Builtin::CoroutineIsYieldable) => {
+                Ok(vec![self.coroutine_isyieldable(&arguments)?])
+            }
             Value::Builtin(Builtin::Error) => Err(self.error_builtin(&arguments)),
             Value::Builtin(Builtin::Print) => self.print_builtin(&arguments),
             Value::Builtin(Builtin::Warn) => self.warn_builtin(&arguments),
@@ -7710,11 +7721,46 @@ impl Execution<'_> {
         Ok(Value::Thread(id))
     }
 
+    /// Lua's running thread is first-class even in the main VM, where no
+    /// coroutine scheduler or heap slot exists.
+    fn coroutine_running(&self) -> Vec<Value> {
+        let main = self.current_coroutine.is_none();
+        vec![
+            Value::Thread(self.current_coroutine.unwrap_or(MAIN_THREAD_ID)),
+            Value::Boolean(main),
+        ]
+    }
+
+    /// The optional argument identifies a thread, not its running status.
+    /// The main thread cannot yield; an owned thread can yield when executing
+    /// within the resumable Lua scheduler (non-yieldable native callbacks are
+    /// not yet a supported yield boundary).
+    fn coroutine_isyieldable(&self, args: &[Value]) -> Result<Value, FlowError> {
+        let id = match args.first().copied() {
+            None => self.current_coroutine.unwrap_or(MAIN_THREAD_ID),
+            Some(Value::Thread(id)) => id,
+            Some(_) => return Err(FlowError::TypeError),
+        };
+        if id != MAIN_THREAD_ID
+            && self.coroutines.get(id).and_then(Option::as_ref).is_none()
+            && self.current_coroutine != Some(id)
+        {
+            return Err(FlowError::InvalidBytecode);
+        }
+        Ok(Value::Boolean(id != MAIN_THREAD_ID))
+    }
+
     fn coroutine_status(&mut self, args: &[Value]) -> Result<Value, FlowError> {
         let Value::Thread(id) = *args.first().ok_or(FlowError::TypeError)? else {
             return Err(FlowError::TypeError);
         };
-        let status = if self.current_coroutine == Some(id) {
+        let status = if id == MAIN_THREAD_ID {
+            if self.current_coroutine.is_none() {
+                b"running".as_slice()
+            } else {
+                b"normal".as_slice()
+            }
+        } else if self.current_coroutine == Some(id) {
             b"running".as_slice()
         } else if self
             .saved_call_contexts
@@ -7749,6 +7795,15 @@ impl Execution<'_> {
         let Value::Thread(id) = *args.first().ok_or(FlowError::TypeError)? else {
             return Err(FlowError::TypeError);
         };
+        if id == MAIN_THREAD_ID {
+            return Ok(vec![
+                Value::Boolean(false),
+                self.intern_rooted_string(
+                    b"cannot resume non-suspended coroutine".to_vec(),
+                    args,
+                )?,
+            ]);
+        }
         let inputs = args.get(1..).unwrap_or_default();
         if self.current_coroutine == Some(id)
             || self
@@ -8291,6 +8346,8 @@ impl Execution<'_> {
                                     | Builtin::TablePack
                                     | Builtin::CollectGarbage
                                     | Builtin::CoroutineYield
+                                    | Builtin::CoroutineRunning
+                                    | Builtin::CoroutineIsYieldable
                             )
                         {
                             return Err(FlowError::TypeError);
@@ -8328,6 +8385,7 @@ impl Execution<'_> {
                                 | Builtin::MathModf
                                 | Builtin::MathRandomSeed
                                 | Builtin::CoroutineResume
+                                | Builtin::CoroutineRunning
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
@@ -8372,6 +8430,7 @@ impl Execution<'_> {
                                 Builtin::MathModf => self.math_modf_builtin(&args)?,
                                 Builtin::MathRandomSeed => self.math_randomseed_builtin(&args)?,
                                 Builtin::CoroutineResume => self.coroutine_resume(&args)?,
+                                Builtin::CoroutineRunning => self.coroutine_running(),
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
@@ -8406,6 +8465,7 @@ impl Execution<'_> {
                             Builtin::ToNumber => self.tonumber_builtin(&args)?,
                             Builtin::CoroutineCreate => self.coroutine_create(&args)?,
                             Builtin::CoroutineStatus => self.coroutine_status(&args)?,
+                            Builtin::CoroutineIsYieldable => self.coroutine_isyieldable(&args)?,
                             Builtin::RawEqual => {
                                 let left = *args.first().ok_or(FlowError::TypeError)?;
                                 let right = *args.get(1).ok_or(FlowError::TypeError)?;
@@ -8452,6 +8512,7 @@ impl Execution<'_> {
                             | Builtin::MathModf
                             | Builtin::MathRandomSeed
                             | Builtin::CoroutineResume
+                            | Builtin::CoroutineRunning
                             | Builtin::CoroutineYield => {
                                 unreachable!(
                                     "iteration/selection builtins handled as multiple results"

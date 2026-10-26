@@ -160,6 +160,19 @@ fn owned_coroutine_error_reentry_and_multiple_yield_results_match_lua54() {
 }
 
 #[test]
+fn owned_coroutine_running_and_isyieldable_match_lua54() {
+    for source in [
+        "local main,is_main=coroutine.running(); print(type(main),is_main,coroutine.status(main),coroutine.isyieldable(),coroutine.isyieldable(main))",
+        "local main=coroutine.running(); local co=coroutine.create(function() local self,flag=coroutine.running(); print(type(self),flag,coroutine.status(self),coroutine.status(main),coroutine.isyieldable(),coroutine.isyieldable(main)); coroutine.yield(7); return coroutine.running()==self end); print(coroutine.isyieldable(co)); print(coroutine.resume(co)); print(coroutine.status(co),coroutine.isyieldable(co)); print(coroutine.resume(co))",
+        "local outer=coroutine.create(function() local self=coroutine.running(); local child=coroutine.create(function() print(coroutine.status(self),coroutine.isyieldable(self)); return 3 end); print(coroutine.resume(child)); print(coroutine.status(self)) end); print(coroutine.resume(outer))",
+        "local main=coroutine.running(); local ok,error_text=coroutine.resume(main); print(ok,type(error_text),coroutine.status(main))",
+        "local ok=pcall(coroutine.isyieldable,3); print(ok); local co=coroutine.create(function() end); print(coroutine.isyieldable(co))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn curated_global_function_print_and_error_semantics_match_lua54() {
     for source in [
         "function first() return second() end; function second() return 7 end; print(first())",
