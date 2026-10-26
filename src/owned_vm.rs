@@ -972,6 +972,13 @@ fn compile_statements<'a>(
                 if names.is_empty() || names.len() != attributes.len() {
                     return Err(Error::InvalidBytecode);
                 }
+                if attributes.iter().enumerate().any(|(index, attribute)| {
+                    *attribute == Some(LocalAttribute::Const) && index >= initializers.len()
+                }) {
+                    return Err(Error::Unsupported(
+                        "constant local requires an initializer".into(),
+                    ));
+                }
                 // All initializers use the preceding lexical scope.
                 // Missing values are nil; surplus scalar results are
                 // evaluated and discarded, matching Lua assignment order.
