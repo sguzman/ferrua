@@ -83,6 +83,40 @@ fn register_table_literals_lookup_and_identity_match_lua54() {
         ("local t={}; t[true]=8; return t[true]", "1|8"),
         ("t={}; t.value=20; return t.value", "1|20"),
         ("local t={}; return type(t),type(t.x)", "2|table|nil"),
+        (
+            "local t={select(1,10,20,30)};return t[1],t[2],t[3]",
+            "3|10|20|30",
+        ),
+        (
+            "local t={7,select(2,10,20,30)};return t[1],t[2],t[3]",
+            "3|7|20|30",
+        ),
+        (
+            "local t={7,(select(2,10,20,30))};return t[1],t[2],t[3]",
+            "3|7|20|nil",
+        ),
+        ("local t={select(9,10,20)};return t[1]", "1|nil"),
+        (
+            "local t={a=9,select(1,10,20)};return t.a,t[1],t[2]",
+            "3|9|10|20",
+        ),
+        (
+            "local t={select(1,10,20),a=5};return t[1],t[2],t.a",
+            "3|10|nil|5",
+        ),
+        (
+            "local t={1,select(1,2,nil,4)};return t[1],t[2],t[3],t[4]",
+            "4|1|2|nil|4",
+        ),
+        (
+            "local t={select(1,select(2,10,20,30))}; return t[1],t[2]",
+            "2|20|30",
+        ),
+        ("local t={select('#',10,20)};return t[1]", "1|2"),
+        (
+            "local t={select(1,10,20),};return t[1],t[2]",
+            "2|10|20",
+        ),
     ] {
         assert_eq!(render(chunk), expected, "{chunk}");
         for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
