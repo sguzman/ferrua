@@ -17,22 +17,70 @@ fn bounded_generic_for_pairs_and_next_match_lua54() {
         .as_deref()
         == Some("1");
     for (chunk, expected) in [
-        ("local t={};local n=0;for k,v in pairs(t) do n=n+1 end return n", 0),
-        ("local t={x=7};local n=0;for k,v in pairs(t) do n=n+v end return n", 7),
-        ("local t={x=7,y=5};local n=0;for k,v in pairs(t) do n=n+v end return n", 12),
-        ("local t={x=7,y=5};local n=0;for k in pairs(t) do n=n+1 end return n", 2),
-        ("local t={[false]=7};local n=0;for k,v in pairs(t) do n=n+v end return n", 7),
-        ("local t={x=3};local n=0;for k,v in next,t,nil do n=n+v end return n", 3),
-        ("local t={x=4};local n=0;for k,v,w in pairs(t) do if w==nil then n=n+v end end return n", 4),
-        ("local t={x=4};local n=0;for k,v in pairs(t) do n=n+v;break end return n", 4),
-        ("local t={x=4};for k,v in pairs(t) do return v end return 0", 4),
-        ("local t={x=3};local a=0;local b=0;for k,v in pairs(t) do a=a+v;b=b+1 end return a+b", 4),
-        ("local t={x=2};local n=0;for k,v in pairs(t) do for p,w in pairs(t) do n=n+v*w end end return n", 4),
-        ("local t={x=3};local n=0;for k,v in pairs(t) do if false then n=n+100 else n=n+v end end return n", 3),
-        ("local t={x=2};local n=0;for k,v in pairs(t) do n=n+v end;for k,v in pairs(t) do n=n+v end return n", 4),
-        ("local t={x=2};local n=0;for k,v in pairs(t) do if v==2 then break end n=n+100 end return n", 0),
-        ("local t={x=2};local n=0;for k,v in pairs(t) do do n=n+v end end return n", 2),
-        ("local t={x=2};local n=0;for k,v in pairs(t) do for i=1,2 do n=n+v end end return n", 4),
+        (
+            "local t={};local n=0;for k,v in pairs(t) do n=n+1 end return n",
+            0,
+        ),
+        (
+            "local t={x=7};local n=0;for k,v in pairs(t) do n=n+v end return n",
+            7,
+        ),
+        (
+            "local t={x=7,y=5};local n=0;for k,v in pairs(t) do n=n+v end return n",
+            12,
+        ),
+        (
+            "local t={x=7,y=5};local n=0;for k in pairs(t) do n=n+1 end return n",
+            2,
+        ),
+        (
+            "local t={[false]=7};local n=0;for k,v in pairs(t) do n=n+v end return n",
+            7,
+        ),
+        (
+            "local t={x=3};local n=0;for k,v in next,t,nil do n=n+v end return n",
+            3,
+        ),
+        (
+            "local t={x=4};local n=0;for k,v,w in pairs(t) do if w==nil then n=n+v end end return n",
+            4,
+        ),
+        (
+            "local t={x=4};local n=0;for k,v in pairs(t) do n=n+v;break end return n",
+            4,
+        ),
+        (
+            "local t={x=4};for k,v in pairs(t) do return v end return 0",
+            4,
+        ),
+        (
+            "local t={x=3};local a=0;local b=0;for k,v in pairs(t) do a=a+v;b=b+1 end return a+b",
+            4,
+        ),
+        (
+            "local t={x=2};local n=0;for k,v in pairs(t) do for p,w in pairs(t) do n=n+v*w end end return n",
+            4,
+        ),
+        (
+            "local t={x=3};local n=0;for k,v in pairs(t) do if false then n=n+100 else n=n+v end end return n",
+            3,
+        ),
+        (
+            "local t={x=2};local n=0;for k,v in pairs(t) do n=n+v end;for k,v in pairs(t) do n=n+v end return n",
+            4,
+        ),
+        (
+            "local t={x=2};local n=0;for k,v in pairs(t) do if v==2 then break end n=n+100 end return n",
+            0,
+        ),
+        (
+            "local t={x=2};local n=0;for k,v in pairs(t) do do n=n+v end end return n",
+            2,
+        ),
+        (
+            "local t={x=2};local n=0;for k,v in pairs(t) do for i=1,2 do n=n+v end end return n",
+            4,
+        ),
     ] {
         assert_eq!(
             run_scalar(chunk),
