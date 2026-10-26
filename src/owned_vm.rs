@@ -2000,11 +2000,13 @@ mod tests {
             let bytecode = compile_integer_chunk(source).unwrap();
             assert_eq!(execute_integer_program(&bytecode), Ok(expected), "{source}");
         }
-        for source in [
-            "do return 1.5 end",
-            "do return 1, 2 end",
-            "do return math.max(1,2) end",
-        ] {
+        let float_return = compile_integer_chunk("do return 1.5 end").unwrap();
+        assert_eq!(
+            execute_register_program(&float_return),
+            Ok(RegisterValue::Float(1.5_f64.to_bits()))
+        );
+        assert_eq!(execute_integer_program(&float_return), Err(Error::TypeError));
+        for source in ["do return 1, 2 end", "do return math.max(1,2) end"] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
     }
@@ -2051,10 +2053,16 @@ mod tests {
             "if true then local a=2 else return 3 end",
             "if {} then return 1 else return 2 end",
             "if false then return 2 else local a=3 end",
-            "if true then return 1.5 else return 2 end",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
+        let float_return =
+            compile_integer_chunk("if true then return 1.5 else return 2 end").unwrap();
+        assert_eq!(
+            execute_register_program(&float_return),
+            Ok(RegisterValue::Float(1.5_f64.to_bits()))
+        );
+        assert_eq!(execute_integer_program(&float_return), Err(Error::TypeError));
         let invalid = Program {
             code: vec![
                 Instruction::Load { dest: 0, value: 1 },
@@ -2657,11 +2665,15 @@ mod tests {
             "return x",
             "x=1; return x",
             "local x=1; print(x); return x",
-            "local x=1; return 1.5",
             "local x=1; x.y=2; return x",
         ] {
             assert!(compile_integer_chunk(source).is_err(), "{source}");
         }
+        let float_return = compile_integer_chunk("local x=1; return 1.5").unwrap();
+        assert_eq!(
+            execute_register_program(&float_return),
+            Ok(RegisterValue::Float(1.5_f64.to_bits()))
+        );
     }
     #[test]
     fn validates_unreachable_integer_bytecode_and_register_bounds() {
