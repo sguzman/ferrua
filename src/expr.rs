@@ -443,7 +443,7 @@ fn check_expression_labels(expression: &Expr<'_>) -> Result<(), &'static str> {
         Expr::Function { body, .. } => {
             check_block_labels(body, &[])?;
             check_block_gotos(body)?;
-        },
+        }
         Expr::Table(fields) => {
             for field in fields {
                 match field {
@@ -491,7 +491,7 @@ fn check_block_labels<'a>(
             Statement::Function { body, .. } => {
                 check_block_labels(body, &[])?;
                 check_block_gotos(body)?;
-            },
+            }
             Statement::Block(body) => check_block_labels(body, &visible)?,
             Statement::While { condition, body } => {
                 check_expression_labels(condition)?;
@@ -591,7 +591,11 @@ impl<'a> JumpCollector<'a> {
                     self.labels.push(JumpSite {
                         name: *name,
                         block,
-                        live: if trailing { inherited.to_vec() } else { live.clone() },
+                        live: if trailing {
+                            inherited.to_vec()
+                        } else {
+                            live.clone()
+                        },
                     });
                 }
                 Statement::Goto(name) => self.gotos.push(JumpSite {
