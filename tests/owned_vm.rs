@@ -472,10 +472,7 @@ fn register_literal_truthiness_matches_lua54_without_general_float_or_string_val
     }
     // Floats are now first-class tagged results, but the legacy integer
     // compatibility API must still reject every noninteger return.
-    for (source, expected) in [
-        ("return 0.0", 0.0_f64),
-        ("return 4 + 0.5", 4.5_f64),
-    ] {
+    for (source, expected) in [("return 0.0", 0.0_f64), ("return 4 + 0.5", 4.5_f64)] {
         let chunk = compile_integer_chunk(source).unwrap();
         assert_eq!(
             ferrua::owned_vm::execute_register_program(&chunk),
