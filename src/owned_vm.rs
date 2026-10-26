@@ -2987,7 +2987,7 @@ mod tests {
             ("local x,y; return y", RegisterValue::Nil),
             ("local x,y=7; return y", RegisterValue::Nil),
             ("local x<const>; return x", RegisterValue::Nil),
-            ("local x,y<const>=4; return y", RegisterValue::Nil),
+            ("local x,y<const> =4; return y", RegisterValue::Nil),
             ("local x,y=7; return x", RegisterValue::Integer(7)),
             ("local x=2,3; return x", RegisterValue::Integer(2)),
             ("local x,y=3,4; x=9; return y", RegisterValue::Integer(4)),
