@@ -3398,14 +3398,8 @@ fn register_tonumber(
     } else {
         (false, trimmed.strip_prefix('+').unwrap_or(trimmed))
     };
-    let digits = if radix == 16 {
-        digits
-            .strip_prefix("0x")
-            .or_else(|| digits.strip_prefix("0X"))
-            .unwrap_or(digits)
-    } else {
-        digits
-    };
+    // An explicit base accepts digits only; Lua does not strip 0x when
+    // a base argument is supplied, even when that base is hexadecimal.
     if digits.is_empty() {
         return Ok(RegisterValue::Nil);
     }
