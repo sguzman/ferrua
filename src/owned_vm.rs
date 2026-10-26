@@ -7,11 +7,40 @@ use std::fmt;
 const MAX_REGISTERS: usize = 16384;
 const MAX_REGISTER_STEPS: usize = 100_000;
 
+/// Bounded register values; strings, tables and functions remain future work.
+/// Tagged booleans and nil no longer masquerade as Lua integers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RegisterValue {
+    Nil,
+    Boolean(bool),
+    Integer(i64),
+}
+
+impl RegisterValue {
+    fn truthy(self) -> bool {
+        !matches!(self, Self::Nil | Self::Boolean(false))
+    }
+
+    fn integer(self) -> Result<i64, Error> {
+        match self {
+            Self::Integer(value) => Ok(value),
+            _ => Err(Error::TypeError),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Instruction {
     Load {
         dest: usize,
         value: i64,
+    },
+    LoadNil {
+        dest: usize,
+    },
+    LoadBoolean {
+        dest: usize,
+        value: bool,
     },
     Neg {
         dest: usize,
@@ -177,6 +206,7 @@ pub enum Error {
     TooLarge,
     InvalidBytecode,
     DivisionByZero,
+    TypeError,
     ZeroForStep,
     StepBudgetExceeded,
 }
@@ -187,6 +217,7 @@ impl fmt::Display for Error {
             Self::TooLarge => write!(f, "experimental program is too large"),
             Self::InvalidBytecode => write!(f, "invalid experimental register bytecode"),
             Self::DivisionByZero => write!(f, "integer division by zero"),
+            Self::TypeError => write!(f, "noninteger operand in register arithmetic"),
             Self::ZeroForStep => write!(f, "numeric for step cannot be zero"),
             Self::StepBudgetExceeded => write!(f, "bounded register VM step budget exhausted"),
         }
@@ -227,6 +258,13 @@ fn emit<'a>(
     }
     let instruction = match expression {
         Expr::Grouped(inner) => return emit(program, inner, depth + 1, locals),
+        Expr::Atom("nil") => Instruction::LoadNil {
+            dest: program.registers,
+        },
+        Expr::Atom("false") | Expr::Atom("true") => Instruction::LoadBoolean {
+            dest: program.registers,
+            value: matches!(expression, Expr::Atom("true")),
+        },
         Expr::Atom(text) => {
             let integer =
                 if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
@@ -347,9 +385,9 @@ fn emit_condition<'a>(
             program.registers += 1;
             emit_instruction(
                 program,
-                Instruction::Load {
+                Instruction::LoadBoolean {
                     dest,
-                    value: i64::from(!matches!(*value, "false" | "nil")),
+                    value: !matches!(*value, "false" | "nil"),
                 },
             )?;
             Ok(dest)
@@ -392,7 +430,7 @@ fn emit_condition<'a>(
                 let jump_at = program.code.len();
                 emit_instruction(program, Instruction::Jump { target: usize::MAX })?;
                 let false_at = program.code.len();
-                emit_instruction(program, Instruction::Load { dest, value: 0 })?;
+                emit_instruction(program, Instruction::LoadBoolean { dest, value: false })?;
                 let after = program.code.len();
                 program.code[branch_at] = Instruction::BranchIfFalse {
                     condition: lhs,
@@ -401,7 +439,7 @@ fn emit_condition<'a>(
                 program.code[jump_at] = Instruction::Jump { target: after };
             } else {
                 // True lhs skips evaluation of the rhs completely.
-                emit_instruction(program, Instruction::Load { dest, value: 1 })?;
+                emit_instruction(program, Instruction::LoadBoolean { dest, value: true })?;
                 let jump_at = program.code.len();
                 emit_instruction(program, Instruction::Jump { target: usize::MAX })?;
                 let rhs_at = program.code.len();
@@ -451,9 +489,9 @@ fn emit_condition<'a>(
                 program.registers += 1;
                 emit_instruction(
                     program,
-                    Instruction::Load {
+                    Instruction::LoadBoolean {
                         dest,
-                        value: i64::from(result),
+                        value: result,
                     },
                 )?;
                 return Ok(dest);
@@ -1299,7 +1337,9 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
     let register = |index: usize| index < program.registers;
     for (pc, instruction) in program.code.iter().enumerate() {
         let valid = match *instruction {
-            Instruction::Load { dest, .. } => register(dest),
+            Instruction::Load { dest, .. }
+            | Instruction::LoadBoolean { dest, .. }
+            | Instruction::LoadNil { dest } => register(dest),
             Instruction::Neg { dest, input }
             | Instruction::LoopCopy { dest, input }
             | Instruction::BitNot { dest, input }
