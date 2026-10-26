@@ -1680,6 +1680,19 @@ pub(crate) fn parse_lua_hex_float(source: &str) -> Option<f64> {
     Some(value * 2.0_f64.powi(exponent))
 }
 
+/// Lua's default float stringification uses about fourteen significant
+/// decimal digits. Rust Debug chooses the shortest round-trippable spelling;
+/// for subnormals this can differ visibly (5e-324 vs Lua's
+/// 4.9406564584125e-324). Preserve the existing ordinary-number spelling
+/// and render the subnormal tail at Lua's default precision.
+fn lua_default_float_bytes(number: f64) -> Vec<u8> {
+    if number.is_subnormal() {
+        format!("{number:.13e}").into_bytes()
+    } else {
+        format!("{number:?}").into_bytes()
+    }
+}
+
 fn number_to_f64(value: Value) -> Result<f64, FlowError> {
     match value {
         Value::Integer(number) => Ok(number as f64),
@@ -4244,7 +4257,7 @@ impl Execution<'_> {
                 self.intern_rooted_string(number.to_string().into_bytes(), roots)?
             }
             Value::Float(bits) => self
-                .intern_rooted_string(format!("{:?}", f64::from_bits(bits)).into_bytes(), roots)?,
+                .intern_rooted_string(lua_default_float_bytes(f64::from_bits(bits)), roots)?,
             Value::Boolean(boolean) => {
                 self.intern_rooted_string(boolean.to_string().into_bytes(), roots)?
             }
@@ -4266,7 +4279,7 @@ impl Execution<'_> {
                             self.intern_rooted_string(number.to_string().into_bytes(), roots)?
                         }
                         Value::Float(bits) => self.intern_rooted_string(
-                            format!("{:?}", f64::from_bits(bits)).into_bytes(),
+                            lua_default_float_bytes(f64::from_bits(bits)),
                             roots,
                         )?,
                         _ => return Err(FlowError::TypeError),
@@ -7589,7 +7602,7 @@ impl Execution<'_> {
                 .cloned()
                 .ok_or(FlowError::InvalidBytecode),
             Value::Integer(number) => Ok(number.to_string().into_bytes()),
-            Value::Float(bits) => Ok(format!("{:?}", f64::from_bits(bits)).into_bytes()),
+            Value::Float(bits) => Ok(lua_default_float_bytes(f64::from_bits(bits))),
             _ => Err(FlowError::TypeError),
         }
     }
