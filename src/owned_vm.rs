@@ -1757,6 +1757,38 @@ mod tests {
     }
 
     #[test]
+    fn register_repeat_until_evaluates_body_before_condition_and_sees_local_scope() {
+        for (source, expected) in [
+            ("local n=0; repeat n=n+1 until n>=4; return n", 4),
+            ("local n=0; repeat n=n+1 until true; return n", 1),
+            (
+                "local n=0; repeat local next=n+1; n=next until next>=4; return n",
+                4,
+            ),
+            (
+                "local n=0; repeat if n<2 then n=n+1 else n=n+2 end until n>=4; return n",
+                4,
+            ),
+            (
+                "local n=0; repeat local i=0; while i<2 do n=n+1; i=i+1 end until n>=6; return n",
+                6,
+            ),
+        ] {
+            let program = compile_integer_chunk(source).unwrap();
+            assert_eq!(
+                execute_integer_program(&program),
+                Ok(expected),
+                "repeat-until: {source}"
+            );
+        }
+        let never = compile_integer_chunk("local n=0; repeat n=n+1 until false; return n").unwrap();
+        assert_eq!(
+            execute_integer_program(&never),
+            Err(Error::StepBudgetExceeded)
+        );
+    }
+
+    #[test]
     fn register_while_loop_step_quota_prevents_unbounded_execution() {
         let loop_program =
             compile_integer_chunk("local n=0; while true do n=n+1 end; return n").unwrap();
@@ -1773,7 +1805,7 @@ mod tests {
             "return x",
             "x=1; return x",
             "local x=1; print(x); return x",
-            "local x=1; repeat x=x+1 until x>2; return x",
+            "local x=1; for i=1,3 do x=x+i end; return x",
             "local x=1; return 1.5",
             "local x=1; x.y=2; return x",
         ] {
