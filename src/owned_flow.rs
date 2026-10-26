@@ -5871,7 +5871,8 @@ impl Execution<'_> {
                         } else {
                             let numeric =
                                 matches!(specifier, b'd' | b'i' | b'u' | b'o' | b'x' | b'X');
-                            let floating = matches!(specifier, b'f' | b'e' | b'E' | b'g' | b'G' | b'a' | b'A');
+                            let floating =
+                                matches!(specifier, b'f' | b'e' | b'E' | b'g' | b'G' | b'a' | b'A');
                             if (left_align
                                 || width > 0
                                 || precision.is_some()
@@ -5951,7 +5952,8 @@ impl Execution<'_> {
                                     if specifier == b'A' {
                                         formatted.make_ascii_uppercase();
                                     }
-                                    if alternate && number.is_finite() && !formatted.contains(&b'.') {
+                                    if alternate && number.is_finite() && !formatted.contains(&b'.')
+                                    {
                                         let exponent = formatted
                                             .iter()
                                             .position(|byte| matches!(*byte, b'p' | b'P'))
