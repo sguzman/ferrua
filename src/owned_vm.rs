@@ -1650,9 +1650,6 @@ pub fn execute_register_program_with_budget(
             .flatten()
             .ok_or(Error::InvalidBytecode)
     }
-    fn read_integer(registers: &[Option<RegisterValue>], at: usize) -> Result<i64, Error> {
-        read(registers, at)?.integer()
-    }
     fn read_bitwise_integer(registers: &[Option<RegisterValue>], at: usize) -> Result<i64, Error> {
         read(registers, at)?.bitwise_integer()
     }
