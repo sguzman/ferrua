@@ -1,4 +1,4 @@
-//! Experimental Ferrua-owned register bytecode for integer expressions.
+//! Experimental Ferrua-owned typed register bytecode for bounded Lua expressions.
 //! Not used by production fer; not a full Lua VM.
 
 use crate::expr::{Expr, LocalAttribute, Statement, parse_chunk, parse_expression};
@@ -10,8 +10,8 @@ const MAX_REGISTERS: usize = 16384;
 const MAX_REGISTER_STEPS: usize = 100_000;
 const MAX_REGISTER_STRING_BYTES: usize = 65_536;
 
-/// Bounded register values; strings, tables and functions remain future work.
-/// Tagged booleans and nil no longer masquerade as Lua integers.
+/// Bounded register values with immutable, program-owned byte-string literals.
+/// Dynamic strings, tables and functions remain unimplemented.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RegisterValue {
     Nil,
@@ -777,8 +777,8 @@ fn emit_condition<'a>(
     }
 }
 
-/// Compile only standalone integer arithmetic and bitwise expressions into owned IR.
-/// Variables, functions, floats, tables and side effects are unsupported.
+/// Compile a bounded Lua scalar-expression subset into typed register IR.
+/// Lua globals, calls, dynamic strings, tables and side effects remain unsupported.
 pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
     let ast = parse_expression(source).map_err(|err| Error::Unsupported(err.to_string()))?;
     let mut program = Program {
@@ -1689,9 +1689,9 @@ pub fn execute_integer_program_with_budget(program: &Program, budget: usize) -> 
     execute_register_program_with_budget(program, budget)?.integer()
 }
 
-/// Execute the experimental register IR and preserve Lua nil/boolean/integer
-/// return types. Strings, functions, tables, floats and a complete register
-/// compiler remain separate unaccepted T302 work.
+/// Execute the experimental register IR with Lua scalar value tags.
+/// Literal string results are resolved with Program::string_bytes. Dynamic
+/// strings, functions, tables and full register compilation remain unaccepted.
 pub fn execute_register_program(program: &Program) -> Result<RegisterValue, Error> {
     execute_register_program_with_budget(program, MAX_REGISTER_STEPS)
 }
