@@ -5201,6 +5201,47 @@ impl Execution<'_> {
                         maxalign = limit;
                         continue;
                     }
+                    b'X' => {
+                        // X consumes its following format option solely to
+                        // obtain an alignment; it does not consume a Lua
+                        // argument nor emit that following field's bytes.
+                        let next = *format.get(index).ok_or(FlowError::TypeError)?;
+                        index += 1;
+                        let mut width = match next {
+                            b'b' | b'B' | b'x' => 1,
+                            b'h' | b'H' => 2,
+                            b'i' | b'I' | b'f' => 4,
+                            b'l' | b'L' | b'j' | b'J' | b'T' | b'd' | b'n' | b's' => 8,
+                            _ => return Err(FlowError::TypeError),
+                        };
+                        if matches!(next, b'i' | b'I' | b's')
+                            && index < format.len()
+                            && format[index].is_ascii_digit()
+                        {
+                            width = 0;
+                            while index < format.len() && format[index].is_ascii_digit() {
+                                width = width
+                                    .checked_mul(10)
+                                    .and_then(|n| n.checked_add(usize::from(format[index] - b'0')))
+                                    .ok_or(FlowError::TooLarge)?;
+                                index += 1;
+                            }
+                        }
+                        if !(1..=16).contains(&width) {
+                            return Err(FlowError::TypeError);
+                        }
+                        let align = width.min(maxalign);
+                        if align > 1 {
+                            if !align.is_power_of_two() {
+                                return Err(FlowError::TypeError);
+                            }
+                            if fields.len() >= MAX_STACK {
+                                return Err(FlowError::TooLarge);
+                            }
+                            fields.push(PackField::Align(align));
+                        }
+                        continue;
+                    }
                     b'x' => PackField::Padding,
                     b'b' | b'B' | b'h' | b'H' | b'l' | b'L' | b'j' | b'J' | b'T' | b'i' | b'I' => {
                         let signed = matches!(code, b'b' | b'h' | b'l' | b'j' | b'i');

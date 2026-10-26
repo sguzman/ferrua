@@ -687,6 +687,23 @@ fn owned_string_pack_bounded_native_alignment_directives_match_lua54() {
 }
 
 #[test]
+fn owned_string_pack_explicit_X_alignment_directives_match_lua54() {
+    for source in [
+        "local p=string.pack('!4bXI4B',7,9); print(#p,string.unpack('!4bXI4B',p),string.packsize('!4bXI4B'))",
+        "local p=string.pack('!8bXdI4',1,258); print(#p,string.unpack('!8bXdI4',p),string.packsize('!8bXdI4'))",
+        "local p=string.pack('!2bXhB',1,2); print(#p,string.unpack('!2bXhB',p),string.packsize('!2bXhB'))",
+        "local p=string.pack('!8c3XI8B','abc',77); print(#p,string.unpack('!8c3XI8B',p),string.packsize('!8c3XI8B'))",
+        "local p=string.pack('!4zXI4B','ab',42); print(#p,string.unpack('!4zXI4B',p))",
+        "local p=string.pack('!4s1XI4B','ab',42); print(#p,string.unpack('!4s1XI4B',p))",
+        "local p=string.pack('!4bXI4',1); print(#p,string.unpack('!4bXI4',p),string.packsize('!4bXI4'))",
+        "local p=string.pack('XxB',5); print(#p,string.unpack('XxB',p),string.packsize('XxB'))",
+        "local a=pcall(string.packsize,'X'); local b=pcall(string.packsize,'!4Xc3'); local c=pcall(string.packsize,'!8bXs3B'); print(a,b,c)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
     for source in [
         "print(string.format('hello')=='hello',string.format('')=='')",
