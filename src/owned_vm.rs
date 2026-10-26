@@ -1832,8 +1832,7 @@ pub fn execute_register_program_with_budget(
             Instruction::Div { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Float(
-                    (read(&registers, lhs)?.number()? / read(&registers, rhs)?.number()?)
-                        .to_bits(),
+                    (read(&registers, lhs)?.number()? / read(&registers, rhs)?.number()?).to_bits(),
                 ),
             ),
             Instruction::Pow { dest, lhs, rhs } => (
