@@ -16,6 +16,7 @@ const MAX_CALL_ARGUMENTS: usize = 128;
 pub enum RegisterBuiltin {
     Type,
     ToString,
+    Select,
 }
 
 /// Bounded register values with immutable, program-owned byte-string literals.
@@ -158,6 +159,13 @@ pub enum Instruction {
         callee: usize,
         argc: usize,
     },
+    /// Read one value from the most recent call, padding with nil.
+    ReadCallResult {
+        dest: usize,
+        index: usize,
+    },
+    /// Expand all results from the immediately preceding final expression call.
+    AppendReturnExpansion,
     Length {
         dest: usize,
         input: usize,
@@ -519,6 +527,7 @@ fn emit<'a>(
                     let builtin = match *text {
                         "type" => RegisterBuiltin::Type,
                         "tostring" => RegisterBuiltin::ToString,
+                        "select" => RegisterBuiltin::Select,
                         _ => {
                             return Err(Error::Unsupported(format!(
                                 "unbound or unsupported name: {text}"
@@ -1023,9 +1032,10 @@ fn assigned_names<'a>(body: &[Statement<'a>], names: &mut HashSet<&'a str>) {
     }
 }
 
-/// Evaluate each scalar RHS before changing bindings, discard surplus
-/// results, and fill missing values with nil. Multi-result call expansion
-/// remains unsupported by this independent register subset.
+/// Evaluate RHS values before changing bindings. Lua expands a final
+/// unparenthesized call into its available results; every other expression
+/// contributes exactly one scalar. Extra results are discarded and missing
+/// results receive nil.
 fn adjusted_rhs<'a>(
     program: &mut Program,
     expressions: &[Expr<'a>],
@@ -1033,10 +1043,22 @@ fn adjusted_rhs<'a>(
     scopes: &[HashMap<&'a str, RegisterBinding>],
 ) -> Result<Vec<usize>, Error> {
     let mut sources = Vec::with_capacity(targets);
-    for expression in expressions {
+    for (position, expression) in expressions.iter().enumerate() {
         let register = emit(program, expression, 0, scopes)?;
         if sources.len() < targets {
             sources.push(register);
+            if position + 1 == expressions.len() && matches!(expression, Expr::Call { .. }) {
+                let remaining = targets - sources.len();
+                for index in 1..=remaining {
+                    if program.registers >= MAX_REGISTERS {
+                        return Err(Error::TooLarge);
+                    }
+                    let dest = program.registers;
+                    program.registers += 1;
+                    emit_instruction(program, Instruction::ReadCallResult { dest, index })?;
+                    sources.push(dest);
+                }
+            }
         }
     }
     while sources.len() < targets {
@@ -1670,12 +1692,16 @@ fn compile_statements<'a>(
                 break;
             }
             Statement::Return(values) => {
-                // Preserve every scalar return value in evaluation order.
-                // General call/vararg multi-result expansion remains unsupported.
+                // Every expression is scalar except an unparenthesized
+                // final call, which expands its complete result vector.
                 let mut first = None;
-                for expression in values {
+                for (position, expression) in values.iter().enumerate() {
                     let register = emit(program, expression, 0, scopes)?;
-                    emit_instruction(program, Instruction::AppendReturn { source: register })?;
+                    if position + 1 == values.len() && matches!(expression, Expr::Call { .. }) {
+                        emit_instruction(program, Instruction::AppendReturnExpansion)?;
+                    } else {
+                        emit_instruction(program, Instruction::AppendReturn { source: register })?;
+                    }
                     if first.is_none() {
                         first = Some(register);
                     }
@@ -1776,6 +1802,8 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             }
             Instruction::LoadBuiltin { dest, .. } => register(dest),
             Instruction::PushArgument { source } => register(source),
+            Instruction::ReadCallResult { dest, .. } => register(dest),
+            Instruction::AppendReturnExpansion => true,
             Instruction::Call { dest, callee, argc } => {
                 register(dest) && register(callee) && argc <= MAX_CALL_ARGUMENTS
             }
@@ -1909,6 +1937,7 @@ pub fn execute_register_program_with_strings_and_budget(
     let mut strings = program.strings.clone();
     let mut string_bytes_used: usize = strings.iter().map(Vec::len).sum();
     let mut return_values = Vec::new();
+    let mut last_call_results = Vec::new();
     let mut call_arguments = Vec::new();
     let mut registers: Vec<Option<RegisterValue>> = vec![None; program.registers];
     fn read(registers: &[Option<RegisterValue>], at: usize) -> Result<RegisterValue, Error> {
@@ -1952,6 +1981,14 @@ pub fn execute_register_program_with_strings_and_budget(
                     return Err(Error::TooLarge);
                 }
                 return_values.push(read(&registers, source)?);
+                pc += 1;
+                continue;
+            }
+            Instruction::AppendReturnExpansion => {
+                if return_values.len().saturating_add(last_call_results.len()) > MAX_REGISTERS {
+                    return Err(Error::TooLarge);
+                }
+                return_values.extend_from_slice(&last_call_results);
                 pc += 1;
                 continue;
             }
@@ -2165,7 +2202,7 @@ pub fn execute_register_program_with_strings_and_budget(
                     .checked_sub(argc)
                     .ok_or(Error::InvalidBytecode)?;
                 let arguments = &call_arguments[start..];
-                let output = match function {
+                let results = match function {
                     RegisterValue::Builtin(RegisterBuiltin::Type) => {
                         let first = arguments.first().ok_or(Error::TypeError)?;
                         let bytes = match first {
@@ -2175,11 +2212,11 @@ pub fn execute_register_program_with_strings_and_budget(
                             RegisterValue::String(_) => b"string",
                             RegisterValue::Builtin(_) => b"function",
                         };
-                        intern_register_string(
+                        vec![intern_register_string(
                             bytes.to_vec(),
                             &mut strings,
                             &mut string_bytes_used,
-                        )?
+                        )?]
                     }
                     RegisterValue::Builtin(RegisterBuiltin::ToString) => {
                         let first = arguments.first().ok_or(Error::TypeError)?;
@@ -2200,13 +2237,49 @@ pub fn execute_register_program_with_strings_and_budget(
                             }
                             RegisterValue::Builtin(_) => b"function: builtin".to_vec(),
                         };
-                        intern_register_string(bytes, &mut strings, &mut string_bytes_used)?
+                        vec![intern_register_string(bytes, &mut strings, &mut string_bytes_used)?]
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::Select) => {
+                        let selector = arguments.first().ok_or(Error::TypeError)?;
+                        let available = arguments.len() - 1;
+                        match selector {
+                            RegisterValue::String(index)
+                                if strings.get(*index).is_some_and(|bytes| bytes == b"#") =>
+                            {
+                                vec![RegisterValue::Integer(available as i64)]
+                            }
+                            RegisterValue::Integer(position) => {
+                                if *position == 0 {
+                                    return Err(Error::TypeError);
+                                }
+                                let offset = if *position > 0 {
+                                    i128::from(*position) - 1
+                                } else {
+                                    available as i128 + i128::from(*position)
+                                };
+                                if offset < 0 {
+                                    return Err(Error::TypeError);
+                                }
+                                let offset = usize::try_from(offset).map_err(|_| Error::TooLarge)?;
+                                arguments[1 + offset.min(available)..].to_vec()
+                            }
+                            _ => return Err(Error::TypeError),
+                        }
                     }
                     _ => return Err(Error::TypeError),
                 };
+                last_call_results = results;
+                let output = last_call_results
+                    .first()
+                    .copied()
+                    .unwrap_or(RegisterValue::Nil);
                 call_arguments.truncate(start);
                 (dest, output)
             }
+            Instruction::ReadCallResult { dest, index } => (
+                dest,
+                last_call_results.get(index).copied().unwrap_or(RegisterValue::Nil),
+            ),
             Instruction::Length { dest, input } => {
                 let length = match read(&registers, input)? {
                     RegisterValue::String(index) => {
