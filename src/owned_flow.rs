@@ -7655,97 +7655,94 @@ impl Execution<'_> {
             root,
             active,
         } = scheduler;
-        let result = (|| -> Result<Vec<Value>, FlowError> {
-            loop {
-                let progress = if let Some(child) = active.last_mut() {
-                    self.execute_frame(&child.instructions, &mut child.frame, FRAME_STEP_QUANTUM)?
-                } else {
-                    self.execute_frame(instructions, &mut *root, FRAME_STEP_QUANTUM)?
-                };
-                match progress {
-                    FrameProgress::Paused => continue,
-                    FrameProgress::Call { handle, args, many } => {
-                        // Child calls execute on an explicit owned frame stack;
-                        // native callbacks may still nest a separate scheduler.
-                        let closure = self
-                            .closures
-                            .get(handle)
-                            .and_then(Option::as_ref)
-                            .cloned()
-                            .ok_or(FlowError::InvalidBytecode)?;
-                        let function = self
-                            .program
-                            .functions
-                            .get(closure.function)
-                            .ok_or(FlowError::InvalidBytecode)?
-                            .clone();
-                        if self.depth >= MAX_CALL_DEPTH {
-                            return Err(FlowError::CallDepthExceeded);
-                        }
-                        if function.instructions.len() > MAX_CODE {
-                            return Err(FlowError::TooLarge);
-                        }
-                        let initial: Vec<_> = function
-                            .parameters
-                            .iter()
-                            .enumerate()
-                            .map(|(i, slot)| (*slot, args.get(i).copied().unwrap_or(Value::Nil)))
-                            .collect();
-                        let varargs = if function.vararg && args.len() > function.parameters.len() {
-                            &args[function.parameters.len()..]
-                        } else {
-                            &[]
-                        };
-                        self.depth += 1;
-                        self.frame_allocations.push(Vec::new());
-                        self.gc_frame_roots.push(GcFrameRoots::default());
-                        let child_frame = match self.prepare_call_frame(
-                            function.slots,
-                            &initial,
-                            &closure.captures,
-                            varargs,
-                        ) {
-                            Ok(child) => child,
-                            Err(error) => {
-                                self.release_call_frame()?;
-                                self.depth -= 1;
-                                return Err(error);
-                            }
-                        };
-                        active.push(ActiveLuaCall {
-                            instructions: function.instructions,
-                            frame: child_frame,
-                            many,
-                        });
+        loop {
+            let progress = if let Some(child) = active.last_mut() {
+                self.execute_frame(&child.instructions, &mut child.frame, FRAME_STEP_QUANTUM)?
+            } else {
+                self.execute_frame(instructions, &mut *root, FRAME_STEP_QUANTUM)?
+            };
+            match progress {
+                FrameProgress::Paused => continue,
+                FrameProgress::Call { handle, args, many } => {
+                    // Child calls execute on an explicit owned frame stack;
+                    // native callbacks may still nest a separate scheduler.
+                    let closure = self
+                        .closures
+                        .get(handle)
+                        .and_then(Option::as_ref)
+                        .cloned()
+                        .ok_or(FlowError::InvalidBytecode)?;
+                    let function = self
+                        .program
+                        .functions
+                        .get(closure.function)
+                        .ok_or(FlowError::InvalidBytecode)?
+                        .clone();
+                    if self.depth >= MAX_CALL_DEPTH {
+                        return Err(FlowError::CallDepthExceeded);
                     }
-                    FrameProgress::Returned(values) => {
-                        if let Some(child) = active.pop() {
+                    if function.instructions.len() > MAX_CODE {
+                        return Err(FlowError::TooLarge);
+                    }
+                    let initial: Vec<_> = function
+                        .parameters
+                        .iter()
+                        .enumerate()
+                        .map(|(i, slot)| (*slot, args.get(i).copied().unwrap_or(Value::Nil)))
+                        .collect();
+                    let varargs = if function.vararg && args.len() > function.parameters.len() {
+                        &args[function.parameters.len()..]
+                    } else {
+                        &[]
+                    };
+                    self.depth += 1;
+                    self.frame_allocations.push(Vec::new());
+                    self.gc_frame_roots.push(GcFrameRoots::default());
+                    let child_frame = match self.prepare_call_frame(
+                        function.slots,
+                        &initial,
+                        &closure.captures,
+                        varargs,
+                    ) {
+                        Ok(child) => child,
+                        Err(error) => {
                             self.release_call_frame()?;
                             self.depth -= 1;
-                            let parent = if let Some(parent) = active.last_mut() {
-                                &mut parent.frame
-                            } else {
-                                &mut *root
-                            };
-                            if child.many {
-                                parent.last_multiple = Some(values.len());
-                                parent.stack.extend(values);
-                            } else {
-                                parent
-                                    .stack
-                                    .push(values.into_iter().next().unwrap_or(Value::Nil));
-                            }
-                            if parent.stack.len() > MAX_STACK {
-                                return Err(FlowError::TooLarge);
-                            }
-                        } else {
-                            return Ok(values);
+                            return Err(error);
                         }
+                    };
+                    active.push(ActiveLuaCall {
+                        instructions: function.instructions,
+                        frame: child_frame,
+                        many,
+                    });
+                }
+                FrameProgress::Returned(values) => {
+                    if let Some(child) = active.pop() {
+                        self.release_call_frame()?;
+                        self.depth -= 1;
+                        let parent = if let Some(parent) = active.last_mut() {
+                            &mut parent.frame
+                        } else {
+                            &mut *root
+                        };
+                        if child.many {
+                            parent.last_multiple = Some(values.len());
+                            parent.stack.extend(values);
+                        } else {
+                            parent
+                                .stack
+                                .push(values.into_iter().next().unwrap_or(Value::Nil));
+                        }
+                        if parent.stack.len() > MAX_STACK {
+                            return Err(FlowError::TooLarge);
+                        }
+                    } else {
+                        return Ok(values);
                     }
                 }
             }
-        })();
-        result
+        }
     }
 
     /// Execute up to one instruction quantum against a retained frame.
