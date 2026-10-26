@@ -1245,6 +1245,17 @@ fn compile_statements<'a>(
                 for at in exits.jumps {
                     program.code[at] = Instruction::Jump { target: after };
                 }
+                // An unconditional true loop whose body definitely returns
+                // also terminates the chunk. A body that merely breaks or
+                // conditionally returns does not establish that guarantee.
+                if matches!(condition, Expr::Atom("true"))
+                    && statements_definitely_return(body)
+                {
+                    if let Some(value) = returned {
+                        result = Some(value);
+                        break;
+                    }
+                }
             }
             Statement::Repeat { body, condition } => {
                 // The until-condition sees locals declared in the repeat
@@ -2904,8 +2915,14 @@ mod tests {
             ("return", RegisterValue::Nil),
             ("do return end", RegisterValue::Nil),
             ("if true then return else return 7 end", RegisterValue::Nil),
-            ("if false then return else return 7 end", RegisterValue::Integer(7)),
-            ("local x=3; if x==3 then return end; return x", RegisterValue::Nil),
+            (
+                "if false then return else return 7 end",
+                RegisterValue::Integer(7),
+            ),
+            (
+                "local x=3; if x==3 then return end; return x",
+                RegisterValue::Nil,
+            ),
             ("local x=1; while true do return end", RegisterValue::Nil),
         ] {
             let program = compile_integer_chunk(source).unwrap();
