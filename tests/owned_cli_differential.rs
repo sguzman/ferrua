@@ -736,19 +736,18 @@ fn owned_gmatch_initial_byte_position_matches_lua54() {
 }
 
 #[test]
-fn owned_gmatch_end_position_capture_matches_upstream_not_pinned_backend() {
-    // Pinned luna-core omits a position capture beginning just after the
-    // last byte. Lua 5.4 allows that empty capture at len + 1.
-    let source = "local t={}; for p in string.gmatch('abc','()',4) do t[#t+1]=p end; print(table.concat(t,','))";
-    let owned = run_fer(true, source);
-    let production = run_fer(false, source);
-    assert!(owned.status.success());
-    assert!(production.status.success());
-    assert_eq!(owned.stdout, b"4\n");
-    assert_eq!(production.stdout, b"\n");
-    if let Some(reference) = reference_output(source) {
-        assert!(reference.status.success());
-        assert_eq!(owned.stdout, reference.stdout);
+fn owned_gmatch_empty_position_capture_at_end_matches_lua54() {
+    // In Lua, the one-based position len + 1 is valid for a zero-width
+    // capture. Only positions strictly past len + 1 exhaust the iterator.
+    for source in [
+        "local t={}; for p in string.gmatch('abc','()',4) do t[#t+1]=p end; print(table.concat(t,','))",
+        "print(string.gmatch('abc','()',4)())",
+        "print(string.gmatch('abc','()',5)()==nil)",
+        "print(string.gmatch('abc','()','4.0')())",
+        "print(string.gmatch('','()',1)())",
+        "print(string.gmatch('','()',2)()==nil)",
+    ] {
+        assert_parity(source, true);
     }
 }
 

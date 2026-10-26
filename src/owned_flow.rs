@@ -5814,7 +5814,7 @@ impl Execution<'_> {
             _ => 1,
         };
         let start = Self::string_offset(initial, source.len() as i64).max(1);
-        let cursor = if start > source.len() as i64 {
+        let cursor = if start > source.len() as i64 + 1 {
             source.len() + 1
         } else {
             (start - 1) as usize
