@@ -280,9 +280,18 @@ fn register_boolean_nil_literal_equality_matches_lua54_in_control_flow() {
         ("if false~=nil then return 17 else return 0 end", 17),
         ("if true~=nil then return 19 else return 0 end", 19),
         ("if (nil)==(nil) then return 23 else return 0 end", 23),
-        ("if (true==false) or (nil==nil) then return 29 else return 0 end", 29),
-        ("if (nil~=false) and 4<5 then return 31 else return 0 end", 31),
-        ("local n=0; while (false==false) and n<3 do n=n+1 end; return n", 3),
+        (
+            "if (true==false) or (nil==nil) then return 29 else return 0 end",
+            29,
+        ),
+        (
+            "if (nil~=false) and 4<5 then return 31 else return 0 end",
+            31,
+        ),
+        (
+            "local n=0; while (false==false) and n<3 do n=n+1 end; return n",
+            3,
+        ),
         ("local n=0; repeat n=n+1 until (nil~=false); return n", 1),
     ] {
         let program = compile_integer_chunk(source)

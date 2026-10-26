@@ -435,7 +435,10 @@ fn emit_condition<'a>(
             // Lua compares nil and boolean values by type and identity.
             // These are condition-only constants; the integer register
             // representation is deliberately not widened to hold Lua values.
-            if matches!(operation, CompareOperation::Equal | CompareOperation::NotEqual) {
+            if matches!(
+                operation,
+                CompareOperation::Equal | CompareOperation::NotEqual
+            ) {
                 if let (Some(lhs), Some(rhs)) =
                     (boolean_nil_literal(left), boolean_nil_literal(right))
                 {
