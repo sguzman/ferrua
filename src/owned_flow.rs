@@ -6089,17 +6089,14 @@ impl Execution<'_> {
             // %f, and %1-%9 backreferences, the same punctuation begins
             // a separate literal atom instead of repeating the construct.
             let can_repeat = matches!(&atom, Atom::Byte(_, _) | Atom::Bracket(_));
-            let repetition = if !plain
-                && can_repeat
-                && index < body.len()
-                && b"*+?-".contains(&body[index])
-            {
-                let operator = body[index];
-                index += 1;
-                operator
-            } else {
-                0
-            };
+            let repetition =
+                if !plain && can_repeat && index < body.len() && b"*+?-".contains(&body[index]) {
+                    let operator = body[index];
+                    index += 1;
+                    operator
+                } else {
+                    0
+                };
             atoms.push((atom, repetition));
         }
         // An unfinished '(' raises an error only when the matching
