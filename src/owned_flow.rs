@@ -5827,9 +5827,9 @@ impl Execution<'_> {
                                                     .get(index + 1)
                                                     .is_some_and(u8::is_ascii_digit)
                                                 {
-                                                    format!("\\\\{:03}", byte)
+                                                    format!("\\{:03}", byte)
                                                 } else {
-                                                    format!("\\\\{}", byte)
+                                                    format!("\\{}", byte)
                                                 };
                                                 quoted.extend_from_slice(decimal.as_bytes());
                                             } else {
