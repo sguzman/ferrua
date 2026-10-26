@@ -150,6 +150,16 @@ pub enum Instruction {
         dest: usize,
         builtin: RegisterBuiltin,
     },
+    /// Read a global environment binding, defaulting to nil when absent.
+    LoadGlobal {
+        dest: usize,
+        name: usize,
+    },
+    /// Write a global after every right-hand side has been evaluated.
+    StoreGlobal {
+        name: usize,
+        source: usize,
+    },
     /// Arguments are evaluated first and placed on the call stack in Lua order.
     PushArgument {
         source: usize,
@@ -443,6 +453,27 @@ fn emit_instruction(program: &mut Program, instruction: Instruction) -> Result<(
     Ok(())
 }
 
+/// Bind an ASCII Lua global name to an immutable byte-string pool slot.
+/// Global bindings themselves remain per-execution, never process-wide.
+fn intern_global_name(program: &mut Program, name: &str) -> Result<usize, Error> {
+    if let Some(index) = program
+        .strings
+        .iter()
+        .position(|item| item.as_slice() == name.as_bytes())
+    {
+        return Ok(index);
+    }
+    let used = program.strings.iter().map(Vec::len).sum::<usize>();
+    if program.strings.len() >= MAX_REGISTERS
+        || used.saturating_add(name.len()) > MAX_REGISTER_STRING_BYTES
+    {
+        return Err(Error::TooLarge);
+    }
+    let index = program.strings.len();
+    program.strings.push(name.as_bytes().to_vec());
+    Ok(index)
+}
+
 fn emit<'a>(
     program: &mut Program,
     expression: &Expr<'a>,
@@ -527,19 +558,18 @@ fn emit<'a>(
                     {
                         return Ok(register);
                     }
-                    let builtin = match *text {
-                        "type" => RegisterBuiltin::Type,
-                        "tostring" => RegisterBuiltin::ToString,
-                        "select" => RegisterBuiltin::Select,
-                        _ => {
-                            return Err(Error::Unsupported(format!(
-                                "unbound or unsupported name: {text}"
-                            )));
-                        }
-                    };
+                    // Full Lua's _ENV is a table with arbitrary field
+                    // operations. Until that feature is implemented, do
+                    // not silently represent it as nil.
+                    if *text == "_ENV" {
+                        return Err(Error::Unsupported(
+                            "dynamic _ENV tables are not available in register VM".into(),
+                        ));
+                    }
+                    let name = intern_global_name(program, text)?;
                     let dest = program.registers;
                     program.registers += 1;
-                    emit_instruction(program, Instruction::LoadBuiltin { dest, builtin })?;
+                    emit_instruction(program, Instruction::LoadGlobal { dest, name })?;
                     return Ok(dest);
                 }
             }
@@ -1136,17 +1166,26 @@ fn compile_statements<'a>(
                     let Expr::Atom(name) = target else {
                         return Err(Error::Unsupported("only local variable targets".into()));
                     };
-                    let binding = scopes
+                    if let Some(binding) = scopes
                         .iter_mut()
                         .rev()
                         .find_map(|scope| scope.get_mut(*name))
-                        .ok_or_else(|| Error::Unsupported(format!("global assignment: {name}")))?;
-                    if binding.constant {
-                        return Err(Error::Unsupported(format!(
-                            "cannot assign to constant local: {name}"
-                        )));
+                    {
+                        if binding.constant {
+                            return Err(Error::Unsupported(format!(
+                                "cannot assign to constant local: {name}"
+                            )));
+                        }
+                        binding.register = register;
+                    } else {
+                        if *name == "_ENV" {
+                            return Err(Error::Unsupported(
+                                "dynamic _ENV tables are not available in register VM".into(),
+                            ));
+                        }
+                        let name = intern_global_name(program, name)?;
+                        emit_instruction(program, Instruction::StoreGlobal { name, source: register })?;
                     }
-                    binding.register = register;
                 }
             }
             Statement::Block(body) => {
@@ -1808,6 +1847,12 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
                 register(dest) && index < program.strings.len()
             }
             Instruction::LoadBuiltin { dest, .. } => register(dest),
+            Instruction::LoadGlobal { dest, name } => {
+                register(dest) && name < program.strings.len()
+            }
+            Instruction::StoreGlobal { name, source } => {
+                name < program.strings.len() && register(source)
+            }
             Instruction::PushArgument { source } => register(source),
             Instruction::ReadCallResult { dest, .. } => register(dest),
             Instruction::AppendReturnExpansion => true,
@@ -1946,6 +1991,7 @@ pub fn execute_register_program_with_strings_and_budget(
     let mut return_values = Vec::new();
     let mut last_call_results = Vec::new();
     let mut call_arguments = Vec::new();
+    let mut globals: HashMap<usize, RegisterValue> = HashMap::new();
     let mut registers: Vec<Option<RegisterValue>> = vec![None; program.registers];
     fn read(registers: &[Option<RegisterValue>], at: usize) -> Result<RegisterValue, Error> {
         registers
@@ -2004,6 +2050,11 @@ pub fn execute_register_program_with_strings_and_budget(
                     return Err(Error::TooLarge);
                 }
                 call_arguments.push(read(&registers, source)?);
+                pc += 1;
+                continue;
+            }
+            Instruction::StoreGlobal { name, source } => {
+                globals.insert(name, read(&registers, source)?);
                 pc += 1;
                 continue;
             }
@@ -2202,6 +2253,19 @@ pub fn execute_register_program_with_strings_and_budget(
             Instruction::LoadFloat { dest, bits } => (dest, RegisterValue::Float(bits)),
             Instruction::LoadString { dest, index } => (dest, RegisterValue::String(index)),
             Instruction::LoadBuiltin { dest, builtin } => (dest, RegisterValue::Builtin(builtin)),
+            Instruction::LoadGlobal { dest, name } => {
+                let value = if let Some(value) = globals.get(&name) {
+                    *value
+                } else {
+                    match program.strings.get(name).ok_or(Error::InvalidBytecode)?.as_slice() {
+                        b"type" => RegisterValue::Builtin(RegisterBuiltin::Type),
+                        b"tostring" => RegisterValue::Builtin(RegisterBuiltin::ToString),
+                        b"select" => RegisterValue::Builtin(RegisterBuiltin::Select),
+                        _ => RegisterValue::Nil,
+                    }
+                };
+                (dest, value)
+            }
             Instruction::Call {
                 dest,
                 callee,
