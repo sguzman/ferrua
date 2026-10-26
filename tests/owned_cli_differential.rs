@@ -785,6 +785,29 @@ fn owned_string_format_general_significant_digits_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_general_rounding_boundary_differential() {
+    // Probe scientific/fixed selection after significant-digit rounding,
+    // including the -4 cutoff, carry into the next exponent, alternate
+    // padding, signed zero, and case conversion.
+    for source in [
+        "print(string.format('%.2g',0.000099999),string.format('%.2g',0.0001))",
+        "print(string.format('%.2G',0.0000099999),string.format('%.2G',0.00001))",
+        "print(string.format('%.2g',999.9),string.format('%.2g',999.0))",
+        "print(string.format('%.1g',9.5),string.format('%.1g',0.000095))",
+        "print(string.format('%.1g',0.0000095),string.format('%.1G',999999))",
+        "print(string.format('%#.2g',100),string.format('%#.3g',100),string.format('%#.4g',100))",
+        "print(string.format('%#.2g',0.001),string.format('%#.2g',1000000))",
+        "print(string.format('%.3g',0.00099999),string.format('%.3g',999.99))",
+        "print(string.format('%+10.2G',123456),string.format('% 10.2g',-0.0))",
+        "print(string.format('%.2g',-999.99),string.format('%.4g',-0.00099999))",
+        "print(string.format('%g',math.huge),string.format('%G',-math.huge))",
+        "print(string.format('%g',0/0),string.format('%G',0/0))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_gsub_short_lived_gc_roots_preserve_long_replacement_semantics() {
     for source in [
         "local n=0; local s=string.rep('a',100); local out,c=string.gsub(s,'.',function(x) n=n+1; return x..'b' end); print(#out,c,n)",
