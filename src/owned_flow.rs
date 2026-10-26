@@ -5089,7 +5089,10 @@ impl Execution<'_> {
         handle: usize,
         args: &[Value],
     ) -> Result<Vec<Value>, FlowError> {
-        let state = self.gmatch_states.get(handle).ok_or(FlowError::InvalidBytecode)?;
+        let state = self
+            .gmatch_states
+            .get(handle)
+            .ok_or(FlowError::InvalidBytecode)?;
         if state.done {
             return Ok(Vec::new());
         }
@@ -5102,12 +5105,7 @@ impl Execution<'_> {
                 return Err(FlowError::StepBudgetExceeded);
             }
             self.steps += 1;
-            let result = self.simple_pattern_match(
-                &source,
-                &pattern,
-                cursor as i64 + 1,
-                false,
-            )?;
+            let result = self.simple_pattern_match(&source, &pattern, cursor as i64 + 1, false)?;
             let Some((begin, end, captures)) = result else {
                 break;
             };
@@ -5115,16 +5113,24 @@ impl Execution<'_> {
                 cursor = begin.saturating_add(1);
                 continue;
             }
-            let state = self.gmatch_states.get_mut(handle).ok_or(FlowError::InvalidBytecode)?;
+            let state = self
+                .gmatch_states
+                .get_mut(handle)
+                .ok_or(FlowError::InvalidBytecode)?;
             state.cursor = end;
             state.last_end = Some(end);
             return if captures.is_empty() {
-                Ok(vec![self.intern_rooted_string(source[begin..end].to_vec(), args)?])
+                Ok(vec![
+                    self.intern_rooted_string(source[begin..end].to_vec(), args)?,
+                ])
             } else {
                 self.simple_pattern_capture_values(&source, &captures, args)
             };
         }
-        self.gmatch_states.get_mut(handle).ok_or(FlowError::InvalidBytecode)?.done = true;
+        self.gmatch_states
+            .get_mut(handle)
+            .ok_or(FlowError::InvalidBytecode)?
+            .done = true;
         Ok(Vec::new())
     }
 
