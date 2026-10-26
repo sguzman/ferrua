@@ -30,7 +30,11 @@ fn tagged_register_and_or_return_selected_operands_like_lua54() {
         ("(5==5) and 42", RegisterValue::Integer(42), "42"),
     ] {
         let compiled = compile_integer_expression(source).unwrap();
-        assert_eq!(execute_register_program(&compiled), Ok(expected), "{source}");
+        assert_eq!(
+            execute_register_program(&compiled),
+            Ok(expected),
+            "{source}"
+        );
         let chunk = compile_integer_chunk(&format!("return {source}")).unwrap();
         assert_eq!(execute_register_program(&chunk), Ok(expected), "{source}");
         for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
