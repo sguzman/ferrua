@@ -1664,6 +1664,19 @@ pub(crate) fn parse_lua_hex_float(source: &str) -> Option<f64> {
     if value == 0.0 {
         return Some(0.0);
     }
+    // Avoid constructing a subnormal scale factor directly with powi:
+    // Rust's powi may underflow below 2^-1022 before multiplication.
+    // Two exactly representable power-of-two factors retain 2^-1074
+    // and produce the IEEE-754 rounded result at subnormal boundaries.
+    // Guard enormous exponents without permitting 0 * infinity => NaN.
+    if exponent < -1022 {
+        let first = value * 2.0_f64.powi(-1022);
+        let remaining = (i64::from(exponent) + 1022).max(-1075) as i32;
+        return Some(first * 2.0_f64.powi(remaining));
+    }
+    if exponent > 1023 {
+        return Some((value * 2.0_f64.powi(1023)) * f64::INFINITY);
+    }
     Some(value * 2.0_f64.powi(exponent))
 }
 
