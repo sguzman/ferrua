@@ -410,6 +410,52 @@ fn register_numeric_for_matches_production_and_upstream_lua54() {
 }
 
 #[test]
+fn generated_numeric_for_steps_branches_and_breaks_match_reference_lua() {
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for seed in 0_i64..48 {
+        let start = seed % 11 - 5;
+        let limit = (seed * 3) % 13 - 6;
+        let raw_step = seed % 7 - 3;
+        let step = if raw_step == 0 { 2 } else { raw_step };
+        let offset = seed % 9 - 4;
+        let source = format!(
+            "local total={offset}; for i={start},{limit},{step} do \
+             if i%2==0 then total=total+i else total=total-i end; \
+             if total>20 then break end \
+             end; return total"
+        );
+        let code = format!("print((function() {source} end)())");
+        let program = compile_integer_chunk(&source)
+            .unwrap_or_else(|error| panic!("seed {seed}: compile {error}: {source}"));
+        let actual = execute_integer_program(&program)
+            .unwrap_or_else(|error| panic!("seed {seed}: execute {error}: {source}"));
+        for binary in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if binary == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(binary);
+            if binary != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let output = command.args(["-e", &code]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "seed {seed} {binary}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let expected: i64 = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .parse()
+                .unwrap();
+            assert_eq!(actual, expected, "seed {seed} {binary}: {source}");
+        }
+    }
+}
+
+#[test]
 fn register_repeat_until_matches_production_and_lua_54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()

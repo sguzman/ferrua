@@ -457,9 +457,10 @@ pub fn compile_integer_expression(source: &str) -> Result<Program, Error> {
 /// Supports integer locals with initializers, parallel assignments to locals,
 /// nested do/end blocks, bounded integer/Boolean if/elseif/else branches
 /// with returning or continuing branches, SSA-like single-assignment
-/// integer merge copies, bounded while and repeat-until loops with
-/// loop-carried register values, and a single integer return from an active block.
-/// Calls, general truthiness, for loops, globals, nil and closures remain unsupported.
+/// integer merge copies, bounded while, repeat-until and integer numeric-for
+/// loops with loop-carried register values and lexical break targets, and a
+/// single integer return from an active block. Calls, general truthiness,
+/// generic iteration, globals, nil and closures remain unsupported.
 pub fn compile_integer_chunk(source: &str) -> Result<Program, Error> {
     let statements = parse_chunk(source).map_err(|e| Error::Unsupported(e.to_string()))?;
     let mut program = Program {
