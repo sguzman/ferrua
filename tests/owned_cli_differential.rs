@@ -187,6 +187,21 @@ fn owned_coroutine_wrap_returns_values_and_propagates_errors_like_lua54() {
 }
 
 #[test]
+fn owned_coroutine_close_releases_suspended_frames_and_preserves_errors_like_lua54() {
+    for source in [
+        "local co=coroutine.create(function() return 7 end); print(coroutine.close(co),coroutine.status(co)); print(coroutine.resume(co))",
+        "local co=coroutine.create(function() coroutine.yield(2); return 3 end); print(coroutine.resume(co)); print(coroutine.close(co),coroutine.status(co)); print(coroutine.resume(co)); print(coroutine.close(co))",
+        "local co=coroutine.create(function() return 7 end); print(coroutine.resume(co)); print(coroutine.close(co),coroutine.close(co))",
+        "local co=coroutine.create(function() error('boom',0) end); local ok=coroutine.resume(co); collectgarbage('collect'); local closed,e=coroutine.close(co); print(ok,closed,type(e),tostring(e):find('boom')~=nil)",
+        "local co; co=coroutine.create(function() print(pcall(coroutine.close,co)) end); print(coroutine.resume(co))",
+        "local main=coroutine.running(); local ok=pcall(coroutine.close,main); print(ok)",
+        "local callback; local co=coroutine.create(function() local t={n=9}; callback=function() return t.n end; coroutine.yield() end); coroutine.resume(co); print(coroutine.close(co),callback()); collectgarbage('collect'); print(callback())",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn curated_global_function_print_and_error_semantics_match_lua54() {
     for source in [
         "function first() return second() end; function second() return 7 end; print(first())",

@@ -81,6 +81,7 @@ pub enum Builtin {
     CoroutineIsYieldable,
     CoroutineWrap,
     CoroutineWrapped(usize),
+    CoroutineClose,
     MathAbs,
     MathFloor,
     MathCeil,
@@ -145,6 +146,7 @@ const COROUTINE_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"running", Builtin::CoroutineRunning),
     (b"isyieldable", Builtin::CoroutineIsYieldable),
     (b"wrap", Builtin::CoroutineWrap),
+    (b"close", Builtin::CoroutineClose),
 ];
 
 const MAX_COROUTINES: usize = 64;
@@ -2012,6 +2014,7 @@ struct OwnedCoroutine {
     allocations: Vec<Vec<usize>>,
     roots: Vec<GcFrameRoots>,
     awaiting_resume: Option<bool>,
+    failure: Option<Value>,
 }
 
 struct SavedCallContext {
@@ -2451,6 +2454,9 @@ impl Execution<'_> {
         }
         for state in self.coroutines.iter().flatten() {
             work.push(Value::Function(state.entry));
+            if let Some(error) = state.failure {
+                work.push(error);
+            }
             for frame in &state.roots {
                 work.extend_from_slice(&frame.stack);
                 for &target in &frame.prepared {
@@ -4414,6 +4420,7 @@ impl Execution<'_> {
             }
             Value::Builtin(Builtin::CoroutineWrap) => Ok(vec![self.coroutine_wrap(&arguments)?]),
             Value::Builtin(Builtin::CoroutineWrapped(id)) => self.coroutine_wrapped(id, &arguments),
+            Value::Builtin(Builtin::CoroutineClose) => self.coroutine_close(&arguments),
             Value::Builtin(Builtin::Error) => Err(self.error_builtin(&arguments)),
             Value::Builtin(Builtin::Print) => self.print_builtin(&arguments),
             Value::Builtin(Builtin::Warn) => self.warn_builtin(&arguments),
@@ -7722,6 +7729,7 @@ impl Execution<'_> {
             allocations: Vec::new(),
             roots: Vec::new(),
             awaiting_resume: None,
+            failure: None,
         }));
         Ok(Value::Thread(id))
     }
@@ -7730,6 +7738,65 @@ impl Execution<'_> {
     /// coroutine scheduler or heap slot exists.
     /// Wrap an owned coroutine as a first-class Lua callable. The closure
     /// identity is a builtin tagged with its retained coroutine slot.
+    /// Close a dead or suspended owned coroutine without replaying its
+    /// instructions. The compiler still rejects <close> variables, so
+    /// user-defined __close methods cannot arise in this bounded subset.
+    fn coroutine_close(&mut self, args: &[Value]) -> Result<Vec<Value>, FlowError> {
+        let Value::Thread(id) = *args.first().ok_or(FlowError::TypeError)? else {
+            return Err(FlowError::TypeError);
+        };
+        if id == MAIN_THREAD_ID
+            || self.current_coroutine == Some(id)
+            || self
+                .saved_call_contexts
+                .iter()
+                .any(|context| context.coroutine_id == Some(id))
+        {
+            return Err(FlowError::TypeError);
+        }
+        let state = self
+            .coroutines
+            .get_mut(id)
+            .and_then(Option::as_mut)
+            .ok_or(FlowError::InvalidBytecode)?;
+        if state.status == CoroutineStatus::Running {
+            return Err(FlowError::TypeError);
+        }
+        if state.status == CoroutineStatus::Dead {
+            return Ok(match state.failure {
+                Some(error) => vec![Value::Boolean(false), error],
+                None => vec![Value::Boolean(true)],
+            });
+        }
+        let mut state = self
+            .coroutines
+            .get_mut(id)
+            .and_then(Option::take)
+            .ok_or(FlowError::InvalidBytecode)?;
+        if state.allocations.len() != state.roots.len() {
+            self.coroutines[id] = Some(state);
+            return Err(FlowError::InvalidBytecode);
+        }
+        // Reverse activation order, exactly like normal coroutine unwind.
+        // Captured cells remain alive through closures outside this thread.
+        for allocated in state.allocations.drain(..).rev() {
+            for cell in allocated {
+                if !self.captured_cells.contains(&cell) {
+                    let slot = self.cells.get_mut(cell).ok_or(FlowError::InvalidBytecode)?;
+                    if slot.take().is_some() {
+                        self.free_cells.push(cell);
+                    }
+                }
+            }
+        }
+        state.roots.clear();
+        state.scheduler = None;
+        state.awaiting_resume = None;
+        state.status = CoroutineStatus::Dead;
+        self.coroutines[id] = Some(state);
+        Ok(vec![Value::Boolean(true)])
+    }
+
     fn coroutine_wrap(&mut self, args: &[Value]) -> Result<Value, FlowError> {
         let Value::Thread(id) = self.coroutine_create(args)? else {
             return Err(FlowError::InvalidBytecode);
@@ -7994,10 +8061,13 @@ impl Execution<'_> {
                 Ok(result)
             }
             Err(error) if Self::unprotectable_error(&error) => Err(error),
-            Err(error) => Ok(vec![
-                Value::Boolean(false),
-                self.protected_error_value(error, args)?,
-            ]),
+            Err(error) => {
+                let value = self.protected_error_value(error, args)?;
+                if let Some(state) = self.coroutines.get_mut(id).and_then(Option::as_mut) {
+                    state.failure = Some(value);
+                }
+                Ok(vec![Value::Boolean(false), value])
+            }
         }
     }
 
@@ -8385,6 +8455,7 @@ impl Execution<'_> {
                                     | Builtin::CoroutineIsYieldable
                                     | Builtin::CoroutineWrap
                                     | Builtin::CoroutineWrapped(_)
+                                    | Builtin::CoroutineClose
                             )
                         {
                             return Err(FlowError::TypeError);
@@ -8424,6 +8495,7 @@ impl Execution<'_> {
                                 | Builtin::CoroutineResume
                                 | Builtin::CoroutineRunning
                                 | Builtin::CoroutineWrapped(_)
+                                | Builtin::CoroutineClose
                         ) {
                             let returned = match builtin {
                                 Builtin::Print => self.print_builtin(&args)?,
@@ -8472,6 +8544,7 @@ impl Execution<'_> {
                                 Builtin::CoroutineWrapped(id) => {
                                     self.coroutine_wrapped(id, &args)?
                                 }
+                                Builtin::CoroutineClose => self.coroutine_close(&args)?,
                                 _ => unreachable!("only multi-result builtins enter this path"),
                             };
                             if matches!(
@@ -8556,6 +8629,7 @@ impl Execution<'_> {
                             | Builtin::CoroutineResume
                             | Builtin::CoroutineRunning
                             | Builtin::CoroutineWrapped(_)
+                            | Builtin::CoroutineClose
                             | Builtin::CoroutineYield => {
                                 unreachable!(
                                     "iteration/selection builtins handled as multiple results"
