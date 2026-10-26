@@ -101,6 +101,22 @@ owned_first_party_conformance!(owned_conformance_bitwise, "conformance/11-bitwis
 owned_first_party_conformance!(owned_conformance_utf8, "conformance/12-utf8.lua");
 
 #[test]
+fn owned_string_receivers_index_the_shared_mutable_string_library_like_lua54() {
+    for source in [
+        "local s='ferrua lua'; print(s:upper(),s:sub(1,6))",
+        "local s='ferrua lua'; local result,n=s:gsub('lua','rust'); print(result,n)",
+        "local s='abc'; print(s.upper==string.upper,('abc').sub==string.sub)",
+        "local lib=string; lib.upper=function(s) return s..'!' end; print(('abc'):upper(),lib.upper==('abc').upper)",
+        "local original=string; string={}; print(('abc'):upper(),type(original))",
+        "local s='abc'; print(s.missing==nil, type(s.lower))",
+        "local ok=pcall(function() local s='abc'; s.newfield=3 end); print(ok)",
+        "local s='a'; print(s:rep(3),s:reverse(),#s)",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn curated_global_function_print_and_error_semantics_match_lua54() {
     for source in [
         "function first() return second() end; function second() return 7 end; print(first())",

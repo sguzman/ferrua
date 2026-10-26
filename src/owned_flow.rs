@@ -8154,12 +8154,20 @@ impl Execution<'_> {
                 }
                 Op::GetTable => {
                     let key = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                    let table = stack.pop().ok_or(FlowError::InvalidBytecode)?;
-                    let Value::Table(handle) = table else {
-                        return Err(FlowError::TypeError);
+                    let receiver = stack.pop().ok_or(FlowError::InvalidBytecode)?;
+                    let table_key = self.table_key(key)?;
+                    let handle = match receiver {
+                        Value::Table(handle) => handle,
+                        Value::String(_) => {
+                            // Lua strings share the __index table established by
+                            // the string library. Keep this original, writable
+                            // library identity even if _G.string is reassigned.
+                            // Root both operands while lazily materializing it.
+                            self.materialize_string_table(&[receiver, key])?
+                        }
+                        _ => return Err(FlowError::TypeError),
                     };
-                    let key = self.table_key(key)?;
-                    stack.push(self.lookup_with_metatable(handle, key)?);
+                    stack.push(self.lookup_with_metatable(handle, table_key)?);
                 }
                 Op::SetTable => {
                     let value = stack.pop().ok_or(FlowError::InvalidBytecode)?;
