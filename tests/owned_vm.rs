@@ -21,6 +21,17 @@ fn tagged_register_decimal_floats_and_mixed_number_order_match_lua54() {
         ("4/2", RegisterValue::Float(2.0_f64.to_bits())),
         ("2.0/4", RegisterValue::Float(0.5_f64.to_bits())),
         ("2^3", RegisterValue::Float(8.0_f64.to_bits())),
+        ("7.0//2", RegisterValue::Float(3.0_f64.to_bits())),
+        ("7//2.0", RegisterValue::Float(3.0_f64.to_bits())),
+        ("-7.0//2", RegisterValue::Float((-4.0_f64).to_bits())),
+        ("7.5//-2", RegisterValue::Float((-4.0_f64).to_bits())),
+        ("-0.0//3", RegisterValue::Float((-0.0_f64).to_bits())),
+        ("7.5%2", RegisterValue::Float(1.5_f64.to_bits())),
+        ("-7.5%2", RegisterValue::Float(0.5_f64.to_bits())),
+        ("7.5%-2", RegisterValue::Float((-0.5_f64).to_bits())),
+        ("-7.5%-2", RegisterValue::Float((-1.5_f64).to_bits())),
+        ("-0.0%3", RegisterValue::Float((-0.0_f64).to_bits())),
+        ("9%2.0", RegisterValue::Float(1.0_f64.to_bits())),
         ("2^-2", RegisterValue::Float(0.25_f64.to_bits())),
         ("9.0^0.5", RegisterValue::Float(3.0_f64.to_bits())),
         ("1+2.5", RegisterValue::Float(3.5_f64.to_bits())),
@@ -83,7 +94,13 @@ fn tagged_register_decimal_floats_and_mixed_number_order_match_lua54() {
             }
         }
     }
-    for source in ["1.5+true", "nil*0.5", "false<1.5"] {
+    for source in [
+        "1.5+true",
+        "nil*0.5",
+        "false<1.5",
+        "1.0//true",
+        "nil%2.0",
+    ] {
         let program = compile_integer_expression(source).unwrap();
         assert_eq!(
             execute_register_program(&program),

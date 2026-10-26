@@ -60,6 +60,17 @@ fn compare_integer_float(integer: i64, float: f64) -> Option<Ordering> {
     }
 }
 
+// Lua's float modulus uses fmod, then adjusts a nonzero remainder
+// whose sign disagrees with the divisor. This preserves signed zero and
+// avoids the precision loss of computing a - floor(a/b) * b.
+fn lua_float_modulus(a: f64, b: f64) -> f64 {
+    let mut remainder = a % b;
+    if (remainder > 0.0 && b < 0.0) || (remainder < 0.0 && b > 0.0) {
+        remainder += b;
+    }
+    remainder
+}
+
 fn numeric_comparison(
     left: RegisterValue,
     right: RegisterValue,
@@ -1844,20 +1855,30 @@ pub fn execute_register_program_with_budget(
                         .to_bits(),
                 ),
             ),
-            Instruction::FloorDiv { dest, lhs, rhs } => (
-                dest,
-                RegisterValue::Integer(floor_div(
-                    read_integer(&registers, lhs)?,
-                    read_integer(&registers, rhs)?,
-                )?),
-            ),
-            Instruction::Mod { dest, lhs, rhs } => (
-                dest,
-                RegisterValue::Integer(lua_mod(
-                    read_integer(&registers, lhs)?,
-                    read_integer(&registers, rhs)?,
-                )?),
-            ),
+            Instruction::FloorDiv { dest, lhs, rhs } => {
+                let left = read(&registers, lhs)?;
+                let right = read(&registers, rhs)?;
+                let result = match (left, right) {
+                    (RegisterValue::Integer(a), RegisterValue::Integer(b)) => {
+                        RegisterValue::Integer(floor_div(a, b)?)
+                    }
+                    (a, b) => RegisterValue::Float((a.number()? / b.number()?).floor().to_bits()),
+                };
+                (dest, result)
+            }
+            Instruction::Mod { dest, lhs, rhs } => {
+                let left = read(&registers, lhs)?;
+                let right = read(&registers, rhs)?;
+                let result = match (left, right) {
+                    (RegisterValue::Integer(a), RegisterValue::Integer(b)) => {
+                        RegisterValue::Integer(lua_mod(a, b)?)
+                    }
+                    (a, b) => {
+                        RegisterValue::Float(lua_float_modulus(a.number()?, b.number()?).to_bits())
+                    }
+                };
+                (dest, result)
+            },
             Instruction::BitAnd { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Integer(
