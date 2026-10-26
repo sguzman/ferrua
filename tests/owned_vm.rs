@@ -113,6 +113,101 @@ fn register_dynamic_concatenation_and_string_operations_match_lua54() {
 }
 
 #[test]
+fn register_fixed_arity_returns_match_lua54() {
+    use ferrua::owned_vm::{Error, execute_register_program_with_strings};
+    let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
+        .ok()
+        .as_deref()
+        == Some("1");
+    for (chunk, expected, rendered) in [
+        ("return", &[][..], "0"),
+        ("local x=7", &[][..], "0"),
+        ("return nil", &[RegisterValue::Nil][..], "1|nil"),
+        (
+            "return 1,2,3",
+            &[
+                RegisterValue::Integer(1),
+                RegisterValue::Integer(2),
+                RegisterValue::Integer(3),
+            ][..],
+            "3|1|2|3",
+        ),
+        (
+            "return 1,nil,3",
+            &[
+                RegisterValue::Integer(1),
+                RegisterValue::Nil,
+                RegisterValue::Integer(3),
+            ][..],
+            "3|1|nil|3",
+        ),
+        (
+            "return true,false,4.5",
+            &[
+                RegisterValue::Boolean(true),
+                RegisterValue::Boolean(false),
+                RegisterValue::Float(4.5_f64.to_bits()),
+            ][..],
+            "3|true|false|4.5",
+        ),
+        (
+            "if false then return 1,2 else return 3 end",
+            &[RegisterValue::Integer(3)][..],
+            "1|3",
+        ),
+        (
+            "local x=2; return x+1, x*3, x-1",
+            &[
+                RegisterValue::Integer(3),
+                RegisterValue::Integer(6),
+                RegisterValue::Integer(1),
+            ][..],
+            "3|3|6|1",
+        ),
+    ] {
+        let program = compile_integer_chunk(chunk).unwrap();
+        let result = execute_register_program_with_strings(&program).unwrap();
+        assert_eq!(result.values(), expected, "{chunk}");
+        assert_eq!(
+            execute_register_program(&program),
+            Ok(expected.first().copied().unwrap_or(RegisterValue::Nil)),
+            "{chunk}"
+        );
+        for executable in [env!("CARGO_BIN_EXE_fer"), "lua5.4"] {
+            if executable == "lua5.4" && !compare_lua {
+                continue;
+            }
+            let mut command = Command::new(executable);
+            if executable != "lua5.4" {
+                command.arg("--lua=5.4");
+            }
+            let source = format!(
+                "local function f() {chunk} end; local t=table.pack(f()); io.write(t.n); for i=1,t.n do io.write('|',tostring(t[i])) end"
+            );
+            let output = command.args(["-e", &source]).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{executable}: {chunk}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, rendered.as_bytes(), "{executable}: {chunk}");
+        }
+    }
+    let program = compile_integer_chunk("return 'a'..'b',42,nil").unwrap();
+    let result = execute_register_program_with_strings(&program).unwrap();
+    assert_eq!(result.values().len(), 3);
+    assert_eq!(result.value_string_bytes(result.values()[0]), Some(b"ab".as_slice()));
+    assert_eq!(result.values()[1], RegisterValue::Integer(42));
+    assert_eq!(result.values()[2], RegisterValue::Nil);
+
+    let failure = compile_integer_chunk("return 7,1//0").unwrap();
+    assert_eq!(
+        execute_register_program_with_strings(&failure),
+        Err(Error::DivisionByZero)
+    );
+}
+
+#[test]
 fn register_adjusted_scalar_assignments_match_lua54() {
     let compare_lua = std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
