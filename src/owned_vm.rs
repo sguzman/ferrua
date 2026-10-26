@@ -1319,7 +1319,10 @@ fn compile_statements<'a>(
                     destinations.push(destination);
                 }
                 let rhs = adjusted_rhs(program, values, targets.len(), scopes)?;
-                for (target, register) in destinations.into_iter().zip(rhs) {
+                // Lua assigns competing destinations right-to-left after all
+                // targets and RHS values have been evaluated. The leftmost
+                // occurrence wins if an lvalue appears more than once.
+                for (target, register) in destinations.into_iter().zip(rhs).rev() {
                     match target {
                         AssignmentDestination::Table { table, key } => {
                             emit_instruction(
