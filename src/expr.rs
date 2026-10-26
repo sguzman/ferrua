@@ -407,6 +407,135 @@ fn source_eof_line(source: &str) -> usize {
     line
 }
 
+// Labels are visible throughout their lexical block, even before they are
+// declared. Lua forbids redeclaring a visible ancestor label. A nested
+// function has a separate label namespace, including anonymous functions
+// inside expressions. The parser already rejects duplicates within one block.
+fn check_expression_labels(expression: &Expr<'_>) -> Result<(), &'static str> {
+    match expression {
+        Expr::Atom(_) | Expr::Vararg => {}
+        Expr::Grouped(inner) | Expr::Unary { right: inner, .. } => {
+            check_expression_labels(inner)?;
+        }
+        Expr::Binary { left, right, .. } => {
+            check_expression_labels(left)?;
+            check_expression_labels(right)?;
+        }
+        Expr::Call { callee, arguments } => {
+            check_expression_labels(callee)?;
+            for argument in arguments {
+                check_expression_labels(argument)?;
+            }
+        }
+        Expr::MethodCall {
+            object, arguments, ..
+        } => {
+            check_expression_labels(object)?;
+            for argument in arguments {
+                check_expression_labels(argument)?;
+            }
+        }
+        Expr::Field { object, .. } => check_expression_labels(object)?,
+        Expr::Index { object, key } => {
+            check_expression_labels(object)?;
+            check_expression_labels(key)?;
+        }
+        Expr::Function { body, .. } => check_block_labels(body, &[])?,
+        Expr::Table(fields) => {
+            for field in fields {
+                match field {
+                    TableField::Named { value, .. } | TableField::Value(value) => {
+                        check_expression_labels(value)?;
+                    }
+                    TableField::Indexed { key, value } => {
+                        check_expression_labels(key)?;
+                        check_expression_labels(value)?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn check_block_labels<'a>(
+    statements: &[Statement<'a>],
+    ancestors: &[&'a str],
+) -> Result<(), &'static str> {
+    let mut visible = ancestors.to_vec();
+    // Collect first: later labels are still visible to preceding nested
+    // blocks, per Lua 5.4's whole-block label visibility rule.
+    for statement in statements {
+        if let Statement::Label(name) = statement {
+            if visible.contains(name) {
+                return Err("duplicate label visible from enclosing block");
+            }
+            visible.push(name);
+        }
+    }
+    for statement in statements {
+        match statement {
+            Statement::Local { initializers, .. } | Statement::Return(initializers) => {
+                for value in initializers {
+                    check_expression_labels(value)?;
+                }
+            }
+            Statement::Assign { targets, values } => {
+                for value in targets.iter().chain(values) {
+                    check_expression_labels(value)?;
+                }
+            }
+            Statement::Call(value) => check_expression_labels(value)?,
+            Statement::Function { body, .. } => check_block_labels(body, &[])?,
+            Statement::Block(body) => check_block_labels(body, &visible)?,
+            Statement::While { condition, body } => {
+                check_expression_labels(condition)?;
+                check_block_labels(body, &visible)?;
+            }
+            Statement::Repeat { body, condition } => {
+                check_block_labels(body, &visible)?;
+                check_expression_labels(condition)?;
+            }
+            Statement::NumericFor {
+                start,
+                limit,
+                step,
+                body,
+                ..
+            } => {
+                check_expression_labels(start)?;
+                check_expression_labels(limit)?;
+                if let Some(step) = step {
+                    check_expression_labels(step)?;
+                }
+                check_block_labels(body, &visible)?;
+            }
+            Statement::GenericFor {
+                iterators, body, ..
+            } => {
+                for iterator in iterators {
+                    check_expression_labels(iterator)?;
+                }
+                check_block_labels(body, &visible)?;
+            }
+            Statement::If {
+                branches,
+                else_branch,
+            } => {
+                for (condition, body) in branches {
+                    check_expression_labels(condition)?;
+                    check_block_labels(body, &visible)?;
+                }
+                if let Some(body) = else_branch {
+                    check_block_labels(body, &visible)?;
+                }
+            }
+            Statement::Break | Statement::Label(_) | Statement::Goto(_) => {}
+        }
+    }
+    Ok(())
+}
+
 pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
     let tokens = tokenize(source)?;
     let mut parser = Parser {
@@ -424,6 +553,7 @@ pub fn parse_expression(source: &str) -> Result<Expr<'_>, ParseError> {
     if parser.peek().is_some() {
         return Err(parser.error("unexpected trailing token"));
     }
+    check_expression_labels(&result).map_err(|message| parser.error(message))?;
     Ok(result)
 }
 
@@ -936,7 +1066,9 @@ pub fn parse_chunk(source: &str) -> Result<Vec<Statement<'_>>, ParseError> {
         function_depth: 0,
         vararg_allowed: true,
     };
-    parser.block(&[], 0)
+    let body = parser.block(&[], 0)?;
+    check_block_labels(&body, &[]).map_err(|message| parser.error(message))?;
+    Ok(body)
 }
 
 #[cfg(test)]

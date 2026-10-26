@@ -98,6 +98,42 @@ fn owned_goto_label_grammar_accepts_valid_lua_syntax() {
 }
 
 #[test]
+fn lua_label_visibility_rejects_ancestor_shadowing_even_when_forward_declared() {
+    // Labels are visible throughout their lexical block, except across
+    // function boundaries. Sibling scopes may reuse the same label.
+    let cases = [
+        ("::outer:: do ::outer:: end", false),
+        ("do ::outer:: end ::outer::", false),
+        ("::outer:: if true then ::outer:: end", false),
+        ("::outer:: while false do ::outer:: end", false),
+        ("function f() ::mark:: do ::mark:: end end", false),
+        ("do ::a:: end do ::a:: end", true),
+        ("::outer:: do ::inner:: end", true),
+        ("::outer:: local f=function() ::outer:: end", true),
+        ("function f() ::outer:: end ::outer::", true),
+    ];
+    for (source, valid) in cases {
+        let parsed = parse_chunk(source).is_ok();
+        assert_eq!(parsed, valid, "owned label scope: {source}");
+        if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA").ok().as_deref() == Some("1") {
+            let reference = format!("assert(load([====[{source}]====]))");
+            let output = std::process::Command::new("lua5.4")
+                .args(["-e", &reference])
+                .output()
+                .expect("pinned Lua 5.4 reference");
+            assert_eq!(
+                output.status.success(),
+                valid,
+                "Lua 5.4 label scope differs: {source}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+    assert!(ferrua::expr::parse_expression("function() ::a:: do ::a:: end end").is_err());
+    assert!(ferrua::expr::parse_expression("function() ::a:: end").is_ok());
+}
+
+#[test]
 fn goto_syntax_and_scope_boundaries_match_lua_54_when_requested() {
     if std::env::var("FERRUA_COMPARE_OWNED_WITH_LUA")
         .ok()
