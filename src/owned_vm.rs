@@ -2060,9 +2060,7 @@ fn validate_integer_program(program: &Program) -> Result<(), Error> {
             Instruction::SetTable { table, key, value } => {
                 register(table) && register(key) && register(value)
             }
-            Instruction::ExpandTableResults { table, first } => {
-                register(table) && first >= 1
-            }
+            Instruction::ExpandTableResults { table, first } => register(table) && first >= 1,
             Instruction::LoadGlobal { dest, name } => {
                 register(dest) && name < program.strings.len()
             }
