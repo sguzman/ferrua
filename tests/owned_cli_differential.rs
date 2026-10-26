@@ -560,6 +560,26 @@ fn owned_string_gsub_function_replacements_and_capture_args_match_lua54() {
 }
 
 #[test]
+fn owned_string_format_basic_integer_and_string_directives_match_lua54() {
+    for source in [
+        "print(string.format('hello')=='hello',string.format('')=='')",
+        "print(string.format('%s:%d','hi',42)=='hi:42')",
+        "print(string.format('%%s=%s','a')=='%s=a',string.format('%%%%')=='%%')",
+        "print(string.format('%d %i',-123,456)=='-123 456')",
+        "print(string.format('%u',-1)=='18446744073709551615')",
+        "print(string.format('%x %X %o',255,255,8)=='ff FF 10')",
+        "print(string.format('%c%c%c',65,0,255)==string.char(65,0,255))",
+        "print(string.format('%d',math.mininteger)==tostring(math.mininteger))",
+        "print(string.format('%s %s',12,'abc')=='12 abc')",
+        "local f=string.format; string.format=function() return 'changed' end; print(string.format()); string.format=f; print(string.format('%s','restored'))",
+        "local ok,s=pcall(string.format,'%s-%d','a',7); print(ok,s); local bad,e=pcall(string.format,'%s'); print(bad,type(e))",
+        "local ok,e=pcall(string.format,'%d',false); print(ok,type(e))",
+    ] {
+        assert_parity(source, true);
+    }
+}
+
+#[test]
 fn owned_string_case_reverse_and_repeat_match_lua54() {
     for source in [
         "print(string.lower('HeLLo\\0WORLD')=='hello\\0world',string.upper('aBc\\0z')=='ABC\\0Z',string.reverse('a\\0b')=='b\\0a')",

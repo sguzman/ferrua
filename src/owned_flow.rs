@@ -112,6 +112,7 @@ pub enum Builtin {
     StringUpper,
     StringReverse,
     StringRep,
+    StringFormat,
     TableConcat,
     TableUnpack,
     TablePack,
@@ -167,6 +168,7 @@ const STRING_GLOBALS: &[(&[u8], Builtin)] = &[
     (b"upper", Builtin::StringUpper),
     (b"reverse", Builtin::StringReverse),
     (b"rep", Builtin::StringRep),
+    (b"format", Builtin::StringFormat),
 ];
 
 const TABLE_GLOBALS: &[(&[u8], Builtin)] = &[
@@ -5783,6 +5785,65 @@ impl Execution<'_> {
         }
         let text = self.string_bytes(*args.first().ok_or(FlowError::TypeError)?)?;
         match builtin {
+            Builtin::StringFormat => {
+                // Deliberately bounded no-width/no-precision directives.
+                // Numeric specifiers operate on Lua's signed/unsigned
+                // 64-bit integer payload, never on host pointer addresses.
+                let mut output = Vec::new();
+                let mut index = 0usize;
+                let mut argument = 1usize;
+                while index < text.len() {
+                    if self.steps >= self.budget {
+                        return Err(FlowError::StepBudgetExceeded);
+                    }
+                    self.steps += 1;
+                    if text[index] != b'%' {
+                        output.push(text[index]);
+                        index += 1;
+                    } else {
+                        let specifier = *text.get(index + 1).ok_or(FlowError::TypeError)?;
+                        index += 2;
+                        if specifier == b'%' {
+                            output.push(b'%');
+                        } else {
+                            let value = *args.get(argument).ok_or(FlowError::TypeError)?;
+                            argument += 1;
+                            let part = match specifier {
+                                b's' => self.string_bytes(value)?,
+                                b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'c' => {
+                                    let integer = self
+                                        .exact_integer_operand(value)
+                                        .or_else(|_| self.integer_operand(value))?;
+                                    match specifier {
+                                        b'd' | b'i' => integer.to_string().into_bytes(),
+                                        b'u' => (integer as u64).to_string().into_bytes(),
+                                        b'o' => format!("{:o}", integer as u64).into_bytes(),
+                                        b'x' => format!("{:x}", integer as u64).into_bytes(),
+                                        b'X' => format!("{:X}", integer as u64).into_bytes(),
+                                        b'c' => vec![integer as u8],
+                                        _ => unreachable!("numeric specifier prevalidated"),
+                                    }
+                                }
+                                _ => {
+                                    return Err(FlowError::Unsupported(
+                                        "Lua format width, precision, floats and quoting are not implemented"
+                                            .into(),
+                                    ));
+                                }
+                            };
+                            if self.steps.saturating_add(part.len()) > self.budget {
+                                return Err(FlowError::StepBudgetExceeded);
+                            }
+                            self.steps += part.len();
+                            output.extend_from_slice(&part);
+                        }
+                    }
+                    if output.len() > MAX_STRING_POOL_BYTES {
+                        return Err(FlowError::TooLarge);
+                    }
+                }
+                self.intern_rooted_string(output, args)
+            }
             Builtin::StringLen => Ok(Value::Integer(text.len() as i64)),
             Builtin::StringLower | Builtin::StringUpper | Builtin::StringReverse => {
                 if self.steps.saturating_add(text.len()) > self.budget {
@@ -6386,7 +6447,8 @@ impl Execution<'_> {
                             | Builtin::StringLower
                             | Builtin::StringUpper
                             | Builtin::StringReverse
-                            | Builtin::StringRep => self.string_builtin(builtin, &args)?,
+                            | Builtin::StringRep
+                            | Builtin::StringFormat => self.string_builtin(builtin, &args)?,
                             Builtin::Utf8Char => self.utf8_char_builtin(&args)?,
                             Builtin::Utf8Offset => self.utf8_offset_builtin(&args)?,
                             Builtin::TableConcat => self.table_concat_builtin(&args)?,
