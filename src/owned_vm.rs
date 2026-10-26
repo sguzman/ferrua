@@ -1377,10 +1377,7 @@ pub fn execute_integer_program(program: &Program) -> Result<i64, Error> {
 /// Run the experimental register dispatcher with an explicit instruction
 /// budget. Callers can lower but never increase the hard process-safe cap.
 /// Validation always precedes budget execution, including when budget is 0.
-pub fn execute_integer_program_with_budget(
-    program: &Program,
-    budget: usize,
-) -> Result<i64, Error> {
+pub fn execute_integer_program_with_budget(program: &Program, budget: usize) -> Result<i64, Error> {
     validate_integer_program(program)?;
     let budget = budget.min(MAX_REGISTER_STEPS);
     let mut registers: Vec<Option<i64>> = vec![None; program.registers];
@@ -2298,7 +2295,10 @@ mod tests {
             Err(Error::StepBudgetExceeded)
         );
         assert_eq!(execute_integer_program_with_budget(&chunk, 2), Ok(7));
-        assert_eq!(execute_integer_program_with_budget(&chunk, usize::MAX), Ok(7));
+        assert_eq!(
+            execute_integer_program_with_budget(&chunk, usize::MAX),
+            Ok(7)
+        );
 
         let expression = compile_integer_expression("1+2").unwrap();
         assert_eq!(expression.code.len(), 3);
@@ -2308,8 +2308,7 @@ mod tests {
         );
         assert_eq!(execute_integer_program_with_budget(&expression, 3), Ok(3));
 
-        let infinite =
-            compile_integer_chunk("while true do end; return 1").unwrap();
+        let infinite = compile_integer_chunk("while true do end; return 1").unwrap();
         assert_eq!(
             execute_integer_program_with_budget(&infinite, 19),
             Err(Error::StepBudgetExceeded)
