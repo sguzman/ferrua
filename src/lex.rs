@@ -499,7 +499,10 @@ mod tests {
 
     #[test]
     fn lua_c_locale_identifiers_are_ascii_only() {
-        assert_eq!(spellings("local cafe_42 = 7"), ["local", "cafe_42", "=", "7"]);
+        assert_eq!(
+            spellings("local cafe_42 = 7"),
+            ["local", "cafe_42", "=", "7"]
+        );
         for source in [
             "local café = 42",
             "local α = 2",
@@ -517,9 +520,6 @@ mod tests {
             spellings("local cafe = \"café\" -- naïve"),
             ["local", "cafe", "=", "\"café\""]
         );
-        assert_eq!(
-            spellings("return [=[α😀]=]"),
-            ["return", "[=[α😀]=]"]
-        );
+        assert_eq!(spellings("return [=[α😀]=]"), ["return", "[=[α😀]=]"]);
     }
 }
