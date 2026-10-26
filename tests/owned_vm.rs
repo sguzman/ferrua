@@ -144,7 +144,9 @@ fn register_call_statements_discard_values_and_preserve_lua_errors() {
             if executable != "lua5.4" {
                 command.arg("--lua=5.4");
             }
-            let source = format!("local function f() {chunk} end; io.write(f())");
+            // The register scalar API consumes only the first value.
+            // Parenthesize the function call to match Lua's one-result adjustment.
+            let source = format!("local function f() {chunk} end; io.write((f()))");
             let output = command.args(["-e", &source]).output().unwrap();
             assert!(
                 output.status.success(),
