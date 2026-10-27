@@ -23,6 +23,8 @@ pub enum RegisterBuiltin {
     RawSet,
     RawLen,
     RawEqual,
+    GetMetatable,
+    SetMetatable,
     Assert,
     ToNumber,
     Next,
@@ -412,6 +414,7 @@ enum TableKey {
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 struct RegisterTable {
     entries: Vec<(TableKey, RegisterValue)>,
+    metatable: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2733,19 +2736,13 @@ pub fn execute_register_program_with_strings_and_budget(
                     return Err(Error::TypeError);
                 };
                 let key = read(&registers, key)?;
-                // Unlike insertion, reading an absent nil or NaN index
-                // returns nil without creating a table slot.
                 let value = if matches!(key, RegisterValue::Nil)
                     || matches!(key, RegisterValue::Float(bits) if f64::from_bits(bits).is_nan())
                 {
                     RegisterValue::Nil
                 } else {
                     let key = register_table_key(key, &strings)?;
-                    let entries = &tables.get(index).ok_or(Error::InvalidBytecode)?.entries;
-                    entries
-                        .iter()
-                        .find(|(candidate, _)| *candidate == key)
-                        .map_or(RegisterValue::Nil, |(_, value)| *value)
+                    register_table_lookup(index, &key, &tables, &strings)?
                 };
                 (dest, value)
             }
@@ -2755,22 +2752,14 @@ pub fn execute_register_program_with_strings_and_budget(
                 };
                 let key = register_table_key(read(&registers, key)?, &strings)?;
                 let value = read(&registers, value)?;
-                let entries = &mut tables.get_mut(index).ok_or(Error::InvalidBytecode)?.entries;
-                if let Some(position) = entries.iter().position(|(candidate, _)| *candidate == key)
-                {
-                    if value == RegisterValue::Nil {
-                        entries.swap_remove(position);
-                        table_entries_used -= 1;
-                    } else {
-                        entries[position].1 = value;
-                    }
-                } else if value != RegisterValue::Nil {
-                    if table_entries_used >= MAX_REGISTER_TABLE_ENTRIES {
-                        return Err(Error::TooLarge);
-                    }
-                    entries.push((key, value));
-                    table_entries_used += 1;
-                }
+                register_table_assignment(
+                    index,
+                    key,
+                    value,
+                    &mut tables,
+                    &strings,
+                    &mut table_entries_used,
+                )?;
                 pc += 1;
                 continue;
             }
@@ -2821,6 +2810,8 @@ pub fn execute_register_program_with_strings_and_budget(
                         b"rawset" => RegisterValue::Builtin(RegisterBuiltin::RawSet),
                         b"rawlen" => RegisterValue::Builtin(RegisterBuiltin::RawLen),
                         b"rawequal" => RegisterValue::Builtin(RegisterBuiltin::RawEqual),
+                        b"getmetatable" => RegisterValue::Builtin(RegisterBuiltin::GetMetatable),
+                        b"setmetatable" => RegisterValue::Builtin(RegisterBuiltin::SetMetatable),
                         b"assert" => RegisterValue::Builtin(RegisterBuiltin::Assert),
                         b"tonumber" => RegisterValue::Builtin(RegisterBuiltin::ToNumber),
                         b"next" => RegisterValue::Builtin(RegisterBuiltin::Next),
@@ -2935,6 +2926,55 @@ pub fn execute_register_program_with_strings_and_budget(
                             return Err(Error::TypeError);
                         }
                         arguments.to_vec()
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::GetMetatable) => {
+                        let first = *arguments.first().ok_or(Error::TypeError)?;
+                        if let RegisterValue::Table(index) = first {
+                            let table = tables.get(index).ok_or(Error::InvalidBytecode)?;
+                            if let Some(meta) = table.metatable {
+                                let guard =
+                                    register_raw_metafield(meta, b"__metatable", &tables, &strings)?;
+                                if guard != RegisterValue::Nil {
+                                    vec![guard]
+                                } else {
+                                    vec![RegisterValue::Table(meta)]
+                                }
+                            } else {
+                                vec![RegisterValue::Nil]
+                            }
+                        } else {
+                            vec![RegisterValue::Nil]
+                        }
+                    }
+                    RegisterValue::Builtin(RegisterBuiltin::SetMetatable) => {
+                        let Some(RegisterValue::Table(index)) = arguments.first() else {
+                            return Err(Error::TypeError);
+                        };
+                        let next = match arguments.get(1).copied().ok_or(Error::TypeError)? {
+                            RegisterValue::Table(meta) => Some(meta),
+                            RegisterValue::Nil => None,
+                            _ => return Err(Error::TypeError),
+                        };
+                        if let Some(meta) = tables
+                            .get(*index)
+                            .ok_or(Error::InvalidBytecode)?
+                            .metatable
+                        {
+                            if register_raw_metafield(
+                                meta,
+                                b"__metatable",
+                                &tables,
+                                &strings,
+                            )? != RegisterValue::Nil
+                            {
+                                return Err(Error::TypeError);
+                            }
+                        }
+                        tables
+                            .get_mut(*index)
+                            .ok_or(Error::InvalidBytecode)?
+                            .metatable = next;
+                        vec![RegisterValue::Table(*index)]
                     }
                     RegisterValue::Builtin(RegisterBuiltin::RawGet) => {
                         let Some(RegisterValue::Table(index)) = arguments.first() else {
@@ -3266,6 +3306,98 @@ pub fn execute_register_program_with_strings_and_budget(
         strings,
         tables,
     })
+}
+
+const MAX_REGISTER_META_CHAIN: usize = 100;
+
+/// Read an exact raw field by name from a table, without invoking __index.
+/// Metamethod fields are ordinary Lua byte strings, including dynamic strings.
+fn register_raw_metafield(
+    index: usize,
+    name: &[u8],
+    tables: &[RegisterTable],
+    strings: &[Vec<u8>],
+) -> Result<RegisterValue, Error> {
+    let table = tables.get(index).ok_or(Error::InvalidBytecode)?;
+    for (key, value) in &table.entries {
+        if let TableKey::String(string) = key
+            && strings.get(*string).is_some_and(|bytes| bytes == name)
+        {
+            return Ok(*value);
+        }
+    }
+    Ok(RegisterValue::Nil)
+}
+
+/// Resolve a missing key through table-valued __index chains. Lua-function
+/// callbacks are unavailable until first-party closure calls are implemented.
+fn register_table_lookup(
+    mut index: usize,
+    key: &TableKey,
+    tables: &[RegisterTable],
+    strings: &[Vec<u8>],
+) -> Result<RegisterValue, Error> {
+    for _ in 0..MAX_REGISTER_META_CHAIN {
+        let table = tables.get(index).ok_or(Error::InvalidBytecode)?;
+        if let Some((_, value)) = table.entries.iter().find(|(candidate, _)| candidate == key) {
+            return Ok(*value);
+        }
+        let meta = match table.metatable {
+            Some(meta) => meta,
+            None => return Ok(RegisterValue::Nil),
+        };
+        match register_raw_metafield(meta, b"__index", tables, strings)? {
+            RegisterValue::Nil => return Ok(RegisterValue::Nil),
+            RegisterValue::Table(next) => index = next,
+            _ => return Err(Error::TypeError),
+        }
+    }
+    Err(Error::TypeError)
+}
+
+/// Preserve Lua's existing-key assignment rule before consulting __newindex.
+/// The final raw store shares the heap-wide entry quota with rawset.
+fn register_table_assignment(
+    mut index: usize,
+    key: TableKey,
+    value: RegisterValue,
+    tables: &mut [RegisterTable],
+    strings: &[Vec<u8>],
+    entries_used: &mut usize,
+) -> Result<(), Error> {
+    for _ in 0..MAX_REGISTER_META_CHAIN {
+        let table = tables.get(index).ok_or(Error::InvalidBytecode)?;
+        let existing = table.entries.iter().position(|(candidate, _)| *candidate == key);
+        if existing.is_none() {
+            if let Some(meta) = table.metatable {
+                match register_raw_metafield(meta, b"__newindex", tables, strings)? {
+                    RegisterValue::Table(next) => {
+                        index = next;
+                        continue;
+                    }
+                    RegisterValue::Nil => {}
+                    _ => return Err(Error::TypeError),
+                }
+            }
+        }
+        let entries = &mut tables.get_mut(index).ok_or(Error::InvalidBytecode)?.entries;
+        if let Some(position) = existing {
+            if value == RegisterValue::Nil {
+                entries.swap_remove(position);
+                *entries_used -= 1;
+            } else {
+                entries[position].1 = value;
+            }
+        } else if value != RegisterValue::Nil {
+            if *entries_used >= MAX_REGISTER_TABLE_ENTRIES {
+                return Err(Error::TooLarge);
+            }
+            entries.push((key, value));
+            *entries_used += 1;
+        }
+        return Ok(());
+    }
+    Err(Error::TypeError)
 }
 
 /// Length for Lua byte strings and the bounded raw table array border.
