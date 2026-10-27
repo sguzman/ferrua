@@ -16,15 +16,42 @@ fn numeric_for_control_types_match_lua54() {
     let integer = RegisterValue::Integer;
     let float = |n: f64| RegisterValue::Float(n.to_bits());
     for (chunk, expected) in [
-        ("local last=0;for i=1,3.5 do last=i end return last", integer(3)),
-        ("local last=0;for i=1,3.0 do last=i end return last", integer(3)),
-        ("local last=0;for i=4,1.5,-1 do last=i end return last", integer(2)),
-        ("local last=0;for i=-1,-2.5,-1 do last=i end return last", integer(-2)),
-        ("local last=0;for i=1,3.5,0.5 do last=i end return last", float(3.5)),
-        ("local last=0;for i=1.0,3 do last=i end return last", float(3.0)),
-        (r#"local last=0;for i="1","3" do last=i end return last"#, float(3.0)),
-        (r#"local last=0;for i=1,"3" do last=i end return last"#, integer(3)),
-        (r#"local last=0;for i=1,3,"1" do last=i end return last"#, float(3.0)),
+        (
+            "local last=0;for i=1,3.5 do last=i end return last",
+            integer(3),
+        ),
+        (
+            "local last=0;for i=1,3.0 do last=i end return last",
+            integer(3),
+        ),
+        (
+            "local last=0;for i=4,1.5,-1 do last=i end return last",
+            integer(2),
+        ),
+        (
+            "local last=0;for i=-1,-2.5,-1 do last=i end return last",
+            integer(-2),
+        ),
+        (
+            "local last=0;for i=1,3.5,0.5 do last=i end return last",
+            float(3.5),
+        ),
+        (
+            "local last=0;for i=1.0,3 do last=i end return last",
+            float(3.0),
+        ),
+        (
+            r#"local last=0;for i="1","3" do last=i end return last"#,
+            float(3.0),
+        ),
+        (
+            r#"local last=0;for i=1,"3" do last=i end return last"#,
+            integer(3),
+        ),
+        (
+            r#"local last=0;for i=1,3,"1" do last=i end return last"#,
+            float(3.0),
+        ),
     ] {
         assert_eq!(owned(chunk), expected, "{chunk}");
         let rendered = match expected {
