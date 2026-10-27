@@ -89,24 +89,21 @@ fn final_method_call_expansion_matches_lua54() {
                 String::from_utf8_lossy(&output.stderr)
             );
             let rendered = String::from_utf8_lossy(&output.stdout);
-            // The Lua reference formats table addresses differently from the
-            // owned execution; normalize only their known identity display.
-            let result = if expected.contains("|table|") {
-                let fields = rendered.split('|').collect::<Vec<_>>();
-                fields
-                    .iter()
-                    .map(|field| {
-                        if field.starts_with("table: ") {
-                            "table"
-                        } else {
-                            *field
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("|")
-            } else {
-                rendered.into_owned()
-            };
+            // The Lua reference formats function and table pointer addresses
+            // differently; normalize only those nondeterministic identities.
+            let result = rendered
+                .split('|')
+                .map(|field| {
+                    if field.starts_with("table: ") {
+                        "table"
+                    } else if field.starts_with("function: ") {
+                        "function"
+                    } else {
+                        field
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("|");
             assert_eq!(result, expected, "{executable}: {chunk}");
         }
     }
