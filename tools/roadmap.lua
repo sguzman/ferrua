@@ -147,12 +147,24 @@ if arg[1] == "--release-gate" then
     return
 end
 
+local incomplete, unchecked = {}, 0
+for _, task in ipairs(tasks) do
+    if task.progress < 100 then
+        incomplete[#incomplete + 1] = task.id .. " (" .. task.progress .. "%)"
+        for _, check in ipairs(task.checks) do
+            if not check.passed then unchecked = unchecked + 1 end
+        end
+    end
+end
+local readiness = #incomplete == 0 and "ACCEPTANCE CHECKS COMPLETE" or "BLOCKED"
 local lines = {
     "# 🗺️ Ferrua roadmap", "",
     "**Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.",
     "",
-    string.format("**Overall:** `%s %d%%` across %d atomic tasks. This describes recorded work, not full Lua compatibility.",
-        bar(mean(tasks)), mean(tasks), #tasks), ""
+    string.format("**Checklist coverage (not work completion):** `%s %d%%` across %d tracked tasks. This is not an estimate of engineering effort, time remaining, or Lua compatibility.",
+        bar(mean(tasks)), mean(tasks), #tasks), "",
+    string.format("**Delivery status:** **%s** — %d incomplete gate tasks, %d unaccepted checks: %s. These are acceptance counts, not an estimate of remaining engineering effort.",
+        readiness, #incomplete, unchecked, table.concat(incomplete, ", ")), ""
 }
 for _, milestone in ipairs(ledger.milestones) do
     local m_tasks = {}

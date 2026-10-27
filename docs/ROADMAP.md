@@ -2,7 +2,9 @@
 
 **Source of truth:** [progress.json](progress.json). Progress is evidence-backed atomic acceptance checks averaged by phase, milestone and feature. No unverified CI claim reaches 100%.
 
-**Overall:** `██████████ 98%` across 211 atomic tasks. This describes recorded work, not full Lua compatibility.
+**Checklist coverage (not work completion):** `██████████ 98%` across 211 tracked tasks. This is not an estimate of engineering effort, time remaining, or Lua compatibility.
+
+**Delivery status:** **BLOCKED** — 6 incomplete gate tasks, 9 unaccepted checks: T107 (33%), T204 (67%), T208 (33%), T301 (50%), T302 (50%), T304 (33%). These are acceptance counts, not an estimate of remaining engineering effort.
 
 ## 🌙 M0 — Working fer interpreter MVP — `██████████ 95%`
 
