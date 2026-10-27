@@ -3119,7 +3119,7 @@ pub fn execute_register_program_with_strings_and_budget(
                 (dest, RegisterValue::String(index))
             }
             Instruction::Neg { dest, input } => {
-                let value = read(&registers, input)?;
+                let value = register_arithmetic_number(read(&registers, input)?, &strings)?;
                 (
                     dest,
                     match value {
@@ -3132,8 +3132,8 @@ pub fn execute_register_program_with_strings_and_budget(
                 )
             }
             Instruction::Add { dest, lhs, rhs } => {
-                let left = read(&registers, lhs)?;
-                let right = read(&registers, rhs)?;
+                let left = register_arithmetic_number(read(&registers, lhs)?, &strings)?;
+                let right = register_arithmetic_number(read(&registers, rhs)?, &strings)?;
                 let result = match (left, right) {
                     (RegisterValue::Integer(a), RegisterValue::Integer(b)) => {
                         RegisterValue::Integer(a.wrapping_add(b))
@@ -3143,8 +3143,8 @@ pub fn execute_register_program_with_strings_and_budget(
                 (dest, result)
             }
             Instruction::Sub { dest, lhs, rhs } => {
-                let left = read(&registers, lhs)?;
-                let right = read(&registers, rhs)?;
+                let left = register_arithmetic_number(read(&registers, lhs)?, &strings)?;
+                let right = register_arithmetic_number(read(&registers, rhs)?, &strings)?;
                 let result = match (left, right) {
                     (RegisterValue::Integer(a), RegisterValue::Integer(b)) => {
                         RegisterValue::Integer(a.wrapping_sub(b))
@@ -3154,8 +3154,8 @@ pub fn execute_register_program_with_strings_and_budget(
                 (dest, result)
             }
             Instruction::Mul { dest, lhs, rhs } => {
-                let left = read(&registers, lhs)?;
-                let right = read(&registers, rhs)?;
+                let left = register_arithmetic_number(read(&registers, lhs)?, &strings)?;
+                let right = register_arithmetic_number(read(&registers, rhs)?, &strings)?;
                 let result = match (left, right) {
                     (RegisterValue::Integer(a), RegisterValue::Integer(b)) => {
                         RegisterValue::Integer(a.wrapping_mul(b))
@@ -3167,21 +3167,21 @@ pub fn execute_register_program_with_strings_and_budget(
             Instruction::Div { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Float(
-                    (read(&registers, lhs)?.number()? / read(&registers, rhs)?.number()?).to_bits(),
+                    (register_arithmetic_number(read(&registers, lhs)?, &strings)?.number()? / register_arithmetic_number(read(&registers, rhs)?, &strings)?.number()?).to_bits(),
                 ),
             ),
             Instruction::Pow { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Float(
-                    read(&registers, lhs)?
+                    register_arithmetic_number(read(&registers, lhs)?, &strings)?
                         .number()?
-                        .powf(read(&registers, rhs)?.number()?)
+                        .powf(register_arithmetic_number(read(&registers, rhs)?, &strings)?.number()?)
                         .to_bits(),
                 ),
             ),
             Instruction::FloorDiv { dest, lhs, rhs } => {
-                let left = read(&registers, lhs)?;
-                let right = read(&registers, rhs)?;
+                let left = register_arithmetic_number(read(&registers, lhs)?, &strings)?;
+                let right = register_arithmetic_number(read(&registers, rhs)?, &strings)?;
                 let result = match (left, right) {
                     (RegisterValue::Integer(a), RegisterValue::Integer(b)) => {
                         RegisterValue::Integer(floor_div(a, b)?)
@@ -3191,8 +3191,8 @@ pub fn execute_register_program_with_strings_and_budget(
                 (dest, result)
             }
             Instruction::Mod { dest, lhs, rhs } => {
-                let left = read(&registers, lhs)?;
-                let right = read(&registers, rhs)?;
+                let left = register_arithmetic_number(read(&registers, lhs)?, &strings)?;
+                let right = register_arithmetic_number(read(&registers, rhs)?, &strings)?;
                 let result = match (left, right) {
                     (RegisterValue::Integer(a), RegisterValue::Integer(b)) => {
                         RegisterValue::Integer(lua_mod(a, b)?)
@@ -3430,6 +3430,23 @@ fn register_tonumber(
     } else {
         integer
     }))
+}
+
+/// Lua 5.4's string library coerces numeric strings for arithmetic,
+/// including integer subtypes; bitwise operations and comparisons do not
+/// use this conversion. Keep it separate from raw numeric VM operations.
+fn register_arithmetic_number(
+    value: RegisterValue,
+    strings: &[Vec<u8>],
+) -> Result<RegisterValue, Error> {
+    match value {
+        RegisterValue::Integer(_) | RegisterValue::Float(_) => Ok(value),
+        RegisterValue::String(_) => match register_tonumber(value, RegisterValue::Nil, strings)? {
+            number @ (RegisterValue::Integer(_) | RegisterValue::Float(_)) => Ok(number),
+            _ => Err(Error::TypeError),
+        },
+        _ => Err(Error::TypeError),
+    }
 }
 
 /// Lua's integer argument coercion for the bounded `select` builtin.
