@@ -2932,8 +2932,12 @@ pub fn execute_register_program_with_strings_and_budget(
                         if let RegisterValue::Table(index) = first {
                             let table = tables.get(index).ok_or(Error::InvalidBytecode)?;
                             if let Some(meta) = table.metatable {
-                                let guard =
-                                    register_raw_metafield(meta, b"__metatable", &tables, &strings)?;
+                                let guard = register_raw_metafield(
+                                    meta,
+                                    b"__metatable",
+                                    &tables,
+                                    &strings,
+                                )?;
                                 if guard != RegisterValue::Nil {
                                     vec![guard]
                                 } else {
@@ -2955,17 +2959,11 @@ pub fn execute_register_program_with_strings_and_budget(
                             RegisterValue::Nil => None,
                             _ => return Err(Error::TypeError),
                         };
-                        if let Some(meta) = tables
-                            .get(*index)
-                            .ok_or(Error::InvalidBytecode)?
-                            .metatable
+                        if let Some(meta) =
+                            tables.get(*index).ok_or(Error::InvalidBytecode)?.metatable
                         {
-                            if register_raw_metafield(
-                                meta,
-                                b"__metatable",
-                                &tables,
-                                &strings,
-                            )? != RegisterValue::Nil
+                            if register_raw_metafield(meta, b"__metatable", &tables, &strings)?
+                                != RegisterValue::Nil
                             {
                                 return Err(Error::TypeError);
                             }
@@ -3367,7 +3365,10 @@ fn register_table_assignment(
 ) -> Result<(), Error> {
     for _ in 0..MAX_REGISTER_META_CHAIN {
         let table = tables.get(index).ok_or(Error::InvalidBytecode)?;
-        let existing = table.entries.iter().position(|(candidate, _)| *candidate == key);
+        let existing = table
+            .entries
+            .iter()
+            .position(|(candidate, _)| *candidate == key);
         if existing.is_none() {
             if let Some(meta) = table.metatable {
                 match register_raw_metafield(meta, b"__newindex", tables, strings)? {

@@ -12,7 +12,9 @@ fn owned(chunk: &str) -> Result<String, Error> {
         RegisterValue::Integer(value) => value.to_string(),
         RegisterValue::Float(bits) => format!("{:?}", f64::from_bits(bits)),
         RegisterValue::String(_) => String::from_utf8_lossy(
-            result.value_string_bytes(result.value).ok_or(Error::InvalidBytecode)?,
+            result
+                .value_string_bytes(result.value)
+                .ok_or(Error::InvalidBytecode)?,
         )
         .into_owned(),
         RegisterValue::Table(_) => "table".to_string(),
@@ -41,10 +43,7 @@ fn table_valued_metamethods_match_lua54() {
         .as_deref()
         == Some("1");
     for (chunk, expected) in [
-        (
-            "local t=setmetatable({}, {__index={x=7}});return t.x",
-            "7",
-        ),
+        ("local t=setmetatable({}, {__index={x=7}});return t.x", "7"),
         (
             "local t=setmetatable({x=3}, {__index={x=7}});return t.x",
             "3",
