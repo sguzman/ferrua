@@ -2961,12 +2961,10 @@ pub fn execute_register_program_with_strings_and_budget(
                         };
                         if let Some(meta) =
                             tables.get(*index).ok_or(Error::InvalidBytecode)?.metatable
-                        {
-                            if register_raw_metafield(meta, b"__metatable", &tables, &strings)?
+                            && register_raw_metafield(meta, b"__metatable", &tables, &strings)?
                                 != RegisterValue::Nil
-                            {
-                                return Err(Error::TypeError);
-                            }
+                        {
+                            return Err(Error::TypeError);
                         }
                         tables
                             .get_mut(*index)
@@ -3369,16 +3367,16 @@ fn register_table_assignment(
             .entries
             .iter()
             .position(|(candidate, _)| *candidate == key);
-        if existing.is_none() {
-            if let Some(meta) = table.metatable {
-                match register_raw_metafield(meta, b"__newindex", tables, strings)? {
-                    RegisterValue::Table(next) => {
-                        index = next;
-                        continue;
-                    }
-                    RegisterValue::Nil => {}
-                    _ => return Err(Error::TypeError),
+        if existing.is_none()
+            && let Some(meta) = table.metatable
+        {
+            match register_raw_metafield(meta, b"__newindex", tables, strings)? {
+                RegisterValue::Table(next) => {
+                    index = next;
+                    continue;
                 }
+                RegisterValue::Nil => {}
+                _ => return Err(Error::TypeError),
             }
         }
         let entries = &mut tables.get_mut(index).ok_or(Error::InvalidBytecode)?.entries;
