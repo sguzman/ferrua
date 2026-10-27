@@ -60,7 +60,10 @@ fn final_method_call_expansion_matches_lua54() {
             "3|function|true|1",
         ),
         ("local t={m=assert};return select('#',t:m(5,6))", "1|3"),
-        ("local t={m=assert};return select('#',t:m(1,t:m(2,3)))", "1|5"),
+        (
+            "local t={m=assert};return select('#',t:m(1,t:m(2,3)))",
+            "1|5",
+        ),
         (
             "local t={m=assert};local a,b,c=t:m(5,6);return rawequal(a,t),b,c",
             "3|true|5|6",
