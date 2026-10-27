@@ -3167,7 +3167,10 @@ pub fn execute_register_program_with_strings_and_budget(
             Instruction::Div { dest, lhs, rhs } => (
                 dest,
                 RegisterValue::Float(
-                    (register_arithmetic_number(read(&registers, lhs)?, &strings)?.number()? / register_arithmetic_number(read(&registers, rhs)?, &strings)?.number()?).to_bits(),
+                    (register_arithmetic_number(read(&registers, lhs)?, &strings)?.number()?
+                        / register_arithmetic_number(read(&registers, rhs)?, &strings)?
+                            .number()?)
+                    .to_bits(),
                 ),
             ),
             Instruction::Pow { dest, lhs, rhs } => (
@@ -3175,7 +3178,10 @@ pub fn execute_register_program_with_strings_and_budget(
                 RegisterValue::Float(
                     register_arithmetic_number(read(&registers, lhs)?, &strings)?
                         .number()?
-                        .powf(register_arithmetic_number(read(&registers, rhs)?, &strings)?.number()?)
+                        .powf(
+                            register_arithmetic_number(read(&registers, rhs)?, &strings)?
+                                .number()?,
+                        )
                         .to_bits(),
                 ),
             ),
