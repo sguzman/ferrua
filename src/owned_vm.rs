@@ -2530,24 +2530,28 @@ pub fn execute_register_program_with_strings_and_budget(
                 let current = read(&registers, counter)?;
                 let bound = read(&registers, limit)?;
                 let stride = read(&registers, step)?;
-                let (finished, exposed) = match (current, bound, stride) {
-                    (
-                        RegisterValue::Integer(value),
-                        RegisterValue::Integer(bound),
-                        RegisterValue::Integer(step),
-                    ) => {
+                // Lua selects integer induction when the original start and
+                // step are integers, even if the limit is a float or a numeric
+                // string. Compare without rounding large integer counters.
+                let numeric_bound = register_arithmetic_number(bound, &strings)?;
+                let (finished, exposed) = match (current, stride) {
+                    (RegisterValue::Integer(value), RegisterValue::Integer(step)) => {
                         if step == 0 {
                             return Err(Error::ZeroForStep);
                         }
+                        let ordering =
+                            numeric_comparison(RegisterValue::Integer(value), numeric_bound)?;
                         (
-                            (step > 0 && value > bound) || (step < 0 && value < bound),
+                            ordering.is_none()
+                                || (step > 0 && ordering == Some(Ordering::Greater))
+                                || (step < 0 && ordering == Some(Ordering::Less)),
                             RegisterValue::Integer(value),
                         )
                     }
-                    (value, bound, step) => {
-                        let value = value.number()?;
-                        let bound = bound.number()?;
-                        let step = step.number()?;
+                    (value, step) => {
+                        let value = register_arithmetic_number(value, &strings)?.number()?;
+                        let bound = numeric_bound.number()?;
+                        let step = register_arithmetic_number(step, &strings)?.number()?;
                         if step == 0.0 {
                             return Err(Error::ZeroForStep);
                         }
@@ -2591,7 +2595,8 @@ pub fn execute_register_program_with_strings_and_budget(
                         }
                     }
                     (value, stride) => {
-                        let next = value.number()? + stride.number()?;
+                        let next = register_arithmetic_number(value, &strings)?.number()?
+                            + register_arithmetic_number(stride, &strings)?.number()?;
                         *registers.get_mut(counter).ok_or(Error::InvalidBytecode)? =
                             Some(RegisterValue::Float(next.to_bits()));
                         pc += 1;
