@@ -2841,6 +2841,8 @@ pub fn execute_register_program_with_strings_and_budget(
                     }
                     evaluated.extend_from_slice(&last_call_results);
                 }
+                let function =
+                    register_resolve_callable(function, &mut evaluated, &tables, &strings)?;
                 let arguments = evaluated.as_slice();
                 let results = match function {
                     RegisterValue::Builtin(RegisterBuiltin::Type) => {
@@ -3323,6 +3325,38 @@ fn register_raw_metafield(
         }
     }
     Ok(RegisterValue::Nil)
+}
+
+/// Lua passes the original callable table as the first argument to
+/// its __call value. A table-valued __call can itself carry another __call;
+/// only first-party builtin endpoints are callable until user-defined
+/// register closures exist. All implicit arguments share the call quota.
+fn register_resolve_callable(
+    mut function: RegisterValue,
+    arguments: &mut Vec<RegisterValue>,
+    tables: &[RegisterTable],
+    strings: &[Vec<u8>],
+) -> Result<RegisterValue, Error> {
+    for _ in 0..MAX_REGISTER_META_CHAIN {
+        match function {
+            RegisterValue::Builtin(_) => return Ok(function),
+            RegisterValue::Table(index) => {
+                let table = tables.get(index).ok_or(Error::InvalidBytecode)?;
+                let meta = table.metatable.ok_or(Error::TypeError)?;
+                let callback = register_raw_metafield(meta, b"__call", tables, strings)?;
+                if callback == RegisterValue::Nil {
+                    return Err(Error::TypeError);
+                }
+                if arguments.len() >= MAX_CALL_ARGUMENTS {
+                    return Err(Error::TooLarge);
+                }
+                arguments.insert(0, function);
+                function = callback;
+            }
+            _ => return Err(Error::TypeError),
+        }
+    }
+    Err(Error::TypeError)
 }
 
 /// Resolve a missing key through table-valued __index chains. Lua-function
